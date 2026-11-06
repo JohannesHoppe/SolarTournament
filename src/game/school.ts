@@ -3,7 +3,7 @@ import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import { patience, rayPatience, touchPatience } from '../world/patience';
-import { barge, rayBarge, touchBarge } from '../world/barge';
+import { barge, rayBarge, rayTug, touchBarge, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
@@ -86,8 +86,8 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
-  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near. */
-  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number): void;
+  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see. */
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number, guard?: boolean): void;
   /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
   moveJumpers(to: THREE.Vector3): void;
   removeJumpers(): void;
@@ -1635,6 +1635,9 @@ const GLINT_SIZE = 30;
 const GLINT_FLICKER = 9;
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
+/** Where the tug's winch is (scratch). */
+const winchPoint = new THREE.Vector3();
+
 export class Markers {
   readonly root = new THREE.Group();
   private readonly buoyGeometry = new THREE.OctahedronGeometry(1, 0);
@@ -1663,6 +1666,10 @@ export class Markers {
   private patience: THREE.Object3D | null = null;
   /** The ore barge a drill escorts (see world/barge), posed where it flies. */
   private barge: THREE.Object3D | null = null;
+  /** The Tallymen's tug (see world/barge), the beams of the Host that struck its winch, and the cable of its harpoon. */
+  private tug: THREE.Object3D | null = null;
+  winchHits = 0;
+  private harpoon: THREE.Line | null = null;
   /** The prop in tow behind a ship and the cable to it (see tow). */
   private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
   private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
@@ -1801,14 +1808,52 @@ export class Markers {
 
   /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal));
+    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal));
   }
 
   /** How far along a beam a hull the drill set out stops it (Patience, the barge), nearer than `max`; null when none does. */
   hullRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
     const moored = this.patience ? rayPatience(this.patience, origin, direction, max) : null;
     const escorted = this.barge ? rayBarge(this.barge, origin, direction, moored ?? max) : null;
-    return escorted ?? moored;
+    const tugged = this.tug ? rayTug(this.tug, origin, direction, escorted ?? moored ?? max) : null;
+    return tugged ?? escorted ?? moored;
+  }
+
+  /** The tug, set out at `position` turned by `quaternion` (its bow along -x), its winch whole. */
+  tugAt(position: THREE.Vector3, quaternion: THREE.Quaternion) {
+    if (!this.tug) {
+      this.tug = tug().root;
+      this.root.add(this.tug);
+      this.winchHits = 0;
+    }
+    this.tug.position.copy(position);
+    this.tug.quaternion.copy(quaternion);
+    this.tug.updateMatrixWorld();
+  }
+
+  /** Where the tug's winch is in the world (into `out`), or null without a tug. */
+  winchAt(out: THREE.Vector3): THREE.Vector3 | null {
+    return this.tug ? out.copy(WINCH).applyMatrix4(this.tug.matrixWorld) : null;
+  }
+
+  /** A beam of the Host's ended at `end`: on the tug's winch, it counts (see winchHits). */
+  struck(end: THREE.Vector3) {
+    if (this.winchAt(winchPoint) && winchPoint.distanceTo(end) < WINCH_REACH) this.winchHits++;
+  }
+
+  /** The harpoon's cable from the winch to `to`, drawn while `to` is given; gone with null. */
+  cable(to: THREE.Vector3 | null) {
+    if (!to || !this.winchAt(winchPoint)) {
+      if (this.harpoon) this.root.remove(this.harpoon);
+      this.harpoon?.geometry.dispose();
+      this.harpoon = null;
+      return;
+    }
+    if (!this.harpoon) {
+      this.harpoon = new THREE.Line(new THREE.BufferGeometry().setFromPoints([winchPoint, to]), this.cableMaterial);
+      this.harpoon.frustumCulled = false;
+      this.root.add(this.harpoon);
+    } else this.harpoon.geometry.setFromPoints([winchPoint, to]);
   }
 
   /** Whether a beam meets the barge before anything else at `max` (see hullRay). */
@@ -1874,6 +1919,9 @@ export class Markers {
     this.root.clear();
     this.patience = null;
     this.barge = null;
+    this.tug = null;
+    this.harpoon?.geometry.dispose();
+    this.harpoon = null;
     this.towing?.cable.geometry.dispose();
     this.towing = null;
     this.rings = [];
@@ -2020,6 +2068,11 @@ export class FlightSchool {
     if (!a?.live || !a.normals.length) return false;
     for (let i = a.next; i < a.points.length; i++) if (touchRing(a.points[i], a.normals[i], RING_RADIUS, position, radius, normal)) return true;
     return false;
+  }
+
+  /** A beam of the Host's ended at `end` (see Markers.struck). */
+  struck(end: THREE.Vector3) {
+    this.markers.struck(end);
   }
 
   /** Whether a beam meets the barge the drill escorts before `max` (see Markers.bargeRay). */

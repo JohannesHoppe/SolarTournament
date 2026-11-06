@@ -1306,10 +1306,10 @@ export class Game implements OnlineGame {
   /**
    * A mission's raiders at a target (see campaign/missions): the Saw Brothers sawing at a rig
    * (`rock` the rock it stands on), or scrappers at an ore barge (no rock: the hull the drill set
-   * out); their bots, the target's middle (moved with it), how far off it they hold, their hits on
-   * it so far.
+   * out), or guards of a hull (the Tallymen at their tug), who fight every ship they see; their
+   * bots, the target's middle (moved with it), how far off it they hold, their hits on it so far.
    */
-  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number } | null = null;
+  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean } | null = null;
   /**
    * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
    * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
@@ -4057,7 +4057,7 @@ export class Game implements OnlineGame {
         bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         bot.prey = null;
-        bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) ? this.sawPoint(bot, this.jumpers) : null;
+        bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.sawPoint(bot, this.jumpers) : null;
         // a mission's rival races its rings
         if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
         // a race at the bot's own pace, by how good it is; a raid in Capture the Flag at the raiders'
@@ -4065,7 +4065,7 @@ export class Game implements OnlineGame {
         if (this.flags) this.flagRole(bot, this.flags);
       }
       // a claim-jumper keeps sawing until a ship comes within JUMPER_NOTICE of it; then it fights
-      const thought = bot ? bot.think(now, this.jumpers?.bots.includes(bot) ? this.noticed(ship) : this.ships, this.field) : null;
+      const thought = bot ? bot.think(now, this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.noticed(ship) : this.ships, this.field) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
       // a bot with a nova core saves it for a crowd of rivals or the battleship's parts, with
@@ -4806,9 +4806,9 @@ export class Game implements OnlineGame {
   /**
    * Raiders at a target (see jumpers): `count` bots of `skill` named from `names` around it,
    * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
-   * rig stands on, or null for a hull of the drill's.
+   * rig stands on, or null for a hull of the drill's; `guard`: guarding it instead.
    */
-  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE) {
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false) {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
@@ -4823,7 +4823,7 @@ export class Game implements OnlineGame {
       ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
       ship.protectedUntil = this.time;
     }
-    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0 };
+    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard };
   }
 
   /**
@@ -5631,7 +5631,7 @@ export class Game implements OnlineGame {
       get rigBeams() {
         return game.rigBeams;
       },
-      spawnJumpers: (rock, rig, count, skill, names, hold) => this.spawnJumpers(rock, rig, count, skill, names, hold),
+      spawnJumpers: (rock, rig, count, skill, names, hold, guard) => this.spawnJumpers(rock, rig, count, skill, names, hold, guard),
       moveJumpers: (to) => game.jumpers?.rig.copy(to),
       removeJumpers: () => this.removeJumpers(),
       spawnRacers: (rings, normals, radius, laps, count, skill, start) => this.spawnRacers(rings, normals, radius, laps, count, skill, start),
@@ -7020,6 +7020,8 @@ export class Game implements OnlineGame {
 
     // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
     const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);
+    // the Host's beam on a hull the drill set out: the drill hears where it ended (a tug's winch)
+    if (blocked !== null && shooter === this.me) this.school?.struck(end);
     const start = shooter.muzzle(beamStart);
     this.effects.beam(start, end, shooter.color);
     this.killcam.recordBeam(this.time, start, end, shooter.color);

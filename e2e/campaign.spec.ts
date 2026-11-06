@@ -355,3 +355,26 @@ test('Ore Barge sets the barge out on its lane, sends the scrappers at its hull,
   await page.evaluate(() => (window.game.timeScale = 1));
   expect(errors).toEqual([]);
 });
+
+test('Repo Men: the tug’s harpoon reels the hull in, and beams on its winch break it free', async ({ page }) => {
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge'], coins: 1200, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 180_000 });
+  // the harpoon bites and the cable shortens
+  await page.waitForFunction(() => window.game.school.attempt?.reach > 0, null, { timeout: 30_000 });
+  const first = await page.evaluate(() => window.game.school.attempt.reach);
+  await expect.poll(() => page.evaluate(() => window.game.school.attempt?.reach ?? 0), { timeout: 10_000 }).toBeLessThan(first - 200);
+  // beams that end on the winch count, and enough of them break the hull free
+  await page.evaluate(async () => {
+    const game = window.game;
+    const winch = game.school.markers.winchAt(game.me.flight.position.clone());
+    for (let k = 0; k < 20 && game.school?.stepIndex === 2; k++) {
+      game.school.struck(winch);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(3);
+  expect(errors).toEqual([]);
+});

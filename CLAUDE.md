@@ -217,7 +217,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/boneyard.ts` | How the Boneyard looks: the racks' girders, three tiers of cradles and dead fighters (low poly); the depot's parts, each module in its own patched station plating (view/surfaces) with welded patches and torn holes over it and the yard's grime over all, cables hanging out, lit windows, hazard paint, the bay's number painted on; the crater floor and its wall; Psyche beyond, drawn behind everything |
 | `world/vesta.ts` | Where Rheasilvia on Vesta (the campaign's chapter 2) puts things: the flank under the claims leaning about 13° towards the summit, its solid box, Vesta's surface around it (the central peak, the basin's floor and rim, Vesta's curve, hills), the summit the HUD marks |
 | `world/rheasilvia.ts` | How Rheasilvia looks: the flank under the claims in the crater floor's ground tinted to Vesta's basalt, bending into the surface beyond, and Vesta out past the basin's rim, drawn behind everything |
-| `world/barge.ts` | A Rockborn ore barge the campaign escorts: a flat spine with open hoppers heaped with ore, a cab at the bow, a drive pod with two bells, in the yards' patched plating; solid as boxes |
+| `world/barge.ts` | The working hulls of the Belt the campaign meets, built alike and solid as boxes: a Rockborn ore barge it escorts (a flat spine with open hoppers heaped with ore), the Tallymen's tug with the winch on its stern |
 | `world/patience.ts` | Patience, the campaign's ore hauler: ore bins on a spine, a ring habitat, the bridge, the workshop and the Magpie's clamp, the drive, in the yards' patched plating; solid as boxes |
 | `world/ceres.ts` | Where Occator on Ceres (the campaign's chapter 3) puts things, along the place's own axes turned towards the low sun: the market terrace, the crater wall's steps and their solid boxes, the habitat domes, the market's mouth and dock, Ceres's surface around it (the crater floor, Cerealia's dome, the far rim), the faculae's salt |
 | `world/horizon.ts` | The land around a place of the campaign beyond its near ground (Vesta's basin, Ceres's crater): one mesh on rings and spokes at the place's heights and in its colors, drawn behind everything that flies |
@@ -285,7 +285,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
-| `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite; the campaign's other people (Rask, Pim, Hedda, the Saw Brothers) on a comm of their own, a narrow radio band |
+| `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite; the campaign's other people (Rask, Pim, Hedda, the Saw Brothers, Ma Tally) on a comm of their own, a narrow radio band |
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills, drive's pedal bass and its timbre); every decision is an integer hash of seed, bar and step |
 | `music/recipes.ts` | The radio page's recipes: every flavor's numbers read from the generator's tables, what it sounds like, a track of it to listen to |
@@ -293,7 +293,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts; the campaign's moods (calm, bright, fight), voiceless |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV in one pass, the band playing a stretch ahead of the render: downloads on the radio page, previews in development |
 | `music/kept.ts` | The radio page's last pressing (title and WAV file), kept in the browser's IndexedDB to be saved again; nothing kept where IndexedDB is blocked |
-| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines, the campaign's lines (Nicole's, Rask's, Pim's, Hedda's and the Saw Brothers', who says which) |
+| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines, the campaign's lines (Nicole's, Rask's, Pim's, Hedda's, the Saw Brothers' and Ma Tally's, who says which) |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/crowd.ts` | The stadium's crowd on the broadcast: a recorded roar (CC0), looped, through overdriven loudspeakers; it swells, erupts and hushes with the show |
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |

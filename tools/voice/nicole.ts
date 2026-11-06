@@ -86,6 +86,12 @@ export const SPEAKERS = {
     reference: { text: "Oh look, brothers, a scrap heap with a gun! Hee hee! Keep sawing, it can't hurt us! Okay, okay! We're going! It was a lousy rig anyway!", speed: 1 },
     language: 'saw',
   },
+  tally: {
+    voice: 'bf_emma',
+    speed: 0.95,
+    reference: { text: 'Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Noted. Your arrears have been increased accordingly. We will see you on your next statement.', speed: 1 },
+    language: 'tally',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

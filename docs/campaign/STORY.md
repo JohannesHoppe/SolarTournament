@@ -126,7 +126,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 3.0 | Occator | story | Patience moors over Occator; Captain Kroll names the place. Down to the market terrace and before the mouth of the market's gallery in the wall's first step: held within 60 m of its dock, 80 m before the mouth, slower than 2 m/s for 2 s, and the dock takes the hull. Cannot fail. | — | Markers; the place (built) |
 | 3.1 | Surplus | shop | Pim fits a Navy surplus laser (☉ 6,000) from the market: what the wallet holds pays for it, the rest goes on the debt. Nicole switches on targeting. Rask calls: he has sold the debt to the Tallymen. (built) | — | Shipyard |
 | 3.2 | Ore Barge | escort | Escort a Rockborn ore barge (240 m, four hoppers heaped with ore) on its lane out of Occator, from before the market over the terrace and out over the crater floor and up, 3.3 km at 20 m/s. 25 s after it sets out the scrappers come (Rust, Grit and Slag), three of skill 0.2, and once they are down three of skill 0.3; each holds 500 m off the barge and fires at its hull until a ship comes within 800 m of it, then fights. The barge at its lane's end with both waves down wins; 300 of their hits on its hull (three left alone land about four a second) fail it, and the attempt starts over. The music turns to the fight when they come. (built) | ☉ 2,000 · 120 | New: an escorted ship on a lane, the raiders of Saw Brothers |
-| 3.3 | Repo Men | fight | The Tallymen, holders of the debt, come for the Magpie. They hook it and reel it towards their tug: shoot three down, or break the cable by shooting the tug's winch. Being dragged within 100 m of the tug fails it. | ☉ 1,500 · 150 | Bots with the hook (bots use it already) |
+| 3.3 | Repo Men | fight | The Tallymen, holders of the debt, come for the Magpie. Their tug (dark, the firm's stencils, a winch drum on its stern) lies 1.5 km off over the crater; 4 s in, its harpoon bites the hull and the winch reels it in at 12 m/s, the cable as long as the way was and shortening, the hull held on it whatever its drive does. Four guards (Docket, Lien, Arrears, Escrow; skill 0.3) fight round the tug. Twelve beams on the winch (within 25 m of its drum) snap the cable, or three guards shot down make them give up; reeled within 100 m of the winch, the hull is theirs and the attempt starts over. (built) | ☉ 1,500 · 150 | Raiders as guards; a cable reeled in |
 | 3.4 | Wall Run | escort | Lead Hedda's barge of Rockborn refugees, bound for the inner system, past the finished stretch of the Solar Wall: over it, outside the searchlights' cones. A barge held in a cone for 3 s is seen; being seen twice fails it. | ☉ 1,000 · 200 | Escort; new: searchlight cones |
 | 3.5 | Scout Two | story | In Pim's workshop the paint comes off. A scene on the hangar's pad. | — | The title screen's pad |
 
@@ -451,7 +451,7 @@ The Host is silent. Everyone else has a voice; the existing ones keep theirs.
 
 **Commissioner Dolores Quill.** Office of Admissions, Ministry of War. Bright, chirpy, speaks in form numbers and congratulations, never threatens and never has to. She is on her ninth body and mentions it like a hairstyle. Role: the Host's helpful patron from chapter 11, the face of the deal at the end. Secret: she runs the search for Scout One (the Ministry's file calls it Operation Lullaby), and she has been steering the Host since chapter 4: she is the anonymous benefactor who bought the debt at Phobos, for the Ministry, and holds it so that the Host keeps rising until its clone brings Scout Two to the Ninth.
 
-**Ma Tally.** Boss of the Tallymen, a firm of repo pirates licensed by the sponsors to take back what debtors owe, ship and clone included. Speaks like a debt collector reading out a statement. Role: the nasty bandits of Acts I to III, the ones it feels good to shoot. Dies in chapter 11. Her clones keep calling in for a while, outraged at the cost.
+**Ma Tally.** Boss of the Tallymen, a firm of repo pirates licensed by the sponsors to take back what debtors owe, ship and clone included. Speaks like a debt collector reading out a statement. Role: the nasty bandits of Acts I to III, the ones it feels good to shoot. Dies in chapter 11. Her clones keep calling in for a while, outraged at the cost. Her hologram (built): a bust in the cold violet of a bank's sign, a woman in her fifties with a silver bob and a pinstriped blouse; her voice even and cool.
 
 **The Saw Brothers.** Claim-jumpers at Vesta, three of them, giggling over the comm while they cut other people's rigs off their rocks. The first fight.
 
@@ -567,6 +567,18 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: The laser talks to me. I can see their drives now, and their names. I have switched on targeting for you, Host. I think I trust you with it.
 
 **RASK** *(over the comm, from Psyche)*: Rask here, darling. Just so you hear it from me: I've sold your paper. The Tallymen bought it, debt, cut and clone. Lovely people. Don't ever miss a payment.
+
+### Repo Men (built)
+
+**HEDDA**: Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.
+
+**MA TALLY** *(over the comm, even and cool)*: Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.
+
+**NICOLE**: A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.
+
+**MA TALLY** *(the cable gone)*: Noted. Your arrears have been increased accordingly. We will see you on your next statement.
+
+**NICOLE**: The cable is gone, and so are they. Debt collectors always come back, Host.
 
 ### The paint comes off (chapter 3)
 

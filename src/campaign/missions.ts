@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, HEDDA, PIM, RASK, SAW } from '../music/lines';
+import { CAMPAIGN, HEDDA, PIM, RASK, SAW, TALLY } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace } from '../world/ceres';
@@ -787,6 +787,76 @@ const oreBarge: Drill = {
   mark: (ctx, a) => t('Wave {n}/{waves} · barge hull {hull} %', { n: Math.max(1, a.count), waves: SCRAP_SKILL.length, hull: Math.max(0, Math.round(100 * (1 - (a.jinks + ctx.rigWear) / BARGE_HULL))) }),
 };
 
+/**
+ * Repo Men (3.3): the Tallymen, who hold the debt, come for the hull. Their tug (see world/barge)
+ * lies at TUG_AT over the crater; HARPOON_AFTER seconds in, its harpoon bites the hull and its
+ * winch reels it in at REEL (units/s, 12 m/s): the cable is as long as the way was and shortens,
+ * and the hull is held on it, whatever its drive does. TALLYMEN guards of TALLY_SKILL fight round
+ * the tug. The hull breaks free with WINCH_HITS of its beams on the winch (the cable snaps) or
+ * TALLY_DOWN of the guards shot down (they give up); reeled within TUG_CATCH (units, 100 m) of the
+ * winch, it is theirs, and the attempt starts over.
+ */
+const TUG_AT = onPlace(-40000, 12000, -26000);
+const TUG_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3().subVectors(onPlace(-30000, 2000, 0), TUG_AT).normalize());
+const HARPOON_AFTER = 4;
+const REEL = 240;
+const TALLYMEN = 4;
+const TALLY_SKILL = 0.3;
+const TALLY_HOLD = 8000;
+const WINCH_HITS = 12;
+const TALLY_DOWN = 3;
+const TUG_CATCH = 2000;
+/** The Tallymen's names, the firm's own (never translated). */
+const TALLY_NAMES = ['Docket', 'Lien', 'Arrears', 'Escrow'];
+const winchNow = new THREE.Vector3();
+const reeled = new THREE.Vector3();
+
+const repoMen: Drill = {
+  line: CAMPAIGN.repoMen,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'occator',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx, a, markers) {
+    markers.clear();
+    markers.tugAt(TUG_AT, TUG_TURN);
+    ctx.spawnJumpers(null, TUG_AT, TALLYMEN, TALLY_SKILL, TALLY_NAMES, TALLY_HOLD, true);
+    // a.reach: the cable's length (0 while the harpoon has not bitten)
+    a.reach = 0;
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx, a, markers) {
+    // a.count: the Host's beams on the winch so far
+    a.count = markers.winchHits;
+    if (a.count >= WINCH_HITS || ctx.jumpersDown >= TALLY_DOWN) {
+      markers.cable(null);
+      return true;
+    }
+    if (!markers.winchAt(winchNow)) return false;
+    const flight = ctx.me.flight;
+    if (a.reach === 0 && a.seconds >= HARPOON_AFTER) a.reach = flight.position.distanceTo(winchNow);
+    if (a.reach > 0) {
+      // the winch reels in; the hull is held on the cable, its way outwards taken off
+      a.reach = Math.max(0, a.reach - REEL * ctx.dt);
+      reeled.subVectors(flight.position, winchNow);
+      const distance = reeled.length();
+      if (distance > a.reach && distance > 0) {
+        reeled.divideScalar(distance);
+        flight.position.copy(winchNow).addScaledVector(reeled, a.reach);
+        const outward = flight.velocity.dot(reeled);
+        if (outward > -REEL) flight.velocity.addScaledVector(reeled, -REEL - outward);
+      }
+      markers.cable(flight.position);
+    }
+    return false;
+  },
+  fail: (ctx) => (ctx.me.flight.position.distanceTo(winchNow) < TUG_CATCH ? CAMPAIGN.repoMenCaught : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => winchNow,
+  mark: (ctx, a) => (a.reach > 0 ? t('Winch {hits}/{needed} · down {n}/{down} · cable {meters} m', { hits: a.count, needed: WINCH_HITS, n: ctx.jumpersDown, down: TALLY_DOWN, meters: Math.round(a.reach / 20) }) : t('Tug')),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -850,4 +920,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'occator', name: msg('Occator'), drills: [onCeres(HEDDA.occator), marketRun, said(CAMPAIGN.marketReached, 'occator')], pay: 0 },
   { id: 'surplus', name: msg('Surplus'), drills: [onCeres(PIM.surplus), onCeres(CAMPAIGN.targeting), onCeres(RASK.soldDebt)], pay: 0, fit: fitLaser },
   { id: 'oreBarge', name: msg('Ore Barge'), drills: [onCeres(HEDDA.oreBarge), oreBarge, said(CAMPAIGN.oreBargeDone, 'occator')], pay: 2000, ratings: 120 },
+  { id: 'repoMen', name: msg('Repo Men'), drills: [onCeres(HEDDA.repoMen), said(TALLY.repo, 'occator'), repoMen, said(TALLY.noted, 'occator'), said(CAMPAIGN.repoMenDone, 'occator')], pay: 1500, ratings: 150 },
 ];

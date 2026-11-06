@@ -1,5 +1,5 @@
 # public/assets/people
 
-The campaign's people, written by `tools/people` (see its README): their busts as their holograms call in (`rask.bin`, `pim.bin`, `hedda.bin`, `saw.bin` for the Saw Brothers, about 3,600 triangles each, in the format `bustParts` in `src/view/products.ts` reads) and their figures in the flesh for the scenes in person (`rask.glb`, `pim.glb`, `hedda.glb`: binary glTF, posed, 12,000 to 16,000 faces, textured, under 1.4 MB each).
+The campaign's people, written by `tools/people` (see its README): their busts as their holograms call in (`rask.bin`, `pim.bin`, `hedda.bin`, `saw.bin` for the Saw Brothers, `tally.bin` for Ma Tally, about 3,600 triangles each, in the format `bustParts` in `src/view/products.ts` reads) and their figures in the flesh for the scenes in person (`rask.glb`, `pim.glb`, `hedda.glb`: binary glTF, posed, 12,000 to 16,000 faces, textured, under 1.4 MB each).
 
 They are made from figures of [MakeHuman](https://static.makehumancommunity.org/) through its Blender extension MPFB: the base mesh, its targets, the clothes, hair and eyebrows of MakeHuman's system assets are CC0, and MakeHuman makes no claim on what is made with them ([`LICENSE.md`](https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md), sections C and D). Shaped, cut out and thinned for the game.

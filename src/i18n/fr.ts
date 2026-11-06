@@ -1552,4 +1552,13 @@ export const FR: Catalog = {
   "The barge is out of the crater, and its ore with it. That is our first real escort, Host.": "La barge est sortie du cratère, et son minerai avec elle. C’était notre première vraie escorte, Hôte.",
   "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.": "Du travail payé. Une barge à minerai quitte la terrasse pour l’anneau de lancement, et les ferrailleurs ramassent tout ce qui sort seul. Vole avec elle. Deux mille si elle sort entière.",
   "Wave {n}/{waves} · barge hull {hull} %": "Vague {n}/{waves} · coque de la barge {hull} %",
+  "Winch {hits}/{needed} · down {n}/{down} · cable {meters} m": "Treuil {hits}/{needed} · abattus {n}/{down} · câble {meters} m",
+  "Tug": "Remorqueur",
+  "Repo Men": "Les saisisseurs",
+  "A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.": "Un harpon dans notre coque, et leur treuil nous ramène. Tire sur le treuil à la poupe du remorqueur, ou abats trois d’entre eux. Ne les laisse pas nous tirer à moins de cent mètres.",
+  "They have reeled us in, and their clamps are on the hull. We start over.": "Ils nous ont ramenés, et leurs pinces sont sur la coque. Nous recommençons.",
+  "The cable is gone, and so are they. Debt collectors always come back, Host.": "Le câble a lâché, et eux sont partis. Les recouvreurs reviennent toujours, Hôte.",
+  "Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.": "Des Tallymen à l’écran. Rask t’a vendu aux pires de tous. Ils ne tirent pas pour tuer. Ils te ramènent et vendent les pièces. Ne leur laisse pas mon canonnier.",
+  "Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.": "Hôte de la coque sept sept trois un. Ici Ma Tally, pour les Tallymen, détenteurs de ta reconnaissance de dette. Ton compte est en souffrance selon des conditions que tu n’as jamais lues. Nous saisissons la garantie. Reste immobile, je te prie. Ça fait moins mal.",
+  "Noted. Your arrears have been increased accordingly. We will see you on your next statement.": "C’est noté. Tes arriérés ont été augmentés en conséquence. Nous nous reverrons sur ton prochain relevé.",
 };

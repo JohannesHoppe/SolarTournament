@@ -1591,4 +1591,13 @@ export const DE: Catalog = {
   "The barge is out of the crater, and its ore with it. That is our first real escort, Host.": "Die Barke ist aus dem Krater, und ihr Erz mit ihr. Das war unser erstes richtiges Geleit, Host.",
   "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.": "Bezahlte Arbeit. Eine Erzbarke fliegt von der Terrasse zum Startring, und Schrottjäger schnappen sich alles, was allein rausfliegt. Flieg mit. Zweitausend, wenn sie heil rauskommt.",
   "Wave {n}/{waves} · barge hull {hull} %": "Welle {n}/{waves} · Rumpf der Barke {hull} %",
+  "Winch {hits}/{needed} · down {n}/{down} · cable {meters} m": "Winde {hits}/{needed} · abgeschossen {n}/{down} · Seil {meters} m",
+  "Tug": "Schlepper",
+  "Repo Men": "Pfändung",
+  "A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.": "Eine Harpune steckt in unserem Rumpf, und ihre Winde holt uns ein. Schieß auf die Winde am Heck des Schleppers, oder schieß drei von ihnen ab. Lass dich nicht auf hundert Meter heranziehen.",
+  "They have reeled us in, and their clamps are on the hull. We start over.": "Sie haben uns eingeholt, und ihre Klammern sitzen am Rumpf. Wir fangen von vorn an.",
+  "The cable is gone, and so are they. Debt collectors always come back, Host.": "Das Seil ist ab, und sie sind weg. Schuldeneintreiber kommen immer wieder, Host.",
+  "Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.": "Tallymen auf dem Schirm. Rask hat dich an die schlimmsten von allen verkauft. Die schießen nicht, um zu töten. Die holen dich ein und verkaufen die Teile. Lass sie meinen Schützen nicht kriegen.",
+  "Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.": "Host von Rumpf sieben sieben drei eins. Hier spricht Ma Tally, für die Tallymen, Inhaber deines Schuldscheins. Dein Konto ist im Rückstand, nach Bedingungen, die du nie gelesen hast. Wir nehmen die Sicherheit an uns. Bitte halt still. Dann tut es weniger weh.",
+  "Noted. Your arrears have been increased accordingly. We will see you on your next statement.": "Vermerkt. Dein Rückstand wurde entsprechend erhöht. Wir sehen uns auf deinem nächsten Kontoauszug.",
 };

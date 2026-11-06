@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -553,6 +553,9 @@ export const CAMPAIGN = {
   oreBarge: 'The barge is setting out. Stay close to it. When the scrappers come, they will go for its hull, not for us, until we get near them.',
   oreBargeLost: 'The barge has taken too much. It is turning back to the terrace, and we start over.',
   oreBargeDone: 'The barge is out of the crater, and its ore with it. That is our first real escort, Host.',
+  repoMen: "A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.",
+  repoMenCaught: 'They have reeled us in, and their clamps are on the hull. We start over.',
+  repoMenDone: 'The cable is gone, and so are they. Debt collectors always come back, Host.',
 } as const;
 
 /**
@@ -599,6 +602,7 @@ export const HEDDA = {
   sawBrothers: "Trouble on the peak. The Saw Brothers are cutting a rig off its rock. Three of them, all mouth. Shoot two and the third one runs. That rig falls, nobody gets paid.",
   cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
+  repoMen: "Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.",
   oreBarge: "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.",
 } as const;
 
@@ -608,13 +612,23 @@ export const SAW = {
   lost: "Okay, okay! We're going! It was a lousy rig anyway!",
 } as const;
 
+/**
+ * Ma Tally, boss of the Tallymen, repo pirates licensed by the sponsors to take back what
+ * debtors owe, ship and clone included: she speaks like a debt collector reading out a
+ * statement, polite and unhurried. Her own voice (see tools/voice).
+ */
+export const TALLY = {
+  repo: 'Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.',
+  noted: 'Noted. Your arrears have been increased accordingly. We will see you on your next statement.',
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -640,6 +654,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(HEDDA)];
     case 'saw':
       return [...Object.values(SAW)];
+    case 'tally':
+      return [...Object.values(TALLY)];
   }
 }
 

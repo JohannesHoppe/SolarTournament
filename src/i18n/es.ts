@@ -1627,4 +1627,13 @@ export const ES: Catalog = {
   "The barge is out of the crater, and its ore with it. That is our first real escort, Host.": "La barcaza ha salido del cráter, y su mineral con ella. Ha sido nuestra primera escolta de verdad, Host.",
   "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.": "Trabajo pagado. Una barcaza de mineral sale de la terraza hacia el anillo de lanzamiento, y los chatarreros cazan todo lo que sale solo. Vuela con ella. Dos mil si sale entera.",
   "Wave {n}/{waves} · barge hull {hull} %": "Oleada {n}/{waves} · casco de la barcaza {hull} %",
+  "Winch {hits}/{needed} · down {n}/{down} · cable {meters} m": "Torno {hits}/{needed} · derribados {n}/{down} · cable {meters} m",
+  "Tug": "Remolcador",
+  "Repo Men": "Los embargadores",
+  "A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.": "Un arpón en nuestro casco, y su torno nos está recogiendo. Dispara al torno de la popa del remolcador, o derriba a tres de ellos. No dejes que nos acerquen a menos de cien metros.",
+  "They have reeled us in, and their clamps are on the hull. We start over.": "Nos han recogido, y sus abrazaderas están en el casco. Empezamos de nuevo.",
+  "The cable is gone, and so are they. Debt collectors always come back, Host.": "El cable ha desaparecido, y ellos también. Los cobradores siempre vuelven, Host.",
+  "Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.": "Tallymen en el radar. Rask te ha vendido a los peores. No disparan a matar. Te recogen y venden las piezas. No dejes que se lleven a mi artillero.",
+  "Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.": "Host del casco siete siete tres uno. Habla Ma Tally, en nombre de los Tallymen, titulares de tu pagaré. Tu cuenta está en mora según unas condiciones que nunca leíste. Vamos a quedarnos con la garantía. Por favor, quédate quieto. Duele menos.",
+  "Noted. Your arrears have been increased accordingly. We will see you on your next statement.": "Anotado. Tu deuda vencida se ha incrementado en consecuencia. Nos vemos en tu próximo extracto.",
 };
