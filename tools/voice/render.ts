@@ -97,7 +97,12 @@ let cloneMissed = false;
 const building = Boolean(process.env.CI || process.env.CF_PAGES);
 function missClones(store: string, reason: string) {
   const message = `The clones of ${store} not used (${reason})`;
-  if (building) throw new Error(`${message}; a build for the site does not go out without them`);
+  if (building) {
+    // said before it is thrown: once Kokoro's phonemizer has loaded, its handler of uncaught
+    // errors throws again and Node prints nothing of this one
+    console.error(`${message}; a build for the site does not go out without them`);
+    throw new Error(message);
+  }
   console.warn(message);
   cloneMissed = true;
 }
@@ -131,8 +136,50 @@ async function cloneIndex(store: string): Promise<CloneIndex | null> {
     return null;
   }
 }
+/** A store's audio in the cache, fetched from the release unless the cache holds it under its fingerprint already; throws where it cannot be had or is not the audio its index names. */
+async function storeAudio(speaker: Speaker, locale: Cloned, index: CloneIndex): Promise<string> {
+  const store = storeName(speaker, locale);
+  let file = cachedStore(clonesCache, store, index.audio);
+  if (!file) {
+    const answer = await fetchRelease(releaseUrl(cloneAudioName(speaker, locale, index.audio)), 120);
+    if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    // the audio is named by its fingerprint, which its index names; a download cut short is not used
+    if (sha256(bytes) !== index.audio) throw new Error('audio and index do not match');
+    mkdirSync(clonesCache, { recursive: true });
+    file = keepStore(clonesCache, store, index.audio, bytes);
+  }
+  // the store under any other fingerprint is of no use: removed
+  tryCache(() => pruneStores(clonesCache, store, index.audio));
+  return file;
+}
+
+/**
+ * A store's index and its audio, fetched together before anything is rendered: the workflow
+ * Voice replaces a store (index and audio) whenever it clones new lines, so audio fetched long
+ * after its index may be gone already. Where the audio cannot be had, the index is read once
+ * more, since a store replaced in between names its new audio there.
+ */
+type Store = { index: CloneIndex; file: string };
+async function cloneStore(speaker: Speaker, locale: Cloned): Promise<Store | null> {
+  const store = storeName(speaker, locale);
+  for (let attempt = 1; ; attempt++) {
+    const index = await cloneIndex(store);
+    if (!index) return null;
+    try {
+      return { index, file: await storeAudio(speaker, locale, index) };
+    } catch (error) {
+      if (attempt === 2) {
+        missClones(store, (error as Error).message);
+        return null;
+      }
+    }
+  }
+}
 const stores = SPEAKER_NAMES.flatMap((speaker) => CLONED.map((locale) => storeName(speaker, locale)));
-const clones = Object.fromEntries(await Promise.all(stores.map(async (store) => [store, await cloneIndex(store)] as const))) as Record<string, CloneIndex | null>;
+const clones = Object.fromEntries(
+  await Promise.all(SPEAKER_NAMES.flatMap((speaker) => CLONED.map(async (locale) => [storeName(speaker, locale), await cloneStore(speaker, locale)] as const))),
+) as Record<string, Store | null>;
 
 // the sprites are rendered again only when what they are made of has changed: the lines and
 // their translations, the clones, this tool (with the model revision) and the engines'
@@ -142,7 +189,7 @@ const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.
 hash.update(readFileSync(join(root, 'src/music/lines.ts')));
 // of the catalogs only what is spoken: a text of the screen never renders the voice again
 for (const locale of CLONED) for (const line of [...allLines('mod'), ...SPEAKER_NAMES.flatMap((speaker) => allLines(SPEAKERS[speaker].language))]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
-for (const store of stores) hash.update(clones[store]?.audio ?? '-');
+for (const store of stores) hash.update(clones[store]?.index.audio ?? '-');
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
 // with a store missed, the key cannot tell what the sprites should hold: neither the stamped
@@ -254,30 +301,15 @@ const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'f
 if (modelsCached) tryCache(() => writeFileSync(complete, COMPUTER_VOICE.revision + '\n'));
 const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: object) => { input_ids: unknown } }).tokenizer;
 
-/** A store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
-async function cloneAudio(speaker: Speaker, locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
-  const store = storeName(speaker, locale);
-  try {
-    let file = cachedStore(clonesCache, store, index.audio);
-    if (!file) {
-      const answer = await fetchRelease(releaseUrl(cloneAudioName(speaker, locale, index.audio)), 120);
-      if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
-      const bytes = Buffer.from(await answer.arrayBuffer());
-      // the audio is named by its fingerprint, which its index names; a download cut short is not used
-      if (sha256(bytes) !== index.audio) throw new Error('audio and index do not match');
-      mkdirSync(clonesCache, { recursive: true });
-      file = keepStore(clonesCache, store, index.audio, bytes);
-    }
-    // the store under any other fingerprint is of no use: removed
-    tryCache(() => pruneStores(clonesCache, store, index.audio));
-    const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
-    if (decoded.status !== 0) throw new Error('ffmpeg failed: ' + decoded.stderr);
-    const bytes = decoded.stdout;
-    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
-  } catch (error) {
-    missClones(store, (error as Error).message);
+/** A store of cloned lines as samples, decoded from its file once it is first spoken from; null when ffmpeg cannot decode it. */
+function cloneAudio(store: string, file: string): Float32Array | null {
+  const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
+  if (decoded.status !== 0) {
+    missClones(store, 'ffmpeg failed: ' + decoded.stderr);
     return null;
   }
+  const bytes = decoded.stdout;
+  return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 const cloneSamples = new Map<string, Float32Array | null>();
 const uncloned = new Map<Speaker, number>();
@@ -286,10 +318,11 @@ const uncloned = new Map<Speaker, number>();
 async function speaks(speaker: Speaker, locale: Locale, line: string): Promise<Int16Array> {
   if (locale !== 'en') {
     const store = storeName(speaker, locale);
-    const index = clones[store];
+    const kept = clones[store];
+    const index = kept?.index;
     const clip = index?.clips[cloneKey(locale, line, speaker)];
-    if (index && clip) {
-      if (!cloneSamples.has(store)) cloneSamples.set(store, await cloneAudio(speaker, locale, index));
+    if (kept && index && clip) {
+      if (!cloneSamples.has(store)) cloneSamples.set(store, cloneAudio(store, kept.file));
       const samples = cloneSamples.get(store);
       if (samples) return trim(toPcm(resample(samples.subarray(clip[0], clip[0] + clip[1]), index.sampleRate, SAMPLE_RATE)));
     }
@@ -327,18 +360,17 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
 for (const [speaker, count] of uncloned) console.warn(`${speaker} speaks ${count} lines without a clone (not cloned yet: see the workflow Voice)`);
 
 // sprites made without a store that was there are not what their inputs promise: no stamp
-// (the next build renders them again) and nothing for the cache
+// (the next build renders them again) and nothing for the cache. The script runs out instead
+// of exiting: onnxruntime's threads abort a process.exit() once Kokoro has run.
 if (cloneMissed) {
   for (const sprite of SPRITES) {
     const kept = JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string };
     delete kept.inputs;
     writeFileSync(manifest(sprite), JSON.stringify(kept, null, 1) + '\n');
   }
-  process.exit(0);
 }
-
 // into the build cache, which keeps the newest few renders
-tryCache(() => {
+else tryCache(() => {
   mkdirSync(cached, { recursive: true });
   for (const file of files) cpSync(join(out, file), join(cached, file));
   const renders = join(cacheRoot, 'voice');
