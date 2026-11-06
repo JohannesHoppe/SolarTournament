@@ -1685,4 +1685,12 @@ export const FR: Catalog = {
   "Two of them were home before us. The miners race again.": "Deux d’entre eux sont arrivés avant nous. Les mineurs recourent.",
   "In the first two, through the static. Perihelion was not pleased, Host. He looked at us the whole last lap.": "Dans les deux premiers, à travers les parasites. Perihelion n’était pas content, Hôte. Il nous a regardés pendant tout le dernier tour.",
   "Io. Sulfur, lava, and a current down from Jupiter they call the flux tube. The miners race round it on rest days, for a purse. Perihelion's here too. Top two takes the purse: four thousand.": "Io. Du soufre, de la lave, et un courant qui descend de Jupiter qu’on appelle le tube de flux. Les mineurs tournent autour les jours de repos, pour une bourse. Perihelion est là aussi. Les deux premiers empochent la bourse : quatre mille.",
+  "a torpedo tube": "un tube lance-torpilles",
+  "the main drive of the first grade": "le moteur principal de premier niveau",
+  "Tube Fitting": "Montage du tube",
+  "Main Drive I": "Moteur principal I",
+  "A torpedo tube, Host, and one torpedo in it each time a clone wakes. It homes on a hull and goes off at it. Our laser can shoot one down, and so can theirs.": "Un tube lance-torpilles, Hôte, et une torpille dedans à chaque fois qu’un clone s’éveille. Elle traque une coque et explose contre elle. Notre laser peut en abattre une, et le leur aussi.",
+  "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "Le moteur pousse plus fort qu’un vaisseau de série maintenant. Juste un peu, Hôte. Dans une course, un peu, c’est tout.",
+  "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Les mineurs s’y connaissent en torpilles, ils font sauter la roche avec. Je leur ai pris un tube pour deux mille, monté sous ton ventre. Un poisson par clone. Le gaspille pas.",
+  "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Réglage de mineur sur ta tuyère, mille. Elle pousse un peu au-delà de la série maintenant. Le dis pas aux inspecteurs des Jeux.",
 };

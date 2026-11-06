@@ -2,7 +2,7 @@ import type { Drill } from '../game/school';
 import type { Mood } from '../music/radio';
 import type { Flavor } from '../music/songs';
 import type { ArenaId } from '../world/arenas';
-import { PLATING_STEP, RADIATOR_STEP, STOCK, type Perks } from '../game/hangar';
+import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
 import { MISSIONS } from './missions';
@@ -53,12 +53,16 @@ export const PANELS_PRICE = 1500;
 export const RADIATORS_PRICE = 1000;
 /** Plating I (chapter 6), at Europa: the hangar's first step of the plating (see PLATING_STEP), its price (☉), paid as the laser's is. */
 export const PLATING_PRICE = 1500;
+/** The first torpedo tube (chapter 7), fitted by Io's sulfur miners: one torpedo a clone; its price (☉), paid as the laser's is. */
+export const TUBE_PRICE = 2000;
+/** Main drive I (chapter 7), at Io: the hangar's first step of the main drive (see DRIVE_STEP), its price (☉), paid as the laser's is. */
+export const DRIVE_ONE_PRICE = 1000;
 
-/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps; and the depot's grey ground off it (Scout Two). */
-export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating';
-const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating'];
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps, a torpedo tube, the main drive's first step; and the depot's grey ground off it (Scout Two). */
+export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating' | 'tube' | 'driveOne';
+const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating', 'tube', 'driveOne'];
 /** What the job board calls each part fitted. */
-export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade') };
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade'), tube: msg('a torpedo tube'), driveOne: msg('the main drive of the first grade') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -92,10 +96,14 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('radiators')) hull.cooling += RADIATOR_STEP;
   // the plating a step up: every hit hurts less
   if (campaign.parts.includes('plating')) hull.damage -= PLATING_STEP;
+  // a torpedo tube: one torpedo a clone, a stock ship's two less one
+  if (campaign.parts.includes('tube')) hull.torpedoes = 1 - TORPEDOES;
+  // the main drive a step past a stock ship's, once it is overhauled to stock
+  if (campaign.parts.includes('driveOne')) hull.drive = STOCK.drive + DRIVE_STEP;
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive';
 
 export interface Mission {
   id: MissionId;

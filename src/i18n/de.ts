@@ -1724,4 +1724,12 @@ export const DE: Catalog = {
   "Two of them were home before us. The miners race again.": "Zwei von ihnen waren vor uns im Ziel. Die Bergleute fahren wieder.",
   "In the first two, through the static. Perihelion was not pleased, Host. He looked at us the whole last lap.": "Unter den ersten zwei, durch das Rauschen hindurch. Perihelion war nicht erfreut, Host. Er hat uns die ganze letzte Runde angesehen.",
   "Io. Sulfur, lava, and a current down from Jupiter they call the flux tube. The miners race round it on rest days, for a purse. Perihelion's here too. Top two takes the purse: four thousand.": "Io. Schwefel, Lava, und ein Strom von Jupiter herunter, den sie die Flussröhre nennen. Die Bergleute fahren an Ruhetagen um sie herum, um ein Preisgeld. Perihelion ist auch da. Die ersten zwei kriegen das Geld: viertausend.",
+  "a torpedo tube": "ein Torpedorohr",
+  "the main drive of the first grade": "der Hauptantrieb der ersten Stufe",
+  "Tube Fitting": "Rohreinbau",
+  "Main Drive I": "Hauptantrieb I",
+  "A torpedo tube, Host, and one torpedo in it each time a clone wakes. It homes on a hull and goes off at it. Our laser can shoot one down, and so can theirs.": "Ein Torpedorohr, Host, und jedes Mal, wenn ein Klon erwacht, ein Torpedo darin. Es sucht sich einen Rumpf und geht an ihm hoch. Unser Laser kann eins abschießen, und ihrer auch.",
+  "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "Das Triebwerk schiebt jetzt stärker als bei einem Serienschiff. Nur ein wenig, Host. In einem Rennen ist ein wenig alles.",
+  "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Die Bergleute kennen sich mit Torpedos aus, sie sprengen damit. Hab ihnen ein Rohr abgekauft, zweitausend, unter deinen Bauch geschraubt. Ein Fisch pro Klon. Verschwend ihn nicht.",
+  "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Bergmanns-Tuning an deiner Triebwerksglocke, tausend. Sie schiebt jetzt ein bisschen über Serie. Sag's nicht den Prüfern der Spiele.",
 };

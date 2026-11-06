@@ -155,6 +155,8 @@ export const BOT_GEAR: Readonly<Perks> = { ...STOCK, hook: true, nanobots: true 
 
 /** What each step of the radiators adds to their cooling (a share of the stock's). */
 export const RADIATOR_STEP = 0.15;
+/** What each step of the main drive adds to its push (a share of the stock's). */
+export const DRIVE_STEP = 0.05;
 /** What each step of the plating takes off every hit (a share of it). */
 export const PLATING_STEP = 0.07;
 
@@ -321,7 +323,7 @@ export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): 
     ...STOCK,
     cooling: 1 + RADIATOR_STEP * step('radiators'),
     thrusters: 1 + 0.08 * step('thrusters'),
-    drive: 1 + 0.05 * step('drive'),
+    drive: 1 + DRIVE_STEP * step('drive'),
     torpedoes: tubeTorpedoes(step('tubes')),
     damage: 1 - PLATING_STEP * step('plating'),
     neon: look('neon'),

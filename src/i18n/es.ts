@@ -1760,4 +1760,12 @@ export const ES: Catalog = {
   "Two of them were home before us. The miners race again.": "Dos de ellos llegaron antes que nosotros. Los mineros vuelven a correr.",
   "In the first two, through the static. Perihelion was not pleased, Host. He looked at us the whole last lap.": "Entre los dos primeros, a través de la estática. A Perihelion no le ha gustado, Host. Nos ha mirado toda la última vuelta.",
   "Io. Sulfur, lava, and a current down from Jupiter they call the flux tube. The miners race round it on rest days, for a purse. Perihelion's here too. Top two takes the purse: four thousand.": "Io. Azufre, lava, y una corriente que baja de Júpiter a la que llaman tubo de flujo. Los mineros corren a su alrededor los días de descanso, por un premio. Perihelion también está aquí. Los dos primeros se llevan el premio: cuatro mil.",
+  "a torpedo tube": "un tubo lanzatorpedos",
+  "the main drive of the first grade": "el motor principal de primer grado",
+  "Tube Fitting": "Montaje del tubo",
+  "Main Drive I": "Motor principal I",
+  "A torpedo tube, Host, and one torpedo in it each time a clone wakes. It homes on a hull and goes off at it. Our laser can shoot one down, and so can theirs.": "Un tubo lanzatorpedos, Host, y un torpedo dentro cada vez que despierta un clon. Busca un casco y estalla contra él. Nuestro láser puede derribar uno, y el suyo también.",
+  "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "El motor empuja ahora más que el de una nave de serie. Solo un poco, Host. En una carrera, un poco lo es todo.",
+  "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Los mineros saben de torpedos, vuelan roca con ellos. Les he sacado un tubo por dos mil, montado bajo tu panza. Un pez por clon. No lo malgastes.",
+  "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Ajuste de minero en tu tobera, mil. Ahora empuja un poco más que de serie. No se lo digas a los inspectores de los Juegos.",
 };

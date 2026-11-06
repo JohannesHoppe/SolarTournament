@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
-import { PLATING_STEP, RADIATOR_STEP, STOCK } from '../game/hangar';
+import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
@@ -130,6 +130,17 @@ describe('the campaign Lot 7731', () => {
     const spared = { ...freshCampaign(), choices: ['quietManSpared' as const] };
     expect(complete(spared, quiet).ratings).toBe(100);
     expect(campaignFrom(JSON.stringify(spared)).choices).toEqual(['quietManSpared']);
+  });
+
+  it('fits a torpedo tube at Io, one torpedo a clone, and Main Drive I, the drive a step past stock, each paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 500, bond: 20000, parts: ['drive' as const] };
+    expect(hullOf(campaign).torpedoes).toBe(-TORPEDOES);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'tubeFitting')!);
+    expect(STOCK.torpedoes + TORPEDOES + hullOf(campaign).torpedoes).toBe(1);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + TUBE_PRICE - 500]);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'mainDrive')!);
+    expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + DRIVE_STEP, 10);
+    expect(campaign.bond).toBe(20000 + TUBE_PRICE - 500 + DRIVE_ONE_PRICE);
   });
 
   it('fits Plating I at Europa: every hit hurting a step less, paid as the laser is', () => {

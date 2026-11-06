@@ -147,7 +147,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 6.2 | Under the Lineae | exploration | Fly down a crack of the ice shell, 200 m wide and 800 m deep, to a science station on its floor, and hold at its dish: echo 4. (built) | ☉ 1,000 · 100 | Surface as a canyon; markers |
 | 6.3 | The Quiet Man | bounty | A Loose raider (skill 0.5) who never finishes a clone: a hull he has worn down to 30 of 100 only scorches under his beam. 40 s into the fight, or once he has worn the hull down that far, he turns away and flies off; shoot him down, or let him go (fewer ratings; the campaign remembers it, for Nicole later). (built; still to come: him shooting only drives) | ☉ 2,500 · 250 or · 100 | Duel; a choice |
 | 7.1 | Flux Tube Race | race | The sulfur miners' race, eight rings on an ellipse over Io's plain, one side running past the flux tube. The nearer the flux tube, the more the link glitches (the picture breaks up as on a hit). Two laps; Perihelion again (skill 0.65) and four miners. Top two. (built; still to come: the miners' beacon buoys in place of the rings, the plasma torus) | ☉ 4,000 · 350 | Race; the link glitch |
-| 7.2 | Tube Fitting | shop | The first torpedo tube (☉ 2,000), fitted by Io's sulfur miners. | — | Shipyard |
+| 7.2 | Tube Fitting | shop | The first torpedo tube (☉ 2,000), fitted by Io's sulfur miners: one torpedo a clone. Then Main Drive I (☉ 1,000), the miners' tuning on the drive's bell. (built) | — | Shipyard |
 | 7.3 | Blackout | story escort | Escort a sulfur freighter through the tube. At two thirds of the way the link cuts: the picture freezes white, no datamosh, LINK LOST. A new clone boots on Patience's printer; the freighter made it alone. Then Patience's log: the Magpie recovered adrift, canopy open, cockpit empty. Cannot fail. | ☉ 2,000 · 150 | Escort; new: the link cut |
 | 8.1 | Hollow Jack | bounty | Hollow Jack (skill 0.7, shoves and hooks) and three of the Loose among Ganymede's ice. Kill Jack. | ☉ 6,000 · 600 | Deathmatch; a named target |
 | 8.2 | The Harpoon | salvage | Fly through the piece of Jack's wreck that holds his harpoon before it drifts out of the arena. | the hook | Wreckage; probe pickup |
@@ -276,8 +276,8 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 4 | Armor panels | 1,500 | The bare flank closed: stock armor (built: Armor Panels; the bare flank counts beams from its side double until then) |
 | 5 | Radiators I | 1,000 | The radiators shed 15 % of a stock ship's more, the hangar's first step, from a tug yard at Callisto; the missing fin's quarter still short (built: Radiators I) |
 | 6 | Plating I | 1,500 | Every hit hurts 7 % of it less, the hangar's first step, from the science outfit at Europa (built: Plating I) |
-| 7 | Torpedo tube | 2,000 | One torpedo per clone |
-| 7 | Main drive I | 1,000 | |
+| 7 | Torpedo tube | 2,000 | One torpedo per clone (built: Tube Fitting) |
+| 7 | Main drive I | 1,000 | The main drive pushes 5 % of a stock ship's harder, the hangar's first step (built: Main Drive I) |
 | 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch |
 | 9 | Second tube | 2,000 | Two torpedoes: stock |
 | 9 | Thrusters I | 1,000 | |

@@ -14,7 +14,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -1002,6 +1002,20 @@ const fitPlating = (campaign: Campaign) => {
   buy(campaign, PLATING_PRICE);
 };
 
+/** Tube Fitting (7.2): the first torpedo tube, one torpedo a clone (see hullOf), at TUBE_PRICE. */
+const fitTube = (campaign: Campaign) => {
+  if (campaign.parts.includes('tube')) return;
+  campaign.parts.push('tube');
+  buy(campaign, TUBE_PRICE);
+};
+
+/** Main Drive I (7.3): the main drive a step past a stock ship's (see hullOf), at DRIVE_ONE_PRICE. */
+const fitDriveOne = (campaign: Campaign) => {
+  if (campaign.parts.includes('driveOne')) return;
+  campaign.parts.push('driveOne');
+  buy(campaign, DRIVE_ONE_PRICE);
+};
+
 /** Pilot Episode: Nicole installs her radar (see Module). */
 const fitRadar = (campaign: Campaign) => {
   if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
@@ -1645,4 +1659,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'plating', name: msg('Plating I'), drills: [said(PIM.plating, 'europa'), said(CAMPAIGN.plating, 'europa')], pay: 0, fit: fitPlating },
   // chapter 7, Flux on Io: the sulfur miners' race round the flux tube
   { id: 'fluxTubeRace', name: msg('Flux Tube Race'), drills: [said(HEDDA.io, 'io'), fluxTubeRace, said(CAMPAIGN.fluxTubeRaceDone, 'io')], pay: 4000, ratings: 350, start: FLUX_START },
+  { id: 'tubeFitting', name: msg('Tube Fitting'), drills: [said(PIM.tube, 'io'), said(CAMPAIGN.tube, 'io')], pay: 0, fit: fitTube },
+  { id: 'mainDrive', name: msg('Main Drive I'), drills: [said(PIM.driveOne, 'io'), said(CAMPAIGN.driveOne, 'io')], pay: 0, fit: fitDriveOne },
 ];
