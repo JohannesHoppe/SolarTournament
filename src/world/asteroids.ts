@@ -83,7 +83,8 @@ export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull' | 'rack';
 /** Where a ray met the field: the piece, how far along, its center; `part` when it met what stands on the piece (a rig, a buoy: see attach), not the piece itself. */
 export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3; part?: boolean };
 
-export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean; fracture?: FractureSet };
+/** The shapes of one kind (see above); `reliefs`: for a box shape, its top as a ground of hills and hollows (see Relief), by the shape's index. */
+export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean; fracture?: FractureSet; reliefs?: readonly (Relief | null)[] };
 
 /**
  * A massive body at the center of an arena or near it (a planet, a black hole): it pulls with
@@ -488,7 +489,7 @@ export class AsteroidField {
           far: set.far[i] ?? null,
           impostor: set.impostor?.[i] ?? null,
           box: !!set.box,
-          relief: (object.userData.relief as Relief | undefined) ?? null,
+          relief: set.reliefs?.[i] ?? null,
           // a shape without a computed collider is measured: a rock collides where it is seen
           surface: set.box || collider ? null : new Surface(reference, center),
           mean: 0,
