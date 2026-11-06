@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
-import { RADIATOR_STEP, STOCK } from '../game/hangar';
+import { PLATING_STEP, RADIATOR_STEP, STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
@@ -120,6 +120,14 @@ describe('the campaign Lot 7731', () => {
     expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
     expect(hullOf(campaign).cooling).toBeLessThan(1);
     expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + RADIATORS_PRICE - 400]);
+  });
+
+  it('fits Plating I at Europa: every hit hurting a step less, paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 400, bond: 20000 };
+    const before = hullOf(campaign).damage;
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'plating')!);
+    expect(hullOf(campaign).damage).toBeCloseTo(before - PLATING_STEP, 10);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + PLATING_PRICE - 400]);
   });
 
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {

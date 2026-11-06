@@ -155,6 +155,8 @@ export const BOT_GEAR: Readonly<Perks> = { ...STOCK, hook: true, nanobots: true 
 
 /** What each step of the radiators adds to their cooling (a share of the stock's). */
 export const RADIATOR_STEP = 0.15;
+/** What each step of the plating takes off every hit (a share of it). */
+export const PLATING_STEP = 0.07;
 
 /**
  * What other browsers are told of a ship's upgrades (a ship state's `lo`): the looks, and the
@@ -321,7 +323,7 @@ export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): 
     thrusters: 1 + 0.08 * step('thrusters'),
     drive: 1 + 0.05 * step('drive'),
     torpedoes: tubeTorpedoes(step('tubes')),
-    damage: 1 - 0.07 * step('plating'),
+    damage: 1 - PLATING_STEP * step('plating'),
     neon: look('neon'),
     flame: look('flame'),
     // the gear counts in full online too (see GEAR)

@@ -13,7 +13,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, RADIATORS_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -933,6 +933,13 @@ const iceRun: Drill = {
   mark: () => t('Tugs {n}/{total} · lost {lost}', { n: CONVOY - convoyLost.filter(Boolean).length, total: CONVOY, lost: convoyLost.filter(Boolean).length }),
 };
 
+/** Plating I (6.4): plating of the first grade, every hit hurting less (see hullOf), at PLATING_PRICE. */
+const fitPlating = (campaign: Campaign) => {
+  if (campaign.parts.includes('plating')) return;
+  campaign.parts.push('plating');
+  buy(campaign, PLATING_PRICE);
+};
+
 /** Pilot Episode: Nicole installs her radar (see Module). */
 const fitRadar = (campaign: Campaign) => {
   if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
@@ -1418,4 +1425,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'radiators', name: msg('Radiators I'), drills: [said(PIM.radiators, 'callisto'), said(CAMPAIGN.radiators, 'callisto')], pay: 0, fit: fitRadiators },
   // chapter 6, the Lineae on Europa: the Crack in the ice shell and the science station on its floor
   { id: 'underTheLineae', name: msg('Under the Lineae'), drills: [said(HEDDA.europa, 'europa'), echoFour, said(CAMPAIGN.echoFour, 'europa'), said(CAMPAIGN.echoFourHeard, 'europa')], pay: 1000, ratings: 100 },
+  { id: 'plating', name: msg('Plating I'), drills: [said(PIM.plating, 'europa'), said(CAMPAIGN.plating, 'europa')], pay: 0, fit: fitPlating },
 ];

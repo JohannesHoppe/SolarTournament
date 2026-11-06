@@ -275,7 +275,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 3 | Drive overhaul | 1,600 | Main drive to stock (built: Overhaul) |
 | 4 | Armor panels | 1,500 | The bare flank closed: stock armor (built: Armor Panels; the bare flank counts beams from its side double until then) |
 | 5 | Radiators I | 1,000 | The radiators shed 15 % of a stock ship's more, the hangar's first step, from a tug yard at Callisto; the missing fin's quarter still short (built: Radiators I) |
-| 6 | Plating I | 1,500 | |
+| 6 | Plating I | 1,500 | Every hit hurts 7 % of it less, the hangar's first step, from the science outfit at Europa (built: Plating I) |
 | 7 | Torpedo tube | 2,000 | One torpedo per clone |
 | 7 | Main drive I | 1,000 | |
 | 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch |
