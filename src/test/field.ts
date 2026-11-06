@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { AsteroidField, type TemplateSet } from '../world/asteroids';
+import { AsteroidField, FIELD_RADIUS, type Placement, type TemplateSet } from '../world/asteroids';
 import { fractureSet } from '../world/fracture';
 import { RACK_BOXES, RACK_RELIEFS } from '../world/yard';
-import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
+import { createRocks, DETAIL, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
 import { planMining, standClaims, type Plan } from '../world/mining';
 import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
 
@@ -41,6 +41,26 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
     standClaims(field, plan);
   };
   return field;
+}
+
+/** A ship's radius in the ground tests (units, 17 m). */
+const GROUND_SHIP = 340;
+
+/**
+ * A field of nothing but a moon's ground (its `placement`, see reliefPiece), and the points (x, z)
+ * of `points` where it does not collide as `surface` gives it: a ship just under the ground
+ * should touch it, one just over it fly free. Also the field, for more of a test's own.
+ */
+export function groundField(key: string, placement: Placement, surface: (x: number, z: number) => number, points: readonly (readonly [number, number])[]): { field: AsteroidField; misses: string[] } {
+  const field = testField(DETAIL);
+  field.generate({ key, seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [placement] });
+  const misses: string[] = [];
+  for (const [x, z] of points) {
+    const ground = surface(x, z);
+    if (!field.overlap(new THREE.Vector3(x, ground + GROUND_SHIP - 60, z), GROUND_SHIP)) misses.push(`${x}, ${z}: not touched just under the ground`);
+    if (field.overlap(new THREE.Vector3(x, ground + GROUND_SHIP + 200, z), GROUND_SHIP)) misses.push(`${x}, ${z}: touched just over the ground`);
+  }
+  return { field, misses };
 }
 
 /** The Belt's mining plan by the rocks' detail, made once for all tests (it follows from the layout and the shapes). */

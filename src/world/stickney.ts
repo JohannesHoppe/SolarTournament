@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { groundMaterial, groundUv, withCollider } from './boneyard';
+import { reliefGround } from './boneyard';
 import { horizonMesh } from './horizon';
 import { Noise } from './noise';
 import { GROUND_HALF, groundRelief, surfaceHeight } from './phobos';
@@ -14,27 +14,8 @@ import { GROUND_HALF, groundRelief, surfaceHeight } from './phobos';
 const PHOBOS_TINT = 0xd6c4b6;
 const PHOBOS_GLOW = 0x2a1d17;
 
-/** The ground's grid: cells of CELL (units, 75 m) over the piece's square. */
-const CELL = 1500;
-
-/**
- * The ground of the field in its box's frame (`half` its half extents): the relief world/phobos
- * gives on a grid of 75 m, its texture laid on from above; the yards' set gives the field the
- * same relief (RACK_RELIEFS in world/yard), so it collides as this very ground.
- */
-export function phobosGround(half: THREE.Vector3): THREE.Group {
-  const cells = Math.round((half.x * 2) / CELL);
-  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, cells, cells);
-  // laid flat: the plane's y into -z
-  geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
-  const position = geometry.getAttribute('position');
-  for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, groundRelief(position.getX(i), position.getZ(i))));
-  geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(groundUv(geometry), groundMaterial(PHOBOS_TINT, PHOBOS_GLOW, 0.04));
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-  return withCollider(new THREE.Group().add(mesh), half);
-}
+/** The ground of the field in its box's frame (`half` its half extents), on the relief world/phobos gives (see reliefGround). */
+export const phobosGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PHOBOS_TINT, PHOBOS_GLOW);
 
 /** Phobos's colors beyond the field: dark grey dust, a little red, in broad patches. */
 const DUST = new THREE.Color(0.06, 0.05, 0.045);

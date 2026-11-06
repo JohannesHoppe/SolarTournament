@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
-import type { TemplateSet } from './asteroids';
+import type { Relief, TemplateSet } from './asteroids';
 import { boxUv, hazardSurface, industrialSurface, STATION_TILE, stationSurface, surfaced, wornSurface } from '../view/surfaces';
 import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, RACK_RELIEFS } from './yard';
 import { phobosGround } from './stickney';
+import { callistoGround } from './valhalla';
 import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
@@ -70,6 +71,7 @@ export function rackSet(): TemplateSet {
     if (type > OCCATOR_TYPE && type <= OCCATOR_TYPE + STEPS) return occatorStep(type - OCCATOR_TYPE, half);
     if (type === WALL_TYPE) return wallPiece(half);
     if (type === PHOBOS_TYPE) return phobosGround(half);
+    if (type === CALLISTO_TYPE) return callistoGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -818,6 +820,29 @@ export function groundUv(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   }
   geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   return macroUv(geometry, 0.5, DUST_TILE);
+}
+
+/** The ground's grid of a relief piece: cells of RELIEF_CELL (units, 75 m) over its square. */
+const RELIEF_CELL = 1500;
+
+/**
+ * A ground whose top is a relief (see Relief), in its box's frame (`half` its half extents): the
+ * relief on a grid of 75 m, in groundMaterial's layers in `color` lit a little by `emissive`; the
+ * yards' set gives the field the same relief (RACK_RELIEFS in world/yard), so it collides as this
+ * very ground.
+ */
+export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number): THREE.Group {
+  const cells = Math.round((half.x * 2) / RELIEF_CELL);
+  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, cells, cells);
+  // laid flat: the plane's y into -z
+  geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
+  const position = geometry.getAttribute('position');
+  for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(groundUv(geometry), groundMaterial(color, emissive, 0.04));
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  return withCollider(new THREE.Group().add(mesh), half);
 }
 
 function crater(): THREE.Group {

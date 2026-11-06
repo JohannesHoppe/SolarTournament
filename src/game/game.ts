@@ -5664,6 +5664,9 @@ export class Game implements OnlineGame {
       get rigWear() {
         return game.jumpers?.hits ?? 0;
       },
+      get leaderDown() {
+        return !!game.jumpers && !game.jumpers.bots[0].ship.alive;
+      },
       get brokenAt() {
         return game.brokenAt;
       },

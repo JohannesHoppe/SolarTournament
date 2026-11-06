@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { cos, exp, log, sin } from '../detmath';
+import type { Placement, Relief } from './asteroids';
 
 /**
  * The land around a place of the campaign beyond its own near ground (Vesta's basin, Ceres's
@@ -17,6 +18,20 @@ export function behindAll<M extends THREE.Material>(material: M): M {
     shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n  gl_Position.z = gl_Position.w * ${BEHIND_ALL};`);
   };
   return material;
+}
+
+/**
+ * A moon's ground as a piece of the field: a box of half extents `half` whose top is the ground
+ * `surface` gives (its `relief`, see Relief), the box's top at `top` (units, over the highest the
+ * ground gets there); `placement` sets it as the piece of kind 'rack' of type `type` in the
+ * yards' set.
+ */
+export function reliefPiece(surface: (x: number, z: number) => number, half: THREE.Vector3, top: number): { relief: Relief; placement: (type: number) => Placement } {
+  const middle = top - half.y;
+  return {
+    relief: (x, z) => surface(x, z) - middle,
+    placement: (type) => ({ kind: 'rack', type, scale: 1, position: new THREE.Vector3(0, middle, 0), orientation: new THREE.Quaternion(), solid: true, ground: true }),
+  };
 }
 
 export interface Horizon {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { cos, hypot, sin } from '../detmath';
 import { Noise } from './noise';
-import type { Placement, Relief } from './asteroids';
+import { reliefPiece } from './horizon';
 
 /**
  * Stickney on Phobos (the campaign's chapter 4, see docs/campaign/): the inner wall and floor of
@@ -68,13 +68,10 @@ export const GROUND_HALF = new THREE.Vector3(6 * KM, 2 * KM, 6 * KM);
 /** Its box's top: the ground's highest point there, the rim's crest with its bumps. */
 const GROUND_TOP = LAND + RIM_HEIGHT + BUMPS;
 
-/** The ground's relief in its box's own coordinates (see Relief): the surface, about the box's middle. */
-export const groundRelief: Relief = (x, z) => surfaceHeight(x, z) - (GROUND_TOP - GROUND_HALF.y);
-
-/** The ground as the field's piece of kind 'rack' (type `type` in the yards' set): a box whose top is the ground (see Relief). */
-export function groundPlacement(type: number): Placement {
-  return { kind: 'rack', type, scale: 1, position: new THREE.Vector3(0, GROUND_TOP - GROUND_HALF.y, 0), orientation: new THREE.Quaternion(), solid: true, ground: true };
-}
+/** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+export const groundRelief = piece.relief;
+export const groundPlacement = piece.placement;
 
 /** Where the race's mark stands for the HUD: Stickney's floor in its middle (units). */
 export const STICKNEY_FLOOR = new THREE.Vector3(STICKNEY.x, surfaceHeight(STICKNEY.x, STICKNEY.z), STICKNEY.z);

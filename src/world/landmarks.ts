@@ -16,6 +16,8 @@ import { ceres } from './occator';
 import { WallScene } from './solarwall';
 import { phobos } from './stickney';
 import { MARS_AT, MARS_SIZE } from './phobos';
+import { callisto } from './valhalla';
+import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -835,6 +837,7 @@ export class Landmarks {
     this.scenes.set('occator', ceres());
     this.scenes.set('wall', this.wall.group);
     this.scenes.set('phobos', this.mars());
+    this.scenes.set('callisto', this.callisto());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -976,8 +979,22 @@ export class Landmarks {
       fragmentShader: gasFragment,
     });
     this.timed.push(material);
-    this.planets.set(planet, (map) => (material.uniforms.map.value = map));
+    // a planet drawn in more than one scene (Jupiter in its arena and over Callisto) gets its map in each
+    const before = this.planets.get(planet);
+    this.planets.set(planet, (map) => {
+      before?.(map);
+      material.uniforms.map.value = map;
+    });
     return material;
+  }
+
+  /** Callisto beyond the field and Jupiter over it, from its real map (see world/callisto). */
+  private callisto(): THREE.Group {
+    const material = this.gas('giant', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xffd2a8, storms: false });
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(JUPITER_SIZE, 96, 48), material);
+    planet.position.copy(JUPITER_AT);
+    planet.userData.shadowless = true;
+    return callisto().add(planet);
   }
 
   /** Phobos beyond the field and Mars over it, from its real map, its thin air a haze along its limb (see world/phobos). */

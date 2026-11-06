@@ -455,3 +455,15 @@ test('Debt Day: four collectors shot down, the Navy hails, and the benefactor ho
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).held), { timeout: 180_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('Pilot Episode: over Valhalla on Callisto, Red Ledger shot down ends the bounty, and Nicole has her radar', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels'], coins: 6000, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine'], held: true };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Red Ledger');
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('pilotEpisode')), { timeout: 180_000 }).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).modules)).toContain('radar');
+  expect(errors).toEqual([]);
+});

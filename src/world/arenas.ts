@@ -7,7 +7,8 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE } from './yard';
+import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, VALHALLA_MARK } from './callisto';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -41,7 +42,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -374,6 +375,22 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.6, 0.52, 0.46],
     grade: { gain: [1.02, 1, 0.97], lift: [0.0016, 0.0012, 0.001], saturation: 0.9 },
   },
+  // Valhalla: Callisto's dark, icy ground under Jupiter's cream and rust, the sky's light warm
+  // from Jupiter's side, a far sun, a grade a little warmer than the inner moons'
+  callisto: {
+    space: 0x020202,
+    sky: 0x9a8a70,
+    ground: 0x24201a,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.06, 0.04, 0.025], size: 540000, shape: 2, turn: 0.7 },
+      { at: [0.6, 0.3, 0.6], color: [0.03, 0.035, 0.045], size: 460000, shape: 0, turn: 2.1 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.64, 0.6, 0.54],
+    grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
+  },
 };
 
 /**
@@ -470,6 +487,26 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the crater's rim, facing down into it
     start: { at: [30000, 2000, 0], toward: [-20000, -8000, 0] },
+    open: true,
+  },
+  {
+    id: 'callisto',
+    name: msg('Valhalla'),
+    tagline: msg('The great basin of Callisto, its rings frozen like ripples in a pond, and Jupiter standing still over it.'),
+    // nothing loose on the ground: its relief alone
+    layout: { key: 'callisto', seed: 5000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [callistoGround(CALLISTO_TYPE)], fall: CALLISTO_FALL },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    mood: MOODS.callisto,
+    preview: { from: [30000, 8000, 30000], at: [-20000, -2000, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Valhalla'), position: VALHALLA_MARK, distance: true },
+      { glyph: 'planet', label: msg('Jupiter'), position: JUPITER_AT, distance: false },
+    ],
+    // over the ground, facing along the rings towards the basin
+    start: { at: [30000, 2000, 0], toward: [-30000, 0, 0] },
     open: true,
   },
 ];

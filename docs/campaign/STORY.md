@@ -139,7 +139,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 4.2 | Debt Day | fight | Ma Tally reads out the statement of account, and six of her collectors (Docket, Lien, Arrears, Escrow, Ledger, Tithe; skill 0.35) come for the hull over Phobos's grooves beyond Stickney's rim, fighting every ship they see. Shoot four. At the fourth, the Navy cutter Restraint hails: the debt is bought by an anonymous benefactor; the Tallymen leave ("The account is closed. For now."). (built) | ☉ 2,000 · 200; the debt changes hands, and the cut stops (this mission's pay already kept in full) | Raiders as guards; the debt held |
 | 4.3 | Groove Shoot | exploration | A camera drone of *Lanes Watch* films the Magpie flying a groove of the land beyond Stickney's rim, under 60 m over the ground and faster than 20 m/s, for 30 s without a break. (built) | ☉ 1,200 · 150 | The moon's relief (built) |
 | 4.4 | Armor Panels | shop | Pim welds panels from Phobos's Navy yards over the bare left flank (☉ 1,500, from the wallet as far as it holds, the rest on the debt): a beam from that side no longer counts double. (built) | — | Shipyard; a look on the hull |
-| 5.1 | Pilot Episode | bounty | *Lanes Watch* goes on air: the Tallyman "Red Ledger" (skill 0.4) and two wingmen. Kills of the target pay; style moments pay double ratings. | ☉ 3,000 · 300 | Deathmatch; a named target; moments |
+| 5.1 | Pilot Episode | bounty | Captain Kroll names the place: Callisto, where Jupiter's lanes start, and *Lanes Watch* wants the Host on its first show. Nicole finds her radar module in her old storage and installs it. On air: the Tallyman "Red Ledger" and his two wingmen, Carbon and Copy (all skill 0.4), fight every ship they see over Valhalla's craters; Red Ledger shot down ends it, the wingmen only in the way. (built; still to come: style moments paying double ratings) | ☉ 3,000 · 300 | Raiders as guards; a named target; moments |
 | 5.2 | Ice Run | escort | Three ice tugs through a field to Ganymede. The Loose (skill 0.45) hook the tugs away instead of shooting them, and never fire at the Magpie's drive. One tug lost is allowed. | ☉ 2,500 · 200 | Escort; bots with the hook |
 | 5.3 | Valhalla Sprint | race | Ministry coils that *Lanes Watch* leases for the show, in a straight line over the rings of the Valhalla basin, at the speed limit, against the clock. Gold under 40 s. | ☉ 1,500 · 150 | School: the full-speed course |
 | 5.4 | Callisto Echo | exploration | Echo 3, in an old Navy listening post among the craters. | 30 | Markers |
@@ -311,7 +311,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | 2 | Voice I | Her memory holds: she speaks every sentence to its end, without crashing (the second-hand voice board Pim fits at Vesta) |
 | 3 | Targeting | The crosshair glowing over a drive; ships' marks and names |
 | 4 | Racing line | The dashed line and its orange bends (built: the Stickney Grand) |
-| 5 | Radar | The radar sphere |
+| 5 | Radar | The radar sphere (built: Pilot Episode) |
 | 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown |
 | 10 | Voice II | Her own voice, clean |
 | 15 | Wells | The escape gauge and the orbit readout |
@@ -379,7 +379,7 @@ A place in the game is a **landmark** (the body in the sky, from real maps where
 
 Jupiter's moons lie inside a magnetic field that traps radiation fierce enough to kill an unshielded person in hours near the inner moons; Callisto, the outermost of the four, lies mostly outside the worst of it, which is why the Lanes' traffic gathers there.
 
-- **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint.
+- **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint. (Built: the field over Valhalla's ring zone, its ridges 150 m high and packed closer than the real ones, 3 km apart, so a sprint crosses several; some 260 craters of 40 to 700 m in radius; Callisto's eighth of a g, which a ship feels; Jupiter still in the sky, 34° up and 4.4° across, from its Cassini map. Still to come: the studio.)
 - **Europa: the Lineae.** About 3,120 km across, a shell of ice over an ocean, its face crossed by long reddish-brown cracks. Jupiter fills some 12° of its sky. The radiation is intense. A science station clings in a crack, its dish pointing at the ice; nobody has found life down there, and its last scientist keeps looking. Flown: the tanker through the belt, the dive into the crack.
 - **Io: Flux.** About 3,640 km across, the most volcanic body known: hundreds of active volcanoes, a surface of sulfur yellow, orange and white, plumes rising high above it. Jupiter fills some 19° of its sky. Io sheds a ring of charged gas along its orbit, and between Io and Jupiter runs a current of millions of amperes along the field's lines: the flux tube, where Jupiter's auroras have a spot of their own. In the game the tube shows as a faint violet glow and a rising static on the link. Station: sulfur miners in shielded bunkers. Flown: the Flux Tube Race, the Blackout.
 - **Ganymede.** About 5,270 km across, the largest moon in the solar system, larger than Mercury, the only moon with a magnetic field of its own (with auroras of its own); bright grooved ground beside dark old ground. The Loose hide in its tug yards. Flown: Hollow Jack, the harpoon, the hook yard.
@@ -603,6 +603,16 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **MA TALLY**: Noted. The account is closed. For now.
 
 **NICOLE**: Bought. By whom? Nobody buys a debt to forgive it, Host.
+
+### Pilot Episode (chapter 5, built)
+
+**HEDDA**: Callisto. Jupiter's lanes start here, and so does the money. Lanes Watch has its studio on the ice, and they want you on their first show. Bounty hunting. Don't let them make a clown of you.
+
+**NICOLE**: One more module from my old storage, Host: the radar. Every ship and rock within two and a half kilometers, ahead and behind, in its sphere on the screen.
+
+**NICOLE**: We are on air. The bounty is a Tallyman they call Red Ledger, with two wingmen, over the craters. Red Ledger is the one who pays. The other two are only in the way.
+
+**NICOLE**: Red Ledger is down, and all of Jupiter's lanes watched it. They will want a second episode, Host.
 
 ### The paint comes off (chapter 3, built)
 

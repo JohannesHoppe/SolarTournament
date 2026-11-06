@@ -66,15 +66,16 @@ describe('the campaign Lot 7731', () => {
     expect(rankOf(12000)).toBe('Contender');
   });
 
-  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser and the racing line at the Stickney Grand', () => {
+  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser, the racing line at the Stickney Grand and the radar in Pilot Episode', () => {
     const campaign = freshCampaign();
     expect(campaign.modules).toEqual([]);
     for (const mission of MISSIONS) {
       if (mission.id === 'surplus') expect(campaign.modules).toEqual([]);
       if (mission.id === 'stickneyGrand') expect(campaign.modules).toEqual(['targeting']);
+      if (mission.id === 'pilotEpisode') expect(campaign.modules).toEqual(['targeting', 'racingLine']);
       complete(campaign, mission);
     }
-    expect(campaign.modules).toEqual(['targeting', 'racingLine']);
+    expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar']);
     expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
   });
 

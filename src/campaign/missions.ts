@@ -6,6 +6,7 @@ import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
+import { surfaceHeight as callistoHeight } from '../world/callisto';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -736,6 +737,37 @@ const grooveShoot: Drill = {
   mark: (ctx, a) => t('Low in a groove {seconds}/{needed} s · {meters} m over the ground', { seconds: Math.floor(a.held), needed: GROOVE_HOLD, meters: Math.round((ctx.me.flight.position.y - phobosHeight(ctx.me.flight.position.x, ctx.me.flight.position.z)) / 20) }),
 };
 
+/**
+ * Pilot Episode (5.1): Lanes Watch's first show. The Tallyman Red Ledger and his two wingmen, of
+ * skill BOUNTY_SKILL, fight every ship they see over Valhalla's craters (guards of BOUNTY_FIELD,
+ * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
+ */
+const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
+const BOUNTY_SKILL = 0.4;
+const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
+
+const pilotEpisode: Drill = {
+  line: CAMPAIGN.pilotEpisode,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'callisto',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, BOUNTY_FIELD, BOUNTY_NAMES.length, BOUNTY_SKILL, BOUNTY_NAMES, 12000, true);
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done: (ctx) => ctx.leaderDown,
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => BOUNTY_FIELD,
+  mark: () => t('Bounty: {name}', { name: BOUNTY_NAMES[0] }),
+};
+
+/** Pilot Episode: Nicole installs her radar (see Module). */
+const fitRadar = (campaign: Campaign) => {
+  if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
+};
+
 /** Debt Day's end: the benefactor holds the debt, and nobody takes a cut from then on. */
 const fitHeld = (campaign: Campaign) => {
   campaign.held = true;
@@ -1186,4 +1218,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'debtDay', name: msg('Debt Day'), drills: [said(TALLY.debtDay, 'phobos'), debtDay, said(NAVY.hail, 'phobos'), said(TALLY.closed, 'phobos'), said(CAMPAIGN.debtDayBought, 'phobos')], pay: 2000, ratings: 200, fit: fitHeld },
   { id: 'grooveShoot', name: msg('Groove Shoot'), drills: [grooveShoot, said(CAMPAIGN.grooveShootDone, 'phobos')], pay: 1200, ratings: 150 },
   { id: 'armorPanels', name: msg('Armor Panels'), drills: [said(PIM.panels, 'phobos'), said(CAMPAIGN.panels, 'phobos')], pay: 0, fit: fitPanels },
+  // chapter 5, Valhalla on Callisto: Lanes Watch's bounty show over the craters, under Jupiter
+  { id: 'pilotEpisode', name: msg('Pilot Episode'), drills: [said(HEDDA.callisto, 'callisto'), said(CAMPAIGN.radar, 'callisto'), pilotEpisode, said(CAMPAIGN.pilotEpisodeDone, 'callisto')], pay: 3000, ratings: 300, fit: fitRadar },
 ];

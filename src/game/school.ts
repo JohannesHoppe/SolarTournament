@@ -94,6 +94,8 @@ export interface SchoolContext {
   /** The raiders shot down so far, and their hits on their target. */
   readonly jumpersDown: number;
   readonly rigWear: number;
+  /** Whether the raider named first (a bounty's target, see spawnJumpers) is shot down. */
+  readonly leaderDown: boolean;
   /** A race against `count` rivals of `skill` (or each of its own `skills`) named from `names` through openings of `radius` at `rings` (facing `normals`), `laps` laps, from beside `start` (see Game.racers). */
   spawnRacers(rings: THREE.Vector3[], normals: THREE.Vector3[], radius: number, laps: number, count: number, skill: number, start: THREE.Vector3, names?: readonly string[], skills?: readonly number[]): void;
   removeRacers(): void;
