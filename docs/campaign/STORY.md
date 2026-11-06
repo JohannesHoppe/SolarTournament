@@ -136,7 +136,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
 | 4.1 | Stickney Grand | race | Captain Kroll names the place: Phobos, the Navy town under Mars. Nicole finds her racing line module in her old storage and installs it. Eight rings of the Games on an ellipse 4.4 by 3.2 km that dives from over Stickney's rim down into the crater and out again, each 300 m over the ground beneath it; three laps against Perihelion (skill 0.65), who has never died, and four others (Vasquez and Kade 0.35, Moth and Dray 0.3), lined up on the loop before the first ring. Top three goes to *Lanes Watch*; later, the race is flown again. (built: the race, the module) | ☉ 2,500 · 250 | Race; the place on a moon's relief (built) |
-| 4.2 | debt Day | fight | Ma Tally and six Tallymen (skill 0.35) in Phobos's grooves. Kill four. At the fourth, a Navy cutter hails: the debt is bought by an anonymous benefactor; the Tallymen leave. | ☉ 2,000 · 200; the debt changes hands, and the cut stops | Deathmatch with a scripted end |
+| 4.2 | Debt Day | fight | Ma Tally reads out the statement of account, and six of her collectors (Docket, Lien, Arrears, Escrow, Ledger, Tithe; skill 0.35) come for the hull over Phobos's grooves beyond Stickney's rim, fighting every ship they see. Shoot four. At the fourth, the Navy cutter Restraint hails: the debt is bought by an anonymous benefactor; the Tallymen leave ("The account is closed. For now."). (built) | ☉ 2,000 · 200; the debt changes hands, and the cut stops (this mission's pay already kept in full) | Raiders as guards; the debt held |
 | 4.3 | Groove Shoot | exploration | A sponsor's camera drone films the Magpie flying a groove under 60 m above the ground for 30 s. | ☉ 1,200 · 150 | Surface; new: a height band |
 | 5.1 | Pilot Episode | bounty | *Lanes Watch* goes on air: the Tallyman "Red Ledger" (skill 0.4) and two wingmen. Kills of the target pay; style moments pay double ratings. | ☉ 3,000 · 300 | Deathmatch; a named target; moments |
 | 5.2 | Ice Run | escort | Three ice tugs through a field to Ganymede. The Loose (skill 0.45) hook the tugs away instead of shooting them, and never fire at the Magpie's drive. One tug lost is allowed. | ☉ 2,500 · 200 | Escort; bots with the hook |
@@ -590,6 +590,18 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE** *(seen once)*: They have seen the barge. Once more, and they send the pickets.
 
 **NICOLE** *(through)*: Over the wall, and gone. Forty people the regime will never count.
+
+### Debt Day (chapter 4, built)
+
+**MA TALLY**: Statement of account, hull seven seven three one. Payment in full is now due. We have brought six collectors. Please do not make this expensive.
+
+**NICOLE**: Seven of them in the grooves, the tug behind. They want the hull. Shoot four of them, and they may think again.
+
+**NAVY CUTTER RESTRAINT** *(a clipped, bored officer)*: Tallymen, this is Navy cutter Restraint. That paper has been bought in full, by a party who wishes to remain anonymous. Stand down and clear the lane.
+
+**MA TALLY**: Noted. The account is closed. For now.
+
+**NICOLE**: Bought. By whom? Nobody buys a debt to forgive it, Host.
 
 ### The paint comes off (chapter 3, built)
 

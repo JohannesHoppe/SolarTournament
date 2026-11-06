@@ -1643,8 +1643,11 @@ export class Game implements OnlineGame {
     if (button.disabled) return;
     const next = nextMission(this.campaign);
     const note = button.querySelector<HTMLElement>('.mode-note')!;
-    note.textContent = next
-      ? t('Next: {mission} · {coins} ☉ · you owe {bond} ☉ · {rank}', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond), rank: t(rankOf(this.campaign.ratings)) })
+    const where = next && { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond), rank: t(rankOf(this.campaign.ratings)) };
+    note.textContent = where
+      ? this.campaign.held
+        ? t('Next: {mission} · {coins} ☉ · debt held · {rank}', where)
+        : t('Next: {mission} · {coins} ☉ · you owe {bond} ☉ · {rank}', where)
       : t('All that is built is flown. More of the story is in the making.');
   }
 
@@ -1672,7 +1675,8 @@ export class Game implements OnlineGame {
     const next = nextMission(campaign);
     const place = arenaById(next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
     $('board-place').textContent = place ? t(place.name) : '';
-    $('board-wallet').textContent = t('{coins} ☉ in the wallet · you owe {bond} ☉ · {rank}', { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) });
+    const wallet = { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) };
+    $('board-wallet').textContent = campaign.held ? t('{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}', wallet) : t('{coins} ☉ in the wallet · you owe {bond} ☉ · {rank}', wallet);
     const job = (mission: Mission, note: string) => {
       const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode' });
       button.innerHTML = `<span class="mode-name"><span class="mode-label"></span></span><span class="mode-note"></span>`;
@@ -5504,9 +5508,11 @@ export class Game implements OnlineGame {
       if (this.mission) this.startRound('school');
       else this.showMenu();
       const done =
-        paid.kept + paid.cut > 0
-          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. You still owe {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) })
-          : t('{mission} done.', { mission: t(mission.name) });
+        paid.kept + paid.cut === 0
+          ? t('{mission} done.', { mission: t(mission.name) })
+          : this.campaign.held
+            ? t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings })
+            : t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. You still owe {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) });
       this.notice(paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done);
       this.schoolMark = this.schoolTrack = null;
       return;

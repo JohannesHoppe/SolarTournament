@@ -10,10 +10,10 @@ const VOICE_RETRY_MS = 5000;
 /**
  * How the campaign's other voices are played (see castOf): `rate` the share of the pitch and
  * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice;
- * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %), `tremble` how far (cents) the pitch
+ * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %; the Navy officer's clipped at 96 %), `tremble` how far (cents) the pitch
  * wavers at TREMBLE_RATE (Hz).
  */
-const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 } };
+const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 }, navy: { rate: 0.96, tremble: 0 } };
 const TREMBLE_RATE = 5;
 
 /** How a line meets one still being said: see Speaker.say. */

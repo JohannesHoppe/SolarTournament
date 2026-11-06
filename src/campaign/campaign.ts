@@ -83,7 +83,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay';
 
 export interface Mission {
   id: MissionId;
@@ -144,9 +144,11 @@ export interface Campaign {
   ratings: number;
   parts: Part[];
   modules: Module[];
+  /** The debt bought by an anonymous benefactor (Debt Day, chapter 4): from then on nobody takes a cut, and the debt stands as it is. */
+  held: boolean;
 }
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -159,7 +161,7 @@ export function campaignFrom(text: string | null): Campaign {
     const parts = Array.isArray(kept.parts) ? PARTS.filter((part) => kept.parts!.includes(part)) : [];
     const modules = Array.isArray(kept.modules) ? MODULES.filter((module) => kept.modules!.includes(module)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true };
   } catch {
     return fresh;
   }
@@ -183,7 +185,8 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept
   }
   campaign.step = 0;
   const pay = first ? Math.max(0, mission.pay - fine) : 0;
-  const cut = Math.min(campaign.bond, Math.round(pay * YARD_CUT));
+  // the debt's holder takes its cut until the benefactor holds the debt
+  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
   campaign.bond -= cut;
   campaign.coins += pay - cut;
   const ratings = first ? (mission.ratings ?? 0) : 0;

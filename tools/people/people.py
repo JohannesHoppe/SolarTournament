@@ -11,6 +11,7 @@ PEOPLE = {
     'pim': dict(phenotype=dict(gender=0.0, age=0.34, muscle=0.5, weight=0.35, height=0.5, proportions=0.6), hair='short02', eyebrows='eyebrow006', clothes=['male_worksuit01', 'shoes05'], skin='young_caucasian_female'),
     'hedda': dict(phenotype=dict(gender=0.0, age=0.78, muscle=0.6, weight=0.45, height=0.6, proportions=0.5), hair='short01', eyebrows='eyebrow002', clothes=['male_casualsuit06', 'shoes03'], skin='old_caucasian_female', targets={'head-age-incr': 0.9, 'l-cheek-bones-incr': 0.6, 'r-cheek-bones-incr': 0.6}),
     'tally': dict(phenotype=dict(gender=0.0, age=0.62, muscle=0.4, weight=0.62, height=0.55, proportions=0.5), hair='bob02', eyebrows='eyebrow001', clothes=['female_elegantsuit01', 'shoes01'], skin='middleage_african_female', targets={'head-age-incr': 0.4}),
+    'navy': dict(phenotype=dict(gender=1.0, age=0.5, muscle=0.6, weight=0.45, height=0.6, proportions=0.55), hair='short03', eyebrows='eyebrow007', clothes=['male_elegantsuit01', 'shoes02'], skin='middleage_asian_male'),
     'saw': dict(phenotype=dict(gender=1.0, age=0.4, muscle=0.55, weight=0.3, height=0.52, proportions=0.45), hair='short04', eyebrows='eyebrow011', clothes=['male_casualsuit05', 'fedora_cocked', 'shoes06'], skin='young_asian_male', targets={'l-cheek-volume-decr': 0.6, 'r-cheek-volume-decr': 0.6}),
 }
 

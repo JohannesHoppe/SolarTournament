@@ -92,6 +92,12 @@ export const SPEAKERS = {
     reference: { text: 'Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Noted. Your arrears have been increased accordingly. We will see you on your next statement.', speed: 1 },
     language: 'tally',
   },
+  navy: {
+    voice: 'bm_george',
+    speed: 1,
+    reference: { text: 'Tallymen, this is Navy cutter Restraint. That paper has been bought in full, by a party who wishes to remain anonymous. Stand down and clear the lane.', speed: 1 },
+    language: 'navy',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, HEDDA, PIM, RASK, SAW, TALLY } from '../music/lines';
+import { CAMPAIGN, HEDDA, NAVY, PIM, RASK, SAW, TALLY } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -683,6 +683,40 @@ const stickneyGrand = race({
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
 
+/**
+ * Debt Day (4.2): Ma Tally's collectors, COLLECTORS of skill COLLECTOR_SKILL, come for the hull over
+ * Phobos's grooves beyond Stickney's rim, fighting every ship they see (guards of the drill's
+ * point, see Game.jumpers); COLLECTORS_DOWN of them shot down, and a Navy cutter hails (the next
+ * lines): the debt is bought, and from then on the benefactor holds it (see Campaign.held).
+ */
+const COLLECTORS = 6;
+const COLLECTOR_SKILL = 0.35;
+const COLLECTORS_DOWN = 4;
+const COLLECTOR_NAMES = ['Docket', 'Lien', 'Arrears', 'Escrow', 'Ledger', 'Tithe'];
+const GROOVES = point(48000, phobosHeight(48000, 0) + 4000, 0);
+
+const debtDay: Drill = {
+  line: CAMPAIGN.debtDay,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'phobos',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, GROOVES, COLLECTORS, COLLECTOR_SKILL, COLLECTOR_NAMES, 12000, true);
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done: (ctx) => ctx.jumpersDown >= COLLECTORS_DOWN,
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => GROOVES,
+  mark: (ctx) => t('Collectors down {n}/{needed}', { n: ctx.jumpersDown, needed: COLLECTORS_DOWN }),
+};
+
+/** Debt Day's end: the benefactor holds the debt, and nobody takes a cut from then on. */
+const fitHeld = (campaign: Campaign) => {
+  campaign.held = true;
+};
+
 /** The prize of the Peak Run, Pim's thruster parts: the thrusters rebuilt to stock, and with them the dodge. */
 const fitThrusters = (campaign: Campaign) => {
   if (!campaign.parts.includes('thrusters')) campaign.parts.push('thrusters');
@@ -1118,4 +1152,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'overhaul', name: msg('Overhaul'), drills: [onCeres(PIM.overhaul), onCeres(CAMPAIGN.overhaul)], pay: 0, fit: fitDrive },
   // chapter 4, Stickney on Phobos: the Navy town under Mars, the race into the crater, the debt changing hands
   { id: 'stickneyGrand', name: msg('Stickney Grand'), drills: [said(HEDDA.phobos, 'phobos'), said(CAMPAIGN.racingLine, 'phobos'), stickneyGrand, said(CAMPAIGN.stickneyGrandDone, 'phobos')], pay: 2500, ratings: 250, fit: fitRacingLine, start: GRAND_START },
+  { id: 'debtDay', name: msg('Debt Day'), drills: [said(TALLY.debtDay, 'phobos'), debtDay, said(NAVY.hail, 'phobos'), said(TALLY.closed, 'phobos'), said(CAMPAIGN.debtDayBought, 'phobos')], pay: 2000, ratings: 200, fit: fitHeld },
 ];

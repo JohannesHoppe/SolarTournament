@@ -445,3 +445,13 @@ test('chapter 4 opens on Phobos: the Stickney Grand lines up five rivals, Perihe
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
   expect(errors).toEqual([]);
 });
+
+test('Debt Day: four collectors shot down, the Navy hails, and the benefactor holds the debt from then on', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand'], coins: 3100, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive'], modules: ['targeting', 'racingLine'] };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'phobos' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 6, null, { timeout: 180_000 });
+  await page.evaluate(() => window.game.jumpers.bots.slice(0, 4).forEach((bot: { ship: { alive: boolean } }) => (bot.ship.alive = false)));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).held), { timeout: 180_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

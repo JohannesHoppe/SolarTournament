@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -565,6 +565,8 @@ export const CAMPAIGN = {
   stickneyGrand: 'Eight rings, three laps, down into the crater and out again. Follow the line. Home in the first three, and the show wants us.',
   stickneyGrandLost: 'Three of them were home before us. Lanes Watch is not interested yet. We race again.',
   stickneyGrandDone: 'In the first three. Lanes Watch has our name now, Host. I am not sure that is good news.',
+  debtDay: 'Seven of them in the grooves, the tug behind. They want the hull. Shoot four of them, and they may think again.',
+  debtDayBought: 'Bought. By whom? Nobody buys a debt to forgive it, Host.',
   scoutTwo: 'Scout Two.',
   scoutTwoHull: 'We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.',
   echoTwoCall: 'The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.',
@@ -639,15 +641,22 @@ export const SAW = {
 export const TALLY = {
   repo: 'Host of hull seven seven three one. This is Ma Tally, for the Tallymen, holders of your paper. Your account is in arrears under terms you never read. We are taking the collateral. Please hold still. It hurts less.',
   noted: 'Noted. Your arrears have been increased accordingly. We will see you on your next statement.',
+  debtDay: 'Statement of account, hull seven seven three one. Payment in full is now due. We have brought six collectors. Please do not make this expensive.',
+  closed: 'Noted. The account is closed. For now.',
+} as const;
+
+/** The officer of a Navy cutter over the comm: clipped, bored, used to being obeyed. Their own voice (see tools/voice). */
+export const NAVY = {
+  hail: 'Tallymen, this is Navy cutter Restraint. That paper has been bought in full, by a party who wishes to remain anonymous. Stand down and clear the lane.',
 } as const;
 
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -675,6 +684,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(SAW)];
     case 'tally':
       return [...Object.values(TALLY)];
+    case 'navy':
+      return [...Object.values(NAVY)];
   }
 }
 

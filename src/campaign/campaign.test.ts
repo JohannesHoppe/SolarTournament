@@ -45,7 +45,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false });
   });
 
   it('counts a mission’s ratings once and in full, and names the rank they raise the Host to', () => {
@@ -57,9 +57,9 @@ describe('the campaign Lot 7731', () => {
       expect(done.ratings).toBe(mission.ratings ?? 0);
       if (done.rank) ranks.push(done.rank);
     }
-    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones
+    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones
     expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + (mission.ratings ?? 0), 0));
-    expect(ranks).toEqual(['Background', 'Local Feed']);
+    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
     expect(rankOf(49)).toBe('Unrated');
@@ -92,6 +92,16 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'overhaul')!);
     expect(hullOf(campaign).drive).toBe(STOCK.drive);
     expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + OVERHAUL_PRICE - 1000]);
+  });
+
+  it('takes no cut once Debt Day has the benefactor hold the debt: its own pay and every one after kept in full, the debt as it stands', () => {
+    const campaign = { ...freshCampaign(), bond: 20000 };
+    const debtDay = MISSIONS.find((mission) => mission.id === 'debtDay')!;
+    const paid = complete(campaign, debtDay);
+    expect(campaign.held).toBe(true);
+    expect([paid.kept, paid.cut, campaign.bond]).toEqual([debtDay.pay, 0, 20000]);
+    const later = complete(campaign, MISSIONS.find((mission) => mission.id === 'stickneyGrand')!);
+    expect(later.cut).toBe(0);
   });
 
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {
