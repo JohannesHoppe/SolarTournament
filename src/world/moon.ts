@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { Noise } from './noise';
-import { reliefPiece } from './horizon';
-import { Randomizer } from '../random';
+import { craterField, reliefPiece, reliefTop } from './horizon';
 import { setFromAxisAngle } from '../detthree';
 import type { Placement } from './asteroids';
 
@@ -32,39 +31,21 @@ export const DOME_RADIUS = 6000;
 export const DOME_HEIGHT = 3000;
 const DOME_CLEAR = 9000;
 
-/** The craters: CRATERS of them seeded over the field, each a bowl with a raised rim, some 50 to 400 m across. */
-const CRATERS = 40;
-const RIM = 0.15;
-const craters = (() => {
-  const r = new Randomizer(19006);
-  return Array.from({ length: CRATERS }, () => ({ x: r.range(-80000, 80000), z: r.range(-80000, 80000), radius: r.range(1000, 8000) })).filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > DOME_CLEAR + c.radius);
-})();
+/** The craters: 40 of them seeded over the field, some 50 to 400 m across, their rims 15 % of their radius high (see craterField). */
+const craters = craterField(19006, 40, 80000, 1000, 8000, DOME_CLEAR, 0.15);
 /** Hummocks of regolith: a few meters. */
 const BUMPS = 80;
 const bumps = new Noise(19007);
 
 /** The Moon's ground (units, its height) over (x, z): the plain, its craters' bowls and rims, hummocks, and the Moon's curve. */
 export function surfaceHeight(x: number, z: number): number {
-  let height = LAND + BUMPS * bumps.fractal(x / 3000, 0.4, z / 3000, 3) - (x * x + z * z) / (2 * MOON_RADIUS);
-  for (const crater of craters) {
-    const dx = x - crater.x;
-    const dz = z - crater.z;
-    const d = Math.sqrt(dx * dx + dz * dz) / crater.radius;
-    if (d > 1.6) continue;
-    // a bowl a fifth as deep as it is wide inside, a rim raised round it fading outside
-    height += d < 1 ? crater.radius * 0.2 * (d * d - 1) + crater.radius * RIM * d * d : crater.radius * RIM * (1 - (d - 1) / 0.6) * (1 - (d - 1) / 0.6);
-  }
-  return height;
+  return LAND + craters(x, z) + BUMPS * bumps.fractal(x / 3000, 0.4, z / 3000, 3) - (x * x + z * z) / (2 * MOON_RADIUS);
 }
 
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 /** Its box's top: over the highest the ground gets in it (overlapping craters' rims add up), sampled every 50 m. */
-const GROUND_TOP = (() => {
-  let top = -Infinity;
-  for (let x = -GROUND_HALF.x; x <= GROUND_HALF.x; x += 1000) for (let z = -GROUND_HALF.z; z <= GROUND_HALF.z; z += 1000) top = Math.max(top, surfaceHeight(x, z));
-  return top + BUMPS;
-})();
+const GROUND_TOP = reliefTop(surfaceHeight, GROUND_HALF) + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece). */
 const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, exp, log, sin } from '../detmath';
 import type { Placement, Relief } from './asteroids';
+import { Randomizer } from '../random';
 
 /**
  * The land around a place of the campaign beyond its own near ground (Vesta's basin, Ceres's
@@ -18,6 +19,35 @@ export function behindAll<M extends THREE.Material>(material: M): M {
     shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n  gl_Position.z = gl_Position.w * ${BEHIND_ALL};`);
   };
   return material;
+}
+
+/**
+ * A cratered plain's craters (the Moon's, Mercury's): `count` bowls seeded from `seed` over a
+ * square `reach` on each side of the field's middle, `from` to `to` in radius (units), none within
+ * `clear` of the middle; what they add to the ground's height at (x, z): each a bowl a fifth as
+ * deep as it is wide, a rim `rim` of its radius high round it, fading out to 1.6 radii.
+ */
+export function craterField(seed: number, count: number, reach: number, from: number, to: number, clear: number, rim: number): (x: number, z: number) => number {
+  const r = new Randomizer(seed);
+  const craters = Array.from({ length: count }, () => ({ x: r.range(-reach, reach), z: r.range(-reach, reach), radius: r.range(from, to) })).filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > clear + c.radius);
+  return (x, z) => {
+    let height = 0;
+    for (const crater of craters) {
+      const dx = x - crater.x;
+      const dz = z - crater.z;
+      const d = Math.sqrt(dx * dx + dz * dz) / crater.radius;
+      if (d > 1.6) continue;
+      height += d < 1 ? crater.radius * 0.2 * (d * d - 1) + crater.radius * rim * d * d : crater.radius * rim * (1 - (d - 1) / 0.6) * (1 - (d - 1) / 0.6);
+    }
+    return height;
+  };
+}
+
+/** The highest `surface` gets over the square of `half` (sampled every 50 m), for a ground box's top. */
+export function reliefTop(surface: (x: number, z: number) => number, half: THREE.Vector3): number {
+  let top = -Infinity;
+  for (let x = -half.x; x <= half.x; x += 1000) for (let z = -half.z; z <= half.z; z += 1000) top = Math.max(top, surface(x, z));
+  return top;
 }
 
 /**
