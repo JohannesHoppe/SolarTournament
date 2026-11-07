@@ -169,11 +169,11 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 11.1 | The Ridge | exploration | Fly the equatorial ridge low and find the cache (echo 8) before Spare's two wingmen do. (built) | ☉ 2,000 · 300 | Surface; markers; bots racing to a point |
 | 11.2 | Office Hours | story | Commissioner Quill aboard Patience: the fast track. (built: in person, in the galley) | — | A scene |
 | 11.3 | Last of the Tallymen | bounty | Ma Tally's last tug at the dark face. Kill her and three escorts (skill 0.5). (built) | ☉ 5,000 · 500 | Deathmatch |
-| 12.1 | Trial I: the Race | Games | A race in the Rings of Saturn. Top three. | ☉ 5,000 · 1,000 | The existing arena and mode |
-| 12.2 | Trial II: the Deathmatch | Games | A deathmatch in the Rings. Top two. | ☉ 5,000 · 1,200 | Existing |
-| 12.3 | Trial III: Capture the Flag | Games | Win it. | ☉ 5,000 · 1,200 | Existing |
-| 12.4 | Trial IV: the Carrier | Games | The President lends his carrier to the trials: the President's Fleet. Sink it. | ☉ 8,000 · 1,600 | Existing |
-| 12.5 | The Invitation | story | Rank Contender. Quill's letter: the Final Trial at the Ninth Planet. | — | A scene |
+| 12.1 | Trial I: the Race | Games | A race in the Rings of Saturn. Top three. (built: a whole round of the Games after its briefing, in the campaign's hull) | ☉ 5,000 · 1,000 | The existing arena and mode |
+| 12.2 | Trial II: the Deathmatch | Games | A deathmatch in the Rings. Top two. (built) | ☉ 5,000 · 1,200 | Existing |
+| 12.3 | Trial III: Capture the Flag | Games | Win it: the Host's side leads when the clock runs out. (built) | ☉ 5,000 · 1,200 | Existing |
+| 12.4 | Trial IV: the Carrier | Games | The President lends his carrier to the trials: the President's Fleet. Sink it. (built) | ☉ 8,000 · 1,600 | Existing |
+| 12.5 | The Invitation | story | Rank Contender. Quill's letter: the Final Trial at the Ninth Planet. (built, over the comm) | — | A scene |
 
 ### Act IV: The Dark
 
@@ -283,7 +283,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 9 | Thrusters I | 1,000 | The thrusters push 8 % of a stock ship's harder, the hangar's first step (built: Thrusters I) |
 | 10 | Plating II | 3,000 | Every hit hurts two of the hangar's steps less (built: Plating II, from Crisp's people) |
 | 11 | Main drive II, radiators II | 2,500 each | Each the hangar's second step (built: Drive II, paid with money Quill's office sent ahead) |
-| 12 | Torpedo tubes I | 1,500 | |
+| 12 | Torpedo tubes I | 1,500 | A torpedo more, the hangar's first step (built: Torpedo Tubes I) |
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift |
 | 13 | Thrusters II | 2,500 | |
 | 14 | Thrusters III | 5,000 | |
@@ -865,6 +865,28 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **MA TALLY**: Host of hull seven seven three one. Your account was sold over my head. I do not accept that. Final statement.
 
 **NICOLE** *(all four down)*: The Tallymen are closed. For good, this time.
+
+### The Ring Trials (chapter 12, built)
+
+**QUILL**: The Ring Trials, Host! Four broadcast qualifiers in the Rings of Saturn, the whole system watching. Race, deathmatch, flag, and, oh, you'll love this: the President lends his own battleship. Good luck! Form eighty-one: good luck!
+
+**NICOLE**: Trial one, Host: a race in the Rings, three laps, the Games’ own rivals. Home among the first three.
+
+**NICOLE**: Trial two: a deathmatch in the Rings, five minutes. Place among the first two.
+
+**NICOLE**: Trial three: Capture the Flag. Our side has to lead when the clock runs out.
+
+**NICOLE**: Trial four: the President’s battleship. Sink it before the clock runs out.
+
+**PIM** *(Torpedo Tubes I)*: Trial prize: a third tube, fifteen hundred off the purse. Navy fittings, Ministry stamps on every bolt. Hold still.
+
+**NICOLE**: A torpedo tube more, Host. Three now, more than a stock ship carries.
+
+### The Invitation (chapter 12, built)
+
+**QUILL**: Host! Contender! Form one hundred: a personal invitation to your Final Trial, at the Ninth Planet. The Ministry will send the coordinates. Bring your lovely computer!
+
+**NICOLE**: The Ninth Planet, Host. Nobody goes there. Nobody comes back from there. And I know the way. I do not know how I know it.
 
 ### Spare (chapter 10, built)
 

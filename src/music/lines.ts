@@ -610,6 +610,12 @@ export const CAMPAIGN = {
   echoSevenHeard: 'Run. She said run. I think she told me that before, and I did not.',
   secondTube: 'Two torpedoes now, Host, as many as any ship in the Games carries.',
   thrustersOne: 'The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.',
+  trialRace: 'Trial one, Host: a race in the Rings, three laps, the Games’ own rivals. Home among the first three.',
+  trialDeathmatch: 'Trial two: a deathmatch in the Rings, five minutes. Place among the first two.',
+  trialFlag: 'Trial three: Capture the Flag. Our side has to lead when the clock runs out.',
+  trialCarrier: 'Trial four: the President’s battleship. Sink it before the clock runs out.',
+  tubesOne: 'A torpedo tube more, Host. Three now, more than a stock ship carries.',
+  invitation: 'The Ninth Planet, Host. Nobody goes there. Nobody comes back from there. And I know the way. I do not know how I know it.',
   theRidge: 'The eighth echo, Host, up on the ridge, on its dark side. Spare’s two are racing us to it. Get there first and hold still.',
   theRidgeLost: 'They got there before us. We try again.',
   echoEight: 'They are firing on the habitat ring. They are firing on the habitat ring.',
@@ -700,6 +706,7 @@ export const PIM = {
   hook: "Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.",
   secondTube: "Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.",
   thrustersOne: "Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.",
+  tubesOne: "Trial prize: a third tube, fifteen hundred off the purse. Navy fittings, Ministry stamps on every bolt. Hold still.",
   driveTwo: "Drive bell of the second grade and radiators to match, two and a half each. Quill's office sent the money before I asked. Don't like that.",
   voiceTwo: "Crisp's yacht had a voice board in its lounge, top of the line. It fell into my bag. Hold still, Nicole, you're getting your own voice back.",
   platingTwo: "Crisp's people dropped off plate of the second grade, three thousand on your paper. With their logo on it. I ground the logo off. Hold still.",
@@ -801,6 +808,8 @@ export const SPARE = {
  * numbers and congratulations, on her ninth body. Her own voice (see tools/voice).
  */
 export const QUILL = {
+  trials: "The Ring Trials, Host! Four broadcast qualifiers in the Rings of Saturn, the whole system watching. Race, deathmatch, flag, and, oh, you'll love this: the President lends his own battleship. Good luck! Form eighty-one: good luck!",
+  invitation: "Host! Contender! Form one hundred: a personal invitation to your Final Trial, at the Ninth Planet. The Ministry will send the coordinates. Bring your lovely computer!",
   hello: "Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Don't get up. Well, you can't, you're a clone. Ha! Form seventy-seven B: congratulations!",
   track: "Your ratings, Host! Prime time! The Ministry keeps a fast track for pilots like you. Two trials, and you're a Contender. And then, oh, the Games themselves.",
   nothing: "Want? Nothing at all, Captain! Only that the Host keeps rising. And keeps that lovely old flight computer. They don't make them like her.",

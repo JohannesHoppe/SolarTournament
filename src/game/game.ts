@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -982,6 +982,8 @@ export class Game implements OnlineGame {
   /** The campaign as the browser keeps it, and the mission of it flown now (null: none). */
   private campaign = campaignFrom(storageGet(CAMPAIGN_KEY));
   private mission: Mission | null = null;
+  /** The mission whose trial round is being flown (see Mission.trial), its drills done. */
+  private trialOf: Mission | null = null;
   /** The mission flown is one done before, flown again for nothing: it keeps no drill reached and runs on into no other. */
   private flyingAgain = false;
   /** The campaign's job board is open (see showBoard). */
@@ -1721,7 +1723,44 @@ export class Game implements OnlineGame {
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.missionFine = 0;
     this.mission = mission;
+    this.trialOf = null;
     this.startRound('school');
+  }
+
+  /**
+   * A trial's round (see Mission.trial): a solo round of its mode in its arena against the Games'
+   * default rivals, in the campaign's hull; the Host's own choice of a solo round is left as it was.
+   */
+  private startTrial(mission: Mission) {
+    const trial = mission.trial!;
+    const chosen = this.solo;
+    this.trialOf = mission;
+    this.schoolMark = this.schoolTrack = null;
+    this.solo = { mode: trial.mode, arena: trial.arena, rivals: [...SOLO_DEFAULT.rivals] };
+    this.startRound('solo');
+    this.solo = chosen;
+  }
+
+  /**
+   * A trial's round over (see Mission.trial): flown to its end and passed, the mission is done and
+   * paid as any other (nothing when flown again); else it waits on the job board to be flown again.
+   * What the results screen says of it.
+   */
+  private judgeTrial(): string {
+    const mission = this.trialOf!;
+    const trial = mission.trial!;
+    this.trialOf = this.mission = null;
+    const me = this.me!;
+    const passed = this.time >= this.roundEndsAt && trialPassed(trial, { place: this.standings().indexOf(me) + 1, sideLeads: !!this.flags && this.flags.leading === me.team, battleshipDown: !!this.fleet?.down });
+    if (!passed) return t('{mission} failed. It waits on the job board.', { mission: t(mission.name) });
+    if (this.flyingAgain) {
+      this.flyingAgain = false;
+      return t('{mission} done.', { mission: t(mission.name) });
+    }
+    let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null };
+    this.keepCampaign((campaign) => (paid = complete(campaign, mission, 0)));
+    const done = t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings });
+    return paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done;
   }
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
@@ -2833,6 +2872,8 @@ export class Game implements OnlineGame {
   }
 
   private showMenu() {
+    // a trial's round left for the menu is no longer flown (see endRound, judgeTrial)
+    if (this.trialOf) this.trialOf = this.mission = null;
     this.showCaller(null);
     this.showQuality();
     this.leaveOnline();
@@ -2928,12 +2969,13 @@ export class Game implements OnlineGame {
     $('hud-room').textContent = '';
 
     // the campaign flies its own hull (Lot 7731), never one of the Games
-    this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, mode === 'school' && this.mission ? 'magpie' : this.selectedShip, true);
+    const campaignHull = !!this.mission && (mode === 'school' || !!this.trialOf);
+    this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, campaignHull ? 'magpie' : this.selectedShip, true);
     this.me.wish = this.tint;
     this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
     // in the campaign the hull it has come to (see campaign/campaign), never the tournament's hangar
-    this.me.outfit(mode === 'school' && this.mission ? hullOf(this.campaign) : perksOf(this.hangar, this.selectedShip, !!this.online));
+    this.me.outfit(campaignHull ? hullOf(this.campaign) : perksOf(this.hangar, this.selectedShip, !!this.online));
     // the HUD shows only what the ship has: no overdrive's readout on a hull without one, no tubes' without torpedoes
     $('hud-overdrive').parentElement!.hidden = !this.me.perks.overdrive;
     $('hud-torpedo').parentElement!.hidden = TORPEDOES + this.me.perks.torpedoes <= 0;
@@ -3581,7 +3623,7 @@ export class Game implements OnlineGame {
     // a round flown to its end is cheered; one left from the pause menu is not
     if (this.time >= this.roundEndsAt) this.crowd.finale();
     this.renderScoreboard();
-    $('results-next').textContent = '';
+    $('results-next').textContent = this.trialOf ? this.judgeTrial() : '';
     $('again').innerHTML = `${t('Back to hangar')} <kbd>Enter</kbd>`;
     this.speaker.say(COMPUTER.roundOver, 'urgent');
     this.setScreen('results');
@@ -3593,8 +3635,9 @@ export class Game implements OnlineGame {
     // the time ran out with the President's battleship still in the fight: it got away
     if (this.fleet?.present(this.field.clock)) this.radio.announce(ANNOUNCER_FLEET.escaped, null);
     // training points from the flight school are no personal best, and pay no coins
-    if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
-    const coins = me && !this.school && !this.spectating ? payOut(this.hangar, me.score) : 0;
+    // nor is a trial of the campaign, which pays in the campaign's own coin
+    if (me && !this.school && !this.trialOf && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
+    const coins = me && !this.school && !this.trialOf && !this.spectating ? payOut(this.hangar, me.score) : 0;
     if (coins > 0) this.saveHangar();
     $('results-coins').textContent = coins > 0 ? t('+{coins} Solar Coins · {total} in the hangar', { coins: coinText(coins), total: coinText(this.hangar.coins) }) : '';
   }
@@ -5505,6 +5548,11 @@ export class Game implements OnlineGame {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
       else if (!this.flyingAgain) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+    }
+    // a trial's drills done: its round is flown next (see Mission.trial, endRound)
+    if (school.finished && this.mission?.trial && !this.trialOf) {
+      this.startTrial(this.mission);
+      return;
     }
     // a mission flown again done: nothing paid, nothing kept, back to the job board
     if (school.finished && this.mission && this.flyingAgain) {

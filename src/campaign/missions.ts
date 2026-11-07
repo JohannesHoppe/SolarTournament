@@ -20,7 +20,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -918,6 +918,16 @@ const fitDriveTwo = (campaign: Campaign) => {
     buy(campaign, DRIVE_TWO_PRICE);
   }
 };
+
+/** Torpedo tubes I (12.4), the trials' prize: the tubes' first step (see hullOf), at TUBES_ONE_PRICE. */
+const fitTubesOne = (campaign: Campaign) => {
+  if (campaign.parts.includes('tubesOne')) return;
+  campaign.parts.push('tubesOne');
+  buy(campaign, TUBES_ONE_PRICE);
+};
+
+/** The Ring Trials' arena (chapter 12): the Rings of Saturn, the Games' own. */
+const RINGS: ArenaId = 'rings';
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
@@ -2135,4 +2145,11 @@ export const MISSIONS: readonly Mission[] = [
   },
   { id: 'driveTwo', name: msg('Drive II'), drills: [said(PIM.driveTwo, 'iapetus'), said(CAMPAIGN.driveTwo, 'iapetus')], pay: 0, fit: fitDriveTwo },
   { id: 'lastTallymen', name: msg('Last of the Tallymen'), drills: [said(HEDDA.lastTallymen, 'iapetus'), said(TALLY.last, 'iapetus'), lastTallymen, said(CAMPAIGN.lastTallymenDone, 'iapetus')], pay: 5000, ratings: 500 },
+  // chapter 12, the Ring Trials: four rounds of the Games in the Rings of Saturn, broadcast
+  { id: 'trialRace', name: msg('Trial I: the Race'), drills: [said(QUILL.trials, RINGS), said(CAMPAIGN.trialRace, RINGS)], pay: 5000, ratings: 1000, trial: { mode: 'race', arena: RINGS, podium: 3 } },
+  { id: 'trialDeathmatch', name: msg('Trial II: the Deathmatch'), drills: [said(CAMPAIGN.trialDeathmatch, RINGS)], pay: 5000, ratings: 1200, trial: { mode: 'deathmatch', arena: RINGS, podium: 2 } },
+  { id: 'trialFlag', name: msg('Trial III: Capture the Flag'), drills: [said(CAMPAIGN.trialFlag, RINGS)], pay: 5000, ratings: 1200, trial: { mode: 'flag', arena: RINGS, podium: 1 } },
+  { id: 'trialCarrier', name: msg('Trial IV: the Battleship'), drills: [said(CAMPAIGN.trialCarrier, RINGS)], pay: 8000, ratings: 1600, trial: { mode: 'fleet', arena: RINGS, podium: 1 } },
+  { id: 'tubesOne', name: msg('Torpedo Tubes I'), drills: [said(PIM.tubesOne, RINGS), said(CAMPAIGN.tubesOne, RINGS)], pay: 0, fit: fitTubesOne },
+  { id: 'invitation', name: msg('The Invitation'), drills: [said(QUILL.invitation, RINGS), said(CAMPAIGN.invitation, RINGS)], pay: 0 },
 ];

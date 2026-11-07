@@ -2,7 +2,8 @@ import type { Drill } from '../game/school';
 import type { Mood } from '../music/radio';
 import type { Flavor } from '../music/songs';
 import type { ArenaId } from '../world/arenas';
-import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP, type Perks } from '../game/hangar';
+import type { RoundMode } from '../game/race';
+import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP, tubeTorpedoes, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
 import { MISSIONS } from './missions';
@@ -67,12 +68,14 @@ export const THRUSTERS_ONE_PRICE = 1000;
 export const PLATING_TWO_PRICE = 3000;
 /** Main drive II and Radiators II (chapter 11), at Iapetus: each the hangar's second step (see DRIVE_STEP, RADIATOR_STEP), each at this price (☉), paid as the laser's is. */
 export const DRIVE_TWO_PRICE = 2500;
+/** Torpedo tubes I (chapter 12), the trials' prize: the hangar's first step of the tubes (see tubeTorpedoes), its price (☉), paid as the laser's is. */
+export const TUBES_ONE_PRICE = 1500;
 
-/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps, a torpedo tube, the main drive's first step, the hook, the second tube, the thrusters' first step, the plating's second, the main drive's and the radiators' second; and the depot's grey ground off it (Scout Two). */
-export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating' | 'tube' | 'driveOne' | 'hook' | 'secondTube' | 'thrustersOne' | 'platingTwo' | 'driveTwo' | 'radiatorsTwo';
-const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating', 'tube', 'driveOne', 'hook', 'secondTube', 'thrustersOne', 'platingTwo', 'driveTwo', 'radiatorsTwo'];
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps, a torpedo tube, the main drive's first step, the hook, the second tube, the thrusters' first step, the plating's second, the main drive's and the radiators' second, the tubes' first step; and the depot's grey ground off it (Scout Two). */
+export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating' | 'tube' | 'driveOne' | 'hook' | 'secondTube' | 'thrustersOne' | 'platingTwo' | 'driveTwo' | 'radiatorsTwo' | 'tubesOne';
+const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating', 'tube', 'driveOne', 'hook', 'secondTube', 'thrustersOne', 'platingTwo', 'driveTwo', 'radiatorsTwo', 'tubesOne'];
 /** What the job board calls each part fitted. */
-export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade'), tube: msg('a torpedo tube'), driveOne: msg('the main drive of the first grade'), hook: msg('the hook, Hollow Jack’s harpoon'), secondTube: msg('a second torpedo tube'), thrustersOne: msg('the thrusters of the first grade'), platingTwo: msg('plating of the second grade'), driveTwo: msg('the main drive of the second grade'), radiatorsTwo: msg('radiators of the second grade') };
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade'), tube: msg('a torpedo tube'), driveOne: msg('the main drive of the first grade'), hook: msg('the hook, Hollow Jack’s harpoon'), secondTube: msg('a second torpedo tube'), thrustersOne: msg('the thrusters of the first grade'), platingTwo: msg('plating of the second grade'), driveTwo: msg('the main drive of the second grade'), radiatorsTwo: msg('radiators of the second grade'), tubesOne: msg('torpedo tubes of the first grade') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -119,12 +122,14 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('hook')) hull.hook = true;
   // the second tube: two torpedoes, a stock ship's
   if (campaign.parts.includes('secondTube')) hull.torpedoes = 2 - TORPEDOES;
+  // the tubes a step past a stock ship's: a torpedo more
+  if (campaign.parts.includes('tubesOne')) hull.torpedoes = 2 - TORPEDOES + tubeTorpedoes(1);
   // the thrusters a step past a stock ship's
   if (campaign.parts.includes('thrustersOne')) hull.thrusters = STOCK.thrusters + THRUSTER_STEP;
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation';
 
 export interface Mission {
   id: MissionId;
@@ -141,6 +146,20 @@ export interface Mission {
   music?: Mood;
   /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
+  /**
+   * A trial of the Games (the Ring Trials): after its drills, a whole round of `mode` in `arena`
+   * against the Games' rivals, flown in the campaign's hull; passed when the Host places among
+   * the first `podium` (a race, a deathmatch), the Host's side leads at the end (Capture the
+   * Flag) or the battleship is down (the President's Fleet). Failed, the round is flown again.
+   */
+  trial?: { mode: RoundMode; arena: ArenaId; podium: number };
+}
+
+/** Whether the Host passed a trial (see Mission.trial): placed `place` (from 1) in a race or deathmatch, their side leading in Capture the Flag, the battleship down in the President's Fleet. */
+export function trialPassed(trial: NonNullable<Mission['trial']>, outcome: { place: number; sideLeads: boolean; battleshipDown: boolean }): boolean {
+  if (trial.mode === 'flag') return outcome.sideLeads;
+  if (trial.mode === 'fleet') return outcome.battleshipDown;
+  return outcome.place <= trial.podium;
 }
 
 /**

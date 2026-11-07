@@ -760,3 +760,27 @@ test('Last of the Tallymen: Ma Tally and three escorts round her tug at Iapetus�
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('lastTallymen')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 11 flown too: the hull with Drive II, for the Ring Trials. */
+const trialsHull = (...done: string[]) => ({ ...iapetusHull('theRidge', 'officeHours', 'driveTwo', 'lastTallymen', ...done), parts: [...iapetusHull().parts, 'driveTwo', 'radiatorsTwo'] });
+
+test('Trial I: after its briefing a whole race of the Games in the Rings, flown in the campaign’s hull; first at the end passes it, paid in the campaign and not in the hangar', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, trialsHull());
+  // the briefing said, the trial’s round begins
+  await page.waitForFunction(() => window.game.school?.attempt?.live, null, { timeout: 180_000 });
+  await page.waitForFunction(() => !window.game.school && window.game.venue?.id === 'rings' && window.game.roundMode === 'race' && window.game.ships.length === 8, null, { timeout: 120_000 });
+  expect(await page.evaluate(() => window.game.me.type)).toBe('magpie');
+  const coins = await page.evaluate(() => localStorage.getItem('solartournament.hangar'));
+  // the Host first home, the clock run out
+  await page.evaluate(() => {
+    const game = window.game;
+    game.me.finish = 1;
+    game.roundEndsAt = game.time;
+  });
+  await page.waitForFunction(() => window.game.state === 'results', null, { timeout: 30_000 });
+  await expect(page.locator('#results-next')).toContainText('Trial I');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('trialRace'))).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem('solartournament.hangar'))).toBe(coins);
+  expect(errors).toEqual([]);
+});

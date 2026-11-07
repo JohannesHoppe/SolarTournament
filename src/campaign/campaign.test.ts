@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -57,9 +57,9 @@ describe('the campaign Lot 7731', () => {
       expect(done.ratings).toBe(ratingsOf(mission, campaign));
       if (done.rank) ranks.push(done.rank);
     }
-    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones, Hollow Jack's bounty to a sponsor's notice, chapter 10 into prime time
+    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones, Hollow Jack's bounty to a sponsor's notice, chapter 10 into prime time, the Ring Trials to a Contender
     expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + ratingsOf(mission, campaign), 0));
-    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed', 'Sponsored', 'Prime Time']);
+    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed', 'Sponsored', 'Prime Time', 'Contender']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
     expect(rankOf(49)).toBe('Unrated');
@@ -151,6 +151,16 @@ describe('the campaign Lot 7731', () => {
     expect(campaign.bond).toBe(20000);
   });
 
+  it('passes a trial of the Ring Trials by its mode: a place on the podium, the side leading, the battleship down', () => {
+    const outcome = { place: 3, sideLeads: false, battleshipDown: false };
+    expect(trialPassed({ mode: 'race', arena: 'rings', podium: 3 }, outcome)).toBe(true);
+    expect(trialPassed({ mode: 'deathmatch', arena: 'rings', podium: 2 }, outcome)).toBe(false);
+    expect(trialPassed({ mode: 'flag', arena: 'rings', podium: 1 }, outcome)).toBe(false);
+    expect(trialPassed({ mode: 'flag', arena: 'rings', podium: 1 }, { ...outcome, sideLeads: true })).toBe(true);
+    expect(trialPassed({ mode: 'fleet', arena: 'rings', podium: 1 }, { ...outcome, battleshipDown: true })).toBe(true);
+    expect(MISSIONS.filter((mission) => mission.trial).map((mission) => mission.trial!.mode)).toEqual(['race', 'deathmatch', 'flag', 'fleet']);
+  });
+
   it('fits Main Drive II and Radiators II at Iapetus: each the hangar’s second step, each paid as the laser is', () => {
     const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['drive' as const, 'driveOne' as const, 'radiators' as const] };
     const before = hullOf(campaign).cooling;
@@ -229,10 +239,10 @@ describe('the campaign Lot 7731', () => {
     expect(hullOf(campaign).thrusters).toBe(PATCHED_THRUSTERS);
   });
 
-  it('gives every mission a name and drills to fly', () => {
+  it('gives every mission a name and drills to fly, a trial at least its briefing before its round', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
-      expect(mission.drills.length).toBeGreaterThan(1);
+      expect(mission.drills.length).toBeGreaterThan(mission.trial ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });
