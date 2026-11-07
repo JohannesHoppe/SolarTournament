@@ -84,7 +84,7 @@ import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, 
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
 import { fieldSlice, SYNC_EVERY, SYNC_GRACE, SYNC_SLICES, syncField, type FieldSlice } from '../world/fieldsync';
-import { IMMOVABLE, massOf, type Body } from '../world/bodies';
+import { IMMOVABLE, MASS, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
@@ -5770,7 +5770,7 @@ export class Game implements OnlineGame {
       get drone() {
         return game.drone;
       },
-      spawnDrone: (position, velocity, name) => this.spawnDrone(position, velocity, name),
+      spawnDrone: (position, velocity, name, mass) => this.spawnDrone(position, velocity, name, mass),
       removeDrone: () => {
         if (this.drone) this.removeShip(this.drone);
         this.drone = null;
@@ -5965,10 +5965,11 @@ export class Game implements OnlineGame {
   }
 
   /** A defenseless target for the flight school, its drive towards the pilot: the one place a laser hurts. */
-  private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name = t('Target drone')) {
+  private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name = t('Target drone'), mass: number = MASS.ship) {
     const me = this.me!;
     this.drone ??= this.addShip('drone', name, me.type === 'human' ? 'alien' : 'human', false);
     this.drone.name = name;
+    this.drone.body.mass = mass;
     this.drone.spawn(position, lookingAt(me.flight.position, position, me.flight.up(upward)), this.time);
     this.drone.flight.velocity.copy(velocity);
     this.drone.protectedUntil = this.time;

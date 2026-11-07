@@ -23,13 +23,16 @@ export const IMMOVABLE = Infinity;
  * reactor canister 14 m long) a quarter of that; a sponsor probe 60 kg (solar wings, a dish and
  * a beacon on a light frame: a hook's winch has it in at a jerk, and its thrusters, about 20 kN,
  * throw it about at some 33 g, see game/items); a torpedo a
- * tonne (its 20 g motor makes about 196 kN); a piece of wreckage five tonnes; the President's
+ * tonne (its 20 g motor makes about 196 kN); a piece of wreckage five tonnes; Scout One, the
+ * campaign's scout, 12 t; the President's
  * battleship (1,150 m) 4.5 million t: a carrier of today, 330 m long, displaces some 100,000 t,
  * and a mass goes with the cube of the length, (1,150 / 330)³ × 100,000 t ≈ 4.2 million t,
  * rounded up for its heavy armor (its size is FLEET_SCALE in game/fleet).
  */
 export const MASS = {
   ship: 60_000,
+  /** Scout One, the PAAA 01's scout (the campaign's Ninth): long-legged and stripped for range, her holds empty, one sleeper in the pod, a fifth of an interceptor. */
+  scout: 12_000,
   core: 15_000,
   probe: 60,
   torpedo: 1_000,

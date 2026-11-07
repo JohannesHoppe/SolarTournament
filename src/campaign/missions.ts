@@ -3,6 +3,7 @@ import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
+import { MASS } from '../world/bodies';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
@@ -1502,7 +1503,34 @@ const firstDeath: Drill = {
 };
 
 /** Orbit (18.5): the Magpie flown into a stable orbit about the hole inside the disk's glare, as the flight school's orbit drill asks; Patience's printer is gone, so a death goes black first (see Drill.lastClone). */
-const lastOrbit: Drill = { ...DRILL.orbit, line: CAMPAIGN.lastOrbit, praise: undefined, lastClone: true };
+/**
+ * Orbit (18.5): the flight school's orbit drill with no printer behind the clone (lastClone), and
+ * Scout One drifting ORBIT_SCOUT ahead of the hull along its flight, at her own mass (MASS.scout):
+ * hooked, she is towed, and the orbit counts only while she hangs on the hook; lost to the hole,
+ * the attempt starts over.
+ */
+const ORBIT_SCOUT = 3000;
+const lastOrbit: Drill = {
+  ...DRILL.orbit,
+  line: CAMPAIGN.lastOrbit,
+  praise: undefined,
+  lastClone: true,
+  keys: ['hook', 'drive', 'turn'],
+  towsDrone: true,
+  enter(ctx, a) {
+    DRILL.orbit.enter!(ctx, a);
+    const flight = ctx.me.flight;
+    ctx.spawnDrone(flight.position.clone().addScaledVector(towOff.copy(flight.velocity).normalize(), ORBIT_SCOUT), flight.velocity.clone(), SCOUT_NAME, MASS.scout);
+    ctx.drone!.hull = 100;
+  },
+  done(ctx, a) {
+    const towed = !!ctx.drone && ctx.hookedShip === ctx.drone;
+    if (!towed) a.swept = 0;
+    return DRILL.orbit.done(ctx, a) && towed;
+  },
+  fail: (ctx) => (!ctx.drone?.alive ? CAMPAIGN.scoutLost : DRILL.orbit.fail!(ctx)),
+  waypoint: (ctx) => (ctx.drone && ctx.hookedShip !== ctx.drone ? ctx.drone.flight.position : null),
+};
 
 /**
  * The Parade (19.1): ten of the Ministry's rings in a line over the Ballroom's dome, PARADE_OVER

@@ -1122,6 +1122,29 @@ test('the job board offers Nicole’s voice clean or with the old board’s crac
   expect(errors).toEqual([]);
 });
 
+test('Orbit at the Ninth: Scout One drifts ahead on the hull’s flight, the orbit counts only with her on the hook, and the hook takes her', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath'));
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.attempt?.live && window.game.drone?.name === 'Scout One', null, { timeout: 180_000 });
+  // not hooked yet: whatever the orbit, nothing is swept
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => window.game.school.attempt.swept)).toBe(0);
+  // her on the nose: the hook takes her
+  await page.evaluate(() => {
+    const flight = window.game.me.flight;
+    const toward = window.game.drone.flight.position.clone().sub(flight.position).normalize();
+    const nose = flight.forward(toward.clone());
+    flight.orientation.premultiply(flight.orientation.clone().setFromUnitVectors(nose, toward));
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' }));
+  });
+  await page.waitForFunction(() => window.game.tethers.get(window.game.me)?.anchor?.ship === window.game.drone && window.game.tethers.get(window.game.me).flying <= 0, null, { timeout: 30_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
+  // she is a light scout, a fifth of an interceptor: the pair still flies
+  expect(await page.evaluate(() => window.game.drone.body.mass)).toBe(12000);
+  expect(await page.evaluate(() => window.game.drone.alive)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test('Orbit at the Ninth: Patience’s printer gone, the clone’s death goes black, no ad, and the attempt starts over', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath'));

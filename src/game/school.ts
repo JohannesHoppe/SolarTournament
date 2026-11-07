@@ -60,8 +60,8 @@ export interface SchoolContext {
   dt: number;
   /** The target drone, once a drill has spawned it. */
   drone: Ship | null;
-  /** Places the target drone at a point, drifting with a velocity, its drive towards the pilot; `name` what the HUD calls it (a target drone unless named: Scout One). */
-  spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name?: string): void;
+  /** Places the target drone at a point, drifting with a velocity, its drive towards the pilot; `name` what the HUD calls it (a target drone unless named: Scout One), `mass` what it weighs on a cable or in a bump (an interceptor's unless given: Scout One's, see world/bodies MASS). */
+  spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name?: string, mass?: number): void;
   /** Takes the target drone out of the arena, alive or not. */
   removeDrone(): void;
   /** The sparring bot of the final exam. */

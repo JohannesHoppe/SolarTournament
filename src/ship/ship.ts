@@ -279,8 +279,8 @@ function sharedRadius(assets: Assets): number {
 
 export class Ship {
   readonly flight = new FlightModel();
-  /** The ship as a body on a rope or in a bump (see world/bodies): its flight, and an interceptor's mass. */
-  readonly body: Body = { position: this.flight.position, velocity: this.flight.velocity, mass: MASS.ship };
+  /** The ship as a body on a rope or in a bump (see world/bodies): its flight, and an interceptor's mass (a drill's ship may weigh less: Scout One, see SchoolContext.spawnDrone). */
+  readonly body: Body & { mass: number } = { position: this.flight.position, velocity: this.flight.velocity, mass: MASS.ship };
   /** Where the ship was before this frame's move, for the swept collision test. */
   readonly previous = new THREE.Vector3();
   /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */
