@@ -82,13 +82,22 @@ def say(sentence: str, seed: int) -> np.ndarray:
     best, best_score = None, -1.0
     for attempt in range(TRIES):
         torch.manual_seed(seed + attempt * 7919)
-        take = model.generate(sentence, language_id=language, exaggeration=clone['exaggeration'], cfg_weight=clone['cfg'], temperature=clone['temperature'])[0].numpy()
+        try:
+            take = model.generate(sentence, language_id=language, exaggeration=clone['exaggeration'], cfg_weight=clone['cfg'], temperature=clone['temperature'])[0].numpy()
+        except IndexError:
+            # now and then the sampling runs past the speech tokens (Chatterbox: "out-of-range
+            # special tokens found in flow") and the decoder fails: a take that failed, and the
+            # next seed tries again
+            print(f'  failed take {attempt + 1}: {sentence}', flush=True)
+            continue
         rambled = len(take) / model.sr > len(letters(sentence)) * SECONDS_PER_LETTER + MARGIN
         score = 0.0 if rambled else clarity(take, sentence, model.sr)
         if score > best_score:
             best, best_score = take, score
         if score >= clear:
             break
+    if best is None:
+        raise RuntimeError(f'every take failed: {sentence}')
     if best_score < clear:
         print(f'  unclear ({best_score:.2f}): {sentence}', flush=True)
     return best
