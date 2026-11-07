@@ -151,7 +151,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho';
 
 export interface Mission {
   id: MissionId;
@@ -175,6 +175,12 @@ export interface Mission {
    * Flag) or the battleship is down (the President's Fleet). Failed, the round is flown again.
    */
   trial?: { mode: RoundMode; arena: ArenaId; podium: number };
+  /**
+   * A side trip (Mercury, Venus): offered on the job board beside the next job once the mission
+   * `side` names is done, and flown whenever the Host likes, never in the story's order; always
+   * from its start, and leaving the drill reached in the story's next mission as it was.
+   */
+  side?: MissionId;
 }
 
 /** Whether the Host passed a trial (see Mission.trial): placed `place` (from 1) in a race or deathmatch, their side leading in Capture the Flag, the battleship down in the President's Fleet. */
@@ -259,8 +265,11 @@ export function campaignFrom(text: string | null): Campaign {
   }
 }
 
-/** The next mission of the story, or null once every mission built is done. */
-export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !campaign.done.includes(mission.id)) ?? null;
+/** The next mission of the story, or null once every mission built is done; side trips are never it (see Mission.side). */
+export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !mission.side && !campaign.done.includes(mission.id)) ?? null;
+
+/** The side trips on offer: those whose mission to start from is done and that are not done themselves (see Mission.side). */
+export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id));
 
 /**
  * A mission done: it counts, what it fits is fitted, its pay less `fine` (what the Host lost on
@@ -278,7 +287,8 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept
     campaign.done.push(mission.id);
     mission.fit?.(campaign);
   }
-  campaign.step = 0;
+  // a side trip leaves the story's next mission where the Host left it
+  if (!mission.side) campaign.step = 0;
   const pay = first ? Math.max(0, mission.pay - fine) : 0;
   // the debt's holder takes its cut until the benefactor holds the debt
   const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));

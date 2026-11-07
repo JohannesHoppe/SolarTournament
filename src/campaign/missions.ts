@@ -19,6 +19,7 @@ import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
 import { surfaceHeight as plutoHeight } from '../world/pluto';
+import { ridgeNorth, surfaceHeight as mercuryHeight } from '../world/mercury';
 import { yacht } from '../world/yacht';
 import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
@@ -1072,6 +1073,35 @@ const heartRun = race({
   podium: 1,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
+
+/**
+ * Terminator Run (a side trip to Mercury): the sun miners' morning race round their camp in
+ * Caloris, TERMINATOR_LAPS laps of TERMINATOR_RINGS rings on an ellipse over the plain and its
+ * ridges, TERMINATOR_OVER over the ground (more than twice a ring's radius, see HEART_OVER); the
+ * first two home are paid.
+ */
+const TERMINATOR_RINGS = 8;
+export const TERMINATOR_LAPS = 2;
+const TERMINATOR_OVER = 6000;
+const terminatorLoop = groundLoop(TERMINATOR_RINGS, [0, 0], 40000, 28000, TERMINATOR_OVER, mercuryHeight);
+export const TERMINATOR_COURSE = terminatorLoop.course;
+export const TERMINATOR_START = terminatorLoop.start;
+const terminatorRun = race({
+  line: CAMPAIGN.terminatorRun,
+  lost: CAMPAIGN.terminatorRunLost,
+  arena: 'mercury',
+  marks: TERMINATOR_COURSE,
+  laps: TERMINATOR_LAPS,
+  pipes: null,
+  rivals: { names: ['Glare', 'Noonday', 'Sunspot', 'Scorch', 'Dazzle'], skills: [0.55, 0.5, 0.45, 0.4, 0.4] },
+  podium: 2,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/** Mercury's echo (a side trip), over the crest of the wrinkle ridge north of the miners' camp, ECHO_MERCURY_OVER over it. */
+const ECHO_MERCURY_X = -20000;
+const ECHO_MERCURY_OVER = 1500;
+export const ECHO_MERCURY = point(ECHO_MERCURY_X, mercuryHeight(ECHO_MERCURY_X, ridgeNorth(ECHO_MERCURY_X)) + ECHO_MERCURY_OVER, ridgeNorth(ECHO_MERCURY_X));
 
 /** The tenth echo (15.2), over the edge of the mountains by Pluto's heart, ECHO_TEN_OVER over their ground. */
 const ECHO_TEN_X = -36000;
@@ -2772,4 +2802,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'parade', name: msg('The Parade'), drills: [parade, said(CAMPAIGN.paradeDone, 'ballroom')], pay: 0, ratings: 500 },
   { id: 'certification', name: msg('Certification'), drills: [said(CAMPAIGN.certification, 'ballroom'), said(CAMPAIGN.certified, 'ballroom')], pay: 0 },
   { id: 'firstRound', name: msg('Your First Round'), drills: [said(CAMPAIGN.firstRound, 'rings')], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
+  // the side trips, from Act II on: Mercury's sun miners and their race, and an echo there
+  { id: 'terminatorRun', name: msg('Terminator Run'), drills: [said(HEDDA.mercury, 'mercury'), terminatorRun, said(CAMPAIGN.terminatorRunDone, 'mercury')], pay: 4000, ratings: 300, start: TERMINATOR_START, side: 'pilotEpisode' },
+  { id: 'mercuryEcho', name: msg('Mercury Echo'), drills: [echoAt(CAMPAIGN.echoMercuryCall, 'mercury', ECHO_MERCURY), said(CAMPAIGN.echoMercury, 'mercury'), said(CAMPAIGN.echoMercuryHeard, 'mercury')], pay: 0, ratings: 40, side: 'terminatorRun' },
 ];

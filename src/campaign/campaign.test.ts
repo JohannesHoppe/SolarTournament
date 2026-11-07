@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -25,6 +25,25 @@ describe('the campaign Lot 7731', () => {
     campaign.done = [];
     expect(complete(campaign, mission)).toMatchObject({ kept: 900, cut: 100 });
     expect(campaign.bond).toBe(0);
+  });
+
+  it('offers the side trips once their mission is done, never as the story’s next one, and leaves the drill reached in the story as it was', () => {
+    const campaign = freshCampaign();
+    const story = MISSIONS.filter((mission) => !mission.side);
+    const upTo = story.findIndex((mission) => mission.id === 'pilotEpisode');
+    campaign.done = story.slice(0, upTo).map((mission) => mission.id);
+    expect(sideTrips(campaign)).toEqual([]);
+    complete(campaign, story[upTo]);
+    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun']);
+    expect(nextMission(campaign)?.id).toBe(story[upTo + 1].id);
+    campaign.step = 3;
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'terminatorRun')!);
+    expect(campaign.step).toBe(3);
+    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['mercuryEcho']);
+    // the whole story done, the side trips still wait
+    campaign.done = story.map((mission) => mission.id);
+    expect(nextMission(campaign)).toBeNull();
+    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun']);
   });
 
   it('takes what the Host lost on the job off the pay before the yard takes its cut, never below nothing', () => {

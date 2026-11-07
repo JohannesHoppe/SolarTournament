@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -1714,6 +1714,9 @@ export class Game implements OnlineGame {
     };
     const pays = (mission: Mission) => (mission.pay ? t('Pays {pay} ☉ before the yard’s cut, {ratings} ratings.', { pay: coinText(mission.pay), ratings: ratingsOf(mission, campaign) }) : t('Pays nothing.'));
     $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
+    const trips = sideTrips(campaign);
+    $('board-side-label').hidden = !trips.length;
+    $('board-side').replaceChildren(...trips.map((mission) => job(mission, `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`)));
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     $('board-done').replaceChildren(...done.map((mission) => job(mission, t('Flown again, it pays nothing.'))));
@@ -1786,7 +1789,7 @@ export class Game implements OnlineGame {
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
   private missionStep(): number {
-    return this.flyingAgain ? 0 : this.campaign.step;
+    return this.flyingAgain || this.mission?.side ? 0 : this.campaign.step;
   }
 
   /**
@@ -5589,7 +5592,7 @@ export class Game implements OnlineGame {
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else if (!this.flyingAgain) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+      else if (!this.flyingAgain && !this.mission?.side) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
     }
     // a trial's drills done: its round is flown next (see Mission.trial, endRound)
     if (school.finished && this.mission?.trial && !this.trialOf) {
@@ -5612,11 +5615,12 @@ export class Game implements OnlineGame {
       this.keepCampaign((campaign) => (paid = complete(campaign, mission, this.missionFine)));
       this.missionFine = 0;
       // the story runs on into its next mission without the menu, from the pad; the menu only
-      // once all that is built is flown
-      this.mission = nextMission(this.campaign);
+      // once all that is built is flown, and the job board after a side trip
+      this.mission = mission.side ? null : nextMission(this.campaign);
       this.schoolMark = this.schoolTrack = null;
       if (this.mission) this.startRound('school');
       else this.showMenu();
+      if (mission.side) this.showBoard(true);
       const done =
         paid.kept + paid.cut === 0
           ? t('{mission} done.', { mission: t(mission.name) })

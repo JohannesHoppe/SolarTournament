@@ -96,7 +96,9 @@ What the Host carries into the Games, nobody else knows. Nicole's line in the sp
 | | 18 The Ninth | The primordial black hole | No planet: a hole, fed to glow. Scout One, and Nicole Aster asleep. The Ministry comes. Perihelion's first death, broadcast to the system three days late. The last tow, with Patience's printer wrecked. Quill's deal. | Admission |
 | **V The Games** | 19 The Ballroom | The Moon, Earth | The parade over the President's Ballroom. The certification. The first round of the Games. | The Magpie for the tournament |
 
-Side trips (optional, from Act II on): **Mercury** (sun miners in the Caloris basin; the Terminator Run, a race along the line between day and night) and **Venus** (Victory Cola's cloud city, a race through the acid cloud deck). They pay coins and ratings and hold one echo each, so a completionist hears all of Nicole's past.
+Side trips (optional, from Act II on): **Mercury** (sun miners in the Caloris basin; the Terminator Run, a race along the line between day and night) and **Venus** (Victory Cola's cloud city, a race through the acid cloud deck). They pay coins and ratings and hold one echo each, so a completionist hears all of Nicole's past. The job board offers them under "Side trips" once Pilot Episode (5.1) is done; they are flown whenever the Host likes, always from their start, and leave the drill reached in the story's next job as it was.
+
+Built: Mercury. **Terminator Run** (☉ 4,000 · 300): Hedda briefs it ("Mercury. The sun miners in Caloris race the Terminator Run every morning, before the heat of noon comes. Side money, and they pay well. Mind the glare."), Nicole calls it ("Two laps round the miners' camp, Host, eight rings, the sun miners against us. First or second, and they pay."): two laps of eight rings on an ellipse round the sun miners' camp, 300 m over the plain and its ridges, against five sun miners (Glare, Noonday, Sunspot, Scorch, Dazzle; skill 0.4 to 0.55); first or second home. Lost: "Two miners home before us. Their own ground, their own glare. Again." Won: "Paid. The miners say noon lasts weeks here, and nobody races at noon." Then **Mercury Echo** (· 40), over the wrinkle ridge north of the camp: "The old frequency, Host, here too, over the ridge north of the camp. Hold us still over it." The echo: "Teodor says I fly like a librarian. Careful, and always back on time. He says it like it is a bad thing." Nicole: "Teodor. She had a friend who laughed at her. I keep a list of my friends, Host. It is short. You are on it." The race is flown round the camp; that it runs along the terminator itself is still to come. Venus is still to come.
 
 ---
 
@@ -234,7 +236,7 @@ Twelve fragments of Nicole's past, one hidden in each of twelve places, found by
 9. The Derelict: "Scout Two is taken. I am alone in Scout One. Course: the dark mass. Cold sleep at arrival."
 10. Pluto: "If you are hearing this, you have my voice, and I have no idea what they made of it. I am sorry."
 11. Granary: "Orbit set. Pod sealed. Wake me when the stars are allowed."
-12. Mercury and Venus: two short ones about the ship's crew, for the completionist (her pilot friend Teodor; the gardener of biodome four).
+12. Mercury and Venus: two short ones about the ship's crew, for the completionist. Mercury (built): "Teodor says I fly like a librarian. Careful, and always back on time. He says it like it is a bad thing." Venus (still to come): the gardener of biodome four.
 
 ---
 
@@ -417,7 +419,7 @@ These bodies are invented for the game. They are numbered by when they were foun
 - **The Moon: the Ballroom.** The President's ballroom, as the radio promised: a gilded dome on the lunar highlands, its own neon portrait of the President across it, Earth hanging overhead, blue and white with the lights of its cities on the night side. Flown: the parade.
 - **Earth.** Seen from the Moon, and from the existing Satellite Junkyard.
 
-- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days.
+- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. (Built: Caloris, the basin's warm grey floor with craters and two wrinkle ridges, the sun miners' camp at its middle, their solar fields on the plain beyond, the morning sun 9° up and 2.6 times as wide as from Earth; the race round the camp.) **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days.
 
 ### Music
 

@@ -7,7 +7,8 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE } from './yard';
+import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL } from './mercury';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
@@ -58,7 +59,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -580,6 +581,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.7, 0.7, 0.7],
     grade: { gain: [1.02, 1, 0.98], lift: [0.0013, 0.0013, 0.0013], saturation: 0.95 },
   },
+  // Caloris: warm grey plains in a hard white glare, the black sky above it
+  mercury: {
+    space: 0x010101,
+    sky: 0xa09888,
+    ground: 0x34302a,
+    ambient: 1.2,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.03, 0.03, 0.035], size: 540000, shape: 1, turn: 0.4 },
+      { at: [0.6, 0.3, 0.6], color: [0.045, 0.035, 0.025], size: 460000, shape: 2, turn: 1.9 },
+    ],
+    stars: 0.7,
+    starmap: true,
+    dust: [0.75, 0.7, 0.62],
+    grade: { gain: [1.03, 1, 0.96], lift: [0.0012, 0.0012, 0.0011], saturation: 0.9 },
+  },
 };
 
 /**
@@ -954,6 +970,24 @@ export const PLACES: readonly ArenaProfile[] = [
     preview: { from: [30000, 6000, 30000], at: [0, -12000, 0] },
     references: [{ glyph: 'planet', label: msg('Earth'), position: MOON_EARTH, distance: false }],
     // over the plain, facing the dome
+    start: { at: [50000, 0, 30000], toward: [0, -12000, 0] },
+    open: true,
+  },
+  {
+    id: 'mercury',
+    name: msg('Caloris'),
+    tagline: msg('The floor of Mercury’s greatest basin, the sun miners’ camp on it, their solar fields beyond, and a morning sun three times as wide as at Earth.'),
+    // nothing loose: the plain, its ridges and craters, the camp
+    layout: { key: 'mercury', seed: 20000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [mercuryGround(MERCURY_TYPE), campPlacement(CAMP_TYPE, POST_HALF)], fall: MERCURY_FALL },
+    // the sun's glare: the laser's radiators shed heat slower
+    cooling: 0.7,
+    storms: true,
+    // 0.39 AU from the sun: 2.6 times as wide as at Earth, seven times as bright
+    sun: { size: 78000, intensity: 4.4, color: 0xfff8ee },
+    mood: MOODS.mercury,
+    preview: { from: [30000, 6000, 30000], at: [0, -12000, 0] },
+    references: [{ glyph: 'planet', label: msg('Sun miners’ camp'), position: CAMP_AT, distance: true }],
+    // over the plain, facing the camp
     start: { at: [50000, 0, 30000], toward: [0, -12000, 0] },
     open: true,
   },

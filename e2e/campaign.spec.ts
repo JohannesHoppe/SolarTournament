@@ -307,6 +307,29 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(errors).toEqual([]);
 });
 
+test('the job board offers a side trip once Act II has begun, flies it at its place from its start, and keeps the story where it stands', async ({ page }) => {
+  const errors = await openGame(page, '/?campaign');
+  // the story done up to Pilot Episode, the drill reached in the next job kept at 2
+  await page.evaluate(async (path) => {
+    const { MISSIONS } = (await import(path)) as typeof import('../src/campaign/missions');
+    const story = MISSIONS.filter((mission) => !mission.side).map((mission) => mission.id);
+    localStorage.setItem('solartournament.campaign', JSON.stringify({ done: story.slice(0, story.indexOf('pilotEpisode') + 1), step: 2, coins: 0, bond: 20000, ratings: 600, parts: [] }));
+  }, '/src/campaign/missions.ts');
+  await page.reload();
+  await page.waitForFunction(() => window.game?.composer, null, { timeout: 60_000 });
+  await page.click('#campaign');
+  await expect(page.locator('#board-side-label')).toBeVisible();
+  await expect(page.locator('#board-side button')).toHaveCount(1);
+  await page.locator('#board-side button', { hasText: 'Terminator Run' }).click();
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive && window.game.venue?.id === 'mercury', null, { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Terminator Run 1/3');
+  await page.waitForFunction(() => window.game.school.stepIndex === 1, null, { timeout: 60_000 });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(kept.step).toBe(2);
+  expect(kept.done).not.toContain('terminatorRun');
+  expect(errors).toEqual([]);
+});
+
 /** The running mission at its drill `step`, without an error on the page. */
 async function movesOn(page: Page, step: number, errors: string[]) {
   await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(step);
