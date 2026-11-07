@@ -103,8 +103,23 @@ def say(sentence: str, seed: int) -> np.ndarray:
     return best
 
 
+# A sentence of fewer words than this is spoken together with the one after it (or before it, at
+# a line's end): one word alone ("Erster.") runs Chatterbox's sampling off its speech tokens.
+FEWEST_WORDS = 2
+
+
 def sentences(text: str) -> list[str]:
-    return [s for s in re.split(r'(?<=[.!?…])\s+', text.strip()) if s]
+    split = [s for s in re.split(r'(?<=[.!?…])\s+', text.strip()) if s]
+    joined: list[str] = []
+    for sentence in split:
+        if joined and len(joined[-1].split()) < FEWEST_WORDS:
+            joined[-1] += ' ' + sentence
+        else:
+            joined.append(sentence)
+    if len(joined) > 1 and len(joined[-1].split()) < FEWEST_WORDS:
+        last = joined.pop()
+        joined[-1] += ' ' + last
+    return joined
 
 
 def clone_speaker(speaker: str, spec: dict) -> bool:
