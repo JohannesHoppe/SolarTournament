@@ -5,6 +5,7 @@
   "maxLines": 100000,
   "maxSize": "10mb",
   "threshold": 0,
+  "exitCode": 1,
   "reporters": ["console"],
   "gitignore": true,
   "ignorePattern": ["import\\s[^;]*?\\sfrom\\s'[^']+';"]
