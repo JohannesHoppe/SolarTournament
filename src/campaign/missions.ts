@@ -29,12 +29,13 @@ import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
-import type { ArenaId } from '../world/arenas';
+import { arenaById, type ArenaId } from '../world/arenas';
+import type { AsteroidField } from '../world/asteroids';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, type Mission } from './campaign';
+import { type Campaign, type MissionId, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
-import { Randomizer } from '../random';
+import { Randomizer, textSeed } from '../random';
 import type { SceneName } from './scenes';
 
 /**
@@ -1756,7 +1757,7 @@ export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, towa
  * coil after it within `time` wins; each coil's core throws the ship on along it, a coil missed
  * (`missed`) or the clock run out (`slow`) starts it over; within `gold` the job's gold is won.
  */
-function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string }): Drill {
+function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string; lay?: (field: AsteroidField) => { points: THREE.Vector3[]; normals: THREE.Vector3[] } }): Drill {
   return {
     line: spec.line,
     gold: spec.gold,
@@ -1764,9 +1765,11 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
     arena: spec.arena,
     music: 'fight',
     autopilot: true,
-    enter(_, a, markers) {
-      a.points = spec.points.map((coil) => coil.clone());
-      a.normals = spec.normals.map((normal) => normal.clone());
+    enter(ctx, a, markers) {
+      // a course laid where the field lies (a courier run's), or the trial's fixed one
+      const laid = spec.lay?.(ctx.field);
+      a.points = laid?.points ?? spec.points.map((coil) => coil.clone());
+      a.normals = laid?.normals ?? spec.normals.map((normal) => normal.clone());
       a.points.forEach((coil, i) => markers.ring(coil, a.normals[i]));
       markers.highlight(0);
     },
@@ -1794,6 +1797,79 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
     mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(spec.time - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
   };
 }
+
+/**
+ * The courier runs (docs/campaign/STORY.md, "Side jobs on every job board"): at each place of
+ * COURIER_PLACES, once its first job is done, a contract on the job board: COURIER_BEACONS beacons
+ * (the Ministry's coils) in order from the place's start, the first COURIER_FIRST ahead along the
+ * way it faces, the next COURIER_GAP on each, weaving up to COURIER_WEAVE to either side (seeded
+ * by the place), at the start's height, each lifted in steps of COURIER_LIFT until clear of the
+ * field's pieces; flown as a time trial, its limit by the course's length (at COURIER_PACE,
+ * units/s, well over what a middling bot flies), its gold time the place's own (COURIER_PLACES:
+ * between what a middling bot and a sharp one fly there, measured in missions.test.ts, for air,
+ * gravity and the lifts make each place its own).
+ */
+const COURIER_BEACONS = 6;
+const COURIER_FIRST = 16000;
+const COURIER_GAP = 14000;
+const COURIER_WEAVE = 5000;
+const COURIER_LIFT = 1000;
+export const COURIER_PACE = 2800;
+/** The places with a courier run, each with the job whose doing offers it (the place's first) and its gold time (s). */
+export const COURIER_PLACES: readonly (readonly [ArenaId, MissionId, number])[] = [
+  ['rheasilvia', 'rheasilvia', 21],
+  ['occator', 'occator', 19],
+  ['phobos', 'stickneyGrand', 15],
+  ['callisto', 'pilotEpisode', 21],
+  ['europa', 'dose', 17],
+  ['io', 'fluxTubeRace', 19],
+  ['ganymede', 'hollowJack', 19],
+  ['titan', 'qualifyingHeat', 16],
+  ['enceladus', 'plumeYacht', 18],
+  ['iapetus', 'theRidge', 15],
+  ['triton', 'geyserField', 15],
+  ['pluto', 'heartRun', 15],
+  ['haumea', 'haumeaRing', 16],
+  ['eris', 'rungTwo', 16],
+  ['lantern', 'kiln', 20],
+  ['granary', 'granary', 17],
+  ['ballroom', 'parade', 16],
+];
+
+/** A place's courier course where `field` lies (see COURIER_PLACES), or as drawn before it is laid (null): its beacons and the way each is flown through. */
+export function layCourier(field: AsteroidField | null, arena: ArenaId): { points: THREE.Vector3[]; normals: THREE.Vector3[] } {
+  const start = arenaById(arena)!.start!;
+  const from = new THREE.Vector3(...start.at);
+  const way = new THREE.Vector3(...start.toward).sub(from).setY(0).normalize();
+  const across = new THREE.Vector3(-way.z, 0, way.x);
+  const r = new Randomizer(textSeed(`courier:${arena}`));
+  const points = Array.from({ length: COURIER_BEACONS }, (_, k) => {
+    const beacon = from.clone().addScaledVector(way, COURIER_FIRST + k * COURIER_GAP).addScaledVector(across, r.range(-1, 1) * COURIER_WEAVE);
+    for (let lift = 0; field && lift < 40 && field.overlap(beacon, RING_RADIUS * 2); lift++) beacon.y += COURIER_LIFT;
+    return beacon;
+  });
+  const normals = points.map((beacon, k) => beacon.clone().sub(k ? points[k - 1] : from).normalize());
+  return { points, normals };
+}
+
+/** A courier course's length from its first beacon to its last (units), for its limit and its gold time. */
+export const courierLength = (points: readonly THREE.Vector3[]) => points.slice(1).reduce((sum, beacon, k) => sum + beacon.distanceTo(points[k]), 0);
+
+/** A courier run's limit and gold time at a place (s): the limit by its course's length as drawn, at COURIER_PACE; the gold the place's own. */
+export function courierTimes(arena: ArenaId): { time: number; gold: number } {
+  const length = courierLength(layCourier(null, arena).points);
+  return { time: Math.ceil(length / COURIER_PACE), gold: COURIER_PLACES.find(([place]) => place === arena)![2] };
+}
+
+/** A courier run's drill at a place: its time trial, laid on the place's own field. */
+function courier(arena: ArenaId): Drill {
+  return timeTrial({ line: CAMPAIGN.courier, arena, points: [], normals: [], ...courierTimes(arena), missed: CAMPAIGN.courierMissed, slow: CAMPAIGN.courierSlow, lay: (field) => layCourier(field, arena) });
+}
+
+/** The courier runs as jobs: one per place, offered once its first job is done (see Mission.side), paying COURIER_PAY the first time. */
+const COURIER_PAY = 800;
+const COURIER_RATINGS = 60;
+const couriers: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `courier:${arena}`, name: msg('Courier Run'), drills: [courier(arena)], pay: COURIER_PAY, ratings: COURIER_RATINGS, side: after, courier: arena }));
 
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
@@ -3068,4 +3144,6 @@ export const MISSIONS: readonly Mission[] = [
   // and once Victory Cola has signed the Host: its city over Venus, the Cloud Line through the acid clouds, and an echo there
   { id: 'cloudLine', name: msg('Cloud Line'), drills: [said(HEDDA.venus, 'venus'), cloudLine, said(CAMPAIGN.cloudLineDone, 'venus')], pay: 5000, ratings: 400, start: CLOUD_START, side: 'sponsorNight' },
   { id: 'venusEcho', name: msg('Venus Echo'), drills: [echoAt(CAMPAIGN.echoVenusCall, 'venus', ECHO_VENUS), said(CAMPAIGN.echoVenus, 'venus'), said(CAMPAIGN.echoVenusHeard, 'venus')], pay: 0, ratings: 40, side: 'cloudLine' },
+  // the courier runs, one at each place, offered once its first job is done
+  ...couriers,
 ];

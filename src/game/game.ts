@@ -1747,7 +1747,11 @@ export class Game implements OnlineGame {
     $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
     const trips = sideTrips(campaign);
     $('board-side-label').hidden = !trips.length;
-    $('board-side').replaceChildren(...trips.map((mission) => job(mission, `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`)));
+    // a courier run names its place, for every place has one
+    const placeOf = (mission: Mission) => t(arenaById(mission.courier!)!.name);
+    $('board-side').replaceChildren(
+      ...trips.map((mission) => job(mission, mission.courier ? `${t('At {place}: six beacons in order against the clock, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}` : `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`)),
+    );
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     const again = (mission: Mission) => {
@@ -1760,7 +1764,7 @@ export class Game implements OnlineGame {
       if (time === null) return note;
       return campaign.golds.includes(mission.id) ? `${note} ${t('★ Gold time: {seconds} s, flown.', { seconds: time })}` : `${note}${goldNote(mission)}`;
     };
-    $('board-done').replaceChildren(...done.map((mission) => job(mission, again(mission))));
+    $('board-done').replaceChildren(...done.map((mission) => job(mission, mission.courier ? `${t('At {place}.', { place: placeOf(mission) })} ${again(mission)}` : again(mission))));
     const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
     const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
     $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;

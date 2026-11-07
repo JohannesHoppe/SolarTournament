@@ -310,19 +310,30 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(errors).toEqual([]);
 });
 
-test('the job board offers a side trip once Act II has begun, flies it at its place from its start, and keeps the story where it stands', async ({ page }) => {
+/** The game opened with `?campaign`, the story done up to Pilot Episode with the drill reached in the next job at `step`, the job board open; the page's errors. */
+async function boardAfterPilotEpisode(page: Page, step: number): Promise<string[]> {
   const errors = await openGame(page, '/?campaign');
-  // the story done up to Pilot Episode, the drill reached in the next job kept at 2
-  await page.evaluate(async (path) => {
-    const { MISSIONS } = (await import(path)) as typeof import('../src/campaign/missions');
-    const story = MISSIONS.filter((mission) => !mission.side).map((mission) => mission.id);
-    localStorage.setItem('solartournament.campaign', JSON.stringify({ done: story.slice(0, story.indexOf('pilotEpisode') + 1), step: 2, coins: 0, bond: 20000, ratings: 600, parts: [] }));
-  }, '/src/campaign/missions.ts');
+  await page.evaluate(
+    async ([path, step]) => {
+      const { MISSIONS } = (await import(path)) as typeof import('../src/campaign/missions');
+      const story = MISSIONS.filter((mission) => !mission.side).map((mission) => mission.id);
+      localStorage.setItem('solartournament.campaign', JSON.stringify({ done: story.slice(0, story.indexOf('pilotEpisode') + 1), step, coins: 0, bond: 20000, ratings: 600, parts: [] }));
+    },
+    ['/src/campaign/missions.ts', step] as const,
+  );
   await page.reload();
   await page.waitForFunction(() => window.game?.composer, null, { timeout: 60_000 });
   await page.click('#campaign');
+  return errors;
+}
+
+test('the job board offers a side trip once Act II has begun, flies it at its place from its start, and keeps the story where it stands', async ({ page }) => {
+  // the story done up to Pilot Episode, the drill reached in the next job kept at 2
+  const errors = await boardAfterPilotEpisode(page, 2);
   await expect(page.locator('#board-side-label')).toBeVisible();
-  await expect(page.locator('#board-side button')).toHaveCount(1);
+  // Mercury, and the courier runs of the places reached so far
+  await expect(page.locator('#board-side button', { hasText: 'Terminator Run' })).toHaveCount(1);
+  await expect(page.locator('#board-side button', { hasText: 'Courier Run' })).toHaveCount(4);
   await page.locator('#board-side button', { hasText: 'Terminator Run' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive && window.game.venue?.id === 'mercury', null, { timeout: 90_000 });
   await expect(page.locator('#school-step')).toContainText('Terminator Run 1/3');
@@ -330,6 +341,16 @@ test('the job board offers a side trip once Act II has begun, flies it at its pl
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(kept.step).toBe(2);
   expect(kept.done).not.toContain('terminatorRun');
+  expect(errors).toEqual([]);
+});
+
+test('a courier run on the job board: six beacons laid at its place from its start, the clock starting at the first', async ({ page }) => {
+  const errors = await boardAfterPilotEpisode(page, 0);
+  const run = page.locator('#board-side button', { hasText: 'Courier Run' }).filter({ hasText: 'Valhalla' });
+  await expect(run).toContainText('Gold time');
+  await run.click();
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto', null, { timeout: 90_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
   expect(errors).toEqual([]);
 });
 

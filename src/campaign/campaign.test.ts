@@ -3,7 +3,7 @@ import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, tria
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
-import { CUTTER_PRICE } from './missions';
+import { COURIER_PLACES, CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
   it('starts with the debt owed and the first mission next', () => {
@@ -31,23 +31,31 @@ describe('the campaign Lot 7731', () => {
   it('offers the side trips once their mission is done, never as the story’s next one, and leaves the drill reached in the story as it was', () => {
     const campaign = freshCampaign();
     const story = MISSIONS.filter((mission) => !mission.side);
+    // the side trips to Mercury and Venus; the courier runs come once each place's first job is done
+    const trips = (c: typeof campaign) => sideTrips(c).filter((mission) => !mission.courier).map((mission) => mission.id);
     const upTo = story.findIndex((mission) => mission.id === 'pilotEpisode');
     campaign.done = story.slice(0, upTo).map((mission) => mission.id);
-    expect(sideTrips(campaign)).toEqual([]);
+    expect(trips(campaign)).toEqual([]);
     complete(campaign, story[upTo]);
-    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun']);
+    expect(trips(campaign)).toEqual(['terminatorRun']);
     expect(nextMission(campaign)?.id).toBe(story[upTo + 1].id);
     campaign.step = 3;
     complete(campaign, MISSIONS.find((mission) => mission.id === 'terminatorRun')!);
     expect(campaign.step).toBe(3);
-    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['mercuryEcho']);
+    expect(trips(campaign)).toEqual(['mercuryEcho']);
     // Venus once Victory Cola has signed the Host (Sponsor Night)
     campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'sponsorNight') + 1).map((mission) => mission.id);
-    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun', 'cloudLine']);
-    // the whole story done, the side trips still wait
+    expect(trips(campaign)).toEqual(['terminatorRun', 'cloudLine']);
+    // the whole story done, the side trips still wait, and a courier run at every place that has one
     campaign.done = story.map((mission) => mission.id);
     expect(nextMission(campaign)).toBeNull();
-    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun', 'cloudLine']);
+    expect(trips(campaign)).toEqual(['terminatorRun', 'cloudLine']);
+    expect(sideTrips(campaign).filter((mission) => mission.courier).length).toBe(COURIER_PLACES.length);
+    // a place's courier run only once its first job is done
+    campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'rheasilvia')).map((mission) => mission.id);
+    expect(sideTrips(campaign).some((mission) => mission.courier === 'rheasilvia')).toBe(false);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'rheasilvia')!);
+    expect(sideTrips(campaign).some((mission) => mission.courier === 'rheasilvia')).toBe(true);
   });
 
   it('takes what the Host lost on the job off the pay before the yard takes its cut, never below nothing', () => {
@@ -109,7 +117,8 @@ describe('the campaign Lot 7731', () => {
     expect(campaign.golds).toEqual([trial.id]);
     for (const mission of MISSIONS.filter((m) => goldOf(m) === null)) expect(gold(freshCampaign(), mission, true)).toBeNull();
     // every gold time lies within its trial's time limit
-    expect(MISSIONS.filter((m) => goldOf(m) !== null).map((m) => m.id).sort()).toEqual(['geyserField', 'tigerStripes', 'valhallaSprint']);
+    expect(MISSIONS.filter((m) => goldOf(m) !== null && !m.courier).map((m) => m.id).sort()).toEqual(['geyserField', 'tigerStripes', 'valhallaSprint']);
+    expect(MISSIONS.filter((m) => m.courier).every((m) => goldOf(m) !== null)).toBe(true);
     expect(campaignFrom(JSON.stringify({ done: [trial.id, MISSIONS[0].id], golds: [trial.id, MISSIONS[0].id] })).golds).toEqual([trial.id]);
   });
 
@@ -370,7 +379,8 @@ describe('the campaign Lot 7731', () => {
   it('gives every mission a name and drills to fly, a trial at least its briefing before its round', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
-      expect(mission.drills.length).toBeGreaterThan(mission.trial ? 0 : 1);
+      // a trial at least its briefing; a courier run's one drill briefs itself
+      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.courier ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });
