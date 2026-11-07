@@ -1899,10 +1899,54 @@ function ambush(arena: ArenaId): Drill {
   };
 }
 
+/**
+ * The mining runs (docs/campaign/STORY.md, "Side jobs on every job board"): at each place of
+ * MINING_PLACES, where loose rock or ice drifts, once its first job is done: break rock and fly
+ * MINE_ORE glints of its ore in (they spring from what breaks, as First Cut's, see glintsOf),
+ * MINE_SECONDS from the first break, before the buyer's barge leaves; the clock run out starts it
+ * over.
+ */
+const MINE_ORE = 12;
+const MINE_SECONDS = 90;
+/** The places with loose rock or ice near their start (measured in missions.test.ts). */
+export const MINING_PLACES: readonly ArenaId[] = ['rheasilvia', 'occator', 'ganymede', 'haumea', 'eris', 'granary'];
+const MINE_PAY = 900;
+const MINE_RATINGS = 60;
+
+function miningRun(arena: ArenaId): Drill {
+  return {
+    line: CAMPAIGN.mining,
+    keys: ['turn', 'drive', 'fire'],
+    arena,
+    autopilot: false,
+    enter(ctx, a) {
+      // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
+      a.count = ctx.rocksBroken;
+      a.jinks = 0;
+      a.next = 0;
+      a.points = [];
+      a.clockFrom = NaN;
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+    },
+    done(ctx, a, markers) {
+      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+      if (a.jinks > 0 && Number.isNaN(a.clockFrom)) a.clockFrom = a.seconds;
+      takeGlint(ctx, a, markers);
+      return a.next >= MINE_ORE;
+    },
+    fail: (_, a) => (a.seconds - a.clockFrom > MINE_SECONDS ? CAMPAIGN.miningSlow : null),
+    waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
+    mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Ore {ore}/{needed} · {seconds} s left', { ore: a.next, needed: MINE_ORE, seconds: Math.max(0, Math.ceil(MINE_SECONDS - (a.seconds - a.clockFrom))) }) : t('Ore {ore}/{needed}', { ore: a.next, needed: MINE_ORE })),
+  };
+}
+
 /** The courier runs as jobs: one per place, offered once its first job is done (see Mission.side), paying COURIER_PAY the first time. */
 const COURIER_PAY = 800;
 const COURIER_RATINGS = 60;
 const couriers: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `courier:${arena}`, name: msg('Courier Run'), drills: [courier(arena)], pay: COURIER_PAY, ratings: COURIER_RATINGS, side: after, courier: arena }));
+/** The mining runs as jobs: one per place of MINING_PLACES, offered as its courier run is. */
+const miningRuns: Mission[] = MINING_PLACES.map((arena) => ({ id: `mining:${arena}`, name: msg('Mining Run'), drills: [miningRun(arena)], pay: MINE_PAY, ratings: MINE_RATINGS, side: COURIER_PLACES.find(([place]) => place === arena)![1], mining: arena }));
 /** The ambushes as jobs: one per place of the courier runs, offered as they are. */
 const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambush:${arena}`, name: msg('Ambush'), drills: [ambush(arena)], pay: AMBUSH_PAY, ratings: AMBUSH_RATINGS, side: after, ambush: arena }));
 
@@ -3183,4 +3227,6 @@ export const MISSIONS: readonly Mission[] = [
   ...couriers,
   // and an ambush at each of them
   ...ambushes,
+  // and a mining run where loose rock or ice drifts
+  ...miningRuns,
 ];

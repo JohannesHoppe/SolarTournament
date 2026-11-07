@@ -365,6 +365,28 @@ test('an ambush on the job board: three bandits round the client’s lane at its
   expect(errors).toEqual([]);
 });
 
+test('a mining run on the job board: rock broken sheds its ore, and the ore flown in wins it', async ({ page }) => {
+  const errors = await boardAfterPilotEpisode(page, 0);
+  await page.locator('#board-side button', { hasText: 'Mining Run' }).filter({ hasText: 'Rheasilvia' }).click();
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'rheasilvia', null, { timeout: 90_000 });
+  // two rocks broken just ahead of the hull, and every glint of their ore flown through in turn
+  await page.evaluate(async () => {
+    const game = window.game;
+    for (let k = 0; k < 2; k++) {
+      game.brokenAt.copy(game.me.flight.position).add(game.me.flight.position.clone().set(0, 0, -3000));
+      game.rocksBroken++;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    // the hull set on each glint in turn, a frame each, until none is left
+    for (let frame = 0; frame < 1800 && game.school?.attempt?.points.length; frame++) {
+      game.me.flight.position.copy(game.school.attempt.points[0]);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('mining:rheasilvia')), { timeout: 60_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 /** The running mission at its drill `step`, without an error on the page. */
 async function movesOn(page: Page, step: number, errors: string[]) {
   await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(step);

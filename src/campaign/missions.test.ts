@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierTimes, layCourier } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierTimes, layCourier, MINING_PLACES } from './missions';
 import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
@@ -168,6 +168,17 @@ describe('the races of the campaign', () => {
       expect(flyTrial(arena, points, normals, from, time, 0.9, false)).toBeLessThanOrEqual(gold);
     });
   }
+
+  it('the mining runs lie where loose rock or ice drifts within 2 km of the place’s start, each one a courier run’s place', () => {
+    for (const arena of MINING_PLACES) {
+      expect(COURIER_PLACES.some(([place]) => place === arena), arena).toBe(true);
+      const field = testField(DETAIL);
+      field.generate(arenaById(arena)!.layout);
+      const start = new THREE.Vector3(...arenaById(arena)!.start!.at);
+      const near = [...field.asteroids.values()].filter((rock) => !rock.solid && rock.object.position.distanceTo(start) < 40000);
+      expect(near.length, arena).toBeGreaterThanOrEqual(3);
+    }
+  });
 
   it('the race in Haumea’s ring is flown by a middling bot: both laps between the beacons among the ring’s ice, nothing missed, without a crash', () => {
     expectRaced('haumea', HAUMEA_COURSE, HAUMEA_LAPS, RING_RADIUS, HEART_SECONDS, HAUMEA_START.at);

@@ -1748,7 +1748,7 @@ export class Game implements OnlineGame {
     const trips = sideTrips(campaign);
     $('board-side-label').hidden = !trips.length;
     // a courier run names its place, for every place has one
-    const placeOf = (mission: Mission) => t(arenaById((mission.courier ?? mission.ambush)!)!.name);
+    const placeOf = (mission: Mission) => t(arenaById((mission.courier ?? mission.ambush ?? mission.mining)!)!.name);
     $('board-side').replaceChildren(
       ...trips.map((mission) =>
         job(
@@ -1757,6 +1757,8 @@ export class Game implements OnlineGame {
             ? `${t('At {place}: six beacons in order against the clock, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
             : mission.ambush
               ? `${t('At {place}: three bandits on a client’s lane, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
+              : mission.mining
+                ? `${t('At {place}: rock broken and its ore flown in against the clock, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
               : `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`,
         ),
       ),
@@ -1773,7 +1775,7 @@ export class Game implements OnlineGame {
       if (time === null) return note;
       return campaign.golds.includes(mission.id) ? `${note} ${t('★ Gold time: {seconds} s, flown.', { seconds: time })}` : `${note}${goldNote(mission)}`;
     };
-    $('board-done').replaceChildren(...done.map((mission) => job(mission, mission.courier || mission.ambush ? `${t('At {place}.', { place: placeOf(mission) })} ${again(mission)}` : again(mission))));
+    $('board-done').replaceChildren(...done.map((mission) => job(mission, mission.courier || mission.ambush || mission.mining ? `${t('At {place}.', { place: placeOf(mission) })} ${again(mission)}` : again(mission))));
     const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
     const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
     $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;
