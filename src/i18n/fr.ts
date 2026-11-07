@@ -626,6 +626,7 @@ export const FR: Catalog = {
   'Color': 'Couleur',
   'Your color': 'Ta couleur',
   'The Sovereign flies in ivory and gold': 'La Sovereign vole en ivoire et or',
+  'The Magpie flies in chalk white and flip paint': 'La Magpie vole en blanc craie et peinture caméléon',
   'Neon Yellow': 'Jaune néon',
   'Acid Green': 'Vert acide',
   'Laser Green': 'Vert laser',

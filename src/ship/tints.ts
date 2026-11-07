@@ -6,7 +6,8 @@ import { TEAM_TINTS } from '../game/flags';
 /**
  * The colors a ship is marked with: its markers, its arrow at the screen's edge, its dot on the
  * radar, its name and its laser. A Host picks one of the palette's neon tints in the menu; each
- * bot has its own; the Sovereign wears ivory and gold, a color no one can pick. In Capture the
+ * bot has its own; the Sovereign wears ivory and gold and the Magpie chalk white with a
+ * blue-green shimmer, colors no one can pick. In Capture the
  * Flag the side's color rules over all of them.
  *
  * Every tint is bright and saturated, so it reads on black space; its hue keeps at least 25°
@@ -26,11 +27,25 @@ export const TINTS = [
 ] as const;
 
 /**
- * The Sovereign's ivory, and the gold of its glow (as `--sovereign` and `--sovereign-gold` in
- * style.css): far lighter than any tint of the palette, so a Sovereign stands out at once.
+ * The Sovereign's ivory, and the gold of its glow (set on an element as `--trophy` and
+ * `--trophy-glow` for style.css): far lighter than any tint of the palette, so a Sovereign stands
+ * out at once.
  */
 export const SOVEREIGN_TINT = '#fff1c9';
 export const SOVEREIGN_GOLD = '#ffc94d';
+/**
+ * The Magpie's chalk white, faintly cold, and the blue-green shimmer of its flip paint for its
+ * glow: as light as the Sovereign's ivory and as far from any tint of the palette, its shimmer
+ * clear of the HUD's azure.
+ */
+export const MAGPIE_TINT = '#eef6f2';
+export const MAGPIE_SHIMMER = '#3fe0c4';
+
+/** The trophies' marks (see hangar, trophy): the tint no Host can pick, and its glow, by ship type. */
+export const TROPHY_MARKS: Partial<Record<string, { tint: string; glow: string }>> = {
+  sovereign: { tint: SOVEREIGN_TINT, glow: SOVEREIGN_GOLD },
+  magpie: { tint: MAGPIE_TINT, glow: MAGPIE_SHIMMER },
+};
 
 /** The tint a Host flies in, kept in this browser (an index into TINTS). */
 const TINT_KEY = 'solartournament.tint';

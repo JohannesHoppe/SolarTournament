@@ -36,9 +36,6 @@
   --hud-act-glow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 8px rgba(255, 157, 0, 0.85);
   --font-numbers: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --danger: #ff5a4f;
-  /* the Sovereign's ivory and the gold of its glow (SOVEREIGN_TINT, SOVEREIGN_GOLD in ship/tints.ts) */
-  --sovereign: #fff1c9;
-  --sovereign-gold: #ffc94d;
   --text: #e8f1ff;
   --muted: #8ea3c0;
   --plate: rgba(6, 12, 28, 0.82);
@@ -572,8 +569,8 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   border-color: var(--text);
 }
 
-/* the Sovereign wears its own colors: the palette steps back */
-#tints.sovereign button {
+/* a trophy (the Sovereign, the Magpie) wears its own colors: the palette steps back */
+#tints.trophy button {
   opacity: 0.3;
 }
 
@@ -581,9 +578,9 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   font-size: 0.8rem;
 }
 
-#tints.sovereign + #tint-name {
-  color: var(--sovereign);
-  text-shadow: 0 0 6px var(--sovereign-gold);
+#tints.trophy + #tint-name {
+  color: var(--trophy);
+  text-shadow: 0 0 6px var(--trophy-glow);
 }
 
 .controls {
@@ -1891,28 +1888,28 @@ body.nova-flash #hud::after {
   display: none;
 }
 
-/* the Sovereign: a gold rim and a slow golden glow, in its ivory or in its side's color */
-.marker.sovereign {
-  animation: sovereign-glow 1.6s ease-in-out infinite alternate;
+/* a trophy: a rim and a slow glow in its own color (--trophy-glow: the Sovereign's gold, the Magpie's shimmer), in its tint or in its side's color */
+.marker.trophy {
+  animation: trophy-glow 1.6s ease-in-out infinite alternate;
 }
 
-.marker.sovereign:not(.offscreen)::before {
-  box-shadow: 0 0 0 2px var(--sovereign-gold);
+.marker.trophy:not(.offscreen)::before {
+  box-shadow: 0 0 0 2px var(--trophy-glow);
 }
 
-@keyframes sovereign-glow {
+@keyframes trophy-glow {
   from {
-    filter: drop-shadow(0 0 1px var(--sovereign-gold));
+    filter: drop-shadow(0 0 1px var(--trophy-glow));
   }
   to {
-    filter: drop-shadow(0 0 6px var(--sovereign-gold));
+    filter: drop-shadow(0 0 6px var(--trophy-glow));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .marker.sovereign {
+  .marker.trophy {
     animation: none;
-    filter: drop-shadow(0 0 3px var(--sovereign-gold));
+    filter: drop-shadow(0 0 3px var(--trophy-glow));
   }
 }
 
@@ -1927,8 +1924,8 @@ body.nova-flash #hud::after {
   box-shadow: 0 0 6px var(--tint);
 }
 
-.swatch.sovereign {
-  box-shadow: 0 0 0 1px var(--sovereign-gold), 0 0 8px var(--sovereign-gold);
+.swatch.trophy {
+  box-shadow: 0 0 0 1px var(--trophy-glow), 0 0 8px var(--trophy-glow);
 }
 
 /* sponsor break before the next clone boots */

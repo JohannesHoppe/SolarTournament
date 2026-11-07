@@ -12,7 +12,7 @@ import { ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
-import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
+import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
 
@@ -476,9 +476,14 @@ export class Ship {
     return this.type === 'sovereign';
   }
 
-  /** Marks the ship in a tint (a Host's in the round, see Game.tintShips); the Sovereign always wears its ivory. */
+  /** A trophy's mark (the Sovereign's ivory and gold, the Magpie's chalk white and shimmer, see TROPHY_MARKS), which no Host can pick; null for every other ship. */
+  get trophy(): { tint: string; glow: string } | null {
+    return TROPHY_MARKS[this.type] ?? null;
+  }
+
+  /** Marks the ship in a tint (a Host's in the round, see Game.tintShips); a trophy always wears its own. */
   setTint(hex: string) {
-    const tint = this.sovereign ? SOVEREIGN_TINT : hex;
+    const tint = this.trophy?.tint ?? hex;
     if (tint === this.tint) return;
     this.tint = tint;
     this.color.set(tint);

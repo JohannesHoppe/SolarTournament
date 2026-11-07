@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import { t } from '../i18n/i18n';
-import { shownTint, SOVEREIGN_GOLD } from '../ship/tints';
+import { shownTint } from '../ship/tints';
 import { cos, pow, sin } from '../detmath';
 
 /** How fast the Sovereign's ring on the radar pulses (rad/s, a beat in about two seconds). */
@@ -138,9 +138,9 @@ export class Radar {
       this.stalk(p, color);
       ctx.fillStyle = color;
       ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5);
-      if (ship.sovereign) {
-        // the Sovereign's dot wears a slowly pulsing gold ring, its side's color or not
-        ctx.strokeStyle = SOVEREIGN_GOLD;
+      if (ship.trophy) {
+        // a trophy's dot wears a slowly pulsing ring in its glow (the Sovereign's gold, the Magpie's shimmer), its side's color or not
+        ctx.strokeStyle = ship.trophy.glow;
         ctx.globalAlpha = 0.6 + 0.4 * sin(now * SOVEREIGN_PULSE);
         ctx.lineWidth = 1.5;
         ctx.strokeRect(p.x - 4.5, p.y - 4.5, 9, 9);

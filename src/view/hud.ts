@@ -715,7 +715,7 @@ export class Hud {
         row.classList.toggle('own', pilot.own);
         const name = document.createElement('span');
         name.className = 'intro-name';
-        name.append(swatch(pilot.tint, pilot.sovereign), ...markedName(pilot.kind, pilot.name));
+        name.append(swatch(pilot.tint, pilot.glow), ...markedName(pilot.kind, pilot.name));
         row.append(name);
         // the skills come from the game's own table, never from another browser
         if (pilot.skills) row.insertAdjacentHTML('beforeend', pilot.skills);
@@ -917,7 +917,8 @@ export class Hud {
       if (marker.tint !== tint) {
         marker.tint = tint;
         element.style.setProperty('--tint', tint);
-        setClass(element, 'sovereign', ship.sovereign);
+        setClass(element, 'trophy', !!ship.trophy);
+        if (ship.trophy) element.style.setProperty('--trophy-glow', ship.trophy.glow);
       }
       // a ship of the own side is marked by a ring, a rival by a square, whatever their colors
       setClass(element, 'ally', ship.allyOf(me));
@@ -1200,7 +1201,7 @@ export interface IntroCard {
   title: string;
   arena: string;
   tagline: string;
-  pilots: { name: string; kind: Kind; tint: string; sovereign: boolean; skills: string; own: boolean }[];
+  pilots: { name: string; kind: Kind; tint: string; glow: string | null; skills: string; own: boolean }[];
   skip: string;
   onSkip: () => void;
 }

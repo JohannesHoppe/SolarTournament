@@ -43,7 +43,7 @@ import { BOND_MAX, type Campaign, campaignFrom, complete, HABIT_NEAR, hasMedal, 
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
-import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
+import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
 import { OpenBeat, pausePush, pushKey, pushStatus, setPushFrom, subscribe as subscribePush, unsubscribe as unsubscribePush } from '../net/push';
@@ -3158,7 +3158,7 @@ export class Game implements OnlineGame {
    */
   private tintShips(now: number) {
     this.tintedAt = now + TINT_SECONDS;
-    const hosts = this.ships.filter((ship) => ship.kind === 'host' && !ship.sovereign);
+    const hosts = this.ships.filter((ship) => ship.kind === 'host' && !ship.trophy);
     const session = this.online?.session;
     if (session) hosts.sort((a, b) => session.joinedTime(ownerOf(a.id)) - session.joinedTime(ownerOf(b.id)) || (a.id < b.id ? -1 : 1));
     assignTints(hosts.map((ship) => ship.wish)).forEach((index, i) => hosts[i].setTint(TINTS[index].hex));
@@ -3774,15 +3774,19 @@ export class Game implements OnlineGame {
     this.renderTints();
   }
 
-  /** Marks the Host's tint in the menu and names it; the Sovereign flies in its own ivory and gold instead. */
+  /** Marks the Host's tint in the menu and names it; a trophy flies in its own colors instead (the Sovereign's ivory and gold, the Magpie's chalk white and flip paint). */
   private renderTints() {
-    const sovereign = this.selectedShip === 'sovereign';
+    const trophy = TROPHY_MARKS[this.selectedShip] ?? null;
     [...$('tints').children].forEach((button, i) => {
       button.classList.toggle('selected', i === this.tint);
       button.setAttribute('aria-checked', String(i === this.tint));
     });
-    $('tints').classList.toggle('sovereign', sovereign);
-    $('tint-name').textContent = sovereign ? t('The Sovereign flies in ivory and gold') : t(TINTS[this.tint].name);
+    $('tints').classList.toggle('trophy', !!trophy);
+    if (trophy) {
+      $('tint-name').style.setProperty('--trophy', trophy.tint);
+      $('tint-name').style.setProperty('--trophy-glow', trophy.glow);
+    }
+    $('tint-name').textContent = this.selectedShip === 'sovereign' ? t('The Sovereign flies in ivory and gold') : this.selectedShip === 'magpie' ? t('The Magpie flies in chalk white and flip paint') : t(TINTS[this.tint].name);
   }
 
   /** The next or the previous ship on show; one that is earned is the one the Host flies. */
@@ -3882,7 +3886,7 @@ export class Game implements OnlineGame {
       row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
       const name = row.insertCell();
-      name.append(swatch(shownTint(ship), ship.sovereign));
+      name.append(swatch(shownTint(ship), ship.trophy?.glow ?? null));
       if (online && isLeadHost(ship.id, online.session.leadId)) name.append(markLead());
       name.append(...markedName(ship.kind, ship.name));
       if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
@@ -5269,7 +5273,7 @@ export class Game implements OnlineGame {
       title: t(MODE_NAMES[this.roundMode]),
       arena: t(this.venue.name),
       tagline: t(this.venue.tagline),
-      pilots: pilots.map((ship) => ({ name: ship.name, kind: ship.kind, tint: shownTint(ship), sovereign: ship.sovereign, skills: ship.kind === 'bot' ? skillScales(skillsOf(ship.name)) : '', own: ship === this.me })),
+      pilots: pilots.map((ship) => ({ name: ship.name, kind: ship.kind, tint: shownTint(ship), glow: ship.trophy?.glow ?? null, skills: ship.kind === 'bot' ? skillScales(skillsOf(ship.name)) : '', own: ship === this.me })),
       skip: t('Skip'),
       onSkip: () => this.skipIntro(),
     });

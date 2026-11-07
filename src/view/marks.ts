@@ -30,11 +30,12 @@ export function markLead(): HTMLElement {
   return mark;
 }
 
-/** A small square in a pilot's tint beside its name (see `.swatch` in style.css); the Sovereign's glows gold. */
-export function swatch(tint: string, sovereign = false): HTMLElement {
+/** A small square in a pilot's tint beside its name (see `.swatch` in style.css); a trophy's glows in its own color (the Sovereign's gold, the Magpie's shimmer). */
+export function swatch(tint: string, glow: string | null = null): HTMLElement {
   const element = document.createElement('i');
-  element.className = sovereign ? 'swatch sovereign' : 'swatch';
+  element.className = glow ? 'swatch trophy' : 'swatch';
   element.style.setProperty('--tint', tint);
+  if (glow) element.style.setProperty('--trophy-glow', glow);
   element.setAttribute('aria-hidden', 'true');
   return element;
 }

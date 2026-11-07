@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { assignTints, botTint, SOVEREIGN_TINT, TINTS } from './tints';
+import { assignTints, botTint, MAGPIE_SHIMMER, MAGPIE_TINT, SOVEREIGN_GOLD, SOVEREIGN_TINT, TINTS, TROPHY_MARKS } from './tints';
 import { BOT_NAMES } from '../music/lines';
 
 /** Hue (degrees), saturation and lightness of a hex color. */
@@ -35,9 +35,16 @@ describe('the palette of tints', () => {
     for (let i = 1; i < hues.length; i++) expect(hues[i]).toBeGreaterThan(hues[i - 1]);
   });
 
-  it("leaves the Sovereign's ivory to the Sovereign: far lighter than every tint", () => {
-    expect(hsl(SOVEREIGN_TINT).lightness).toBeGreaterThanOrEqual(0.85);
-    expect(TINTS.map(({ hex }) => hex)).not.toContain(SOVEREIGN_TINT);
+  it("leaves the Sovereign's ivory and the Magpie's chalk white to them: far lighter than every tint, each its own, the Magpie's shimmer clear of the HUD's azure", () => {
+    for (const tint of [SOVEREIGN_TINT, MAGPIE_TINT]) {
+      expect(hsl(tint).lightness).toBeGreaterThanOrEqual(0.85);
+      expect(TINTS.map(({ hex }) => hex)).not.toContain(tint);
+    }
+    expect(MAGPIE_TINT).not.toBe(SOVEREIGN_TINT);
+    expect(TROPHY_MARKS.sovereign).toEqual({ tint: SOVEREIGN_TINT, glow: SOVEREIGN_GOLD });
+    expect(TROPHY_MARKS.magpie).toEqual({ tint: MAGPIE_TINT, glow: MAGPIE_SHIMMER });
+    expect(apart(hsl(MAGPIE_SHIMMER).hue, 217)).toBeGreaterThanOrEqual(25);
+    expect(TROPHY_MARKS.human).toBeUndefined();
   });
 
   it('gives every bot its own tint, the same on every browser', () => {
