@@ -57,16 +57,16 @@ describe('the campaign Lot 7731', () => {
       expect(done.ratings).toBe(ratingsOf(mission, campaign));
       if (done.rank) ranks.push(done.rank);
     }
-    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones, Hollow Jack's bounty to a sponsor's notice
+    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones, Hollow Jack's bounty to a sponsor's notice, chapter 10 into prime time
     expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + ratingsOf(mission, campaign), 0));
-    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed', 'Sponsored']);
+    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed', 'Sponsored', 'Prime Time']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
     expect(rankOf(49)).toBe('Unrated');
     expect(rankOf(12000)).toBe('Contender');
   });
 
-  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser, the racing line at the Stickney Grand, the radar in Pilot Episode and the threat warnings in Dose', () => {
+  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser, the racing line at the Stickney Grand, the radar in Pilot Episode, the threat warnings in Dose and her own voice at Enceladus', () => {
     const campaign = freshCampaign();
     expect(campaign.modules).toEqual([]);
     for (const mission of MISSIONS) {
@@ -74,9 +74,10 @@ describe('the campaign Lot 7731', () => {
       if (mission.id === 'stickneyGrand') expect(campaign.modules).toEqual(['targeting']);
       if (mission.id === 'pilotEpisode') expect(campaign.modules).toEqual(['targeting', 'racingLine']);
       if (mission.id === 'dose') expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar']);
+      if (mission.id === 'voiceTwo') expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat']);
       complete(campaign, mission);
     }
-    expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat']);
+    expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat', 'voice']);
     expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
   });
 
@@ -141,6 +142,13 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'mainDrive')!);
     expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + DRIVE_STEP, 10);
     expect(campaign.bond).toBe(20000 + TUBE_PRICE - 500 + DRIVE_ONE_PRICE);
+  });
+
+  it('gives Nicole her own voice back at Enceladus, for nothing: the module, and no part', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000 };
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'voiceTwo')!);
+    expect(campaign.modules).toContain('voice');
+    expect(campaign.bond).toBe(20000);
   });
 
   it('fits Plating II at Enceladus: every hit hurts two steps of the hangar less than a stock ship’s, paid as the laser is', () => {

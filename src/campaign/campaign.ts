@@ -79,12 +79,12 @@ export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter
  * autopilot, the brake and the impact warning are hers from the prologue on, so no module stands
  * for them. Targeting: the crosshair turning orange over a hull, the ships' marks and names.
  * Racing line: the dashed line. Radar: the radar sphere. Threat: TRACKED, LOCKED, ON YOUR TAIL and
- * TORPEDO INBOUND with its countdown. Wells: the escape gauge and the orbit readout.
+ * TORPEDO INBOUND with its countdown. Voice: her own voice, clean (until then thin, see Speaker.thin). Wells: the escape gauge and the orbit readout.
  */
-export type Module = 'targeting' | 'racingLine' | 'radar' | 'threat' | 'wells';
-const MODULES: readonly Module[] = ['targeting', 'racingLine', 'radar', 'threat', 'wells'];
+export type Module = 'targeting' | 'racingLine' | 'radar' | 'threat' | 'voice' | 'wells';
+const MODULES: readonly Module[] = ['targeting', 'racingLine', 'radar', 'threat', 'voice', 'wells'];
 /** What the job board calls each of Nicole's modules. */
-export const MODULE_NAMES: Record<Module, string> = { targeting: msg('targeting'), racingLine: msg('racing line'), radar: msg('radar'), threat: msg('threat'), wells: msg('wells') };
+export const MODULE_NAMES: Record<Module, string> = { targeting: msg('targeting'), racingLine: msg('racing line'), radar: msg('radar'), threat: msg('threat'), voice: msg('her own voice'), wells: msg('wells') };
 
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
 export function hullOf(campaign: Campaign): Perks {
@@ -119,7 +119,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes';
 
 export interface Mission {
   id: MissionId;

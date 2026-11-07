@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -23,6 +23,25 @@ const GRAND_SECONDS = 360;
 const FLUX_SECONDS = 240;
 /** The Qualifying Heat's three laps over Kraken Mare are flown within this many seconds by a middling bot. */
 const HEAT_SECONDS = 420;
+
+/**
+ * A middling bot flies a mission's time trial at `arena` (see timeTrial): from `from`, through each
+ * coil of `course` along its normal, every one of them inside the arena, within the clock `time`
+ * after the first (the burn up to it, 1 km from rest, takes some 6 s more), without a miss or a crash.
+ */
+function flyTrial(arena: string, course: readonly THREE.Vector3[], normals: readonly THREE.Vector3[], from: readonly [number, number, number], time: number) {
+  const field = testField(DETAIL);
+  field.generate(arenaById(arena as never)!.layout);
+  const start = new THREE.Vector3(...from);
+  for (const coil of course) expect(coil.length()).toBeLessThan(ARENA_LIMIT);
+  expect(start.length()).toBeLessThan(ARENA_LIMIT);
+  const points = course.map((coil) => coil.clone());
+  const line = new RacingLine(points, false, start);
+  const flight = flyRings(field, { points, normals: normals.map((normal) => normal.clone()), radius: RING_RADIUS, core: BOOST_RADIUS, line, open: false }, start, normals[0], SKILL, RACE_SPEED, time + 6);
+  expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(1)} s`).toBe(points.length);
+  expect(flight.missed).toBe(0);
+  expect(flight.crashed).toBe(false);
+}
 
 /**
  * A middling bot flies a mission's race at `arena`: every lap through every mark of `course`
@@ -52,19 +71,11 @@ describe('the races of the campaign', () => {
   });
 
   it('the Valhalla Sprint on Callisto is flown by a middling bot: from its start through every coil in a straight line over the ridges, the clock beaten, without a crash', () => {
-    const field = testField(DETAIL);
-    field.generate(arenaById('callisto')!.layout);
-    const start = new THREE.Vector3(...SPRINT_START.at);
-    const way = new THREE.Vector3(-1, 0, 0);
-    for (const coil of SPRINT_COURSE) expect(coil.length()).toBeLessThan(ARENA_LIMIT);
-    expect(start.length()).toBeLessThan(ARENA_LIMIT);
-    const points = SPRINT_COURSE.map((coil) => coil.clone());
-    const line = new RacingLine(points, false, start);
-    // the clock runs from the first coil: the burn up to it (1 km from rest) takes some 6 s of it
-    const flight = flyRings(field, { points, normals: points.map(() => way), radius: RING_RADIUS, core: BOOST_RADIUS, line, open: false }, start, way, SKILL, RACE_SPEED, SPRINT_TIME + 6);
-    expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(1)} s`).toBe(points.length);
-    expect(flight.missed).toBe(0);
-    expect(flight.crashed).toBe(false);
+    flyTrial('callisto', SPRINT_COURSE, SPRINT_COURSE.map(() => new THREE.Vector3(-1, 0, 0)), SPRINT_START.at, SPRINT_TIME);
+  });
+
+  it('the Tiger Stripes on Enceladus are flown by a middling bot: down one stripe and up the next through every coil, the ad’s clock beaten, without a crash', () => {
+    flyTrial('enceladus', TIGER_COURSE, TIGER_NORMALS, TIGER_START.at, TIGER_TIME);
   });
 
   it('the Flux Tube Race on Io is flown by a middling bot: both laps through every ring, past the flux tube, nothing missed, without a crash; one side of its loop runs where the link crackles', () => {

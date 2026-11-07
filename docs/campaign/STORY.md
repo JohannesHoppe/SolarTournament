@@ -164,8 +164,8 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 9.4 | Circuit Final | race | The final: the Qualifying Heat's loop and field, win it. (built) | ☉ 6,000 · 800 | Race |
 | 9.5 | Methane Echo | exploration | Echo 7, low over the methane sea, where the haze hides it from the eye but not from the radar. (built) | 40 | Markers; radar |
 | 10.1 | Plume Yacht | escort | Escort Crisp's yacht through the plumes. Staged "bandits" fire to miss, for the cameras. Then real raiders (skill 0.65) shoot the actors and go for the yacht. (built) | ☉ 5,000 · 500 | Escort; scripted waves |
-| 10.2 | Hello, Host | story duel | A grey interceptor with "SPARE" sprayed on its flank fights exactly like the Host and breaks off at half health. His hail. | · 300 | Duel; new: a bot replaying the Host's recorded flight habits (optional, see section 10) |
-| 10.3 | Tiger Stripes | race | A time trial down the four stripes, through Ministry coils leased for a Victory Cola ad and moored at the vents. Gold under the ad's 60 s. | ☉ 2,500 · 300 | Race against the clock; the plumes as drill dust |
+| 10.2 | Hello, Host | story duel | A grey interceptor with "SPARE" sprayed on its flank fights exactly like the Host and breaks off at half health. His hail. (built: a bot of skill 0.6; flying the Host's recorded habits is still to come) | · 300 | Duel; new: a bot replaying the Host's recorded flight habits (optional, see section 10) |
+| 10.3 | Tiger Stripes | race | A time trial down the four stripes, through Ministry coils leased for a Victory Cola ad and moored at the vents. Through all eight coils within the ad's 75 s. (built) | ☉ 2,500 · 300 | Race against the clock; the plumes as drill dust |
 | 11.1 | The Ridge | exploration | Fly the equatorial ridge low and find the cache (echo 8) before Spare's two wingmen do. | ☉ 2,000 · 300 | Surface; markers; bots racing to a point |
 | 11.2 | Office Hours | story | Commissioner Quill aboard Patience: the fast track. | — | A scene |
 | 11.3 | Last of the Tallymen | bounty | Ma Tally's last tug at the dark face. Kill her and three escorts (skill 0.5). | ☉ 5,000 · 500 | Deathmatch |
@@ -313,7 +313,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | 4 | Racing line | The dashed line and its orange bends (built: the Stickney Grand) |
 | 5 | Radar | The radar sphere (built: Pilot Episode) |
 | 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown (built: Dose) |
-| 10 | Voice II | Her own voice, clean |
+| 10 | Voice II | Her own voice, clean (built: from a voice board out of Crisp's yacht; until then she sounds thin, through a narrow band) |
 | 15 | Wells | The escape gauge and the orbit readout |
 | 19 | Ministry certification | The Games' Nicole (the end) |
 
@@ -816,7 +816,27 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **NICOLE**: Plating of the second grade, Host. Every hit hurts a little less again.
 
-### Spare (chapter 10)
+### Voice II (chapter 10, built)
+
+**PIM**: Crisp's yacht had a voice board in its lounge, top of the line. It fell into my bag. Hold still, Nicole, you're getting your own voice back.
+
+**NICOLE** *(Voice I)*: Pim says it takes a moment to settle in, Host. I will be quiet until it does.
+
+### Tiger Stripes (chapter 10, built)
+
+**BELLAMY CRISP**: Host! We leased the Ministry's coils and moored them at the vents! You fly the stripes, the plumes sparkle, the can pops. Seventy-five seconds, the length of the ad. Go go go!
+
+**NICOLE**: Eight coils, two over each stripe, down one and back up the next. The clock starts at the first, and the ad runs seventy-five seconds. Mind the plumes: they patter, they do not hurt.
+
+**NICOLE** *(through in time)*: Through in time. Victory Cola has its ad, Host, and the plumes look beautiful in it.
+
+### Spare (chapter 10, built)
+
+**HEDDA**: Something out of the stripes. One ship, grey, no transponder. It's hailing you. By name.
+
+**NICOLE**: A grey interceptor, Host, SPARE sprayed on its flank. It does not fly like a raider. Watch it.
+
+**NICOLE** *(at half his hull)*: He is breaking off. At half his hull. As we would.
 
 **SPARE**: Hello, Host. Don't shoot. You'd only be killing yourself. Again.
 

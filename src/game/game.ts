@@ -4260,6 +4260,8 @@ export class Game implements OnlineGame {
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
     const radar = this.aid('radar');
+    // Nicole's own voice only once the campaign gives it back (see Speaker.thin)
+    this.speaker.thin = !this.aid('voice');
     if ($('radar').hidden === radar) $('radar').hidden = !radar;
     if (radar && !this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     // in a planet's air the horizon is the planet's, from the ship's place (see world/air)

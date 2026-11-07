@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, RASK, SAW, TALLY } from '../music/lines';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, RASK, SAW, SPARE, TALLY } from '../music/lines';
 import { clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -13,7 +13,7 @@ import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { sulfurFreighter } from '../world/barge';
 import { yacht } from '../world/yacht';
-import { LAND as ENCELADUS_LAND, STRIPE_WAY } from '../world/enceladus';
+import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -818,30 +818,39 @@ const PERIHELION_BREAK = 35;
 const DUEL_FIELD = point(0, -25000, 0);
 const DUEL_GONE = point(-60000, -10000, -20000);
 
-const hazeDuel: Drill = {
-  line: CAMPAIGN.hazeDuel,
-  keys: ['turn', 'drive', 'fire'],
-  arena: 'titan',
-  autopilot: false,
-  music: 'fight',
-  enter(ctx) {
-    ctx.spawnJumpers(null, DUEL_FIELD, 1, PERIHELION_SKILL, ['Perihelion'], 8000, true);
-    ctx.me.heat = 0;
-    ctx.me.overheated = false;
-  },
-  done(ctx, a) {
-    if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
-    if (ctx.leaderDown || ctx.leaderHull <= PERIHELION_BREAK) {
-      ctx.standDown(DUEL_GONE);
-      ctx.say([CAMPAIGN.hazeDuelBreaks]);
-      a.doneAt = a.seconds + 4;
-    }
-    return false;
-  },
-  leave: (ctx) => ctx.removeJumpers(),
-  waypoint: () => null,
-  mark: (ctx) => t('Perihelion · hull {hull} %', { hull: Math.round(ctx.leaderHull) }),
-};
+/**
+ * A duel with one rival who never lets a clone die (the Haze Duel's Perihelion, Spare): `name` of
+ * `skill` at `field`, fighting every ship he sees; once his hull is down to `breakAt` (of 100) he
+ * flies off to `gone`, Nicole says `breaks`, and the duel is won a few seconds later.
+ */
+function duel(spec: { line: string; arena: ArenaId; name: string; skill: number; field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string }): Drill {
+  return {
+    line: spec.line,
+    keys: ['turn', 'drive', 'fire'],
+    arena: spec.arena,
+    autopilot: false,
+    music: 'fight',
+    enter(ctx) {
+      ctx.spawnJumpers(null, spec.field, 1, spec.skill, [spec.name], 8000, true);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+    },
+    done(ctx, a) {
+      if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
+      if (ctx.leaderDown || ctx.leaderHull <= spec.breakAt) {
+        ctx.standDown(spec.gone);
+        ctx.say([spec.breaks]);
+        a.doneAt = a.seconds + 4;
+      }
+      return false;
+    },
+    leave: (ctx) => ctx.removeJumpers(),
+    waypoint: () => null,
+    mark: (ctx) => t(spec.mark, { hull: Math.round(ctx.leaderHull) }),
+  };
+}
+
+const hazeDuel = duel({ line: CAMPAIGN.hazeDuel, arena: 'titan', name: 'Perihelion', skill: PERIHELION_SKILL, field: DUEL_FIELD, breakAt: PERIHELION_BREAK, gone: DUEL_GONE, breaks: CAMPAIGN.hazeDuelBreaks, mark: msg('Perihelion · hull {hull} %') });
 
 /** Methane Echo (9.5): the seventh echo, low over Kraken Mare, ECHO_SEVEN_OVER over the sea, where the haze hides it from the eye and not from the radar. */
 const ECHO_SEVEN_OVER = 1600;
@@ -859,6 +868,46 @@ const fitThrustersOne = (campaign: Campaign) => {
   campaign.parts.push('thrustersOne');
   buy(campaign, THRUSTERS_ONE_PRICE);
 };
+
+/** Voice II (10.2): Nicole's own voice, clean, from a board out of Crisp's yacht (see Module, Speaker.thin). */
+const fitVoice = (campaign: Campaign) => {
+  if (!campaign.modules.includes('voice')) campaign.modules.push('voice');
+};
+
+/**
+ * Hello, Host (10.2): Spare, the clone lost in Io's flux tube, in a grey interceptor (skill
+ * SPARE_SKILL) over the tiger stripes; once his hull is down to SPARE_BREAK (of 100) he breaks
+ * off, as the Host would, and hails.
+ */
+const SPARE_SKILL = 0.6;
+const SPARE_BREAK = 50;
+const SPARE_FIELD = point(0, ENCELADUS_LAND + 10000, 0);
+const SPARE_GONE = point(60000, ENCELADUS_LAND + 30000, -30000);
+
+const helloHost = duel({ line: CAMPAIGN.helloHost, arena: 'enceladus', name: 'Spare', skill: SPARE_SKILL, field: SPARE_FIELD, breakAt: SPARE_BREAK, gone: SPARE_GONE, breaks: CAMPAIGN.spareBreaks, mark: msg('Spare · hull {hull} %') });
+
+/**
+ * Tiger Stripes (10.3): a time trial down the four stripes, through TIGER_PER_STRIPE coils of the
+ * Ministry over each, leased for a Victory Cola ad and moored at the vents (the second and the
+ * fourth of each stripe, see VENTS), TIGER_OVER over the plain so the trough and its ridges stay
+ * clear beneath; down the first stripe, back up the second, and so on. The clock starts at the
+ * first coil, and every coil after it within TIGER_TIME (the ad's length) wins; a coil missed
+ * starts it over.
+ */
+const TIGER_PER_STRIPE = 2;
+const TIGER_OVER = 3200;
+export const TIGER_TIME = 75;
+const VENTS_PER = VENTS.length / STRIPE_NAMES.length;
+export const TIGER_COURSE = STRIPE_NAMES.flatMap((_, k) => {
+  const coils = [1, 3].map((i) => VENTS[k * VENTS_PER + i].clone().setY(ENCELADUS_LAND + TIGER_OVER));
+  return k % 2 ? coils.reverse() : coils;
+});
+/** Each coil faces along its stripe, the way it is flown. */
+export const TIGER_NORMALS = TIGER_COURSE.map((_, i) => STRIPE_WAY.clone().multiplyScalar(Math.floor(i / TIGER_PER_STRIPE) % 2 ? -1 : 1));
+const TIGER_FROM = TIGER_COURSE[0].clone().addScaledVector(STRIPE_WAY, -20000);
+export const TIGER_START = { at: [TIGER_FROM.x, TIGER_FROM.y, TIGER_FROM.z] as const, toward: [TIGER_COURSE[0].x, TIGER_COURSE[0].y, TIGER_COURSE[0].z] as const };
+
+const tigerStripes = timeTrial({ line: CAMPAIGN.tigerStripes, arena: 'enceladus', points: TIGER_COURSE, normals: TIGER_NORMALS, time: TIGER_TIME, missed: CAMPAIGN.tigerStripesMissed, slow: CAMPAIGN.tigerStripesSlow });
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
@@ -970,39 +1019,49 @@ const SPRINT_HEIGHT = (() => {
 export const SPRINT_COURSE = Array.from({ length: SPRINT_COILS }, (_, k) => point(SPRINT_FROM - (k + 1) * SPRINT_GAP, SPRINT_HEIGHT, 0));
 export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, toward: [0, SPRINT_HEIGHT, 0] as const };
 
-const valhallaSprint: Drill = {
-  line: CAMPAIGN.valhallaSprint,
-  keys: ['drive', 'turn'],
-  arena: 'callisto',
-  music: 'fight',
-  autopilot: true,
-  enter(_, a, markers) {
-    a.points = SPRINT_COURSE.map((coil) => coil.clone());
-    a.normals = a.points.map(() => SPRINT_WAY.clone());
-    a.points.forEach((coil, i) => markers.ring(coil, a.normals[i]));
-    markers.highlight(0);
-  },
-  done(ctx, a, markers) {
-    // the first coil counts only flown along the line, so a pilot coming back to start over turns first
-    if (a.next === 0 && ctx.me.flight.velocity.dot(SPRINT_WAY) <= 0) {
-      a.side = NaN;
-      return false;
-    }
-    const off = passRing(ctx, a);
-    if (off === null) return false;
-    if (off >= RING_RADIUS) {
-      a.warned = true;
-      return false;
-    }
-    markers.highlight(a.next);
-    if (off < RING_RADIUS * CORE_SHARE) ctx.boost(SPRINT_WAY);
-    if (a.next === 1) a.clockFrom = a.seconds;
-    return a.next >= a.points.length;
-  },
-  fail: (_, a) => (a.warned ? CAMPAIGN.valhallaSprintMissed : a.seconds - a.clockFrom > SPRINT_TIME ? CAMPAIGN.valhallaSprintSlow : null),
-  waypoint: (_, a) => a.points[a.next] ?? null,
-  mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(SPRINT_TIME - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
-};
+/**
+ * A time trial through coils of the Ministry (Valhalla Sprint, Tiger Stripes): `points` flown in
+ * order, each through its face along `normals`; the first counts only flown along its normal, so
+ * a pilot coming back to start over turns first; the clock starts at the first coil, and every
+ * coil after it within `time` wins; each coil's core throws the ship on along it, a coil missed
+ * (`missed`) or the clock run out (`slow`) starts it over.
+ */
+function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; missed: string; slow: string }): Drill {
+  return {
+    line: spec.line,
+    keys: ['drive', 'turn'],
+    arena: spec.arena,
+    music: 'fight',
+    autopilot: true,
+    enter(_, a, markers) {
+      a.points = spec.points.map((coil) => coil.clone());
+      a.normals = spec.normals.map((normal) => normal.clone());
+      a.points.forEach((coil, i) => markers.ring(coil, a.normals[i]));
+      markers.highlight(0);
+    },
+    done(ctx, a, markers) {
+      if (a.next === 0 && ctx.me.flight.velocity.dot(a.normals[0]) <= 0) {
+        a.side = NaN;
+        return false;
+      }
+      const off = passRing(ctx, a);
+      if (off === null) return false;
+      if (off >= RING_RADIUS) {
+        a.warned = true;
+        return false;
+      }
+      markers.highlight(a.next);
+      if (off < RING_RADIUS * CORE_SHARE) ctx.boost(a.normals[a.next - 1]);
+      if (a.next === 1) a.clockFrom = a.seconds;
+      return a.next >= a.points.length;
+    },
+    fail: (_, a) => (a.warned ? spec.missed : a.seconds - a.clockFrom > spec.time ? spec.slow : null),
+    waypoint: (_, a) => a.points[a.next] ?? null,
+    mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(spec.time - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
+  };
+}
+
+const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
 /** Radiators I (5.5): a tug yard's radiators of the first grade, a step up (see hullOf), at RADIATORS_PRICE. */
 const fitRadiators = (campaign: Campaign) => {
@@ -1989,4 +2048,7 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 10, the Plumes at Enceladus: Crisp's show, and the raiders who were not in it
   { id: 'plumeYacht', name: msg('Plume Yacht'), drills: [said(HEDDA.enceladus, 'enceladus'), said(CRISP.yacht, 'enceladus'), plumeYacht, said(CAMPAIGN.plumeYachtDone, 'enceladus'), said(CRISP.after, 'enceladus')], pay: 5000, ratings: 500 },
   { id: 'platingTwo', name: msg('Plating II'), drills: [said(PIM.platingTwo, 'enceladus'), said(CAMPAIGN.platingTwo, 'enceladus')], pay: 0, fit: fitPlatingTwo },
+  { id: 'voiceTwo', name: msg('Voice II'), drills: [said(PIM.voiceTwo, 'enceladus'), said(CAMPAIGN.voiceTwo, 'enceladus')], pay: 0, fit: fitVoice },
+  { id: 'helloHost', name: msg('Hello, Host'), drills: [said(HEDDA.spare, 'enceladus'), said(SPARE.hello, 'enceladus'), helloHost, said(SPARE.io, 'enceladus'), said(CAMPAIGN.spareFlight, 'enceladus'), said(SPARE.nicole, 'enceladus'), said(SPARE.stop, 'enceladus')], pay: 0, ratings: 300 },
+  { id: 'tigerStripes', name: msg('Tiger Stripes'), drills: [said(CRISP.tigerStripes, 'enceladus'), tigerStripes, said(CAMPAIGN.tigerStripesDone, 'enceladus')], pay: 2500, ratings: 300, start: TIGER_START },
 ];

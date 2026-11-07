@@ -10,11 +10,14 @@ const VOICE_RETRY_MS = 5000;
 /**
  * How the campaign's other voices are played (see castOf): `rate` the share of the pitch and
  * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice;
- * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %; the Navy officer's clipped at 96 %), `tremble` how far (cents) the pitch
+ * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %; the Navy officer's clipped at 96 %; Spare's as rendered, flat), `tremble` how far (cents) the pitch
  * wavers at TREMBLE_RATE (Hz).
  */
-const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 }, navy: { rate: 0.96, tremble: 0 }, jack: { rate: 0.88, tremble: 20 }, crisp: { rate: 1.1, tremble: 0 } };
+const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 }, navy: { rate: 0.96, tremble: 0 }, jack: { rate: 0.88, tremble: 20 }, crisp: { rate: 1.1, tremble: 0 }, spare: { rate: 1, tremble: 0 } };
 const TREMBLE_RATE = 5;
+/** Nicole's thin voice (see Speaker.thin): what a second-hand voice board passes, from THIN_LOW to THIN_HIGH (Hz). */
+const THIN_LOW = 420;
+const THIN_HIGH = 3600;
 
 /** How a line meets one still being said: see Speaker.say. */
 export type Urgency = 'chatter' | 'urgent' | 'lesson';
@@ -36,6 +39,9 @@ export class Speaker {
   private readonly room: GainNode;
   /** The clone stands among the people (a scene in person, see campaign/scenes): their lines come from the room, not the comm. */
   inPerson = false;
+  /** Nicole's own voice before the campaign gives it back to her (see Module, 'voice'): thin, through a second-hand voice board's narrow band. */
+  private readonly thinInput: GainNode;
+  thin = false;
   /** The lines playing or waiting to play, by their source. */
   private readonly sources = new Map<AudioBufferSourceNode, string>();
   private busyUntil = 0;
@@ -53,6 +59,15 @@ export class Speaker {
     level.gain.value = 1.1;
     this.input = context.createGain();
     this.input.connect(highpass).connect(grit).connect(level).connect(destination);
+    // a second-hand voice board: the lows and the air above the speech cut away
+    const board = context.createBiquadFilter();
+    board.type = 'highpass';
+    board.frequency.value = THIN_LOW;
+    const top = context.createBiquadFilter();
+    top.type = 'lowpass';
+    top.frequency.value = THIN_HIGH;
+    this.thinInput = context.createGain();
+    this.thinInput.connect(board).connect(top).connect(this.input);
     // a cheap comm from outside the ship: the telephone band, nasal, driven hard into a rasp
     const band = context.createBiquadFilter();
     band.type = 'bandpass';
@@ -134,7 +149,7 @@ export class Speaker {
       if (queued && waiting.has(line)) continue;
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
-      source.connect(who ? (this.inPerson ? this.room : this.comm) : this.input);
+      source.connect(who ? (this.inPerson ? this.room : this.comm) : this.thin ? this.thinInput : this.input);
       // a voice of the cast lower and heavier than it was rendered, with a tremble in it
       const cast = who ? CAST_VOICES[who] : null;
       const rate = cast?.rate ?? 1;

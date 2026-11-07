@@ -110,6 +110,12 @@ export const SPEAKERS = {
     reference: { text: "Host! Bellamy Crisp, Director of Excitement, Victory Cola! Taste the win! Here's the deal! Our probes in your rounds, our logo on your hull. Welcome to the family!", speed: 1 },
     language: 'crisp',
   },
+  spare: {
+    voice: 'am_liam',
+    speed: 0.95,
+    reference: { text: "Hello, Host. Don't shoot. You'd only be killing yourself. Again. Hi, Nicole. You sound better. They call us strays. I call myself Spare.", speed: 1 },
+    language: 'spare',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

@@ -703,3 +703,23 @@ test('the Plume Yacht: Crisp’s actors fire wide and hurt nobody, then real rai
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('plumeYacht')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('Hello, Host: Spare in his grey interceptor breaks off at half his hull, and his hail follows', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...enceladusHull('plumeYacht', 'platingTwo', 'voiceTwo'), modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice'] });
+  await page.waitForFunction(() => window.game.venue?.id === 'enceladus' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 1, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Spare');
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.hull = 45));
+  await page.waitForFunction(() => (window.game.school?.stepIndex ?? 0) > 2, null, { timeout: 60_000 });
+  expect(await page.evaluate(() => window.game.jumpers?.bots[0]?.ship.alive ?? true)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Tiger Stripes: eight coils over the four stripes at Enceladus, the clock not yet running before the first', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...enceladusHull('plumeYacht', 'platingTwo', 'voiceTwo', 'helloHost'), modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice'] });
+  await page.waitForFunction(() => window.game.venue?.id === 'enceladus' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  expect(await page.evaluate(() => Number.isFinite(window.game.school.attempt.clockFrom))).toBe(false);
+  expect(errors).toEqual([]);
+});
