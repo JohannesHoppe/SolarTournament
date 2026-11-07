@@ -35,6 +35,8 @@ export interface SchoolContext {
   braking: boolean;
   /** The own hook holds on to something. */
   hooked: boolean;
+  /** The ship the own hook holds on to (a drill's ship to tow), or null. */
+  hookedShip: Ship | null;
   /** The impact warning is on. */
   impactAhead: boolean;
   /** The orbit readout as the HUD shows it near the black hole (see game/orbit); null elsewhere. */
@@ -45,6 +47,8 @@ export interface SchoolContext {
   setAutopilot(on: boolean): void;
   /** Set by the flight school: the autopilot leaves the drift across the nose alone this frame (see Drill.keepsDrift). */
   keepDrift: boolean;
+  /** Set by the flight school: the hook bites the drill's drone this frame (see Drill.towsDrone). */
+  towDrone: boolean;
   /** The overdrive ready at once, whenever the Host last fired it. */
   readyOverdrive(): void;
   /** The camera sits in the cockpit instead of behind the ship. */
@@ -245,6 +249,8 @@ export interface Drill {
   autopilotAfter?: boolean;
   /** While true, the autopilot leaves the drift across the nose alone: the drill's drift is the point. */
   keepsDrift?(ctx: SchoolContext, attempt: Attempt): boolean;
+  /** The drill's ship (the drone, see SchoolContext.spawnDrone) is there to be towed: the hook bites it (it passes over a target drone otherwise). */
+  towsDrone?: boolean;
   /** The drill does not apply to the Host's device: it is passed over without a word. */
   skip?(ctx: SchoolContext): boolean;
   /** No printer for the next clone (the Ninth's Orbit): the clone's death goes black for a few seconds, no clone's link booting, before the attempt starts over. */
@@ -2267,6 +2273,7 @@ export class FlightSchool {
       drill.enter?.(ctx, attempt, this.markers);
     }
     ctx.keepDrift = drill.keepsDrift?.(ctx, attempt) ?? false;
+    ctx.towDrone = drill.towsDrone ?? false;
     if (attempt.turned === undefined) attempt.turned = drill.turn?.(ctx, attempt);
     attempt.seconds += ctx.dt;
     this.markers.update(ctx.dt, ctx.field);

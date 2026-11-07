@@ -1053,6 +1053,38 @@ test('Ride the Comet: the comet hooked sheds its shower at the hull on the cable
   expect(errors).toEqual([]);
 });
 
+test('The Feeders’ Comet: Scout One on the hook comes free of her moorings and is dragged off the comet’s route by the hull', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...ninthHull('theDrain', 'scoutOne'), step: 1 });
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  // the hull at rest 150 m from Scout One, its nose on her
+  const aimAt = async (away: boolean) =>
+    page.evaluate((away) => {
+      const flight = window.game.me.flight;
+      const scout = window.game.drone.flight.position;
+      if (!away) flight.position.copy(scout).add(scout.clone().set(0, 3000, 0));
+      flight.velocity.set(0, 0, 0);
+      const toward = scout.clone().sub(flight.position).normalize();
+      if (away) toward.negate();
+      const nose = flight.forward(scout.clone());
+      flight.orientation.premultiply(flight.orientation.clone().setFromUnitVectors(nose, toward));
+    }, away);
+  await aimAt(false);
+  const start = await page.evaluate(() => window.game.drone.flight.position.clone());
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
+  await page.waitForFunction(() => window.game.tethers.get(window.game.me)?.anchor?.ship === window.game.drone && window.game.tethers.get(window.game.me).flying <= 0, null, { timeout: 30_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
+  // straight up, away from her: the cable drags her along
+  await aimAt(true);
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })));
+  await page.waitForFunction((start) => window.game.drone.flight.position.distanceTo(start) > 2000, start, { timeout: 30_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })));
+  expect(await page.evaluate(() => window.game.school.attempt.told)).toBe(true);
+  // clear of the route when the head passes: the drill is done
+  await page.waitForFunction(() => window.game.school.stepIndex >= 2, null, { timeout: 90_000 });
+  expect(errors).toEqual([]);
+});
+
 test('Certification: the President in the flesh on his dais under the Ballroom’s dome, Quill at its foot', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath', 'lastOrbit', 'theDeal', 'parade'));

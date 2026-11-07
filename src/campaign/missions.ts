@@ -1430,6 +1430,52 @@ const feedersComet: Drill = {
   mark: (ctx) => t('Navy {n}/{total} · Scout One {hull} %', { n: GUNS - ctx.jumpersDown, total: GUNS, hull: Math.max(0, Math.round(ctx.drone?.hull ?? 0)) }),
 };
 
+/**
+ * The Feeders' Comet, the tow (18.3): the comet the Ministry threw at Scout One, its head
+ * TOW_SECONDS out, coming along TOW_ROUTE at TOW_HEAD_SPEED (a tumbling chunk of TOW_HEAD_RADIUS
+ * the Host sees come); hooked, Scout One is free of her moorings, and the hook's cable drags her.
+ * When the head arrives she must lie TOW_CLEAR off its route, or it takes her.
+ */
+const TOW_SECONDS = 45;
+/** The head's way: along this direction to Scout One, at 100 m/s (units/s), 20 m across (units). */
+const TOW_ROUTE = new THREE.Vector3(-1, 0.15, -0.4).normalize();
+const TOW_HEAD_SPEED = 2000;
+const TOW_HEAD_RADIUS = 400;
+/** How far off the head's route Scout One has to lie when it passes (units, 75 m): the head and her hull clear of each other. */
+const TOW_CLEAR = 1500;
+const towOff = new THREE.Vector3();
+
+/** How far Scout One lies off the head's route (units). */
+function offRoute(at: THREE.Vector3): number {
+  towOff.subVectors(at, SCOUT_AT);
+  return towOff.addScaledVector(TOW_ROUTE, -towOff.dot(TOW_ROUTE)).length();
+}
+
+const towScout: Drill = {
+  line: CAMPAIGN.towScout,
+  keys: ['hook', 'turn', 'drive'],
+  arena: 'hole',
+  autopilot: false,
+  keepsDrift: () => true,
+  towsDrone: true,
+  enter(ctx, a, markers) {
+    parkScout(ctx);
+    // a.told: Scout One has been on the hook, and lies free of her moorings
+    a.told = false;
+    const start = SCOUT_AT.clone().addScaledVector(TOW_ROUTE, -TOW_HEAD_SPEED * TOW_SECONDS);
+    a.points = [markers.debris(start, TOW_ROUTE.clone().multiplyScalar(TOW_HEAD_SPEED), TOW_HEAD_RADIUS)];
+  },
+  done(ctx, a) {
+    const scout = ctx.drone;
+    if (ctx.hookedShip && ctx.hookedShip === scout) a.told = true;
+    if (!a.told && scout?.alive) parkScout(ctx);
+    return a.seconds >= TOW_SECONDS && !!scout?.alive && offRoute(scout.flight.position) >= TOW_CLEAR;
+  },
+  fail: (ctx, a) => (!ctx.drone?.alive || (a.seconds >= TOW_SECONDS && offRoute(ctx.drone.flight.position) < TOW_CLEAR) ? CAMPAIGN.feedersCometLost : null),
+  waypoint: (_, a) => (a.told ? null : SCOUT_AT),
+  mark: (ctx, a) => t('Comet in {seconds} s · Scout One {meters} m off its route', { seconds: Math.max(0, Math.ceil(TOW_SECONDS - a.seconds)), meters: Math.round(offRoute(ctx.drone?.flight.position ?? SCOUT_AT) * 0.05) }),
+};
+
 /** First Death (18.4): Perihelion (FINAL_SKILL) and four Navy fighters (0.5), Spare on the Host's wing (with its habits, ctx.spare); Perihelion shot down ends it, no breaking off. */
 const FINAL_SKILL = 0.75;
 const FINAL_FIELD = point(-10000, 2000, 20000);
@@ -2897,7 +2943,7 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 18, the Ninth: the hole, Scout One among the Feeders' ice, Perihelion's first death, the deal
   { id: 'theDrain', name: msg('The Drain'), drills: [said(HEDDA.ninth, 'hole'), theDrain, said(CAMPAIGN.drainFound, 'hole')], pay: 0, ratings: 500 },
   { id: 'scoutOne', name: msg('Scout One'), drills: [said(CAMPAIGN.helloMe, 'hole'), said(CAMPAIGN.stove, 'hole'), said(SPARE.company, 'hole'), said(PERIHELION.evening, 'hole')], pay: 0 },
-  { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800 },
+  { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, towScout, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800 },
   { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, said(CAMPAIGN.firstDeathDone, 'hole')], pay: 0, ratings: 1500 },
   { id: 'lastOrbit', name: msg('Orbit'), drills: [lastOrbit, said(CAMPAIGN.lastOrbitDone, 'hole')], pay: 0, ratings: 2000 },
   { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },

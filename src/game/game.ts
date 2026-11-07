@@ -5613,6 +5613,7 @@ export class Game implements OnlineGame {
     context.braking = this.brakePhase === 'brake';
     const hook = this.tethers.get(this.me!);
     context.hooked = !!hook?.anchor && hook.flying <= 0;
+    context.hookedShip = context.hooked ? (hook!.anchor!.ship ?? null) : null;
     context.autopilot = this.autopilot;
     context.cockpit = this.cockpit;
     context.impactAhead = this.impactAhead;
@@ -5724,6 +5725,7 @@ export class Game implements OnlineGame {
       controls: IDLE,
       braking: false,
       hooked: false,
+      hookedShip: null,
       impactAhead: false,
       orbit: null,
       autopilot: false,
@@ -5731,6 +5733,7 @@ export class Game implements OnlineGame {
         if (this.autopilot !== on) this.toggleAutopilot();
       },
       keepDrift: false,
+      towDrone: false,
       readyOverdrive: () => {
         this.overdriveReadyAt = 0;
       },
@@ -6259,7 +6262,8 @@ export class Game implements OnlineGame {
     const aim = aimHook(
       ship,
       this.field,
-      this.ships.filter((other) => other !== this.drone),
+      // a target drone is no ship to hook, unless the drill has it there to be towed (Scout One)
+      this.ships.filter((other) => other !== this.drone || (this.school !== null && this.schoolContext?.towDrone === true)),
       marks,
     );
     const end = aim ? aim.at : ship.nose(new THREE.Vector3()).addScaledVector(ship.flight.forward(forward), HOOK_RANGE);

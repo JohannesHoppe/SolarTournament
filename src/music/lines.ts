@@ -623,6 +623,7 @@ export const CAMPAIGN = {
   stove: 'She looks so young. I always thought I would feel something grand. I feel like I left the stove on for a very long time.',
   feedersComet: 'They are firing at Scout One, Host. At her. Keep them off her.',
   feedersCometLost: 'Scout One is hit. Her pod. Again, Host, please.',
+  towScout: 'And now the comet, Host. They threw it at her; its head is three quarters of a minute out. Hook her and drag her off its route. Sideways, Host, not along it.',
   feedersCometDone: 'They pulled back. She is still asleep. She did not even notice.',
   firstDeath: 'Perihelion, Host, and four of the Navy. Spare is with us. This time he does not get to break off.',
   firstDeathDone: 'He is down. Perihelion. The Undying. His first death, Host. The whole system will see it, three days from now.',
