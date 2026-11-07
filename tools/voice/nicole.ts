@@ -134,6 +134,12 @@ export const SPEAKERS = {
     reference: { text: 'Evening, scrap. Nothing personal. They promised me the Games. I have never died. Not once. Not for anyone.', speed: 1 },
     language: 'perihelion',
   },
+  president: {
+    voice: 'am_adam',
+    speed: 1,
+    reference: { text: 'New Hosts! Tremendous Hosts. I picked them myself. What a ship. Very old. I like old things. I am one thousand years young. Never been better.', speed: 1 },
+    language: 'president',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

@@ -1030,6 +1030,16 @@ test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over
   expect(errors).toEqual([]);
 });
 
+test('Certification: the President in the flesh on his dais under the Ballroom’s dome, Quill at its foot', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath', 'lastOrbit', 'theDeal', 'parade'));
+  await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 120_000 });
+  // the set, the President and Quill
+  await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('ballroom');
+  expect(errors).toEqual([]);
+});
+
 test('the job board offers Nicole’s voice clean or with the old board’s crackle only once her own is back, and keeps the choice', async ({ page }) => {
   const errors = await takeJobFrom(page, trialsHull());
   await page.keyboard.press('Escape');

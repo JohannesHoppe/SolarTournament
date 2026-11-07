@@ -2055,4 +2055,9 @@ export const FR: Catalog = {
   "Biodome four has tomatoes today. Ines cried over them. Real tomatoes, under a real roof, going somewhere real.": "Le biodôme quatre a des tomates aujourd’hui. Ines a pleuré devant. De vraies tomates, sous un vrai toit, en route vers un vrai endroit.",
   "Ines, the gardener. They grow tomatoes here too, under glass, for a cola. Nobody here is going anywhere.": "Ines, la jardinière. Ici aussi on fait pousser des tomates, sous verre, pour un cola. Ici, personne ne va nulle part.",
   "Venus. Highball, Victory Cola's city, floats over the acid clouds, and Crisp's people race the Cloud Line through them for the feeds. Your sponsor wants you in it. Go and look expensive.": "Vénus. Highball, la ville de Victory Cola, flotte au-dessus des nuages d’acide, et les gens de Crisp y courent la Ligne des nuages pour les chaînes. Ton sponsor te veut dedans. Vas-y et aie l’air cher.",
+  "The Ballroom. The clamps hold the hull on the President’s pad under the dome; your clone climbs down onto his floor.": "La Salle de Bal. Les pinces tiennent la coque sur la plateforme du Président sous le dôme ; ton clone descend sur son parquet.",
+  "New Hosts! Tremendous Hosts. The best Hosts. I picked them myself. Nobody picks like me.": "Nouveaux Hôtes ! Des Hôtes formidables. Les meilleurs Hôtes. Je les ai choisis moi-même. Personne ne choisit comme moi.",
+  "What a ship. Very old. I like old things. I am one thousand years young. Never been better.": "Quel vaisseau. Très vieux. J’aime les vieilles choses. J’ai mille ans de jeunesse. Jamais été aussi bien.",
+  "And the computer. Beautiful computer. Terrible firmware, very sad. My people will fix her. The best firmware in history.": "Et l’ordinateur. Magnifique ordinateur. Firmware épouvantable, très triste. Mes gens vont la réparer. Le meilleur firmware de l’histoire.",
+  "The President": "Le Président",
 };

@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill, vey, perihelion: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill, vey, perihelion, president: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion' | 'president';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -944,13 +944,23 @@ export const PERIHELION = {
   evening: 'Evening, scrap. Nothing personal. They promised me the Games.',
 } as const;
 
+/**
+ * The Orange President in person, once, at the Ballroom (chapter 19), in his current body: the
+ * radio's superlatives and hollow boasts said to the Host's face. His own voice (see tools/voice).
+ */
+export const PRESIDENT = {
+  hosts: 'New Hosts! Tremendous Hosts. The best Hosts. I picked them myself. Nobody picks like me.',
+  ship: 'What a ship. Very old. I like old things. I am one thousand years young. Never been better.',
+  nicole: 'And the computer. Beautiful computer. Terrible firmware, very sad. My people will fix her. The best firmware in history.',
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion';
-/** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill', vey: 'Admiral Vey', perihelion: 'Perihelion' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold, Admiral Vey the Navy's faded blue, Perihelion the Circuit's white gold. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d', vey: '#7f9cc8', perihelion: '#f0e0a0' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL), vey: Object.values(VEY), perihelion: Object.values(PERIHELION) };
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion' | 'president';
+/** The name each of them is shown under, beside the line (through t(): a name reads the same in every language, the President's title is translated). */
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill', vey: 'Admiral Vey', perihelion: 'Perihelion', president: 'The President' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold, Admiral Vey the Navy's faded blue, Perihelion the Circuit's white gold, the President his tan's orange. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d', vey: '#7f9cc8', perihelion: '#f0e0a0', president: '#ff8a3c' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL), vey: Object.values(VEY), perihelion: Object.values(PERIHELION), president: Object.values(PRESIDENT) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -992,6 +1002,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(VEY)];
     case 'perihelion':
       return [...Object.values(PERIHELION)];
+    case 'president':
+      return [...Object.values(PRESIDENT)];
   }
 }
 

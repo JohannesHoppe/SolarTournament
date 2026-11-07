@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { atan2 } from '../detmath';
 import { DOOR, EYE, inOffice, office, SPOTS } from '../world/office';
 import { galley, GALLEY_DOOR, GALLEY_EYE, GALLEY_SPOTS, inGalley } from '../world/galley';
+import { hall, HALL_EYE, HALL_EYE_AT, HALL_SPOTS, inHall } from '../world/hall';
 import { type Placement, Stage } from '../view/stage';
 import type { Mood } from '../music/radio';
 
@@ -12,10 +13,10 @@ import type { Mood } from '../music/radio';
  * into one (see campaign/missions, `climbOut`) and its lines are then said in the room, not over
  * the comm.
  */
-export type SceneName = 'office' | 'galley' | 'visit' | 'file';
+export type SceneName = 'office' | 'galley' | 'visit' | 'file' | 'ballroom';
 
-/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour; Quill's visit to it and Spare's are quiet. */
-export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, file: null };
+/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour; Quill's visit to it and Spare's are quiet; the Ballroom has its ball. */
+export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, file: null, ballroom: 'bright' };
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {
@@ -72,8 +73,23 @@ function filePlan(): ScenePlan {
   return plan;
 }
 
-const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, file: filePlan };
-const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, file: galley };
+/** The Ballroom under its dome: the President on his dais, Quill at its foot, the clone on the carpet before it, looking up at him. */
+function ballroomPlan(): ScenePlan {
+  const eye = inHall(HALL_EYE_AT).setY(inHall(HALL_EYE_AT).y + HALL_EYE);
+  const dais = inHall(HALL_SPOTS.dais);
+  const foot = inHall(HALL_SPOTS.foot);
+  return {
+    people: [
+      { who: 'president', at: dais, facing: towards(dais, eye) },
+      { who: 'quill', at: foot, facing: towards(foot, eye) },
+    ],
+    eye,
+    look: atan2(-(dais.x - eye.x), -(dais.z - eye.z)),
+  };
+}
+
+const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, file: filePlan, ballroom: ballroomPlan };
+const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, file: galley, ballroom: hall };
 
 /** A scene's plan. */
 export const planOf = (name: SceneName) => PLANS[name]();

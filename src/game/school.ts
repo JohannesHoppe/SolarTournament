@@ -2334,7 +2334,7 @@ export class FlightSchool {
       shown.device = device;
       shown.status = {
         step: t('{course} {n}/{total}', { course: this.course ? t(COURSE_NAMES[this.course]) : t(this.mission?.name ?? ''), n: index + 1, total: this.drills.length }),
-        text: castOf(this.line) ? t('{who}: {line}', { who: CAST_NAMES[castOf(this.line)!], line: t(this.line) }) : t(this.line),
+        text: castOf(this.line) ? t('{who}: {line}', { who: t(CAST_NAMES[castOf(this.line)!]), line: t(this.line) }) : t(this.line),
         keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command].map((label) => t(label))),
       };
     }

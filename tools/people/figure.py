@@ -4,6 +4,7 @@ made one plain texture (its diffuse map, at most TEXTURE pixels) and written as 
 public/assets/people/<who>.glb, y up and facing +z as the game reads it.
 Run in Blender: Blender -b <who>.blend --python figure.py -- <who> <out.glb> <triangles>."""
 import bpy, math, sys
+import numpy as np
 from mathutils import Matrix
 
 args = sys.argv[sys.argv.index('--') + 1:]
@@ -13,7 +14,13 @@ TEXTURE = 1024
 # how each person stands: the upper arms turned down from the rig's A-pose about the axis from
 # front to back (deg; Pim's and Hedda's hang at their sides), or turned in about their own
 # axis (Rask's hands folded on his belly)
-POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35), 'quill': ('down', 35), 'spare': ('down', 35)}
+POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35), 'quill': ('down', 35), 'spare': ('down', 35), 'president': ('down', 30)}
+# a person's own colors laid over a texture, by the part's object name (an exact name, else a
+# part of it): 'times' multiplies each channel, 'dye' gives the texture that color on average,
+# keeping its light and dark (each pixel the color times its brightness over the mean); clamped
+# to white. The President's sprayed-on tan and his hair dyed gold, where MakeHuman's skins and
+# hair have no such color
+TINTS = {'president': {'Human': ('times', (1.25, 0.8, 0.5)), 'short02': ('dye', (0.85, 0.66, 0.3))}}
 # each texture's largest side by the part it colors, the first match of its object's name (px):
 # the skin TEXTURE, seen most closely, the clothes half of it, the small parts a quarter; what is
 # cut out by its alpha (hair, eyebrows) stays PNG
@@ -80,6 +87,23 @@ for obj in meshes:
             if max(image.size) > side:
                 scale = side / max(image.size)
                 image.scale(max(1, int(image.size[0] * scale)), max(1, int(image.size[1] * scale)))
+            tints = TINTS.get(WHO, {})
+            tint = tints.get(obj.name) or next((value for key, value in tints.items() if key != 'Human' and key in obj.name), None)
+            if tint:
+                pixels = np.empty(len(image.pixels), dtype=np.float32)
+                image.pixels.foreach_get(pixels)
+                rgba = pixels.reshape(-1, 4)
+                how, color = tint
+                color = np.array(color, dtype=np.float32)
+                if how == 'dye':
+                    light = rgba[:, :3].mean(axis=1)
+                    seen = rgba[:, 3] > 0.5
+                    rgba[:, :3] = color * (light / max(1e-4, float(light[seen].mean() if seen.any() else light.mean())))[:, None]
+                else:
+                    rgba[:, :3] *= color
+                rgba[:, :3] = np.minimum(1.0, rgba[:, :3])
+                image.pixels.foreach_set(pixels)
+                image.update()
             if not cut:
                 image.filepath_raw = f'{bpy.app.tempdir}{image.name}.jpg'
                 image.file_format = 'JPEG'

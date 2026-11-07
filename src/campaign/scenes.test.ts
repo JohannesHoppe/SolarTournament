@@ -5,6 +5,7 @@ import { planOf, type SceneName } from './scenes';
 import { CAB } from '../world/office';
 import { GALLEY } from '../world/galley';
 import { CAB_RADIUS } from '../world/yard';
+import { DOME_RADIUS } from '../world/moon';
 
 /**
  * A scene's plan: the clone and everyone inside its room, the people close enough to talk (2 to
@@ -37,5 +38,12 @@ describe('the scenes in person', () => {
   it('Patience’s galley: everyone inside the room, the people a few meters off and facing the clone, the clone looking at Hedda', () => {
     // the room: 9 m long, 6 m wide round its middle
     expectPlan('galley', (point) => Math.abs(point.x - GALLEY.x) < 90 && Math.abs(point.z - GALLEY.z) < 60, 'hedda');
+  });
+
+  it('the Ballroom: everyone under the dome, the President and Quill a few meters off and facing the clone, the clone looking up at the President', () => {
+    expectPlan('ballroom', (point) => hypot(point.x, point.z) < DOME_RADIUS, 'president');
+    // the President stands on his dais, above the clone's floor
+    const { people, eye } = planOf('ballroom');
+    expect(people[0].at.y).toBeGreaterThan(eye.y - 34);
   });
 });

@@ -2094,4 +2094,9 @@ export const DE: Catalog = {
   "Biodome four has tomatoes today. Ines cried over them. Real tomatoes, under a real roof, going somewhere real.": "Biodom vier hat heute Tomaten. Ines hat über ihnen geweint. Echte Tomaten, unter einem echten Dach, unterwegs an einen echten Ort.",
   "Ines, the gardener. They grow tomatoes here too, under glass, for a cola. Nobody here is going anywhere.": "Ines, die Gärtnerin. Hier wachsen auch Tomaten, unter Glas, für eine Cola. Niemand hier ist irgendwohin unterwegs.",
   "Venus. Highball, Victory Cola's city, floats over the acid clouds, and Crisp's people race the Cloud Line through them for the feeds. Your sponsor wants you in it. Go and look expensive.": "Venus. Highball, Victory Colas Stadt, schwebt über den Säurewolken, und Crisps Leute fliegen für die Sender die Wolkenlinie durch sie hindurch. Dein Sponsor will dich dabei haben. Flieg hin und sieh teuer aus.",
+  "The Ballroom. The clamps hold the hull on the President’s pad under the dome; your clone climbs down onto his floor.": "Der Ballsaal. Die Klammern halten den Rumpf auf dem Landeplatz des Präsidenten unter der Kuppel; dein Klon steigt hinunter auf sein Parkett.",
+  "New Hosts! Tremendous Hosts. The best Hosts. I picked them myself. Nobody picks like me.": "Neue Hosts! Großartige Hosts. Die besten Hosts. Ich habe sie selbst ausgesucht. Niemand sucht aus wie ich.",
+  "What a ship. Very old. I like old things. I am one thousand years young. Never been better.": "Was für ein Schiff. Sehr alt. Ich mag alte Sachen. Ich bin tausend Jahre jung. Nie besser gewesen.",
+  "And the computer. Beautiful computer. Terrible firmware, very sad. My people will fix her. The best firmware in history.": "Und der Computer. Wunderschöner Computer. Schreckliche Firmware, sehr traurig. Meine Leute reparieren sie. Die beste Firmware der Geschichte.",
+  "The President": "Der Präsident",
 };

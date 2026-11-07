@@ -2903,7 +2903,7 @@ export class Game implements OnlineGame {
       if (hologram && panel.contains(hologram.canvas)) hologram.stop();
       return;
     }
-    panel.querySelector<HTMLElement>('.comm-name')!.textContent = CAST_NAMES[who];
+    panel.querySelector<HTMLElement>('.comm-name')!.textContent = t(CAST_NAMES[who]);
     const model = portraitModel(who);
     if (model) hologram.show(panel.querySelector<HTMLElement>('.comm-show')!, model, CAST_COLORS[who], PORTRAIT_SWING);
     // a bust not fetched yet: the name stands, the hologram comes on once it is there

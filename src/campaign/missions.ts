@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
 import { RISE, VESTA_GROUND } from '../world/vesta';
@@ -2837,7 +2837,19 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },
   // chapter 19, the Ballroom: the parade over the President's dome, the certification, the first round of the Games
   { id: 'parade', name: msg('The Parade'), drills: [parade, said(CAMPAIGN.paradeDone, 'ballroom')], pay: 0, ratings: 500 },
-  { id: 'certification', name: msg('Certification'), drills: [said(CAMPAIGN.certification, 'ballroom'), said(CAMPAIGN.certified, 'ballroom')], pay: 0 },
+  {
+    id: 'certification',
+    name: msg('Certification'),
+    drills: [
+      climbOut('ballroom', msg('The Ballroom. The clamps hold the hull on the President’s pad under the dome; your clone climbs down onto his floor.'), 'ballroom'),
+      inRoom(PRESIDENT.hosts, 'ballroom'),
+      inRoom(PRESIDENT.ship, 'ballroom'),
+      inRoom(PRESIDENT.nicole, 'ballroom'),
+      climbIn(CAMPAIGN.certification, 'ballroom'),
+      said(CAMPAIGN.certified, 'ballroom'),
+    ],
+    pay: 0,
+  },
   { id: 'firstRound', name: msg('Your First Round'), drills: [said(CAMPAIGN.firstRound, 'rings')], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
   // the side trips, from Act II on: Mercury's sun miners and their race, and an echo there
   { id: 'terminatorRun', name: msg('Terminator Run'), drills: [said(HEDDA.mercury, 'mercury'), terminatorRun, said(CAMPAIGN.terminatorRunDone, 'mercury')], pay: 4000, ratings: 300, start: TERMINATOR_START, side: 'pilotEpisode' },

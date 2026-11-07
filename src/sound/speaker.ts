@@ -10,10 +10,10 @@ const VOICE_RETRY_MS = 5000;
 /**
  * How the campaign's other voices are played (see castOf): `rate` the share of the pitch and
  * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice;
- * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %; the Navy officer's clipped at 96 %; Spare's as rendered, flat; Quill's bright at 106 %; Admiral Vey's old and slow at 86 %, wavering; Perihelion's cool at 98 %), `tremble` how far (cents) the pitch
+ * Pim's a girl's at 112 %; Hedda's low and worn at 84 %; the Saw Brothers' quick and giggling at 116 %, wavering; Ma Tally's even and cool at 92 %; the Navy officer's clipped at 96 %; Spare's as rendered, flat; Quill's bright at 106 %; Admiral Vey's old and slow at 86 %, wavering; Perihelion's cool at 98 %; the President's big and pleased with itself at 92 %), `tremble` how far (cents) the pitch
  * wavers at TREMBLE_RATE (Hz).
  */
-const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 }, navy: { rate: 0.96, tremble: 0 }, jack: { rate: 0.88, tremble: 20 }, crisp: { rate: 1.1, tremble: 0 }, spare: { rate: 1, tremble: 0 }, quill: { rate: 1.06, tremble: 0 }, vey: { rate: 0.86, tremble: 30 }, perihelion: { rate: 0.98, tremble: 0 } };
+const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 }, saw: { rate: 1.16, tremble: 45 }, tally: { rate: 0.92, tremble: 0 }, navy: { rate: 0.96, tremble: 0 }, jack: { rate: 0.88, tremble: 20 }, crisp: { rate: 1.1, tremble: 0 }, spare: { rate: 1, tremble: 0 }, quill: { rate: 1.06, tremble: 0 }, vey: { rate: 0.86, tremble: 30 }, perihelion: { rate: 0.98, tremble: 0 }, president: { rate: 0.92, tremble: 0 } };
 const TREMBLE_RATE = 5;
 /** Nicole's thin voice (see Speaker.thin): what a second-hand voice board passes, from THIN_LOW to THIN_HIGH (Hz). */
 const THIN_LOW = 420;

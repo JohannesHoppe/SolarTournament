@@ -27,18 +27,25 @@ export const moonGround = (half: THREE.Vector3): THREE.Group => reliefGround(hal
 const RIBS = 16;
 const LAMPS = 48;
 
+/** The President's polished gold (the dome's ribs and band, the dais's rims, the hall's columns), mirroring what shines. */
+export const polishedGold = () => lacquer(new THREE.MeshPhysicalMaterial({ color: 0xe2aa3e, metalness: 1, roughness: 0.28, envMap: shine(), envMapIntensity: 2.6, clearcoat: 0.5, clearcoatRoughness: 0.2 }));
+
+/** The dome's glass, a half sphere squashed to the dome's height with its foot at `floor`, gold-tinted; `inside` the face seen from under it (the hall, see world/hall). */
+export function domeGlass(floor: number, inside = false): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2).scale(DOME_RADIUS, DOME_HEIGHT, DOME_RADIUS).translate(0, floor, 0),
+    lacquer(new THREE.MeshPhysicalMaterial({ color: 0xe8c890, emissive: 0x6a4010, metalness: 0.2, roughness: 0.08, transparent: true, opacity: inside ? 0.3 : 0.55, envMap: shine(), envMapIntensity: 1.5, clearcoat: 1, clearcoatRoughness: 0.04, side: inside ? THREE.BackSide : THREE.FrontSide, depthWrite: !inside })),
+  );
+}
+
 /** The Ballroom in its box's frame (`half` its half extents, the box's bottom on the plain): the dome, its ribs, its lamps. */
 export function ballroom(half: THREE.Vector3): THREE.Group {
   const group = new THREE.Group();
   const floor = -half.y;
-  // the glass: a half sphere squashed to the dome's height, gold-tinted, the warm light of the ball inside showing through
-  const glass = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2).scale(DOME_RADIUS, DOME_HEIGHT, DOME_RADIUS).translate(0, floor, 0),
-    lacquer(new THREE.MeshPhysicalMaterial({ color: 0xe8c890, emissive: 0x6a4010, metalness: 0.2, roughness: 0.08, transparent: true, opacity: 0.55, envMap: shine(), envMapIntensity: 1.5, clearcoat: 1, clearcoatRoughness: 0.04 })),
-  );
-  group.add(glass);
+  // the glass: gold-tinted, the warm light of the ball inside showing through
+  group.add(domeGlass(floor));
   // the ribs: polished gold arcs from the foot to the crown
-  const gold = lacquer(new THREE.MeshPhysicalMaterial({ color: 0xe2aa3e, metalness: 1, roughness: 0.28, envMap: shine(), envMapIntensity: 2.6, clearcoat: 0.5, clearcoatRoughness: 0.2 }));
+  const gold = polishedGold();
   for (let i = 0; i < RIBS; i++) {
     // a half ring standing in its xy plane, from the foot over the crown to the foot, turned about the axis
     const rib = rotateY(new THREE.TorusGeometry(1, 0.012, 6, 48, Math.PI).scale(DOME_RADIUS, DOME_HEIGHT, DOME_RADIUS), (i / RIBS) * Math.PI);

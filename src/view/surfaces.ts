@@ -1813,6 +1813,71 @@ export function wreckInnards(): Surface {
   return innards;
 }
 
+let marble: Surface | null = null;
+/** The marble floor's tile (px of SIZE): MARBLE_TILES squares a side, each a slab of its own, cut along MARBLE_SEAM px of gold. */
+const MARBLE_TILES = 4;
+const MARBLE_SEAM = 3;
+
+/**
+ * The President's floor, new as only what he owns is: slabs of white marble and black in a
+ * checker, each with veins of its own, cut along strips of polished gold inlay, mirror-smooth.
+ * No wear, no grime, no scratch: nobody walks on it who would leave one.
+ */
+export function marbleSurface(): Surface {
+  if (marble) return marble;
+  if (!drawable) return blankSurface();
+  const r = new Randomizer(2584);
+  const { color, orm, bump } = blank({ roughness: 0.08, metalness: 0 });
+  const g = color[1];
+  const slab = SIZE / MARBLE_TILES;
+  for (let row = 0; row < MARBLE_TILES; row++) {
+    for (let col = 0; col < MARBLE_TILES; col++) {
+      const x = col * slab;
+      const y = row * slab;
+      const dark = (row + col) % 2 === 1;
+      g.fillStyle = dark ? '#1a1716' : '#ece6dc';
+      g.fillRect(x, y, slab, slab);
+      // the veins: thin wandering strokes across the slab, grey in white marble, gold-brown in black
+      g.save();
+      g.beginPath();
+      g.rect(x, y, slab, slab);
+      g.clip();
+      for (let v = 0; v < 5; v++) {
+        g.strokeStyle = dark ? `rgba(170, 130, 70, ${r.range(0.25, 0.6)})` : `rgba(90, 86, 84, ${r.range(0.2, 0.5)})`;
+        g.lineWidth = r.range(0.4, 1.6);
+        g.beginPath();
+        let vx = x + r.range(0, slab);
+        let vy = y;
+        g.moveTo(vx, vy);
+        while (vy < y + slab) {
+          const nx = vx + r.range(-10, 10);
+          const ny = vy + r.range(6, 16);
+          g.quadraticCurveTo(vx + r.range(-8, 8), (vy + ny) / 2, nx, ny);
+          vx = nx;
+          vy = ny;
+        }
+        g.stroke();
+      }
+      g.restore();
+    }
+  }
+  // the gold inlay between the slabs: bright, metallic, a hair proud of the stone
+  g.fillStyle = '#d9a640';
+  orm[1].fillStyle = ormColor(0.2, 1);
+  bump[1].fillStyle = '#a0a0a0';
+  for (let k = 0; k < MARBLE_TILES; k++) {
+    for (const target of [g, orm[1], bump[1]]) {
+      target.fillRect(k * slab - MARBLE_SEAM / 2, 0, MARBLE_SEAM, SIZE);
+      target.fillRect(0, k * slab - MARBLE_SEAM / 2, SIZE, MARBLE_SEAM);
+      // the strip at the tile's edge wraps round to the other side
+      target.fillRect(SIZE - MARBLE_SEAM / 2, 0, MARBLE_SEAM, SIZE);
+      target.fillRect(0, SIZE - MARBLE_SEAM / 2, SIZE, MARBLE_SEAM);
+    }
+  }
+  marble = textures(color[0], orm[0], bump[0]);
+  return marble;
+}
+
 /** A lit sign: a sponsor's name in neon letters on a dark plate, framed. */
 export function signTexture(text: string, tint: string): THREE.Texture {
   if (!drawable) return new THREE.Texture();

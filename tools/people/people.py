@@ -1,11 +1,13 @@
 """The campaign's people (see tools/people/README.md): each built with MPFB, MakeHuman's character
 generator in Blender, from MakeHuman's CC0 assets, saved as a .blend and rendered as a picture of
-its bust for review. Run in Blender: Blender -b --python people.py -- <folder>."""
+its bust for review. Run in Blender: Blender -b --python people.py -- <folder> [who ...], every
+person without a name given."""
 import bpy, sys, math
 from mathutils import Vector
 from bl_ext.blender_org.mpfb.services import HumanService, TargetService
 
-OUT = sys.argv[sys.argv.index('--') + 1]
+ARGS = sys.argv[sys.argv.index('--') + 1:]
+OUT, ONLY = ARGS[0], set(ARGS[1:])
 PEOPLE = {
     'rask': dict(phenotype=dict(gender=1.0, age=0.72, muscle=0.3, weight=1.0, height=0.55, proportions=0.3), hair='', eyebrows='eyebrow010', clothes=['male_casualsuit03', 'shoes02'], skin='middleage_caucasian_male', targets={'head-fat-incr': 1.0, 'neck-double-incr': 1.0, 'l-cheek-volume-incr': 1.0, 'r-cheek-volume-incr': 1.0, 'stomach-pregnant-incr': 0.7, 'head-age-incr': 0.5}),
     'pim': dict(phenotype=dict(gender=0.0, age=0.34, muscle=0.5, weight=0.35, height=0.5, proportions=0.6), hair='short02', eyebrows='eyebrow006', clothes=['male_worksuit01', 'shoes05'], skin='young_caucasian_female'),
@@ -18,6 +20,7 @@ PEOPLE = {
     'quill': dict(phenotype=dict(gender=0.0, age=0.4, muscle=0.45, weight=0.42, height=0.58, proportions=0.7), hair='bob01', eyebrows='eyebrow001', clothes=['female_elegantsuit01', 'shoes01'], skin='young_caucasian_female'),
     'vey': dict(phenotype=dict(gender=1.0, age=0.9, muscle=0.35, weight=0.4, height=0.55, proportions=0.4), hair='short01', eyebrows='eyebrow010', clothes=['male_elegantsuit01', 'shoes02'], skin='old_caucasian_male', targets={'head-age-incr': 1.0, 'l-cheek-volume-decr': 0.5, 'r-cheek-volume-decr': 0.5}),
     'perihelion': dict(phenotype=dict(gender=1.0, age=0.45, muscle=0.7, weight=0.45, height=0.62, proportions=0.7), hair='short03', eyebrows='eyebrow007', clothes=['male_casualsuit04', 'shoes01'], skin='young_caucasian_male2', targets={'l-cheek-bones-incr': 0.5, 'r-cheek-bones-incr': 0.5}),
+    'president': dict(phenotype=dict(gender=1.0, age=0.4, muscle=0.45, weight=0.66, height=0.66, proportions=0.6), hair='short02', eyebrows='eyebrow003', clothes=['male_elegantsuit01', 'shoes01'], skin='young_caucasian_male2', targets={'l-cheek-volume-incr': 0.5, 'r-cheek-volume-incr': 0.5, 'neck-double-incr': 0.3}),
     'saw': dict(phenotype=dict(gender=1.0, age=0.4, muscle=0.55, weight=0.3, height=0.52, proportions=0.45), hair='short04', eyebrows='eyebrow011', clothes=['male_casualsuit05', 'fedora_cocked', 'shoes06'], skin='young_asian_male', targets={'l-cheek-volume-decr': 0.6, 'r-cheek-volume-decr': 0.6}),
 }
 
@@ -25,6 +28,8 @@ def asset(sub, name):
     return f'{name}/{name}.mhclo' if name else ''
 
 for who, spec in PEOPLE.items():
+    if ONLY and who not in ONLY:
+        continue
     bpy.ops.wm.read_factory_settings(use_empty=True)
     info = HumanService._create_default_human_info_dict()
     pheno = TargetService.get_default_macro_info_dict()
