@@ -11,19 +11,21 @@ import { ARENA_LIMIT } from '../world/arena';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
 import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
-import { sulfurFreighter, tug } from '../world/barge';
+import { iceTug, sulfurFreighter, tug } from '../world/barge';
+import { DEPOT_AT } from '../world/ladder';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
 import { surfaceHeight as plutoHeight } from '../world/pluto';
 import { yacht } from '../world/yacht';
+import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -825,9 +827,12 @@ const DUEL_GONE = point(-60000, -10000, -20000);
 /**
  * A duel with one rival who never lets a clone die (the Haze Duel's Perihelion, Spare): `name` of
  * `skill` at `field`, fighting every ship he sees; once his hull is down to `breakAt` (of 100) he
- * flies off to `gone`, Nicole says `breaks`, and the duel is won a few seconds later.
+ * flies off to `gone` with any `escorts` (a few of the Navy beside him), Nicole says `breaks`, and
+ * the duel is won a few seconds later.
  */
-function duel(spec: { line: string; arena: ArenaId; name: string; skill: number; field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string }): Drill {
+function duel(spec: { line: string; arena: ArenaId; name: string; skill: number; field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string; escorts?: { names: readonly string[]; skill: number } }): Drill {
+  const names = [spec.name, ...(spec.escorts?.names ?? [])];
+  const skills = names.map((_, i) => (i ? spec.escorts!.skill : spec.skill));
   return {
     line: spec.line,
     keys: ['turn', 'drive', 'fire'],
@@ -835,7 +840,7 @@ function duel(spec: { line: string; arena: ArenaId; name: string; skill: number;
     autopilot: false,
     music: 'fight',
     enter(ctx) {
-      ctx.spawnJumpers(null, spec.field, 1, spec.skill, [spec.name], 8000, true);
+      ctx.spawnJumpers(null, spec.field, names.length, skills, names, 8000, true);
       ctx.me.heat = 0;
       ctx.me.overheated = false;
     },
@@ -1081,6 +1086,43 @@ const fitPlatingThree = (campaign: Campaign) => {
   if (campaign.parts.includes('platingThree')) return;
   campaign.parts.push('platingThree');
   buy(campaign, PLATING_THREE_PRICE);
+};
+
+/**
+ * Haumea's Ring (16.1): the depot crews' race between beacons in Haumea's ring, two laps of
+ * HAUMEA_RINGS rings on an ellipse among the ring's ice; only first home wins.
+ */
+const HAUMEA_RINGS = 8;
+export const HAUMEA_LAPS = 2;
+const haumeaLoop = groundLoop(HAUMEA_RINGS, [0, 0], 46000, 36000, 0, () => 0);
+export const HAUMEA_COURSE = haumeaLoop.course;
+export const HAUMEA_START = haumeaLoop.start;
+const haumeaRing = race({
+  line: CAMPAIGN.haumeaRing,
+  lost: CAMPAIGN.haumeaRingLost,
+  arena: 'haumea',
+  marks: HAUMEA_COURSE,
+  laps: HAUMEA_LAPS,
+  pipes: null,
+  rivals: { names: ['Rime', 'Sleet', 'Hoar', 'Glaze', 'Floe'], skills: [0.6, 0.55, 0.5, 0.45, 0.45] },
+  podium: 1,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/** Rung Two (16.2): a fuel barge of the depot's (an ice tug's build) from the far side of the field to the depot at Eris, two waves of scavengers on it. */
+export const FUEL_FROM = point(48000, 2000, 36000);
+const rungTwo = bargeRun({ line: CAMPAIGN.rungTwo, lost: CAMPAIGN.rungTwoLost, arena: 'eris', from: FUEL_FROM, to: DEPOT_AT, speed: 400, quiet: 20, count: 3, skills: [0.5, 0.55], names: ['Drift', 'Scree', 'Talus'], hold: 10000, hull: 400, kind: iceTug });
+
+/** The Hunter (16.3): Perihelion (skill 0.7), the Ministry's hunter now, and two Navy fighters (0.5) at Eris; at 35 % of his hull he breaks off again. */
+const hunter = duel({ line: CAMPAIGN.hunter, arena: 'eris', name: 'Perihelion', skill: 0.7, field: point(-10000, 0, 0), breakAt: 35, gone: point(-60000, 20000, 40000), breaks: CAMPAIGN.hunterBreaks, mark: msg('Perihelion · hull {hull} %'), escorts: { names: ['Lt. Ames', 'Ens. Kolb'], skill: 0.5 } });
+
+/** Main drive III and Radiators III (16.4): each the hangar's third step (see hullOf), at DRIVE_THREE_PRICE each. */
+const fitDriveThree = (campaign: Campaign) => {
+  for (const part of ['driveThree', 'radiatorsThree'] as const) {
+    if (campaign.parts.includes(part)) continue;
+    campaign.parts.push(part);
+    buy(campaign, DRIVE_THREE_PRICE);
+  }
 };
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
@@ -1749,53 +1791,79 @@ const SCRAP_HOLD = 10000;
 const BARGE_HULL = 300;
 /** The scrappers' names, the Rockborn's own (never translated). */
 const SCRAP_NAMES = ['Rust', 'Grit', 'Slag'];
-const BARGE_WAY = new THREE.Vector3().subVectors(BARGE_TO, BARGE_FROM).normalize();
-const BARGE_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), BARGE_WAY);
+/**
+ * A barge flown along its lane (`from` to `to`, at `speed`), waves of raiders firing at it: `quiet`
+ * seconds after it sets out a wave of `count` of `skills[0]`, and once they are down one of each
+ * skill after; each holds `hold` off the barge and fires at it until a ship comes near. The barge
+ * at its lane's end with every wave down wins; `hull` of their hits on it fail it (`lost`), and
+ * the attempt starts over. `kind` is its build (see world/barge).
+ */
+interface BargeRun {
+  line: string;
+  lost: string;
+  arena: ArenaId;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  speed: number;
+  quiet: number;
+  count: number;
+  skills: readonly number[];
+  names: readonly string[];
+  hold: number;
+  hull: number;
+  kind?: () => { root: THREE.Group; boxes: readonly HullBox[] };
+}
 const bargeNow = new THREE.Vector3();
 
-/** Where the barge is `seconds` after it set out, on its lane, stopped at its end. */
-function bargeAt(seconds: number, out: THREE.Vector3): THREE.Vector3 {
-  const length = BARGE_FROM.distanceTo(BARGE_TO);
-  return out.copy(BARGE_FROM).addScaledVector(BARGE_WAY, Math.min(length, seconds * BARGE_SPEED));
+/** Where a barge run's barge is `seconds` after it set out, on its lane, stopped at its end. */
+function bargeAt(run: BargeRun, seconds: number, out: THREE.Vector3): THREE.Vector3 {
+  const length = run.from.distanceTo(run.to);
+  return out.lerpVectors(run.from, run.to, Math.min(1, (seconds * run.speed) / length));
 }
 
-const oreBarge: Drill = {
-  line: CAMPAIGN.oreBarge,
-  keys: ['turn', 'drive', 'fire'],
-  arena: 'occator',
-  autopilot: false,
-  // the lane's calm until the scrappers come, then the fight
-  turn: (_, a) => (a.count > 0 ? 'fight' : undefined),
-  enter(ctx, a, markers) {
-    stop(ctx);
-    ctx.removeJumpers();
-    markers.clear();
-    markers.bargeAt(BARGE_FROM, BARGE_TURN);
-    // a.count: the waves sent; a.jinks: the hits of the waves before this one
-    a.count = 0;
-    a.jinks = 0;
-    ctx.me.heat = 0;
-    ctx.me.overheated = false;
-  },
-  done(ctx, a, markers) {
-    bargeAt(a.seconds, bargeNow);
-    markers.bargeAt(bargeNow, BARGE_TURN);
-    ctx.moveJumpers(bargeNow);
-    if (a.count === 0 && a.seconds >= BARGE_QUIET) {
-      ctx.spawnJumpers(null, bargeNow, SCRAPPERS, SCRAP_SKILL[0], SCRAP_NAMES, SCRAP_HOLD);
-      a.count = 1;
-    } else if (a.count > 0 && a.count < SCRAP_SKILL.length && ctx.jumpersDown >= SCRAPPERS) {
-      a.jinks += ctx.rigWear;
-      ctx.spawnJumpers(null, bargeNow, SCRAPPERS, SCRAP_SKILL[a.count], SCRAP_NAMES, SCRAP_HOLD);
-      a.count++;
-    }
-    return a.count >= SCRAP_SKILL.length && ctx.jumpersDown >= SCRAPPERS && bargeNow.distanceTo(BARGE_TO) < 1;
-  },
-  fail: (ctx, a) => (a.jinks + ctx.rigWear >= BARGE_HULL ? CAMPAIGN.oreBargeLost : null),
-  leave: (ctx) => ctx.removeJumpers(),
-  waypoint: () => bargeNow,
-  mark: (ctx, a) => t('Wave {n}/{waves} · barge hull {hull} %', { n: Math.max(1, a.count), waves: SCRAP_SKILL.length, hull: Math.max(0, Math.round(100 * (1 - (a.jinks + ctx.rigWear) / BARGE_HULL))) }),
-};
+function bargeRun(run: BargeRun): Drill {
+  const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), new THREE.Vector3().subVectors(run.to, run.from).normalize());
+  const waves = run.skills.length;
+  return {
+    line: run.line,
+    keys: ['turn', 'drive', 'fire'],
+    arena: run.arena,
+    autopilot: false,
+    // the lane's calm until the raiders come, then the fight
+    turn: (_, a) => (a.count > 0 ? 'fight' : undefined),
+    enter(ctx, a, markers) {
+      stop(ctx);
+      ctx.removeJumpers();
+      markers.clear();
+      markers.bargeAt(run.from, turn, run.kind);
+      // a.count: the waves sent; a.jinks: the hits of the waves before this one
+      a.count = 0;
+      a.jinks = 0;
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+    },
+    done(ctx, a, markers) {
+      bargeAt(run, a.seconds, bargeNow);
+      markers.bargeAt(bargeNow, turn, run.kind);
+      ctx.moveJumpers(bargeNow);
+      if (a.count === 0 && a.seconds >= run.quiet) {
+        ctx.spawnJumpers(null, bargeNow, run.count, run.skills[0], run.names, run.hold);
+        a.count = 1;
+      } else if (a.count > 0 && a.count < waves && ctx.jumpersDown >= run.count) {
+        a.jinks += ctx.rigWear;
+        ctx.spawnJumpers(null, bargeNow, run.count, run.skills[a.count], run.names, run.hold);
+        a.count++;
+      }
+      return a.count >= waves && ctx.jumpersDown >= run.count && bargeNow.distanceTo(run.to) < 1;
+    },
+    fail: (ctx, a) => (a.jinks + ctx.rigWear >= run.hull ? run.lost : null),
+    leave: (ctx) => ctx.removeJumpers(),
+    waypoint: () => bargeNow,
+    mark: (ctx, a) => t('Wave {n}/{waves} · barge hull {hull} %', { n: Math.max(1, a.count), waves, hull: Math.max(0, Math.round(100 * (1 - (a.jinks + ctx.rigWear) / run.hull))) }),
+  };
+}
+
+const oreBarge = bargeRun({ line: CAMPAIGN.oreBarge, lost: CAMPAIGN.oreBargeLost, arena: 'occator', from: BARGE_FROM, to: BARGE_TO, speed: BARGE_SPEED, quiet: BARGE_QUIET, count: SCRAPPERS, skills: SCRAP_SKILL, names: SCRAP_NAMES, hold: SCRAP_HOLD, hull: BARGE_HULL });
 
 /**
  * Repo Men (3.3): the Tallymen, who hold the debt, come for the hull. Their tug (see world/barge)
@@ -2434,4 +2502,9 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'lastLight', name: msg('Last Light'), drills: [said(HEDDA.lastLight, 'pluto'), lastLight, said(CAMPAIGN.lastLightDone, 'pluto')], pay: 6000, ratings: 400 },
   { id: 'wells', name: msg('Wells'), drills: [said(CAMPAIGN.wells, 'pluto'), said(CAMPAIGN.wellsAhead, 'pluto')], pay: 0, fit: fitWells },
   { id: 'platingThree', name: msg('Plating III'), drills: [said(PIM.platingThree, 'pluto'), said(CAMPAIGN.platingThree, 'pluto')], pay: 0, fit: fitPlatingThree },
+  // chapter 16, the Long Ladder: Haumea's ring, a fuel barge to Eris's depot, Perihelion hunting
+  { id: 'haumeaRing', name: msg('Haumea’s Ring'), drills: [said(HEDDA.haumea, 'haumea'), haumeaRing, said(CAMPAIGN.haumeaRingDone, 'haumea')], pay: 6000, ratings: 600, start: HAUMEA_START },
+  { id: 'rungTwo', name: msg('Rung Two'), drills: [said(HEDDA.rungTwo, 'eris'), rungTwo, said(CAMPAIGN.rungTwoDone, 'eris')], pay: 6000, ratings: 400 },
+  { id: 'theHunter', name: msg('The Hunter'), drills: [said(HEDDA.hunter, 'eris'), hunter, said(CAMPAIGN.hunterDone, 'eris')], pay: 5000, ratings: 600 },
+  { id: 'driveThree', name: msg('Drive III'), drills: [said(PIM.driveThree, 'eris'), said(CAMPAIGN.driveThree, 'eris')], pay: 0, fit: fitDriveThree },
 ];

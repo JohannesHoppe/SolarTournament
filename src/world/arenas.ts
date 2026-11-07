@@ -12,6 +12,7 @@ import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
 import { CHARON_AT, groundPlacement as plutoGround, PLUTO_FALL } from './pluto';
+import { DEPOT_AT, ERIS_AT, HAUMEA_AT } from './ladder';
 import { GEYSER_COLUMNS, groundPlacement as tritonGround, memorialPlacement, NEPTUNE_AT, STATION_AT as MEMORIAL_AT, TRITON_FALL } from './triton';
 import { groundPlacement as mirandaGround, MIRANDA_FALL, MOUTH as VERONA_MOUTH, URANUS_AT } from './miranda';
 import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SATURN } from './iapetus';
@@ -55,7 +56,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -195,6 +196,22 @@ function derelict(): Placement[] {
  * the ring's glow, the sun's streamers), kept faint where they would cover the Milky Way as a
  * second, made-up one.
  */
+/** The Long Ladder's rungs (Haumea, Eris): ice in the dark, a body's white below, the sun a star among the others. */
+const LADDER_MOOD: Mood = {
+  space: 0x010102,
+  sky: 0x80848c,
+  ground: 0x26282c,
+  ambient: 1.35,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.03, 0.035, 0.05], size: 540000, shape: 1, turn: 1.9 },
+    { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.04], size: 460000, shape: 0, turn: 0.4 },
+  ],
+  stars: 1.1,
+  starmap: true,
+  dust: [0.75, 0.8, 0.85],
+  grade: { gain: [0.98, 1, 1.02], lift: [0.0011, 0.0012, 0.0014], saturation: 0.86 },
+};
+
 const MOODS: Record<ArenaId, Mood> = {
   // dusty and warm: veils of amber and rust dust, a warm sky, ochre dust, a golden grade
   belt: {
@@ -542,6 +559,8 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.7, 0.68, 0.66],
     grade: { gain: [1, 0.99, 0.99], lift: [0.0012, 0.0012, 0.0013], saturation: 0.88 },
   },
+  haumea: LADDER_MOOD,
+  eris: LADDER_MOOD,
 };
 
 /**
@@ -824,6 +843,43 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('Charon'), position: CHARON_AT, distance: false }],
     // over the plain, facing the mountains
     start: { at: [50000, 0, 30000], toward: [-30000, -6000, 0] },
+    open: true,
+  },
+  {
+    id: 'haumea',
+    name: msg('Haumea’s Ring'),
+    tagline: msg('Blocks of water ice in a thin ring round Haumea, the stretched dwarf planet spinning below it once in four hours.'),
+    // the ring's ice: a thin layer of blocks, 200 m thick, across the field
+    layout: { key: 'haumea', seed: 16000, kind: 'ice', count: 34, minScale: 0.3, maxScale: 1, radius: FIELD_RADIUS, inner: 8000, flat: 2000, spin: SPIN_RATE, toughness: 600 },
+    cooling: 1,
+    storms: false,
+    // 50 AU from the sun: a bright star
+    sun: { size: 5000, intensity: 2, color: 0xfff0dd },
+    mood: MOODS.haumea,
+    preview: { from: [30000, 8000, 30000], at: [0, 0, 0] },
+    references: [{ glyph: 'planet', label: msg('Haumea'), position: HAUMEA_AT, distance: false }],
+    // at the ring's edge, facing into it
+    start: { at: [50000, 0, 30000], toward: [0, 0, 0] },
+    open: true,
+  },
+  {
+    id: 'eris',
+    name: msg('Rung Two'),
+    tagline: msg('The Ministry’s fuel depot over Eris, one of the brightest bodies known, its moon Dysnomia beside it, loose ice drifting round both.'),
+    // loose ice round the depot
+    layout: { key: 'eris', seed: 16100, kind: 'ice', count: 20, minScale: 0.3, maxScale: 0.8, radius: FIELD_RADIUS, inner: 10000, spin: SPIN_RATE, toughness: 600 },
+    cooling: 1,
+    storms: false,
+    // 95 AU from the sun: a star, brighter than the rest
+    sun: { size: 3000, intensity: 1.8, color: 0xfff0dd },
+    mood: MOODS.eris,
+    preview: { from: [30000, 8000, 30000], at: [0, 0, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Depot'), position: DEPOT_AT, distance: true },
+      { glyph: 'planet', label: msg('Eris'), position: ERIS_AT, distance: false },
+    ],
+    // on the field's far side from the depot, facing it
+    start: { at: [50000, 0, 30000], toward: [-50000, 4000, -30000] },
     open: true,
   },
 ];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -172,6 +172,15 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'thrustersThree')!);
     expect(hullOf(campaign).thrusters).toBeCloseTo(STOCK.thrusters + 3 * THRUSTER_STEP, 10);
     expect(campaign.bond).toBe(20000 + OVERDRIVE_PRICE + THRUSTERS_TWO_PRICE + THRUSTERS_THREE_PRICE);
+  });
+
+  it('fits Main Drive III and Radiators III on the Ladder: each the hangar’s third step, each paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['drive' as const, 'driveOne' as const, 'driveTwo' as const, 'radiators' as const, 'radiatorsTwo' as const] };
+    const before = hullOf(campaign).cooling;
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'driveThree')!);
+    expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + 3 * DRIVE_STEP, 10);
+    expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
+    expect(campaign.bond).toBe(20000 + 2 * DRIVE_THREE_PRICE);
   });
 
   it('fits Plating III at Pluto: every hit hurts three of the hangar’s steps less, paid as the laser is', () => {

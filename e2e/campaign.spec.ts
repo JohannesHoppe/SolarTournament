@@ -893,3 +893,24 @@ test('Last Light: Ministry pickets fire at Patience moored at the last dock; all
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).modules.includes('wells')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 15 flown too: the hull with Plating III and Nicole's wells, on the Ladder. */
+const ladderHull = (...done: string[]) => ({ ...plutoHull('heartRun', 'theFile', 'plutoEcho', 'lastLight', 'wells', 'platingThree', ...done), parts: [...plutoHull().parts, 'platingThree'], modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice', 'wells'] });
+
+test('chapter 16 on the Ladder: five depot crews line up at eight rings in Haumea’s ring', async ({ page }) => {
+  test.setTimeout(400_000);
+  const errors = await takeJobFrom(page, ladderHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'haumea' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  expect(errors).toEqual([]);
+});
+
+test('The Hunter: Perihelion and two Navy fighters at Eris; worn down to a third of his hull he breaks off, and the duel is won', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ladderHull('haumeaRing', 'rungTwo'));
+  await page.waitForFunction(() => window.game.venue?.id === 'eris' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Perihelion');
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.hull = 30));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theHunter')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

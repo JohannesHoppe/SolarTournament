@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, HEART_COURSE, HEART_LAPS, HEART_START, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, HEART_COURSE, HEART_LAPS, HEART_START, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 import { faceAt } from '../world/miranda';
@@ -115,6 +115,16 @@ describe('the races of the campaign', () => {
 
   it('the Geyser Field on Triton is flown by a middling bot: past every geyser through its coil to the Memorial Station, the clock beaten, the columns pushing it as they push every ship, without a crash', () => {
     flyTrial('triton', GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START.at, GEYSER_TIME);
+  });
+
+  it('the race in Haumea’s ring is flown by a middling bot: both laps between the beacons among the ring’s ice, nothing missed, without a crash', () => {
+    expectRaced('haumea', HAUMEA_COURSE, HAUMEA_LAPS, RING_RADIUS, HEART_SECONDS, HAUMEA_START.at);
+  });
+
+  it('the fuel barge of Rung Two sets out and docks inside the arena', () => {
+    const depot = new THREE.Vector3(...arenaById('eris')!.references![0].position.toArray());
+    expect(FUEL_FROM.length()).toBeLessThan(ARENA_LIMIT);
+    expect(depot.length()).toBeLessThan(ARENA_LIMIT);
   });
 
   it('the Heart Run on Pluto is flown by a middling bot: both laps over the heart through every ring, nothing missed, without a crash', () => {

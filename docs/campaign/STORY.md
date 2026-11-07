@@ -189,9 +189,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 15.1 | Heart Run | race | The Feeder pilots' race over the nitrogen plain of Pluto's heart. Win it, and the Feeders take Patience on. (built) | ☉ 5,000 · 500 | Race; surface |
 | 15.2 | The File | story | Spare comes aboard Patience unarmed. (built: in person, in the galley) | — | A scene |
 | 15.3 | Last Light | escort | Patience joins a Feeder convoy past Charon; the Ministry's pickets (skill 0.55) check every ship. (built: Patience moored where the convoy forms up, six pickets firing at her) | ☉ 6,000 · 400 | Escort |
-| 16.1 | Haumea's Ring | race | The depot crews' race between beacons on Haumea's ring while the elongated body turns beneath it once in four hours. Win. | ☉ 6,000 · 600 | Race; ice of the Rings |
-| 16.2 | Rung Two | escort | A fuel barge to the depot at Eris. | ☉ 6,000 · 400 | Escort |
-| 16.3 | The Hunter | duel | Perihelion and two Navy fighters at Eris. Win; he breaks off again, swearing. | ☉ 5,000 · 600 | Duel |
+| 16.1 | Haumea's Ring | race | The depot crews' race between beacons on Haumea's ring while the elongated body turns beneath it once in four hours. Win. (built) | ☉ 6,000 · 600 | Race; ice of the Rings |
+| 16.2 | Rung Two | escort | A fuel barge to the depot at Eris. (built: two waves of three scavengers) | ☉ 6,000 · 400 | Escort |
+| 16.3 | The Hunter | duel | Perihelion and two Navy fighters at Eris. Win; he breaks off again, swearing. (built) | ☉ 5,000 · 600 | Duel |
 | 17.1 | Kiln | story | The settlers on Lantern who bought plots on the Ninth, with their brochures. Carry their letters to the Feeders. | · 200 | A courier run between buoys |
 | 17.2 | Granary | stealth | Slip into the Feeders' store of ice, out of the tugs' sensor cones, to the comet bound for the Ninth. Seen twice fails it. | · 400 | Searchlight cones again |
 | 17.3 | Ride the Comet | story | Hook the comet's nucleus and hold on in its coma while it is pushed out; its shower is the danger. | · 500 | Comets; the hook |
@@ -288,7 +288,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 13 | Thrusters II | 2,500 | The hangar's second step (built: Thrusters II) |
 | 14 | Thrusters III | 5,000 | The hangar's third step (built: Thrusters III) |
 | 15 | Plating III | 6,000 | The hangar's third step (built: Plating III, Feeder plate) |
-| 16 | Main drive III, radiators III | 5,000 each | |
+| 16 | Main drive III, radiators III | 5,000 each | Each the hangar's third step (built: Drive III) |
 | 17 | Torpedo tubes II, III | 3,000, 6,000 | Complete |
 
 The looks come from Pim and cost little: neon trim and drive flame on the hangar's three steps each, from chapter 9 on, at its prices. The nova core is the sponsors' and appears only as a probe, from rank Sponsored on.
@@ -953,6 +953,28 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE** *(at the edge)*: Out. They will not follow us past the edge. Not yet.
 
 **PIM** *(Thrusters III)*: Last of the Loose's thrusters, third grade, five thousand. Spare paid half. Don't ask me why.
+
+### The Long Ladder (chapter 16, built)
+
+**HEDDA**: Haumea. First rung of the Ladder. The depot crews race their ring between the beacons while the rock spins under them. Win, and the depot fuels us for free.
+
+**NICOLE**: Two laps between the ring’s beacons, Host, among its ice. Only first counts.
+
+**NICOLE** *(first home)*: First. The depot fuels Patience for nothing. The crews are buying Hedda drinks.
+
+**HEDDA**: Eris. Rung two. A fuel barge goes from the ice to the depot, and the scavengers out here don't ask whose fuel it is. Bring it in.
+
+**NICOLE** *(docked)*: The barge is docked at the depot. Rung two, fuelled.
+
+**HEDDA**: Perihelion's here. Not racing. The Ministry made him a hunter, and you're the job. Two Navy with him.
+
+**NICOLE**: Perihelion and two Navy fighters, Host. He hunts for the Ministry now. Wear him down.
+
+**NICOLE** *(he breaks off)*: He is breaking off again. Swearing, this time. I heard him.
+
+**NICOLE**: He will come back, Host. He always comes back.
+
+**PIM** *(Drive III)*: Depot crews swap drive bells like spoons. Third grade, and radiators to match, five thousand each. Fuel's free. Parts aren't.
 
 ### The admiral (chapter 14, built, over the comm, in three lines)
 
