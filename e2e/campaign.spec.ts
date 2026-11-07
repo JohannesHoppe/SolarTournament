@@ -731,11 +731,16 @@ test('the Plume Yacht: Crisp’s actors fire wide and hurt nobody, then real rai
   expect(errors).toEqual([]);
 });
 
-test('Hello, Host: Spare in his grey interceptor breaks off at half his hull, and his hail follows', async ({ page }) => {
+test('Hello, Host: Spare in his grey interceptor, fighting with the Host’s habits, breaks off at half his hull, and his hail follows', async ({ page }) => {
   test.setTimeout(300_000);
-  const errors = await takeJobFrom(page, { ...enceladusHull('plumeYacht', 'platingTwo', 'voiceTwo'), modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice'] });
+  // a Host who landed one beam in three and fought up close half the time
+  const habits = { shots: 300, hits: 100, fight: 600, near: 300 };
+  const errors = await takeJobFrom(page, { ...enceladusHull('plumeYacht', 'platingTwo', 'voiceTwo'), modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice'], habits });
   await page.waitForFunction(() => window.game.venue?.id === 'enceladus' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 1, null, { timeout: 180_000 });
-  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Spare');
+  const spare = await page.evaluate(() => ({ name: window.game.jumpers.bots[0].ship.name, skills: window.game.jumpers.bots[0].skills }));
+  expect(spare.name).toBe('Spare');
+  expect(spare.skills.aim).toBeCloseTo(0.75);
+  expect(spare.skills.daring).toBeCloseTo(0.6);
   await page.evaluate(() => (window.game.jumpers.bots[0].ship.hull = 45));
   await page.waitForFunction(() => (window.game.school?.stepIndex ?? 0) > 2, null, { timeout: 60_000 });
   expect(await page.evaluate(() => window.game.jumpers?.bots[0]?.ship.alive ?? true)).toBe(true);

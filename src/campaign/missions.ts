@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import type { Skill } from '../ship/bots';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
@@ -834,9 +835,8 @@ const DUEL_GONE = point(-60000, -10000, -20000);
  * flies off to `gone` with any `escorts` (a few of the Navy beside him), Nicole says `breaks`, and
  * the duel is won a few seconds later.
  */
-function duel(spec: { line: string; arena: ArenaId; name: string; skill: number; field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string; escorts?: { names: readonly string[]; skill: number } }): Drill {
+function duel(spec: { line: string; arena: ArenaId; name: string; skill: number | ((ctx: SchoolContext) => Skill); field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string; escorts?: { names: readonly string[]; skill: number } }): Drill {
   const names = [spec.name, ...(spec.escorts?.names ?? [])];
-  const skills = names.map((_, i) => (i ? spec.escorts!.skill : spec.skill));
   return {
     line: spec.line,
     keys: ['turn', 'drive', 'fire'],
@@ -844,6 +844,8 @@ function duel(spec: { line: string; arena: ArenaId; name: string; skill: number;
     autopilot: false,
     music: 'fight',
     enter(ctx) {
+      const leader = typeof spec.skill === 'number' ? spec.skill : spec.skill(ctx);
+      const skills = names.map((_, i) => (i ? spec.escorts!.skill : leader));
       ctx.spawnJumpers(null, spec.field, names.length, skills, names, 8000, true);
       ctx.me.heat = 0;
       ctx.me.overheated = false;
@@ -888,16 +890,16 @@ const fitVoice = (campaign: Campaign) => {
 };
 
 /**
- * Hello, Host (10.2): Spare, the clone lost in Io's flux tube, in a grey interceptor (skill
- * SPARE_SKILL) over the tiger stripes; once his hull is down to SPARE_BREAK (of 100) he breaks
- * off, as the Host would, and hails.
+ * Hello, Host (10.2): Spare, the clone lost in Io's flux tube, in a grey interceptor over the
+ * tiger stripes, fighting as the Host fought until Io (ctx.spare, see campaign/campaign,
+ * spareSkills); once his hull is down to SPARE_BREAK (of 100) he breaks off, as the Host would,
+ * and hails.
  */
-const SPARE_SKILL = 0.6;
 const SPARE_BREAK = 50;
 const SPARE_FIELD = point(0, ENCELADUS_LAND + 10000, 0);
 const SPARE_GONE = point(60000, ENCELADUS_LAND + 30000, -30000);
 
-const helloHost = duel({ line: CAMPAIGN.helloHost, arena: 'enceladus', name: 'Spare', skill: SPARE_SKILL, field: SPARE_FIELD, breakAt: SPARE_BREAK, gone: SPARE_GONE, breaks: CAMPAIGN.spareBreaks, mark: msg('Spare · hull {hull} %') });
+const helloHost = duel({ line: CAMPAIGN.helloHost, arena: 'enceladus', name: 'Spare', skill: (ctx) => ctx.spare, field: SPARE_FIELD, breakAt: SPARE_BREAK, gone: SPARE_GONE, breaks: CAMPAIGN.spareBreaks, mark: msg('Spare · hull {hull} %') });
 
 /**
  * Tiger Stripes (10.3): a time trial down the four stripes, through TIGER_PER_STRIPE coils of the
@@ -1011,7 +1013,7 @@ const fitThrustersTwo = (campaign: Campaign) => {
 
 /**
  * The Sweep (13.3): SWEEPERS Navy fighters of SWEEP_SKILL come for the hideout's mouth, holding
- * SWEEP_HOLD off it (units, 200 m); Spare flies on the Host's wing (skill SPARE_SKILL). One of them
+ * SWEEP_HOLD off it (units, 200 m); Spare flies on the Host's wing (with the Host's habits, ctx.spare). One of them
  * within SWEEP_REACH of the mouth (units, 300 m) for SWEEP_SIT seconds in a row opens the hideout
  * and starts it over; the mouth kept clear SWEEP_SECONDS, or all of them down, wins.
  */
@@ -1034,7 +1036,7 @@ const theSweep: Drill = {
   enter(ctx, a) {
     ctx.removeJumpers();
     ctx.spawnJumpers(null, VERONA_MOUTH, SWEEPERS, SWEEP_SKILL, SWEEP_NAMES, SWEEP_HOLD);
-    ctx.wingman('Spare', SPARE_SKILL, SWEEP_FROM.clone().lerp(VERONA_MOUTH, 0.8));
+    ctx.wingman('Spare', ctx.spare, SWEEP_FROM.clone().lerp(VERONA_MOUTH, 0.8));
     ctx.me.heat = 0;
     ctx.me.overheated = false;
     // a.jinks: the seconds a Navy ship has sat on the mouth in a row
@@ -1362,7 +1364,7 @@ const feedersComet: Drill = {
   mark: (ctx) => t('Navy {n}/{total} · Scout One {hull} %', { n: GUNS - ctx.jumpersDown, total: GUNS, hull: Math.max(0, Math.round(ctx.drone?.hull ?? 0)) }),
 };
 
-/** First Death (18.4): Perihelion (FINAL_SKILL) and four Navy fighters (0.5), Spare on the Host's wing; Perihelion shot down ends it, no breaking off. */
+/** First Death (18.4): Perihelion (FINAL_SKILL) and four Navy fighters (0.5), Spare on the Host's wing (with its habits, ctx.spare); Perihelion shot down ends it, no breaking off. */
 const FINAL_SKILL = 0.75;
 const FINAL_FIELD = point(-10000, 2000, 20000);
 const firstDeath: Drill = {
@@ -1373,7 +1375,7 @@ const firstDeath: Drill = {
   music: 'fight',
   enter(ctx) {
     ctx.spawnJumpers(null, FINAL_FIELD, 5, [FINAL_SKILL, 0.5], ['Perihelion', 'Lt. Ames', 'Ens. Kolb', 'Lt. Hale', 'Ens. Dorn'], 10000, true);
-    ctx.wingman('Spare', 0.6, ctx.me.flight.position.clone().add(point(2000, 500, 0)));
+    ctx.wingman('Spare', ctx.spare, ctx.me.flight.position.clone().add(point(2000, 500, 0)));
     ctx.me.heat = 0;
     ctx.me.overheated = false;
   },

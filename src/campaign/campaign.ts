@@ -6,6 +6,7 @@ import type { RoundMode } from '../game/race';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP, tubeTorpedoes, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
+import { evenSkills, type Skills } from '../ship/bots';
 import { MISSIONS } from './missions';
 
 /**
@@ -241,13 +242,53 @@ export interface Campaign {
   choices: Choice[];
   /** Nicole's voice through the old voice board's narrow band once her own is back (the module `voice`), as the Host chose on the job board: a look only. */
   crackle: boolean;
+  /** How the Host fights, counted until the link cut at Io (see Habits). */
+  habits: Habits;
 }
+
+/**
+ * How the Host fights in the campaign, counted in every fight against a mission's raiders until
+ * Blackout is done (see Game.watchHabits), the minute the clone that is to become Spare is lost at
+ * Io: its beams fired at them and the hits among them, the seconds of fight (a raider alive) and
+ * those of them with the nearest raider within HABIT_NEAR. Spare remembers all of it (see spareSkills).
+ */
+export interface Habits {
+  shots: number;
+  hits: number;
+  fight: number;
+  near: number;
+}
+
+/** Within this of the nearest raider, the Host fights up close (units, 600 m): a dogfight's turning range, beyond it a duel of long shots. */
+export const HABIT_NEAR = 12000;
+/** Fewer shots or seconds of fight than these, and the habits tell nothing yet: Spare flies SPARE_SKILL throughout. */
+const HABIT_SHOTS = 30;
+const HABIT_FIGHT = 60;
+/** Spare's aim is the Host's share of hits times HABIT_AIM_GAIN (a Host who lands one beam in three aims like a bot of 0.75), his daring its share of fight up close times HABIT_DARING_GAIN. */
+const HABIT_AIM_GAIN = 2.25;
+const HABIT_DARING_GAIN = 1.2;
+/** Spare is never worse than SPARE_LEAST at anything, nor better than SPARE_MOST: he is a fair fight whoever the Host is. */
+const SPARE_LEAST = 0.35;
+const SPARE_MOST = 0.85;
+/** Spare's skill where the habits tell nothing, and always his reflexes: a clone's hands are the Host's hands. */
+export const SPARE_SKILL = 0.6;
+
+/** Spare's skills (see Habits): he fights as the Host fought until Io, hitting as often and closing in as much. */
+export function spareSkills(habits: Habits): Skills {
+  if (habits.shots < HABIT_SHOTS || habits.fight < HABIT_FIGHT) return evenSkills(SPARE_SKILL);
+  const fair = (value: number) => Math.min(SPARE_MOST, Math.max(SPARE_LEAST, value));
+  return { aim: fair((habits.hits / habits.shots) * HABIT_AIM_GAIN), reflexes: SPARE_SKILL, daring: fair((habits.near / habits.fight) * HABIT_DARING_GAIN) };
+}
+
+const freshHabits = (): Habits => ({ shots: 0, hits: 0, fight: 0, near: 0 });
+/** The most of any count the browser keeps: far beyond what a campaign fires or fights. */
+const HABITS_MAX = 10_000_000;
 
 /** The choices the story asks of the Host: the Quiet Man let go when he turned away (The Quiet Man, chapter 6). */
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits() });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -261,7 +302,12 @@ export function campaignFrom(text: string | null): Campaign {
     const modules = Array.isArray(kept.modules) ? MODULES.filter((module) => kept.modules!.includes(module)) : [];
     const choices = Array.isArray(kept.choices) ? CHOICES.filter((choice) => kept.choices!.includes(choice)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true };
+    const fought = (typeof kept.habits === 'object' && kept.habits !== null ? kept.habits : {}) as Partial<Habits>;
+    const shots = number(fought.shots, 0, HABITS_MAX);
+    const fight = number(fought.fight, 0, HABITS_MAX);
+    // never more hits than shots, nor more seconds up close than of fight
+    const habits = { shots, hits: Math.min(shots, number(fought.hits, 0, HABITS_MAX)), fight, near: Math.min(fight, number(fought.near, 0, HABITS_MAX)) };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits };
   } catch {
     return fresh;
   }

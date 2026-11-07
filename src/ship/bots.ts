@@ -248,6 +248,9 @@ const BOT_SKILLS: Record<string, Skills> = {
 
 /** Skills that are all the same, for a bot of a name without its own (0.4) or one the flight school sets. */
 export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: skill, daring: skill });
+/** A bot's skills as a mission names them: one number for all three, or each of its own (Spare's, see campaign/campaign, spareSkills). */
+export type Skill = number | Skills;
+export const skillsFrom = (skill: Skill): Skills => (typeof skill === 'number' ? evenSkills(skill) : skill);
 
 /** A bot's skills by its name; only the table's own entries count, never what every object inherits (a name another browser sends may be "constructor"). */
 export const skillsOf = (name: string) => (Object.hasOwn(BOT_SKILLS, name) ? BOT_SKILLS[name] : evenSkills(0.4));

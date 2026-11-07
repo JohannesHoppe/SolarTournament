@@ -25,6 +25,7 @@ import type { ArenaId } from '../world/arenas';
 import type { OrbitState } from './orbit';
 import type { SceneName } from '../campaign/scenes';
 import type { Choice } from '../campaign/campaign';
+import type { Skill, Skills } from '../ship/bots';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -89,7 +90,7 @@ export interface SchoolContext {
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
   /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` (or each its own of `skill`) named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
-  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number | readonly number[], names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
   /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
   moveJumpers(to: THREE.Vector3): void;
   removeJumpers(): void;
@@ -97,8 +98,10 @@ export interface SchoolContext {
   readonly jumpersDown: number;
   readonly rigWear: number;
   /** A wingman on the Host's side (`name` of `skill`, at `at`): fights every ship not on it, gets no clone after its death (the Sweep's Spare). */
-  wingman(name: string, skill: number, at: THREE.Vector3): void;
+  wingman(name: string, skill: Skill, at: THREE.Vector3): void;
   removeWingman(): void;
+  /** Spare's skills: the Host's own habits in the campaign's fights up to Io (see campaign/campaign, spareSkills). */
+  readonly spare: Skills;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
   brawl(): void;
   /** The raiders spawned last are actors: their shots fly wide and hurt nothing (the Plume Yacht's staged bandits). */

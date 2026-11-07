@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT } from './campaign';
+import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -67,7 +68,30 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 } });
+    // the habits as kept, never more hits than shots nor more seconds up close than of fight
+    expect(campaignFrom(JSON.stringify({ habits: { shots: 40, hits: 90, fight: 120.7, near: 500 } })).habits).toEqual({ shots: 40, hits: 40, fight: 120, near: 120 });
+    expect(campaignFrom(JSON.stringify({ habits: 'all' })).habits).toEqual({ shots: 0, hits: 0, fight: 0, near: 0 });
+  });
+
+  it('lets Spare fight as the Host fought until Io: its aim by the hits, its daring by the time up close, fair either way', () => {
+    // too little to tell: Spare's own skill
+    expect(spareSkills({ shots: 10, hits: 10, fight: 600, near: 600 })).toEqual(evenSkills(SPARE_SKILL));
+    expect(spareSkills({ shots: 400, hits: 100, fight: 20, near: 20 })).toEqual(evenSkills(SPARE_SKILL));
+    // a Host landing one beam in three, up close half the time
+    const middling = spareSkills({ shots: 300, hits: 100, fight: 600, near: 300 });
+    expect(middling.aim).toBeCloseTo(0.75);
+    expect(middling.daring).toBeCloseTo(0.6);
+    expect(middling.reflexes).toBe(SPARE_SKILL);
+    // a sharpshooter who keeps away, and a brawler who misses: within the fair bounds
+    const sniper = spareSkills({ shots: 300, hits: 290, fight: 600, near: 0 });
+    const brawler = spareSkills({ shots: 300, hits: 0, fight: 600, near: 600 });
+    expect(sniper.aim).toBeLessThan(0.9);
+    expect(sniper.daring).toBeGreaterThan(0.3);
+    expect(brawler.aim).toBeGreaterThan(0.3);
+    expect(brawler.daring).toBeLessThan(0.9);
+    expect(sniper.aim).toBeGreaterThan(brawler.aim);
+    expect(brawler.daring).toBeGreaterThan(sniper.daring);
   });
 
   it('counts a mission’s ratings once and in full, and names the rank they raise the Host to', () => {

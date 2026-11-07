@@ -9,7 +9,7 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, raceSpeedOf, SIEGE_DISTANCE, skillsOf, startTiming, TORPEDO_CLEARANCE, type Ring, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, raceSpeedOf, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, type Ring, type Skill, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { GradedOutputPass } from '../view/grade';
@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, HABIT_NEAR, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -994,6 +994,29 @@ export class Game implements OnlineGame {
   private flyingAgain = false;
   /** The campaign's job board is open (see showBoard). */
   private atBoard = false;
+
+  /** The Host's habits are counted (see campaign/campaign, Habits): in a mission's fight against raiders who fire in earnest, until Blackout is done. */
+  private get learning(): boolean {
+    return !!this.school?.mission && !!this.jumpers && !this.jumpers.blanks && !this.campaign.done.includes('blackout');
+  }
+
+  /** A beam of the Host's in a fight: a shot, and a hit if it ended on a raider. Kept with the campaign's next change. */
+  private countShot(struck: Ship | null) {
+    if (!this.learning) return;
+    const habits = this.campaign.habits;
+    habits.shots++;
+    if (struck && this.jumpers!.bots.some((bot) => bot.ship === struck)) habits.hits++;
+  }
+
+  /** The seconds of fight while a raider is alive, and those of them with the nearest within HABIT_NEAR. Kept with the campaign's next change. */
+  private watchHabits(me: Ship | null, dt: number) {
+    if (!me?.alive || this.state !== 'playing' || !this.learning) return;
+    let nearest = Infinity;
+    for (const bot of this.jumpers!.bots) if (bot.ship.alive) nearest = Math.min(nearest, bot.ship.flight.position.distanceTo(me.flight.position));
+    if (nearest === Infinity) return;
+    this.campaign.habits.fight += dt;
+    if (nearest < HABIT_NEAR) this.campaign.habits.near += dt;
+  }
 
   /** Changes the campaign and keeps it. */
   private keepCampaign(change: (campaign: Campaign) => void) {
@@ -4133,6 +4156,7 @@ export class Game implements OnlineGame {
     this.showFlare(dt);
     this.playComet(dt, me);
     this.hullPatter(me, dt);
+    this.watchHabits(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -4938,14 +4962,14 @@ export class Game implements OnlineGame {
    * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
    * rig stands on, or null for a hull of the drill's; `guard`: guarding it instead.
    */
-  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number | readonly number[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
       const ship = this.addShip(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
       // brothers: one side, never at each other
       ship.team = JUMPER_TEAM;
-      const bot = new Bot(ship, evenSkills(typeof skill === 'number' ? skill : (skill[i] ?? skill[0])));
+      const bot = new Bot(ship, skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[0]) : (skill as Skill)));
       this.bots.push(bot);
       bots.push(bot);
       const angle = (i / count) * Math.PI * 2;
@@ -5814,7 +5838,7 @@ export class Game implements OnlineGame {
         this.removeWingman();
         const me = game.me!;
         const ship = this.addShip('wingman', name, 'human', false);
-        const bot = new Bot(ship, evenSkills(skill));
+        const bot = new Bot(ship, skillsFrom(skill));
         this.bots.push(bot);
         this.wingman = bot;
         ship.team = me.team = ALLY_TEAM;
@@ -5822,6 +5846,9 @@ export class Game implements OnlineGame {
         ship.protectedUntil = this.time;
       },
       removeWingman: () => this.removeWingman(),
+      get spare() {
+        return spareSkills(game.campaign.habits);
+      },
       ambush: (count, skill, names, hold) => {
         const actors = game.jumpers?.bots.map((bot) => bot.ship) ?? [];
         const rig = game.jumpers?.rig ?? new THREE.Vector3();
@@ -7268,6 +7295,7 @@ export class Game implements OnlineGame {
       }
     } else if (struck) this.applyLaserHit(struck, origin, direction, shooter, beamLength);
     if (struck && shooter === this.me && struck.allyOf(shooter)) this.warnFriend(COMPUTER.friendHit);
+    if (shooter === this.me) this.countShot(struck);
 
     if (wreckHit) {
       this.effects.sparks(end, shooter.color, 40);
