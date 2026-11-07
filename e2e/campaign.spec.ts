@@ -422,8 +422,11 @@ test('Wall Run: the barge follows the hull low over the Solar Wall’s top edge,
     const flight = game.me.flight;
     const way = [[-40000, 0, 2000], [-6000, 5000, 2000], [6000, 5000, 2000], [60000, 3000, 2000]];
     let k = 0;
+    // how often the searchlights saw the barge during the run (read while it lasts: the next drill has a count of its own)
+    (window as unknown as { wallSeen: number }).wallSeen = 0;
     const steer = () => {
       if (game.school?.stepIndex !== 1) return;
+      (window as unknown as { wallSeen: number }).wallSeen = game.school.attempt?.count ?? 0;
       const [x, y, z] = way[k];
       const d = flight.position.clone().set(x, y, z).sub(flight.position);
       if (d.length() < 600 && k < way.length - 1) k++;
@@ -433,7 +436,8 @@ test('Wall Run: the barge follows the hull low over the Solar Wall’s top edge,
     steer();
   });
   await page.waitForFunction(() => window.game.school?.stepIndex === 2, null, { timeout: 240_000 });
-  expect(await page.evaluate(() => window.game.school.attempt?.count ?? 0)).toBe(0);
+  // through, seen at most once (twice fails the run)
+  expect(await page.evaluate(() => (window as unknown as { wallSeen: number }).wallSeen)).toBeLessThan(2);
   await page.evaluate(() => (window.game.timeScale = 1));
   expect(errors).toEqual([]);
 });
