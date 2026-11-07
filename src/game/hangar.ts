@@ -15,10 +15,15 @@ import { msg } from '../i18n/i18n';
  * the game names whoever put it there (see hangarFrom); online the cap holds for everyone anyway.
  */
 
-/** The two interceptors, which have upgrades; every ship a Host can fly is a ShipType (the Sovereign too, once earned). */
-/** The ships of the Games a Host flies (the campaign's own hull is no tournament's). */
-export type TournamentShip = Exclude<ShipType, 'magpie'>;
-export type HangarShip = Exclude<TournamentShip, 'sovereign'>;
+/**
+ * The ships of the Games a Host flies: the two interceptors, which have upgrades, the Sovereign
+ * once earned, and the Magpie once the campaign is done (the campaign's own hull in its last
+ * stage, see campaign/campaign).
+ */
+export type TournamentShip = ShipType;
+export type HangarShip = Exclude<TournamentShip, 'sovereign' | 'magpie'>;
+/** The trophies: ships that fly with every upgrade and wear every look, earned rather than bought. */
+export const trophy = (ship: TournamentShip): ship is 'sovereign' | 'magpie' => ship === 'sovereign' || ship === 'magpie';
 export const HANGAR_SHIPS: readonly HangarShip[] = ['human', 'alien'];
 
 export type UpgradeId = 'radiators' | 'thrusters' | 'drive' | 'tubes' | 'plating' | 'neon' | 'flame';
@@ -122,6 +127,8 @@ export interface Perks {
   stripped: boolean;
   /** The left flank without its armor panels (the campaign's hull until they are fitted): a beam from that side counts double (see Ship.laserHit). */
   bareFlank: boolean;
+  /** A look: the campaign's hull in its last stage, the Magpie (from chapter 13 on, and the tournament's Magpie, see MAGPIE_LOOKS); only a hull that carries it shows it. */
+  magpie: boolean;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -144,7 +151,14 @@ export const STOCK: Readonly<Perks> = {
   patched: false,
   stripped: false,
   bareFlank: false,
+  magpie: false,
 };
+
+/** How the Magpie looks wherever it flies in the Games: the campaign's hull in its last stage, welded, its old livery bared, both flanks closed. */
+export const MAGPIE_LOOKS = { patched: true, stripped: true, bareFlank: false, magpie: true } as const satisfies Partial<Perks>;
+
+/** A ship's perks with its hull's looks: the Magpie always in its last stage (see MAGPIE_LOOKS), whoever flies it. */
+export const hullLooks = (type: ShipType, perks: Perks): Perks => (type === 'magpie' ? { ...perks, ...MAGPIE_LOOKS } : perks);
 
 /**
  * A bot's ship: stock, with the hook and the nanobots, so a round's rivals hook and mend as a
@@ -171,7 +185,7 @@ export const PLATING_STEP = 0.07;
 export const packLooks = (perks: Perks) => Math.min(ONLINE_LEVEL, Math.round((perks.cooling - 1) / RADIATOR_STEP)) * 16 + perks.neon * 4 + perks.flame;
 export const MAX_LOOKS = (ONLINE_LEVEL + 1) * 16 - 1;
 /** Another browser's ship as `lo` tells it (see packLooks): stock but for its looks and radiators. */
-export const unpackLooks = (looks: number): Perks => ({ ...STOCK, cooling: 1 + RADIATOR_STEP * (looks >> 4), neon: (looks >> 2) & 3, flame: looks & 3 });
+export const unpackLooks = (looks: number, type: ShipType): Perks => hullLooks(type, { ...STOCK, cooling: 1 + RADIATOR_STEP * (looks >> 4), neon: (looks >> 2) & 3, flame: looks & 3 });
 
 const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.map((upgrade) => [upgrade.id, 0])) as Record<UpgradeId, number>;
 
@@ -257,7 +271,8 @@ export function hangarFrom(text: string | null): KeptHangar {
       }
     }
   } else if (gear !== undefined) unreadable.push('gear');
-  if (ship === 'human' || ship === 'alien') hangar.ship = ship;
+  // the Magpie is the campaign's to give (see Game.magpieEarned), which the hangar does not hold
+  if (ship === 'human' || ship === 'alien' || ship === 'magpie') hangar.ship = ship;
   // the Sovereign is judged only on steps read in full: an unreadable step is no reason to call anyone a cheater
   else if (ship === 'sovereign' && !kept.cheated) {
     if (sovereignEarned(hangar)) hangar.ship = ship;
@@ -314,14 +329,15 @@ export function payOut(hangar: Hangar, points: number): number {
 /** Torpedoes a clone carries beyond the standard load for the steps of its tubes: one for every two. */
 export const tubeTorpedoes = (level: number) => Math.ceil(level / 2);
 
-/** How a ship flies with the steps it has (the Sovereign: every step), online at most ONLINE_LEVEL of each but the looks. */
+/** How a ship flies with the steps it has (a trophy: every step), online at most ONLINE_LEVEL of each but the looks. */
 export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): Perks {
   const step = (id: UpgradeId) => {
-    const level = ship === 'sovereign' ? LEVELS : hangar.levels[ship][id];
+    const level = trophy(ship) ? LEVELS : hangar.levels[ship][id];
     return online ? Math.min(level, ONLINE_LEVEL) : level;
   };
-  const look = (id: UpgradeId) => (ship === 'sovereign' ? LEVELS : hangar.levels[ship][id]);
-  return {
+  const look = (id: UpgradeId) => (trophy(ship) ? LEVELS : hangar.levels[ship][id]);
+  const gear = (id: GearId) => trophy(ship) || hangar.gear[ship][id];
+  return hullLooks(ship, {
     ...STOCK,
     cooling: 1 + RADIATOR_STEP * step('radiators'),
     thrusters: 1 + THRUSTER_STEP * step('thrusters'),
@@ -331,8 +347,8 @@ export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): 
     neon: look('neon'),
     flame: look('flame'),
     // the gear counts in full online too (see GEAR)
-    hook: ship === 'sovereign' || hangar.gear[ship].hook,
-    nanobots: ship === 'sovereign' || hangar.gear[ship].nanobots,
-    selfDestruct: ship === 'sovereign' || hangar.gear[ship].selfDestruct,
-  };
+    hook: gear('hook'),
+    nanobots: gear('nanobots'),
+    selfDestruct: gear('selfDestruct'),
+  });
 }

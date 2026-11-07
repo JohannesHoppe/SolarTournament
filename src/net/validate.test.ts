@@ -25,6 +25,11 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, ...slow })?.n).toBe('Nova');
   });
 
+  it('take every ship of the Games a Host flies, the Magpie too, and no other', () => {
+    for (const k of ['human', 'alien', 'sovereign', 'magpie']) expect(shipState({ ...ship, ...slow, k })?.k).toBe(k);
+    expect(shipState({ ...ship, ...slow, k: 'battleship' })).toBeNull();
+  });
+
   it('take kills and score below zero, which novas can bring about', () => {
     expect(shipState({ ...ship, ...slow, ki: -3, s: -1500 })?.ki).toBe(-3);
   });

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, RCS_THRUST, TURN_ACCELERATION } from './flight';
 import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
-import { THRUSTER_LAYOUTS } from './models';
+import { showMagpie, THRUSTER_LAYOUTS } from './models';
 import { MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
 import { CLOG_LOSS } from '../world/air';
@@ -500,6 +500,8 @@ export class Ship {
     // the armor panels welded over the bare left flank, once fitted (see models, flankPanels)
     const panels = this.model.getObjectByName('panels');
     if (panels) panels.visible = !perks.bareFlank;
+    // the hull in its last stage, the Magpie, over all of it (see models, magpieHull)
+    showMagpie(this.model, perks.magpie);
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;
@@ -685,7 +687,8 @@ export class Ship {
       ({ twin: this.twin, plating: this.plating, nova: this.nova, decoys: this.decoys } = unpackItems(state.it!));
       // another browser's ship shows the looks of its upgrades and heats in the air with its
       // radiators; how it flies is that browser's
-      if (state.lo !== packLooks(this.perks)) this.outfit(unpackLooks(state.lo!));
+      // (its hull's looks with them: the Magpie in its last stage, see hangar, hullLooks)
+      if (state.lo !== packLooks(this.perks) || (this.type === 'magpie' && !this.perks.magpie)) this.outfit(unpackLooks(state.lo!, this.type));
       // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
       this.wish = state.co!;
       this.torpedoes = state.to!;

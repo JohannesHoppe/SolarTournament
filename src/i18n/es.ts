@@ -184,6 +184,9 @@ export const ES: Catalog = {
   '{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.': '{coins} Solar Coins. La cartera está llena: las rondas no pagan nada hasta que gastes.',
   'The Sovereign flies with every upgrade, and wears every look.': 'La Sovereign vuela con todas las mejoras y luce toda la estética.',
   'The Sovereign is the President’s gift for both interceptors made complete.': 'La Sovereign es el regalo del Presidente por completar los dos interceptores.',
+  'Bring Lot 7731 through the campaign, and it is yours.': 'Lleva a Lot 7731 hasta el final de la campaña y será tuya.',
+  'The Magpie flies with every upgrade, and wears every look.': 'La Magpie vuela con todas las mejoras y luce toda la estética.',
+  'The Magpie is Lot 7731 as Pim finished it, yours once the campaign is done.': 'La Magpie es Lot 7731 tal como Pim la terminó; será tuya cuando acabes la campaña.',
   '{note} · looks only': '{note} · solo estética',
   Complete: 'Completo',
   Clones: 'Clones',
@@ -1432,6 +1435,8 @@ export const ES: Catalog = {
     'Las bajas seguidas son un espectáculo, y el público lo paga: una baja a menos de {streak} s de tu última hace una racha. La segunda vale media baja más ({streakDouble}), la tercera y cada una de las siguientes una baja entera más ({streakMore}); las rachas de los bots pagan igual. Las bajas de una nova ya cuentan doble y no dan bonus, pero cuentan en la racha; una baja de tu propio bando no cuenta en ninguna, y la muerte de tu clon la termina.',
   'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.':
     'En el hangar, las monedas compran mejoras para ambos interceptores, tres niveles cada una: radiadores, propulsores, motor principal, tubos lanzatorpedos, blindaje y la estética (franjas de neón, llama del motor). Además compran equipo para cada interceptor por separado: el gancho ({hookPrice} ☉), los nanobots ({nanobotsPrice} ☉) y la autodestrucción ({selfDestructPrice} ☉). Online cada mejora cuenta como mucho un nivel, así que los novatos se enfrentan a los veteranos casi de igual a igual; el equipo y la estética cuentan enteros, y los bots llevan el gancho y los nanobots. Completa ambos interceptores y el Presidente te regala la Sovereign: un trofeo, no una nave mejor.',
+  "Fly the story to its end, and the Magpie is yours for the Games as well: the campaign's ship as Pim finished it, black and chalk white, a neon magpie on each fin. Another trophy, flying like a complete interceptor with all the gear and every look.":
+    'Vuela la historia hasta el final y la Magpie será tuya también en los Juegos: la nave de la campaña tal como Pim la terminó, negra y blanca como la tiza, una urraca de neón en cada aleta. Otro trofeo, que vuela como un interceptor completo, con todo el equipo y toda la estética.',
   "The Games run without a central server. The Hosts' browsers build the tournament's network among themselves and agree on what happens by consensus.":
     'Los Juegos funcionan sin servidor central. Los navegadores de los Hosts construyen entre ellos la red del torneo y acuerdan por consenso lo que ocurre.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.':
@@ -1918,6 +1923,7 @@ export const ES: Catalog = {
   "The Ring Trials, Host! Four broadcast qualifiers in the Rings of Saturn, the whole system watching. Race, deathmatch, flag, and, oh, you'll love this: the President lends his own battleship. Good luck! Form eighty-one: good luck!": "¡Las Pruebas de los Anillos, Host! Cuatro clasificatorias televisadas en los Anillos de Saturno, con todo el sistema mirando. Carrera, deathmatch, bandera y, ay, esto te va a encantar: el Presidente presta su propio acorazado. ¡Buena suerte! Formulario ochenta y uno: ¡buena suerte!",
   "Host! Contender! Form one hundred: a personal invitation to your Final Trial, at the Ninth Planet. The Ministry will send the coordinates. Bring your lovely computer!": "¡Host! ¡Aspirante! Formulario cien: una invitación personal a tu Prueba Final, en el Noveno Planeta. El Ministerio enviará las coordenadas. ¡Trae a tu encantador ordenador!",
   "the overdrive, the Loose’s hack": "el overdrive, el hackeo de los Loose",
+  "the Magpie’s livery, brushed by hand, its nose, mast and pod rebuilt": "la librea de la Magpie, pintada a brocha, con su morro, su mástil y su cápsula reconstruidos",
   "the thrusters of the second grade": "los propulsores de segundo grado",
   "Buoy {n}/{total} · {speed} m/s": "Boya {n}/{total} · {speed} m/s",
   "Navy {n}/{total} · {seconds} s left": "Armada {n}/{total} · quedan {seconds} s",

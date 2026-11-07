@@ -4,7 +4,8 @@ import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces'
 import { hazeUniforms } from '../view/haze';
 import { letteringTexture, numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
-import { hypot } from '../detmath';
+import { cos, hypot, sin } from '../detmath';
+import { rotateY } from '../detthree';
 import { Randomizer } from '../random';
 
 /**
@@ -645,10 +646,212 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
     { parts: fins, wear: { ...SCRAP, relief: 'ribs' }, seed: 7732 },
   ];
   const root = hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  // the scrap hull's own paint and parts in a group of their own, which the Magpie's livery replaces
+  const scrap = new THREE.Group();
+  scrap.name = 'scrap';
+  for (const mesh of root.children.filter((child) => child.name === 'humanHull')) scrap.attach(mesh);
+  root.add(scrap);
   root.add(welds(THRUSTER_LAYOUTS.human));
   root.add(oldLivery());
   root.add(flankPanels());
+  root.add(magpieHull());
   return root;
+}
+
+/**
+ * Shows the campaign's hull in its last stage, the Magpie (see Perks.magpie), or as far as it is
+ * fitted before it: the Magpie's hull in place of the scrap hull's paint and parts and of the
+ * panels welded over its flank.
+ */
+export function showMagpie(root: THREE.Object3D, magpie: boolean) {
+  const scrap = root.getObjectByName('scrap');
+  const bird = root.getObjectByName('magpie');
+  if (!scrap || !bird) return;
+  scrap.visible = !magpie;
+  bird.visible = magpie;
+  const panels = root.getObjectByName('panels');
+  if (panels && magpie) panels.visible = false;
+}
+
+/** The Magpie's paint, hand-brushed: matte black and chalk white as the bird is colored, the flip paint's dark teal under its shimmer, the reactor vents' straw and blue. */
+const MAGPIE_BLACK = 0x1c1d20;
+const CHALK = 0xe6e1d4;
+const FLIP = 0x163f48;
+const STRAW = 0xc8ae62;
+/** Pim's brushwork: a matte coat over the scrap hull's metal, every stroke showing, chipped and scratched where it was flown. */
+const BRUSHED: Wear = { rust: 0.1, chips: 0.35, grime: 0.35, scratches: 0.5, seams: 0.6, stencils: ['S2', 'NO STEP', 'MAGPIE'], roughness: 0.86, metalness: 0.12, flakes: true, brushed: 1 };
+/** The flip paint: a thin, glossy film of salvaged paint, shifting from blue to green with the angle (iridescence). */
+const FLIPPED: Wear = { rust: 0, chips: 0.25, grime: 0.15, scratches: 0.3, seams: 0.2, stencils: [], roughness: 0.3, metalness: 0.6, relief: 'flush' };
+/** The scout's long nose, rebuilt by Pim in front of the interceptor's (from the interceptor's nose forward). */
+const MAGPIE_NOSE: End[] = [HUMAN_BODY[1], { z: -290, w: 24, h: 20, y: -4 }, { z: -420, w: 6, h: 5, y: -8 }];
+/** The sleeper pod's hump behind the canopy, from the canopy back. */
+const POD: [End, End] = [{ z: 150, w: 16, h: 8, y: 56 }, { z: -30, w: 24, h: 16, y: 50 }];
+/** Where the sensor mast stands on the pod (units along the ship), how tall it reaches over the pod's top (units). */
+const MAST_Z = 60;
+const MAST_TOP = 130;
+
+/**
+ * The Magpie (the campaign's hull from chapter 13 on, and the tournament's ship once the campaign
+ * is done): the interceptor's proportions with the scout's long nose, the sleeper pod's hump
+ * behind the canopy and the sensor mast on it, both struts and fins, the gun, two drive bells;
+ * brushed in matte black with chalk white where the bird is white (the belly, the struts), a
+ * film of flip paint along the fins' tops and the plates' leading edges, the reactor vents on
+ * the bulkhead tinted straw and blue, a neon magpie in sun orange on each fin's outer face, the
+ * Loose's knot small on each flank of the pod. The old livery and the welds stay where they are
+ * (see oldLivery, welds). One group named `magpie`, hidden until the hull is the Magpie.
+ */
+function magpieHull(): THREE.Group {
+  const parts: THREE.BufferGeometry[] = [
+    paint(loft(OCTAGON, HUMAN_BODY[2], HUMAN_BODY[1]), MAGPIE_BLACK),
+    paint(loft(OCTAGON, MAGPIE_NOSE[0], MAGPIE_NOSE[1]), MAGPIE_BLACK),
+    paint(loft(OCTAGON, MAGPIE_NOSE[1], MAGPIE_NOSE[2]), MAGPIE_BLACK),
+    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
+    // the pod's hump, and the spine behind it
+    paint(loft(OCTAGON, POD[0], POD[1]), MAGPIE_BLACK),
+    paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: 140, w: 10, h: 6, y: 58 }), MAGPIE_BLACK),
+    // the sensor mast: a post on the pod, a crossbar, the sensor's pod on top
+    paint(loft(RECTANGLE, { z: MAST_Z + 6, w: 2.5, h: (MAST_TOP - 60) / 2, y: (MAST_TOP + 60) / 2 }, { z: MAST_Z - 6, w: 2, h: (MAST_TOP - 60) / 2, y: (MAST_TOP + 60) / 2 }), GUNMETAL),
+    paint(loft(RECTANGLE, { z: MAST_Z + 2, w: 18, h: 1.5, y: MAST_TOP - 18 }, { z: MAST_Z - 2, w: 18, h: 1.5, y: MAST_TOP - 18 }), GUNMETAL),
+    paint(loft(OCTAGON, { z: MAST_Z + 18, w: 5, h: 5, y: MAST_TOP }, { z: MAST_Z - 30, w: 3, h: 3, y: MAST_TOP }), CHALK),
+    // the belly in chalk white, the gun under the nose
+    paint(loft(RECTANGLE, { z: 160, w: 34, h: 12, y: -50 }, { z: -150, w: 22, h: 8, y: -40 }), CHALK),
+    paint(loft(OCTAGON, { z: -120, w: 9, h: 9, y: -52 }, { z: -300, w: 6, h: 6, y: -52 }), GUNMETAL),
+    ...pair(paint(loft(OCTAGON, { z: 250, w: 30, h: 26, x: 87, y: 2 }, { z: 60, w: 22, h: 20, x: 75, y: 4 }), MAGPIE_BLACK)),
+    ...pair(paint(loft(OCTAGON, NACELLE_CAP, NACELLE_END, 'back'), GUNMETAL)),
+    // both struts in chalk white, as the bird's shoulders, their plates black
+    ...pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), CHALK)),
+    ...pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), MAGPIE_BLACK)),
+    ...driveBells([GUNMETAL, HEAT_TINT, HEAT_BLUE], STEEL),
+    paint(loft(RECTANGLE, { z: 262, w: 40, h: 28, y: -2 }, { z: 200, w: 44, h: 32, y: 0 }), GUNMETAL),
+    ...RIBS.map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
+    // the bulkhead over the drive block, its vents tinted straw to blue by the overdrive's dumps
+    paint(loft(RECTANGLE, { z: 244, w: 56, h: 6, y: 48 }, { z: 214, w: 50, h: 6, y: 46 }), MAGPIE_BLACK),
+    ...VENTS.map((x) => paintAlong(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), 218, STRAW, 246, HEAT_BLUE)),
+    ...Object.values(thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, MAGPIE_BLACK, STEEL)).flat(),
+  ];
+  const fins = pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), MAGPIE_BLACK));
+  // the flip paint: along the fins' tops, and over the plates' leading edges
+  const flip = [
+    ...pair(paint(band(HUMAN_FIN, -100, 250, 12), FLIP)),
+    ...pair(paint(loft(RECTANGLE, { z: 27, w: 91, h: 6 + SKIN, x: 170, y: 12 }, { z: 20 - SKIN, w: 90 + SKIN, h: 6 + SKIN, x: 170, y: 12 }), FLIP)),
+  ];
+  const lights = [
+    ...pair(loft(RECTANGLE, { z: 262, w: 5, h: 5, x: 285, y: 88 }, { z: 250, w: 5, h: 5, x: 285, y: 88 })),
+    ...pair(loft(RECTANGLE, { z: 264, w: 4, h: 4, x: 30, y: 30 }, { z: 256, w: 4, h: 4, x: 30, y: 30 })),
+  ];
+  const bird = new THREE.Group().add(
+    coat({ parts, wear: BRUSHED, seed: 7740 }),
+    coat({ parts: fins, wear: { ...BRUSHED, relief: 'ribs', stencils: ['NO STEP'] }, seed: 7741 }),
+    coat({ parts: flip, wear: FLIPPED, seed: 7742, look: { iridescence: 1, iridescenceIOR: 1.8, iridescenceThicknessRange: [250, 650] } }),
+    new THREE.Mesh(mergeGeometries(lights), new THREE.MeshBasicMaterial({ color: TAIL_LIGHT, toneMapped: false })),
+    magpieNeon(),
+    looseKnot(),
+  );
+  bird.name = 'magpie';
+  bird.visible = false;
+  return bird;
+}
+
+/** The neon magpie on each fin's outer face: where it hangs (units: its middle along the ship and over the ship's middle, its length and height) and how bright its tube burns. */
+const NEON_BIRD = { z: 160, y: 18, x: 306, length: 100, height: 64 };
+const NEON_ORANGE = new THREE.Color(1, 0.62, 0.18).multiplyScalar(2.2);
+
+/**
+ * A canvas `width` by `height` drawn by `draw`, as a texture, or an empty one where nothing can be
+ * drawn (the unit tests).
+ */
+function drawn(width: number, height: number, draw: (g: CanvasRenderingContext2D) => void): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.Texture();
+  const element = document.createElement('canvas');
+  element.width = width;
+  element.height = height;
+  const g = element.getContext('2d');
+  if (!g) return new THREE.Texture();
+  draw(g);
+  const texture = new THREE.CanvasTexture(element);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+/**
+ * The magpie Pim bent from a neon tube, in sun orange: one line round its head and body, the beak
+ * forward, the long tail back, a line along the wing and the legs; the tube's white core in its
+ * own glow. Drawn with its head towards the nose on both fins (the left one is the right's mirror).
+ */
+function magpieNeon(): THREE.Mesh {
+  const map = drawn(256, 160, (g) => {
+    const tube = (width: number, color: string, blur: number) => {
+      g.lineWidth = width;
+      g.strokeStyle = color;
+      g.shadowColor = '#ff9d00';
+      g.shadowBlur = blur;
+      g.lineCap = g.lineJoin = 'round';
+      g.beginPath();
+      // the tail, long and narrow, out to the left; the back up to the head on the right
+      g.moveTo(14, 112);
+      g.lineTo(96, 86);
+      g.quadraticCurveTo(140, 50, 186, 52);
+      // the head, the beak forward, the throat and breast down to the belly
+      g.quadraticCurveTo(204, 34, 222, 48);
+      g.lineTo(246, 54);
+      g.lineTo(220, 62);
+      g.quadraticCurveTo(206, 100, 160, 104);
+      g.lineTo(22, 120);
+      g.stroke();
+      // the wing along the back, its tip towards the tail
+      g.beginPath();
+      g.moveTo(178, 66);
+      g.quadraticCurveTo(140, 70, 104, 92);
+      g.stroke();
+      // the legs
+      g.beginPath();
+      g.moveTo(166, 104);
+      g.lineTo(158, 138);
+      g.moveTo(178, 100);
+      g.lineTo(176, 138);
+      g.stroke();
+    };
+    tube(9, 'rgba(255, 140, 20, 0.9)', 18);
+    tube(3.5, '#fff1d8', 6);
+  });
+  const { z, y, x, length, height } = NEON_BIRD;
+  // the plane faces +x with its left edge (the tail) to the stern
+  const plane = rotateY(new THREE.PlaneGeometry(length, height).toNonIndexed(), Math.PI / 2).translate(x, y, z);
+  const sign = new THREE.Mesh(
+    mergeGeometries([plane, mirror(plane)]),
+    new THREE.MeshBasicMaterial({ map, color: NEON_ORANGE, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+  );
+  sign.name = 'magpieNeon';
+  return sign;
+}
+
+/** The Loose's knot on each flank of the pod: where it sits (units, along the ship and over its middle) and its size. */
+const KNOT = { z: 30, y: 52, size: 16 };
+
+/** The Loose's sigil, a knot of three loops (a trefoil) in chalk white, small, on both flanks of the pod behind the canopy; paint, like the old livery. */
+function looseKnot(): THREE.Mesh {
+  const map = drawn(128, 128, (g) => {
+    g.strokeStyle = '#ece6d6';
+    g.lineWidth = 9;
+    g.lineCap = g.lineJoin = 'round';
+    g.beginPath();
+    // a trefoil: (sin t + 2 sin 2t, cos t − 2 cos 2t)
+    for (let k = 0; k <= 120; k++) {
+      const a = (k / 120) * Math.PI * 2;
+      const px = 64 + 17 * (sin(a) + 2 * sin(2 * a));
+      const py = 64 - 17 * (cos(a) - 2 * cos(2 * a)) - 8;
+      if (k === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.stroke();
+  });
+  const { z, y, size } = KNOT;
+  const flank = at([POD[1], POD[0]], z).w + SKIN;
+  const plane = rotateY(new THREE.PlaneGeometry(size, size).toNonIndexed(), Math.PI / 2).translate(flank, y, z);
+  const knot = new THREE.Mesh(mergeGeometries([plane, mirror(plane)]), decalPaint(map, -1));
+  knot.userData.decal = true;
+  return knot;
 }
 
 /**
@@ -682,8 +885,7 @@ export const SCOUT_LIVERY = { name: 'PAAA 01', registry: 'S2', fore: -150, aft: 
 function oldLivery(): THREE.Group {
   const { fore, aft, y, height } = SCOUT_LIVERY;
   const span = { fore, aft, bottom: y - height / 2, top: y + height / 2 };
-  const paint = (map: THREE.Texture, lift: number) =>
-    new THREE.Mesh(flankPaint(HUMAN_BODY, span), new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.05, roughness: 0.8, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: lift, polygonOffsetUnits: lift }));
+  const paint = (map: THREE.Texture, lift: number) => new THREE.Mesh(flankPaint(HUMAN_BODY, span), decalPaint(map, lift));
   const livery = new THREE.Group().add(paint(liveryBand(7735), -1), paint(letteringTexture({ emblem: true, name: SCOUT_LIVERY.name, registry: SCOUT_LIVERY.registry }, 7734), -2));
   livery.name = 'livery';
   livery.traverse((part) => (part.userData.decal = true));
@@ -693,35 +895,31 @@ function oldLivery(): THREE.Group {
 
 /** The band the old livery's letters lie on: off-white over a dark blue stripe, five centuries old, chipped to the metal here and there, its edges ragged. */
 function liveryBand(seed: number): THREE.Texture {
-  if (typeof document === 'undefined') return new THREE.Texture();
   const width = 1024;
   const height = 128;
-  const element = document.createElement('canvas');
-  element.width = width;
-  element.height = height;
-  const g = element.getContext('2d');
-  if (!g) return new THREE.Texture();
-  g.fillStyle = '#d6cfbd';
-  g.fillRect(0, height * 0.08, width, height * 0.74);
-  g.fillStyle = '#1a2d55';
-  g.fillRect(0, height * 0.82, width, height * 0.12);
-  // chips down to the metal: the paint gone in flakes, more of them towards the ends
-  const r = new Randomizer(seed);
-  const next = () => r.nextFloat();
-  g.globalCompositeOperation = 'destination-out';
-  for (let k = 0; k < 260; k++) {
-    const x = next() * width;
-    const end = Math.min(x, width - x) / width;
-    if (next() > 0.35 + end * 2) continue;
-    g.beginPath();
-    g.ellipse(x, next() * height, 2 + next() * 14, 1 + next() * 6, next() * Math.PI, 0, Math.PI * 2);
-    g.fill();
-  }
-  const texture = new THREE.CanvasTexture(element);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
+  return drawn(width, height, (g) => {
+    g.fillStyle = '#d6cfbd';
+    g.fillRect(0, height * 0.08, width, height * 0.74);
+    g.fillStyle = '#1a2d55';
+    g.fillRect(0, height * 0.82, width, height * 0.12);
+    // chips down to the metal: the paint gone in flakes, more of them towards the ends
+    const r = new Randomizer(seed);
+    const next = () => r.nextFloat();
+    g.globalCompositeOperation = 'destination-out';
+    for (let k = 0; k < 260; k++) {
+      const x = next() * width;
+      const end = Math.min(x, width - x) / width;
+      if (next() > 0.35 + end * 2) continue;
+      g.beginPath();
+      g.ellipse(x, next() * height, 2 + next() * 14, 1 + next() * 6, next() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
 }
+
+/** Paint laid on a hull as a decal of `map` (see oldLivery), `lift` steps of depth off the plates it lies on, so it never fights them for a pixel. */
+const decalPaint = (map: THREE.Texture, lift: number) =>
+  new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.05, roughness: 0.8, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: lift, polygonOffsetUnits: lift });
 
 /**
  * Pim's welds (see Perks.patched): around each thruster housing, near both its ends, a band of

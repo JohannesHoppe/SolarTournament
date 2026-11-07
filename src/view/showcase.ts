@@ -4,6 +4,7 @@ import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
 import { SOVEREIGN_GOLD } from '../ship/tints';
+import { showMagpie } from '../ship/models';
 import { HologramLight } from './hologram';
 import { hazardSurface, lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
@@ -63,22 +64,27 @@ const FLOOD = 1.8;
 /** The lamps' running light goes around the pad once in this many seconds. */
 const LAMP_SECONDS = 4;
 
+/** The light a ship not earned yet shows in: the Sovereign in its gold, the Magpie in the blue-green of its flip paint (the interceptors are always earned). */
+const HOLOGRAM_LIGHT: Record<ShipType, string> = { sovereign: SOVEREIGN_GOLD, magpie: '#7fe6d2', human: SOVEREIGN_GOLD, alien: SOVEREIGN_GOLD };
+
+/** A ship not earned yet as a hologram (see Showcase.hologramOf). */
+type Hologram = { picture: THREE.Object3D; light: HologramLight; size: number };
+
 /**
  * The ship on show in the menu: the seal of the Ministry of War inlaid in a landing pad seen
  * from above at a slant, and the chosen ship hovers above it and turns slowly, an exhibit in its
- * upgrades' looks, its drive burning low. A ship not earned yet (the Sovereign) shows as a
- * hologram in its gold (see view/hologram): only its picture is there, the ship itself is not yet
- * the Host's. A view of its own, behind the menu's plates.
+ * upgrades' looks, its drive burning low. A ship not earned yet (the Sovereign, the Magpie)
+ * shows as a hologram in its light (see view/hologram): only its picture is there, the ship
+ * itself is not yet the Host's. A view of its own, behind the menu's plates.
  */
 export class Showcase {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(30, 1, 10, 20000);
   private readonly ships = new Map<ShipType, Ship>();
-  /** The ship not earned yet, as a hologram, and its height (units), which scales the band a glitch tears. */
-  private readonly picture: THREE.Object3D;
-  private readonly hologram = new HologramLight(SOVEREIGN_GOLD);
-  private readonly hologramSize: number;
+  /** Each ship not earned yet as a hologram, made at its first showing: its picture, its light and its height (units), which scales the band a glitch tears. */
+  private readonly holograms = new Map<ShipType, Hologram>();
+  private hologram: Hologram | null = null;
   private readonly wide = window.matchMedia(TITLE_WIDE);
   private readonly still = window.matchMedia('(prefers-reduced-motion: reduce)');
   /** The light of the ship's lift on the pad below it: a pool on the seal, and a lamp. */
@@ -126,25 +132,41 @@ export class Showcase {
     this.pool = pool;
     this.lamps = lamps;
     this.scene.add(pad, this.lift);
-    this.picture = assets.ships.sovereign.clone(true);
+  }
+
+  /** The hologram of a ship not earned yet, in its light (see HOLOGRAM_LIGHT), made once. */
+  private hologramOf(type: ShipType): Hologram {
+    const kept = this.holograms.get(type);
+    if (kept) return kept;
+    const picture = this.assets.ships[type].clone(true);
+    // the Magpie as it is earned, in its last stage
+    showMagpie(picture, true);
+    const light = new HologramLight(HOLOGRAM_LIGHT[type]);
     // no flame and no glow: nothing of it burns; and no paint (a decal), only the shape in light
-    this.hologram.dress(this.picture, (mesh) => {
+    light.dress(picture, (mesh) => {
       const name = mesh.name.toLowerCase();
-      return name.startsWith('drive') || name.includes('glow') || !!mesh.userData.decal;
+      return name.startsWith('drive') || name.includes('glow') || name.includes('neon') || !!mesh.userData.decal;
     });
-    const bounds = new THREE.Box3().setFromObject(this.picture);
-    this.hologramSize = bounds.getSize(new THREE.Vector3()).y;
-    this.scene.add(this.picture);
+    const size = new THREE.Box3().setFromObject(picture).getSize(new THREE.Vector3()).y;
+    picture.visible = false;
+    this.scene.add(picture);
+    const made = { picture, light, size };
+    this.holograms.set(type, made);
+    return made;
   }
 
   /** Puts a ship on show in its looks, or its hologram while it is `locked`. */
   show(type: ShipType, perks: Perks, locked: boolean) {
     this.locked = locked;
     this.flood.intensity = locked ? FLOOD * 0.2 : FLOOD;
-    this.picture.visible = locked;
     for (const ship of this.ships.values()) ship.root.visible = false;
+    for (const { picture } of this.holograms.values()) picture.visible = false;
     this.shown = null;
-    if (locked) return;
+    this.hologram = locked ? this.hologramOf(type) : null;
+    if (this.hologram) {
+      this.hologram.picture.visible = true;
+      return;
+    }
     let ship = this.ships.get(type);
     if (!ship) {
       ship = new Ship('showcase-' + type, '', type, this.assets, false);
@@ -186,7 +208,7 @@ export class Showcase {
     this.camera.setViewOffset(width, height, (0.5 - spot.x) * width, (0.5 - spot.y) * height, width, height);
     const dt = Math.min(0.1, Math.max(0, time - this.last));
     this.last = time;
-    const root = this.locked ? this.picture : this.shown?.root;
+    const root = this.hologram?.picture ?? this.shown?.root;
     if (root) {
       root.position.set(0, HOVER, 0);
       root.rotation.set(0, (time / TURN_SECONDS) * Math.PI * 2, 0);
@@ -197,7 +219,7 @@ export class Showcase {
       this.lift.position.set(0, HOVER - 120, 0);
       this.lift.intensity = this.locked ? 0 : 3;
     }
-    if (this.locked) this.hologram.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologramSize);
+    this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
     this.shown?.idle(dt, 0.35);
     this.renderer.render(this.scene, this.camera);

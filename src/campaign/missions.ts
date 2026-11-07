@@ -992,8 +992,12 @@ const veronaDrop: Drill = {
   mark: (ctx, a) => t('Buoy {n}/{total} · {speed} m/s', { n: Math.min(a.next + 1, a.points.length), total: a.points.length, speed: Math.round(ctx.me.flight.velocity.length() * 0.05) }),
 };
 
-/** The overdrive (13.2), the Loose's reactor dump, fitted at OVERDRIVE_PRICE. */
+/**
+ * The overdrive (13.2), the Loose's reactor dump, fitted at OVERDRIVE_PRICE; and among the Loose
+ * Pim brushes the Magpie's livery on and rebuilds the scout's nose, mast and pod, for nothing.
+ */
 const fitOverdrive = (campaign: Campaign) => {
+  if (!campaign.parts.includes('magpie')) campaign.parts.push('magpie');
   if (campaign.parts.includes('overdrive')) return;
   campaign.parts.push('overdrive');
   buy(campaign, OVERDRIVE_PRICE);

@@ -75,7 +75,7 @@ test('alone, the pause menu pays out the round and starts a new one at once, in 
   expect(errors).toEqual([]);
 });
 
-test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereign is not flown before it is earned', async ({ page }) => {
+test('the hangar sells an upgrade for Solar Coins and keeps it, and neither the Magpie nor the Sovereign is flown before it is earned', async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('seeded')) localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 1200, ship: 'human' }));
     sessionStorage.setItem('seeded', '1');
@@ -84,7 +84,9 @@ test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereig
   await page.click('#hangar');
   await page.locator('.upgrade', { hasText: 'Radiators' }).click();
   await expect(page.locator('#hangar-coins')).toContainText('200 Solar Coins');
-  // the previous ship from the human interceptor is the Sovereign, still a silhouette
+  // the previous ships from the human interceptor are the Magpie and the Sovereign, both still holograms
+  await page.click('#ship-prev');
+  await expect(page.locator('#ship-note')).toContainText('Bring Lot 7731 through the campaign');
   await page.click('#ship-prev');
   await expect(page.locator('#ship-note')).toContainText('Make both interceptors complete');
   await page.reload();

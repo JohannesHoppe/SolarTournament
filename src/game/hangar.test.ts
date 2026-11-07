@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAGPIE_LOOKS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -78,14 +78,27 @@ describe('the hangar', () => {
 
   it('tells other browsers its looks and its radiators online, so they heat it in the air as its own browser does', () => {
     const online = perksOf(maxed(), 'human', true);
-    const seen = unpackLooks(packLooks(online));
+    const seen = unpackLooks(packLooks(online), 'human');
     expect(seen.cooling).toBeCloseTo(online.cooling);
     expect(seen.neon).toBe(online.neon);
     expect(seen.flame).toBe(online.flame);
     expect(packLooks(online)).toBeLessThanOrEqual(MAX_LOOKS);
-    expect(unpackLooks(packLooks(STOCK))).toEqual(STOCK);
+    expect(unpackLooks(packLooks(STOCK), 'human')).toEqual(STOCK);
     // the Sovereign's too, its looks in full and its radiators at the cap
     expect(packLooks(perksOf(emptyHangar(), 'sovereign', true))).toBe(MAX_LOOKS);
+  });
+
+  it('flies the Magpie as a complete interceptor, as the Sovereign, capped online, and shows it in its last stage to every browser', () => {
+    const magpie = perksOf(emptyHangar(), 'magpie', false);
+    const sovereign = perksOf(emptyHangar(), 'sovereign', false);
+    expect(magpie).toEqual({ ...sovereign, ...MAGPIE_LOOKS });
+    expect(perksOf(emptyHangar(), 'magpie', true)).toEqual({ ...perksOf(emptyHangar(), 'sovereign', true), ...MAGPIE_LOOKS });
+    expect(unpackLooks(packLooks(magpie), 'magpie')).toMatchObject(MAGPIE_LOOKS);
+    expect(unpackLooks(packLooks(magpie), 'human').magpie).toBe(false);
+    // kept as the ship flown; whether it is earned the campaign says (see Game.magpieEarned)
+    const hangar = emptyHangar();
+    hangar.ship = 'magpie';
+    expect(hangarFrom(JSON.stringify(hangar)).hangar.ship).toBe('magpie');
   });
 
   it('holds in its wallet what the hangar sells, and no more', () => {

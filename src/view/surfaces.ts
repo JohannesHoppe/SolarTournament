@@ -56,6 +56,8 @@ export interface Wear {
   relief?: 'scales' | 'ribs' | 'engraved' | 'flush';
   /** Dents beaten into the plating (0..1; none when left out). */
   dents?: number;
+  /** Paint brushed on by hand, every stroke showing (0..1; none when left out, see brushed). */
+  brushed?: number;
   /** The chips as small flakes, a rim of primer around bare metal (see flakes), instead of plain scars. */
   flakes?: boolean;
 }
@@ -470,6 +472,42 @@ function flakes(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRende
   }
 }
 
+/**
+ * Paint brushed on by hand: long strokes along the plates, each a shade of its own, the ridges
+ * the bristles left in it running along each stroke in the bump, so they catch the light on dark
+ * paint as on pale.
+ */
+function brushed(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, amount: number) {
+  color.lineCap = bump.lineCap = 'round';
+  for (let i = 0; i < 40 * amount; i++) {
+    const x = r.range(0, SIZE);
+    const y = r.range(0, SIZE);
+    const angle = r.range(-0.12, 0.12);
+    const length = r.range(40, 140);
+    const width = r.range(6, 16);
+    const shade = r.range(0, 0.1);
+    const bristles = Array.from({ length: 5 }, () => [r.range(-0.5, 0.5) * width, r.nextFloat() < 0.5 ? 150 : 105] as const);
+    const ux = cos(angle);
+    const uy = sin(angle);
+    wrapped(x, y, length + width, (px, py) => {
+      color.strokeStyle = `rgba(0, 0, 0, ${shade})`;
+      color.lineWidth = width;
+      color.beginPath();
+      color.moveTo(px, py);
+      color.lineTo(px + ux * length, py + uy * length);
+      color.stroke();
+      bump.lineWidth = 0.9;
+      for (const [across, gray] of bristles) {
+        bump.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, 0.35)`;
+        bump.beginPath();
+        bump.moveTo(px - uy * across, py + ux * across);
+        bump.lineTo(px - uy * across + ux * length, py + ux * across + uy * length);
+        bump.stroke();
+      }
+    });
+  }
+}
+
 /** Fine scratches, bright in roughness (scuffed) and a little darker in color. */
 function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderingContext2D, amount: number) {
   color.strokeStyle = 'rgba(0, 0, 0, 0.18)';
@@ -535,6 +573,7 @@ function drawWorn(seed: number, wear: Wear, detail = 1, glowing = false) {
   else if (wear.relief === 'engraved') engraving(r, color[1], orm[1], bump[1], wear);
   else panels(r, color[1], bump[1], wear.seams, wear.relief);
   if (wear.dents) dents(r, color[1], bump[1], wear.dents);
+  if (wear.brushed) brushed(r, color[1], bump[1], wear.brushed);
   grime(r, color[1], wear.grime);
   rust(r, color[1], orm[1], wear.rust);
   (wear.flakes ? flakes : chips)(r, color[1], orm[1], wear.chips);
