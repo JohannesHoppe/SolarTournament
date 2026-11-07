@@ -1801,4 +1801,11 @@ export const ES: Catalog = {
   "The tug crews swing blocks of ice on their cables all day. Their drill, Host: hook a block, swing round it, and let go faster than sixty-five meters a second. Three times.": "Las cuadrillas de los remolcadores balancean bloques de hielo con sus cables todo el día. Su ejercicio, Host: engancha un bloque, gira a su alrededor y suelta a más de sesenta y cinco metros por segundo. Tres veces.",
   "Three blocks, three swings. The tug crews clapped, Host. I think that was for us.": "Tres bloques, tres giros. Las cuadrillas aplaudieron, Host. Creo que era para nosotros.",
   "Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.": "Victory Cola, Host. Cada ronda que volamos vende una lata ahora. Me gustábamos más cuando nadie miraba.",
+  "Qualifying Heat": "Manga de clasificación",
+  "Kraken Mare": "Kraken Mare",
+  "Titan’s methane sea under its orange haze, and Saturn over the haze, its ring a thin line.": "El mar de metano de Titán bajo su bruma naranja, y Saturno sobre la bruma, su anillo una línea fina.",
+  "Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.": "Ocho bobinas, tres vueltas. Un lado pasa por encima de la bruma, el otro se hunde en ella: ahí abajo el aire nos frena y esconde la siguiente bobina hasta que estamos cerca. Entre los tres primeros.",
+  "Three of them were home before us. We qualify again.": "Tres de ellos llegaron antes que nosotros. Volvemos a clasificarnos.",
+  "Qualified. The Circuit has our name on a can now, Host.": "Clasificados. El Circuito ya tiene nuestro nombre en una lata, Host.",
+  "Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.": "Titán. El Circuito de Victory Cola, ahora que son dueños de tus rondas. Carreras aéreas sobre el Kraken Mare, abajo en la bruma. Primero la manga de clasificación. Entre los tres primeros, o no entras.",
 };

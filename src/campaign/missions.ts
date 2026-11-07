@@ -727,6 +727,37 @@ const fluxTubeRace: Drill = {
 };
 
 /**
+ * The Victory Cola Circuit over Kraken Mare (chapter 9): HEAT_RINGS Ministry coils on an ellipse
+ * (HEAT_REACH by HEAT_DEPTH) whose one side runs HEAT_HIGH over Titan's haze deck and whose
+ * other dips HEAT_LOW into it, where the air brakes and hides (see world/air). The Qualifying
+ * Heat (9.1): HEAT_LAPS laps against Perihelion and four of the Circuit, home among the first
+ * HEAT_PODIUM; the Circuit Final (9.4) the same loop, home first.
+ */
+export const HEAT_RINGS = 8;
+const HEAT_REACH = 44000;
+const HEAT_DEPTH = 32000;
+const HEAT_HIGH = 3000;
+const HEAT_LOW = -6000;
+export const HEAT_LAPS = 3;
+const heatHeight = (x: number) => HEAT_LOW + ((HEAT_HIGH - HEAT_LOW) * (x / HEAT_REACH + 1)) / 2;
+const heat = groundLoop(HEAT_RINGS, [0, 0], HEAT_REACH, HEAT_DEPTH, 0, heatHeight);
+export const HEAT_COURSE = heat.course;
+export const HEAT_START = heat.start;
+const CIRCUIT_RIVALS = { names: ['Perihelion', 'Vasquez', 'Fizz', 'Kade', 'Vega'], skills: [0.65, 0.45, 0.4, 0.4, 0.35] };
+
+const qualifyingHeat = race({
+  line: CAMPAIGN.qualifyingHeat,
+  lost: CAMPAIGN.qualifyingHeatLost,
+  arena: 'titan',
+  marks: HEAT_COURSE,
+  laps: HEAT_LAPS,
+  pipes: null,
+  rivals: CIRCUIT_RIVALS,
+  podium: 3,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/**
  * Debt Day (4.2): Ma Tally's collectors, COLLECTORS of skill COLLECTOR_SKILL, come for the hull over
  * Phobos's grooves beyond Stickney's rim, fighting every ship they see (guards of the drill's
  * point, see Game.jumpers); COLLECTORS_DOWN of them shot down, and a Navy cutter hails (the next
@@ -1778,4 +1809,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'harpoon', name: msg('The Harpoon'), drills: [harpoon, said(PIM.hook, 'ganymede'), said(CAMPAIGN.hook, 'ganymede')], pay: 0, fit: fitHook },
   { id: 'swingShift', name: msg('Swing Shift'), drills: [swingShift, said(CAMPAIGN.swingShiftDone, 'ganymede')], pay: 1000, ratings: 100 },
   { id: 'sponsorNight', name: msg('Sponsor Night'), drills: [said(CRISP.hello, 'ganymede'), said(CRISP.deal, 'ganymede'), said(CAMPAIGN.sponsored, 'ganymede')], pay: 0 },
+  // chapter 9, the Victory Cola Circuit over Kraken Mare on Titan, in the haze
+  { id: 'qualifyingHeat', name: msg('Qualifying Heat'), drills: [said(HEDDA.titan, 'titan'), qualifyingHeat, said(CAMPAIGN.qualifyingHeatDone, 'titan')], pay: 4000, ratings: 400, start: HEAT_START },
 ];

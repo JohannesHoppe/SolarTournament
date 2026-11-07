@@ -631,3 +631,11 @@ test('Swing Shift faces the hull to a block of ice of the tug yard, three times 
   expect(await page.evaluate(() => window.game.me.perks.hook)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('chapter 9 opens on Titan: the Qualifying Heat lines up five rivals, Perihelion among them, at eight coils over and into the haze, the air the place’s own', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...chapterFive(...CHAPTER_SEVEN, 'hollowJack', 'harpoon', 'swingShift', 'sponsorNight'), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
+  await linedUp(page, 'titan', 1);
+  expect(await page.evaluate(() => !!window.game.field.air)).toBe(true);
+  expect(errors).toEqual([]);
+});

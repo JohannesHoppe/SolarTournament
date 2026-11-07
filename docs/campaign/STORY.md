@@ -158,7 +158,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 9.1 | Qualifying Heat | race | Three laps through Titan's haze over Kraken Mare, the course dipping into the thick air. Top three. | ☉ 4,000 · 400 | Race; Jupiter's air with Titan's numbers |
+| 9.1 | Qualifying Heat | race | Three laps through Titan's haze over Kraken Mare, eight coils whose loop runs 150 m over the deck on one side and dips 300 m into the thick air on the other; Perihelion and four of the Circuit. Top three. (built) | ☉ 4,000 · 400 | Race; Jupiter's air on Titan |
 | 9.2 | Pit Fight | arena | A five-minute deathmatch in the haze, the announcer on air. Place top three. | ☉ 4,000 · 500 | Deathmatch; air |
 | 9.3 | Haze Duel | duel | Perihelion alone, in air where the eye sees 600 m and the radar twice that. Win. He breaks off before his clone dies (he always does). | ☉ 3,000 · 400 | Duel; the senses in haze |
 | 9.4 | Circuit Final | race | The final: win it. | ☉ 6,000 · 800 | Race |
@@ -663,6 +663,14 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **HEDDA**: Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.
 
 **NICOLE**: My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.
+
+### Qualifying Heat (chapter 9, built)
+
+**HEDDA**: Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.
+
+**NICOLE**: Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.
+
+**NICOLE** *(home among the first three)*: Qualified. The Circuit has our name on a can now, Host.
 
 ### Flux Tube Race (chapter 7, built)
 

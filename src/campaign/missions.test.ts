@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -21,6 +21,8 @@ const PEAK_SECONDS = 240;
 const GRAND_SECONDS = 360;
 /** The Flux Tube Race's two laps are flown within this many seconds by a middling bot. */
 const FLUX_SECONDS = 240;
+/** The Qualifying Heat's three laps over Kraken Mare are flown within this many seconds by a middling bot. */
+const HEAT_SECONDS = 420;
 
 /**
  * A middling bot flies a mission's race at `arena`: every lap through every mark of `course`
@@ -71,6 +73,16 @@ describe('the races of the campaign', () => {
     expect(flight.missed).toBe(0);
     expect(flight.crashed).toBe(false);
     expect(Math.max(...FLUX_COURSE.map((ring) => fluxStatic(ring)))).toBeGreaterThan(0.3);
+  });
+
+  it('the Qualifying Heat over Kraken Mare is flown by a middling bot: three laps through every coil, over Titan’s haze and down into it, nothing missed, without a crash', () => {
+    const { flight, total } = flyRace('titan', HEAT_COURSE, HEAT_LAPS, RING_RADIUS, HEAT_SECONDS, HEAT_START.at);
+    expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
+    expect(flight.missed).toBe(0);
+    expect(flight.crashed).toBe(false);
+    // one side over the deck, the other in the haze under it
+    expect(Math.max(...HEAT_COURSE.map((ring) => ring.y))).toBeGreaterThan(0);
+    expect(Math.min(...HEAT_COURSE.map((ring) => ring.y))).toBeLessThan(-4000);
   });
 
   it('the Stickney Grand on Phobos is flown by a middling bot: three laps through every ring, down into the crater and out, nothing missed, without a crash', () => {

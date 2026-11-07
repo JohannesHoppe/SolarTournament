@@ -69,7 +69,7 @@ export function reliefOutside(relief: (x: number, z: number) => number, half: TH
   for (let x = -half.x; x <= half.x; x += step) {
     for (let z = -half.z; z <= half.z; z += step) {
       const top = relief(x, z);
-      if (top >= half.y || top <= -half.y) outside.push(`${x}, ${z}: ${top}`);
+      if (top > half.y || top < -half.y) outside.push(`${x}, ${z}: ${top}`);
     }
   }
   return outside;

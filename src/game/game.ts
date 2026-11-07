@@ -2615,7 +2615,7 @@ export class Game implements OnlineGame {
     // a planet's air: its haze in every shader that draws the world (see view/haze)
     const air = arena.layout.air ?? null;
     this.scene.fog = air ? this.haze.fog : null;
-    this.haze.setAir(air, this.landmarks.jupiter.deckLight, this.landmarks.jupiter.deepLight);
+    this.haze.setAir(air, arena.hazeLight?.deck ?? this.landmarks.jupiter.deckLight, arena.hazeLight?.deep ?? this.landmarks.jupiter.deepLight);
     this.belt.group.visible = arena.id === 'belt';
     this.mining.setSun(arena.sun.color, arena.sun.intensity);
     if (!keepWreckage) {

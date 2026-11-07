@@ -21,6 +21,10 @@ import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { europa } from './lineae';
 import { io } from './flux';
 import { ganymede } from './yards';
+import { hazeBackdrop, hazeDeck } from './kraken';
+import { SATURN_AT, SATURN_SIZE } from './titan';
+/** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
+const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
 import { JUPITER_AT as IO_JUPITER_AT, JUPITER_SIZE as IO_JUPITER_SIZE } from './io';
 import { JUPITER_AT as EUROPA_JUPITER_AT, JUPITER_SIZE as EUROPA_JUPITER_SIZE } from './europa';
@@ -847,6 +851,7 @@ export class Landmarks {
     this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
+    this.scenes.set('titan', this.titan());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -995,6 +1000,35 @@ export class Landmarks {
       material.uniforms.map.value = map;
     });
     return material;
+  }
+
+  /**
+   * Titan's sky over Kraken Mare (see world/titan): the top of the haze as a sheet at the deck,
+   * and Saturn over it from its real map, its ring seen almost from its edge (Titan's orbit lies
+   * in the ring's plane), tilted SATURN_RING_TILT off it so it shows as a thin bright line.
+   */
+  private titan(): THREE.Group {
+    const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, storms: false });
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(SATURN_SIZE, 96, 48), material);
+    planet.position.copy(SATURN_AT);
+    planet.userData.shadowless = true;
+    const inner = SATURN_SIZE * (RING_INNER / SATURN_RADIUS);
+    const outer = SATURN_SIZE * (RING_OUTER / SATURN_RADIUS);
+    const sheet = new THREE.RingGeometry(inner, outer, 256, 1);
+    const uv = sheet.attributes.uv;
+    const p = new THREE.Vector3();
+    for (let i = 0; i < uv.count; i++) {
+      p.fromBufferAttribute(sheet.attributes.position, i);
+      uv.setXY(i, (p.length() - inner) / (outer - inner), 0.5);
+    }
+    const ring = new THREE.Mesh(sheet, new THREE.MeshBasicMaterial({ map: this.maps.ring, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    // the ring's plane holds the line of sight but for a tilt: its normal square to it and nearly level
+    const sight = SATURN_AT.clone().normalize();
+    const normal = new THREE.Vector3(0, 1, 0).addScaledVector(sight, -sight.y).normalize().addScaledVector(sight, SATURN_RING_TILT).normalize();
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    ring.position.copy(SATURN_AT);
+    ring.userData.shadowless = true;
+    return new THREE.Group().add(hazeDeck(), hazeBackdrop(), planet, ring);
   }
 
   /** A moon of Jupiter beyond the field (`ground`) and Jupiter over it at `at`, `size` in radius, from its real map (see world/callisto, world/europa). */

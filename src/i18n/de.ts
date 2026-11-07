@@ -1765,4 +1765,11 @@ export const DE: Catalog = {
   "The tug crews swing blocks of ice on their cables all day. Their drill, Host: hook a block, swing round it, and let go faster than sixty-five meters a second. Three times.": "Die Schleppercrews schwingen den ganzen Tag Eisblöcke an ihren Kabeln. Ihre Übung, Host: einen Block haken, um ihn schwingen und schneller als fünfundsechzig Meter pro Sekunde loslassen. Dreimal.",
   "Three blocks, three swings. The tug crews clapped, Host. I think that was for us.": "Drei Blöcke, drei Schwünge. Die Schleppercrews haben geklatscht, Host. Ich glaube, das galt uns.",
   "Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.": "Victory Cola, Host. Jede Runde, die wir fliegen, verkauft jetzt eine Dose. Mir waren wir lieber, als keiner zugesehen hat.",
+  "Qualifying Heat": "Qualifikationslauf",
+  "Kraken Mare": "Kraken Mare",
+  "Titan’s methane sea under its orange haze, and Saturn over the haze, its ring a thin line.": "Titans Methansee unter seinem orangefarbenen Dunst, und Saturn über dem Dunst, sein Ring ein dünner Strich.",
+  "Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.": "Acht Spulen, drei Runden. Eine Seite führt über den Dunst, die andere taucht hinein: Da unten bremst uns die Luft, und sie verbirgt die nächste Spule, bis wir nah dran sind. Unter die ersten drei.",
+  "Three of them were home before us. We qualify again.": "Drei von ihnen waren vor uns im Ziel. Wir qualifizieren uns noch einmal.",
+  "Qualified. The Circuit has our name on a can now, Host.": "Qualifiziert. Der Circuit hat unseren Namen jetzt auf einer Dose, Host.",
+  "Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.": "Titan. Der Circuit von Victory Cola, jetzt wo denen deine Runden gehören. Luftrennen über dem Kraken Mare, unten im Dunst. Erst der Qualifikationslauf. Unter die ersten drei, sonst bist du nicht dabei.",
 };

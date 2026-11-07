@@ -1726,4 +1726,11 @@ export const FR: Catalog = {
   "The tug crews swing blocks of ice on their cables all day. Their drill, Host: hook a block, swing round it, and let go faster than sixty-five meters a second. Three times.": "Les équipes des remorqueurs balancent des blocs de glace au bout de leurs câbles toute la journée. Leur exercice, Hôte : accroche un bloc, tourne autour, et lâche à plus de soixante-cinq mètres par seconde. Trois fois.",
   "Three blocks, three swings. The tug crews clapped, Host. I think that was for us.": "Trois blocs, trois balancements. Les équipes ont applaudi, Hôte. Je crois que c’était pour nous.",
   "Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.": "Victory Cola, Hôte. Chaque manche que nous volons vend une canette maintenant. Je nous préférais quand personne ne regardait.",
+  "Qualifying Heat": "Manche de qualification",
+  "Kraken Mare": "Kraken Mare",
+  "Titan’s methane sea under its orange haze, and Saturn over the haze, its ring a thin line.": "La mer de méthane de Titan sous sa brume orange, et Saturne au-dessus de la brume, son anneau un trait fin.",
+  "Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.": "Huit bobines, trois tours. Un côté passe au-dessus de la brume, l’autre y plonge : là-dessous, l’air nous freine et cache la bobine suivante jusqu’à ce qu’on soit près. Dans les trois premiers.",
+  "Three of them were home before us. We qualify again.": "Trois d’entre eux sont arrivés avant nous. On se qualifie encore une fois.",
+  "Qualified. The Circuit has our name on a can now, Host.": "Qualifiés. Le Circuit a notre nom sur une canette maintenant, Hôte.",
+  "Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.": "Titan. Le Circuit de Victory Cola, maintenant qu’ils possèdent tes manches. Des courses aériennes au-dessus du Kraken Mare, dans la brume. D’abord la manche de qualification. Dans les trois premiers, ou t’es pas dedans.",
 };

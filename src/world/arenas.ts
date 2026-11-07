@@ -7,8 +7,10 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
+import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
+import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
 import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
@@ -48,7 +50,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -73,6 +75,8 @@ export interface ArenaProfile {
   grains?: number;
   /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
   sheet?: number;
+  /** The light of the haze of its air (see view/haze), right under the deck and deep down, where it is not Jupiter's (see world/jupiter). */
+  hazeLight?: { deck: THREE.Color; deep: THREE.Color };
   /** A place of the campaign: no edge, no grid; a ship may fly on into the empty dark as far as it likes. */
   open?: boolean;
   /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
@@ -443,6 +447,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.66, 0.66, 0.66],
     grade: { gain: [1, 1, 1], lift: [0.0013, 0.0013, 0.0013], saturation: 0.88 },
   },
+  // Kraken Mare: over the haze a dim, cold sky and Saturn's cream; under it all orange twilight
+  titan: {
+    space: 0x030201,
+    sky: 0xa07850,
+    ground: 0x3a2410,
+    ambient: 1.4,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.07, 0.045, 0.02], size: 540000, shape: 1, turn: 2.2 },
+      { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.03], size: 460000, shape: 0, turn: 1.1 },
+    ],
+    stars: 0.8,
+    starmap: true,
+    dust: [0.8, 0.6, 0.38],
+    grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
+  },
 };
 
 /**
@@ -616,6 +635,24 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('Jupiter'), position: GANYMEDE_JUPITER, distance: false }],
     // at the yard's edge, facing into it
     start: { at: [45000, 1000, 30000], toward: [0, 0, 0] },
+    open: true,
+  },
+  {
+    id: 'titan',
+    name: msg('Kraken Mare'),
+    tagline: msg('Titan’s methane sea under its orange haze, and Saturn over the haze, its ring a thin line.'),
+    // nothing loose: the haze, and the sea under it
+    layout: { key: 'titan', seed: 9000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [titanSea(TITAN_TYPE)], fall: TITAN_FALL, air: TITAN_AIR },
+    cooling: 1,
+    storms: false,
+    // 9.5 AU from the sun, a small cold disk
+    sun: { size: 16000, intensity: 3, color: 0xfff0dd },
+    mood: MOODS.titan,
+    hazeLight: { deck: TITAN_DECK_LIGHT, deep: TITAN_DEEP_LIGHT },
+    preview: { from: [30000, 6000, 30000], at: [0, -6000, 0] },
+    references: [{ glyph: 'planet', label: msg('Saturn'), position: TITAN_SATURN, distance: false }],
+    // over the haze, facing down into it
+    start: { at: [40000, 2000, 30000], toward: [0, -8000, 0] },
     open: true,
   },
 ];

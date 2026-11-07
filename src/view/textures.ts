@@ -16,6 +16,25 @@ export function toTexture(element: HTMLCanvasElement): THREE.CanvasTexture {
   return texture;
 }
 
+/** A square texture of `size` texels, each texel's red, green and blue (0 to 1) from `texel` (written into its `rgb`), opaque; a color texture unless `linear` (a normal map's). */
+export function pixelTexture(size: number, texel: (x: number, y: number, rgb: [number, number, number]) => void, linear = false): THREE.CanvasTexture {
+  const [element, context] = canvas(size);
+  const image = context.createImageData(size, size);
+  const rgb: [number, number, number] = [0, 0, 0];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      texel(x, y, rgb);
+      const i = (y * size + x) * 4;
+      for (let c = 0; c < 3; c++) image.data[i + c] = Math.round(255 * Math.min(1, Math.max(0, rgb[c])));
+      image.data[i + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
+  const texture = linear ? new THREE.CanvasTexture(element) : toTexture(element);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
 /** A round glow fading to transparent black, colored by the gradient stops. */
 export function radialTexture(stops: [number, string][], size = 256): THREE.CanvasTexture {
   const [element, ctx] = canvas(size);

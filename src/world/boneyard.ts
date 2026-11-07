@@ -7,7 +7,8 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, RACK_RELIEFS } from './yard';
+import { seaPiece } from './kraken';
 import { ganymedeGround } from './yards';
 import { ioGround } from './flux';
 import { europaGround, scienceStation } from './lineae';
@@ -80,6 +81,7 @@ export function rackSet(): TemplateSet {
     if (type === STATION_TYPE) return scienceStation(half);
     if (type === IO_TYPE) return ioGround(half);
     if (type === GANYMEDE_TYPE) return ganymedeGround(half);
+    if (type === TITAN_TYPE) return seaPiece(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -830,6 +832,15 @@ export function groundUv(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return macroUv(geometry, 0.5, DUST_TILE);
 }
 
+/** A square grid lying flat (in x and z) over a box's footprint (`half` its half extents), in cells of `cell` (units). */
+export function flatGrid(half: THREE.Vector3, cell: number): THREE.PlaneGeometry {
+  const cells = Math.round((half.x * 2) / cell);
+  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, cells, cells);
+  // laid flat: the plane's y into -z
+  geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
+  return geometry;
+}
+
 /** The ground's grid of a relief piece by default: cells of RELIEF_CELL (units, 75 m) over its square. */
 const RELIEF_CELL = 1500;
 
@@ -840,10 +851,7 @@ const RELIEF_CELL = 1500;
  * (RACK_RELIEFS in world/yard), so it collides as this very ground.
  */
 export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL): THREE.Group {
-  const cells = Math.round((half.x * 2) / cell);
-  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, cells, cells);
-  // laid flat: the plane's y into -z
-  geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
+  const geometry = flatGrid(half, cell);
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
   geometry.computeVertexNormals();
