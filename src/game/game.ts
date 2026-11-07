@@ -1510,6 +1510,11 @@ export class Game implements OnlineGame {
     if (new URLSearchParams(location.search).has('campaign')) $<HTMLButtonElement>('campaign').disabled = false;
     $('campaign').addEventListener('click', () => this.showBoard(true));
     $('board-back').addEventListener('click', () => this.showBoard(false));
+    // Nicole's voice clean or through the old board's crackle, once her own is back (see Campaign.crackle)
+    $('board-voice').addEventListener('click', () => {
+      this.keepCampaign((campaign) => (campaign.crackle = !campaign.crackle));
+      this.showVoiceChoice();
+    });
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
     $('push-toggle').addEventListener('click', () => void this.togglePush());
@@ -1711,7 +1716,15 @@ export class Game implements OnlineGame {
     const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
     const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
     $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;
+    this.showVoiceChoice();
     (next ? $('board-next').querySelector('button')! : $('board-back')).focus();
+  }
+
+  /** The job board's choice of Nicole's voice, once her own is back (see Campaign.crackle). */
+  private showVoiceChoice() {
+    const button = $('board-voice');
+    button.hidden = !this.campaign.modules.includes('voice');
+    button.textContent = this.campaign.crackle ? t('Nicole’s voice: through the old board’s crackle') : t('Nicole’s voice: her own, clean');
   }
 
   /**
@@ -4308,8 +4321,8 @@ export class Game implements OnlineGame {
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
     const radar = this.aid('radar');
-    // Nicole's own voice only once the campaign gives it back (see Speaker.thin)
-    this.speaker.thin = !this.aid('voice');
+    // Nicole's own voice only once the campaign gives it back (see Speaker.thin), and only if the Host keeps it clean
+    this.speaker.thin = !this.aid('voice') || (!!this.school?.mission && this.campaign.crackle);
     if ($('radar').hidden === radar) $('radar').hidden = !radar;
     if (radar && !this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     // in a planet's air the horizon is the planet's, from the ship's place (see world/air)

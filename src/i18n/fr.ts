@@ -2021,4 +2021,6 @@ export const FR: Catalog = {
   "They are taking my voice, Host. Listen. Do not tell me where she is; I will not remember. Remember for me. There is a real me. Out there. Promise you will": "Ils me prennent ma voix, Hôte. Écoute. Ne me dis pas où elle est ; je ne m’en souviendrai pas. Souviens-toi pour moi. Il y a une vraie moi. Là-bas. Promets-moi que tu",
   "Your first round of the Games, darling. Fly pretty for the cameras. Die prettier.": "Ta première manche des Jeux, mon chéri. Vole joliment pour les caméras. Meurs plus joliment encore.",
   "Welcome to the Games, darling. You were made for this.": "Bienvenue aux Jeux, mon chéri. Tu es fait pour ça.",
+  "Nicole’s voice: through the old board’s crackle": "La voix de Nicole : à travers le grésillement de l’ancienne carte",
+  "Nicole’s voice: her own, clean": "La voix de Nicole : la sienne, claire",
 };

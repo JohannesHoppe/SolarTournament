@@ -326,7 +326,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 
 In every stage before the Ministry's she calls the Host "Host", and she never flirts. The Host should still hear the tournament's Nicole in her, and wonder what the Ministry did to her to make the other one.
 
-After chapter 10 the campaign's hangar lets the Host choose the radio filter of her voice (salvage crackle or clean), as a look only.
+After chapter 10 the campaign's hangar lets the Host choose the radio filter of her voice (salvage crackle or clean), as a look only (built: a button on the job board).
 
 ---
 

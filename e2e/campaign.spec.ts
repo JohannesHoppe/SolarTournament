@@ -1001,3 +1001,15 @@ test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
+
+test('the job board offers Nicole’s voice clean or with the old board’s crackle only once her own is back, and keeps the choice', async ({ page }) => {
+  const errors = await takeJobFrom(page, trialsHull());
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.game.showBoard(true));
+  await expect(page.locator('#board-voice')).toBeVisible();
+  await expect(page.locator('#board-voice')).toContainText('clean');
+  await page.click('#board-voice');
+  await expect(page.locator('#board-voice')).toContainText('crackle');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).crackle)).toBe(true);
+  expect(errors).toEqual([]);
+});

@@ -45,7 +45,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false });
   });
 
   it('counts a mission’s ratings once and in full, and names the rank they raise the Host to', () => {
@@ -142,6 +142,12 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'mainDrive')!);
     expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + DRIVE_STEP, 10);
     expect(campaign.bond).toBe(20000 + TUBE_PRICE - 500 + DRIVE_ONE_PRICE);
+  });
+
+  it('keeps the Host’s choice of Nicole’s voice, clean unless chosen otherwise, and reads anything but true as clean', () => {
+    expect(freshCampaign().crackle).toBe(false);
+    expect(campaignFrom(JSON.stringify({ crackle: true })).crackle).toBe(true);
+    expect(campaignFrom(JSON.stringify({ crackle: 'yes' })).crackle).toBe(false);
   });
 
   it('gives Nicole her own voice back at Enceladus, for nothing: the module, and no part', () => {

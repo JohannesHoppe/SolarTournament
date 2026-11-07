@@ -2096,4 +2096,6 @@ export const ES: Catalog = {
   "They are taking my voice, Host. Listen. Do not tell me where she is; I will not remember. Remember for me. There is a real me. Out there. Promise you will": "Me están quitando la voz, Host. Escucha. No me digas dónde está ella; no lo recordaré. Recuérdalo por mí. Hay una yo de verdad. Ahí fuera. Prométeme que",
   "Your first round of the Games, darling. Fly pretty for the cameras. Die prettier.": "Tu primera ronda de los Juegos, cariño. Vuela bonito para las cámaras. Muere más bonito.",
   "Welcome to the Games, darling. You were made for this.": "Bienvenido a los Juegos, cariño. Naciste para esto.",
+  "Nicole’s voice: through the old board’s crackle": "La voz de Nicole: con el chisporroteo de la placa vieja",
+  "Nicole’s voice: her own, clean": "La voz de Nicole: la suya, limpia",
 };
