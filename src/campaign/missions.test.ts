@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { RACE_SPEED } from '../ship/bots';
+import { evenSkills, RACE_SPEED, raceSpeedOf } from '../ship/bots';
 import { RacingLine } from '../game/racingline';
 import { type Attempt, clearOfRock, PIPE_BORE, RING_RADIUS, type SchoolContext } from '../game/school';
 import { arenaById } from '../world/arenas';
@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD } from './missions';
 import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
@@ -46,7 +46,7 @@ function expectRaced(arena: string, course: readonly THREE.Vector3[], laps: numb
  * coil of `course` along its normal, every one of them inside the arena, within the clock `time`
  * after the first (the burn up to it, 1 km from rest, takes some 6 s more), without a miss or a crash.
  */
-function flyTrial(arena: string, course: readonly THREE.Vector3[], normals: readonly THREE.Vector3[], from: readonly [number, number, number], time: number) {
+function flyTrial(arena: string, course: readonly THREE.Vector3[], normals: readonly THREE.Vector3[], from: readonly [number, number, number], time: number, skill = SKILL): number {
   const field = testField(DETAIL);
   field.generate(arenaById(arena as never)!.layout);
   const start = new THREE.Vector3(...from);
@@ -54,11 +54,25 @@ function flyTrial(arena: string, course: readonly THREE.Vector3[], normals: read
   expect(start.length()).toBeLessThan(ARENA_LIMIT);
   const points = course.map((coil) => coil.clone());
   const line = new RacingLine(points, false, start);
-  const flight = flyRings(field, { points, normals: normals.map((normal) => normal.clone()), radius: RING_RADIUS, core: BOOST_RADIUS, line, open: false }, start, normals[0], SKILL, RACE_SPEED, time + 6);
+  // when the first coil's plane is crossed the way it faces: the trial's clock starts there
+  let flown = 0;
+  let first = NaN;
+  let side = NaN;
+  const clock = (flight: { position: THREE.Vector3 }, step: number) => {
+    flown += step;
+    const now = trialSide.copy(flight.position).sub(course[0]).dot(normals[0]);
+    if (Number.isNaN(first) && side < 0 && now >= 0) first = flown;
+    side = now;
+    return false;
+  };
+  const speed = skill === SKILL ? RACE_SPEED : raceSpeedOf(evenSkills(skill));
+  const flight = flyRings(field, { points, normals: normals.map((normal) => normal.clone()), radius: RING_RADIUS, core: BOOST_RADIUS, line, open: false }, start, normals[0], skill, speed, time + 6, 0, clock);
   expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(1)} s`).toBe(points.length);
   expect(flight.missed).toBe(0);
   expect(flight.crashed).toBe(false);
+  return flight.seconds - first;
 }
+const trialSide = new THREE.Vector3();
 
 /**
  * A middling bot flies a mission's race at `arena`: every lap through every mark of `course`
@@ -121,6 +135,19 @@ describe('the races of the campaign', () => {
 
   it('the Geyser Field on Triton is flown by a middling bot: past every geyser through its coil to the Memorial Station, the clock beaten, the columns pushing it as they push every ship, without a crash', () => {
     flyTrial('triton', GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START.at, GEYSER_TIME);
+  });
+
+  it('every time trial’s gold time is a feat: a sharp bot (0.9) flies within it, a middling one within the limit but not the gold', () => {
+    for (const [arena, course, normals, from, time, gold] of [
+      ['callisto', SPRINT_COURSE, SPRINT_COURSE.map(() => new THREE.Vector3(-1, 0, 0)), SPRINT_START.at, SPRINT_TIME, SPRINT_GOLD],
+      ['enceladus', TIGER_COURSE, TIGER_NORMALS, TIGER_START.at, TIGER_TIME, TIGER_GOLD],
+      ['triton', GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START.at, GEYSER_TIME, GEYSER_GOLD],
+    ] as const) {
+      const middling = flyTrial(arena, course, normals, from, time);
+      expect(middling, arena).toBeLessThanOrEqual(time);
+      expect(middling, arena).toBeGreaterThan(gold);
+      expect(flyTrial(arena, course, normals, from, time, 0.9), arena).toBeLessThanOrEqual(gold);
+    }
   });
 
   it('the race in Haumea’s ring is flown by a middling bot: both laps between the beacons among the ring’s ice, nothing missed, without a crash', () => {

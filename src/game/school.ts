@@ -106,6 +106,8 @@ export interface SchoolContext {
   removeWingman(): void;
   /** Spare's skills: the Host's own habits in the campaign's fights up to Io (see campaign/campaign, spareSkills). */
   readonly spare: Skills;
+  /** The running time trial was flown within its gold time (see Drill.gold): the job's gold is won once the mission is done. */
+  goldTime(): void;
   /** A piece of a comet's shower strikes a hull at `at`, flying along `direction` (the own unless `ship` names another, a drill's Scout One): as hard as a piece of the Games' shower (see Game.cometStrike). */
   pelt(at: THREE.Vector3, direction: THREE.Vector3, ship?: Ship): void;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
@@ -249,6 +251,8 @@ export interface Drill {
   autopilotAfter?: boolean;
   /** While true, the autopilot leaves the drift across the nose alone: the drill's drift is the point. */
   keepsDrift?(ctx: SchoolContext, attempt: Attempt): boolean;
+  /** A time trial's gold time (s, from its first coil to its last): flown within it, the job's gold is won (see SchoolContext.goldTime). */
+  gold?: number;
   /** The drill's ship (the drone, see SchoolContext.spawnDrone) is there to be towed: the hook bites it (it passes over a target drone otherwise). */
   towsDrone?: boolean;
   /** The drill does not apply to the Host's device: it is passed over without a word. */

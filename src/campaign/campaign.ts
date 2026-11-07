@@ -246,10 +246,34 @@ export interface Campaign {
   habits: Habits;
   /** The jobs flown clean, each worth its medal's bonus once (see medal). */
   medals: MissionId[];
+  /** The time trials flown within their gold time, each worth its bonus once (see gold). */
+  golds: MissionId[];
 }
 
-/** A medal's bonus: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
+/** A medal's bonus, and a gold time's: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
 export const MEDAL_SHARE = 0.25;
+
+/** A job's gold time (s), the gold of its time trial (see Drill.gold); null for a job without one. */
+export const goldOf = (mission: Mission): number | null => mission.drills.find((drill) => drill.gold !== undefined)?.gold ?? null;
+
+/** The bonus a medal or a gold pays, less the yard's cut while the debt is unpaid: paid into the wallet, the bonus kept returned. */
+function bonusOf(campaign: Campaign, mission: Mission): number {
+  const bonus = Math.round(mission.pay * MEDAL_SHARE);
+  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(bonus * YARD_CUT));
+  campaign.bond -= cut;
+  campaign.coins += bonus - cut;
+  return bonus - cut;
+}
+
+/**
+ * A time trial flown within its gold time (see goldOf) wins the job's gold, the first time or on
+ * any flight again: its bonus paid once, as a medal's. The bonus kept, or null for none won now.
+ */
+export function gold(campaign: Campaign, mission: Mission, golden: boolean): number | null {
+  if (!golden || goldOf(mission) === null || campaign.golds.includes(mission.id)) return null;
+  campaign.golds.push(mission.id);
+  return bonusOf(campaign, mission);
+}
 
 /** Whether a job has a medal to win: one that pays, flown on the flight school's drills (a trial's round is judged by its place). */
 export const hasMedal = (mission: Mission) => mission.pay > 0 && !mission.trial;
@@ -262,11 +286,7 @@ export const hasMedal = (mission: Mission) => mission.pay > 0 && !mission.trial;
 export function medal(campaign: Campaign, mission: Mission, clean: boolean): number | null {
   if (!clean || !hasMedal(mission) || campaign.medals.includes(mission.id)) return null;
   campaign.medals.push(mission.id);
-  const bonus = Math.round(mission.pay * MEDAL_SHARE);
-  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(bonus * YARD_CUT));
-  campaign.bond -= cut;
-  campaign.coins += bonus - cut;
-  return bonus - cut;
+  return bonusOf(campaign, mission);
 }
 
 /**
@@ -311,7 +331,7 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [] });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -332,7 +352,9 @@ export function campaignFrom(text: string | null): Campaign {
     const habits = { shots, hits: Math.min(shots, number(fought.hits, 0, HABITS_MAX)), fight, near: Math.min(fight, number(fought.near, 0, HABITS_MAX)) };
     // a medal only for a job done that has one
     const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals };
+    // a gold only for a job done with a gold time
+    const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds };
   } catch {
     return fresh;
   }

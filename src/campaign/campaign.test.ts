@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, hasMedal, medal, MEDAL_SHARE } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE } from './campaign';
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
@@ -68,7 +68,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [] });
     // a medal only for a job done that has one
     const paying = MISSIONS.find((mission) => hasMedal(mission))!;
     const unpaid = MISSIONS.find((mission) => !hasMedal(mission))!;
@@ -98,6 +98,19 @@ describe('the campaign Lot 7731', () => {
     expect(medal(held, job, true)).toBe(bonus);
     // a job that pays nothing, or a trial, has none
     for (const mission of MISSIONS.filter((m) => m.pay === 0 || m.trial)) expect(medal(freshCampaign(), mission, true)).toBeNull();
+  });
+
+  it('pays a time trial’s gold once, for its gold time, and only a job with a gold time has one', () => {
+    const campaign = { ...freshCampaign(), held: true };
+    const trial = MISSIONS.find((mission) => goldOf(mission) !== null)!;
+    expect(gold(campaign, trial, false)).toBeNull();
+    expect(gold(campaign, trial, true)).toBe(Math.round(trial.pay * MEDAL_SHARE));
+    expect(gold(campaign, trial, true)).toBeNull();
+    expect(campaign.golds).toEqual([trial.id]);
+    for (const mission of MISSIONS.filter((m) => goldOf(m) === null)) expect(gold(freshCampaign(), mission, true)).toBeNull();
+    // every gold time lies within its trial's time limit
+    expect(MISSIONS.filter((m) => goldOf(m) !== null).map((m) => m.id).sort()).toEqual(['geyserField', 'tigerStripes', 'valhallaSprint']);
+    expect(campaignFrom(JSON.stringify({ done: [trial.id, MISSIONS[0].id], golds: [trial.id, MISSIONS[0].id] })).golds).toEqual([trial.id]);
   });
 
   it('lets Spare fight as the Host fought until Io: its aim by the hits, its daring by the time up close, fair either way', () => {

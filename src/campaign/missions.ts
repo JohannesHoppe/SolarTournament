@@ -914,6 +914,8 @@ const helloHost = duel({ line: CAMPAIGN.helloHost, arena: 'enceladus', name: 'Sp
 const TIGER_PER_STRIPE = 2;
 const TIGER_OVER = 3200;
 export const TIGER_TIME = 75;
+/** The gold time (s): between a middling bot's 72 s and a sharp one's 64 s (see missions.test.ts). */
+export const TIGER_GOLD = 66;
 const VENTS_PER = VENTS.length / STRIPE_NAMES.length;
 export const TIGER_COURSE = STRIPE_NAMES.flatMap((_, k) => {
   const coils = [1, 3].map((i) => VENTS[k * VENTS_PER + i].clone().setY(ENCELADUS_LAND + TIGER_OVER));
@@ -924,7 +926,7 @@ export const TIGER_NORMALS = TIGER_COURSE.map((_, i) => STRIPE_WAY.clone().multi
 const TIGER_FROM = TIGER_COURSE[0].clone().addScaledVector(STRIPE_WAY, -20000);
 export const TIGER_START = { at: [TIGER_FROM.x, TIGER_FROM.y, TIGER_FROM.z] as const, toward: [TIGER_COURSE[0].x, TIGER_COURSE[0].y, TIGER_COURSE[0].z] as const };
 
-const tigerStripes = timeTrial({ line: CAMPAIGN.tigerStripes, arena: 'enceladus', points: TIGER_COURSE, normals: TIGER_NORMALS, time: TIGER_TIME, missed: CAMPAIGN.tigerStripesMissed, slow: CAMPAIGN.tigerStripesSlow });
+const tigerStripes = timeTrial({ line: CAMPAIGN.tigerStripes, arena: 'enceladus', points: TIGER_COURSE, normals: TIGER_NORMALS, time: TIGER_TIME, gold: TIGER_GOLD, missed: CAMPAIGN.tigerStripesMissed, slow: CAMPAIGN.tigerStripesSlow });
 
 /** Main drive II and Radiators II (11.2), paid by the Ministry's money: each the hangar's second step (see hullOf), at DRIVE_TWO_PRICE each. */
 const fitDriveTwo = (campaign: Campaign) => {
@@ -1736,6 +1738,8 @@ const SPRINT_FROM = 62000;
 const SPRINT_GAP = 20000;
 const SPRINT_OVER = 2000;
 export const SPRINT_TIME = 25;
+/** The gold time (s): between a middling bot's 23 s and a sharp one's 20 s (see missions.test.ts). */
+export const SPRINT_GOLD = 21;
 const SPRINT_WAY = point(-1, 0, 0);
 const SPRINT_HEIGHT = (() => {
   let highest = -Infinity;
@@ -1750,11 +1754,12 @@ export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, towa
  * order, each through its face along `normals`; the first counts only flown along its normal, so
  * a pilot coming back to start over turns first; the clock starts at the first coil, and every
  * coil after it within `time` wins; each coil's core throws the ship on along it, a coil missed
- * (`missed`) or the clock run out (`slow`) starts it over.
+ * (`missed`) or the clock run out (`slow`) starts it over; within `gold` the job's gold is won.
  */
-function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; missed: string; slow: string }): Drill {
+function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string }): Drill {
   return {
     line: spec.line,
+    gold: spec.gold,
     keys: ['drive', 'turn'],
     arena: spec.arena,
     music: 'fight',
@@ -1779,7 +1784,10 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
       markers.highlight(a.next);
       if (off < RING_RADIUS * CORE_SHARE) ctx.boost(a.normals[a.next - 1]);
       if (a.next === 1) a.clockFrom = a.seconds;
-      return a.next >= a.points.length;
+      if (a.next < a.points.length) return false;
+      // the last coil within the gold time: the job's gold (see campaign/campaign, gold)
+      if (a.seconds - a.clockFrom <= spec.gold) ctx.goldTime();
+      return true;
     },
     fail: (_, a) => (a.warned ? spec.missed : a.seconds - a.clockFrom > spec.time ? spec.slow : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
@@ -1787,7 +1795,7 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
   };
 }
 
-const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
+const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
 /** Radiators I (5.5): a tug yard's radiators of the first grade, a step up (see hullOf), at RADIATORS_PRICE. */
 const fitRadiators = (campaign: Campaign) => {
@@ -2531,6 +2539,8 @@ const GEYSER_FROM = point(48000, TRITON_LAND + 3000, 36000);
 const GEYSER_OFF = GEYSER_RADIUS + 2400;
 const GEYSER_OVER = 3000;
 export const GEYSER_TIME = 60;
+/** The gold time (s): between a middling bot's 44 s and a sharp one's 41 s (see missions.test.ts). */
+export const GEYSER_GOLD = 42;
 const GEYSER_WAY = new THREE.Vector3().subVectors(MEMORIAL_AT, GEYSER_FROM).setY(0).normalize();
 const GEYSER_SIDE = new THREE.Vector3(-GEYSER_WAY.z, 0, GEYSER_WAY.x);
 /** The geysers on the way, in the order the way passes them: those within GEYSER_LANE of its line (units, 1.5 km). */
@@ -2549,7 +2559,7 @@ export const GEYSER_COURSE = (() => {
 export const GEYSER_NORMALS = GEYSER_COURSE.map((coil, i) => coil.clone().sub(i ? GEYSER_COURSE[i - 1] : GEYSER_FROM).setY(0).normalize());
 export const GEYSER_START = { at: [GEYSER_FROM.x, GEYSER_FROM.y, GEYSER_FROM.z] as const, toward: [GEYSER_COURSE[0].x, GEYSER_COURSE[0].y, GEYSER_COURSE[0].z] as const };
 
-const geyserField = timeTrial({ line: CAMPAIGN.geyserField, arena: 'triton', points: GEYSER_COURSE, normals: GEYSER_NORMALS, time: GEYSER_TIME, missed: CAMPAIGN.geyserFieldMissed, slow: CAMPAIGN.geyserFieldSlow });
+const geyserField = timeTrial({ line: CAMPAIGN.geyserField, arena: 'triton', points: GEYSER_COURSE, normals: GEYSER_NORMALS, time: GEYSER_TIME, gold: GEYSER_GOLD, missed: CAMPAIGN.geyserFieldMissed, slow: CAMPAIGN.geyserFieldSlow });
 
 /**
  * The Memorial (14.3): the bow's bridge tower (see world/bridgetower), torn off and drifting in the
