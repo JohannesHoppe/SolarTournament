@@ -975,3 +975,25 @@ test('First Death: Perihelion and four Navy fighters, Spare on the Host’s side
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('firstDeath')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over the dome; kept to it, the parade is flown', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath', 'lastOrbit', 'theDeal'));
+  await page.waitForFunction(() => window.game.venue?.id === 'ballroom' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await page.evaluate(
+    async ([path]) => {
+      const { slotAt } = (await import(path)) as typeof import('../src/campaign/missions');
+      const game = window.game;
+      const slot = game.me.flight.position.clone();
+      const start = game.time;
+      while (game.school?.stepIndex === 0 && game.time - start < 90) {
+        game.me.flight.position.copy(slotAt(game.school.attempt?.seconds ?? 0, slot));
+        game.me.flight.velocity.set(0, 0, 0);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    },
+    ['/src/campaign/missions.ts'] as const,
+  );
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});

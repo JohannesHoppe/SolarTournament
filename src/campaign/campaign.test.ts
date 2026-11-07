@@ -158,7 +158,7 @@ describe('the campaign Lot 7731', () => {
     expect(trialPassed({ mode: 'flag', arena: 'rings', podium: 1 }, outcome)).toBe(false);
     expect(trialPassed({ mode: 'flag', arena: 'rings', podium: 1 }, { ...outcome, sideLeads: true })).toBe(true);
     expect(trialPassed({ mode: 'fleet', arena: 'rings', podium: 1 }, { ...outcome, battleshipDown: true })).toBe(true);
-    expect(MISSIONS.filter((mission) => mission.trial).map((mission) => mission.trial!.mode)).toEqual(['race', 'deathmatch', 'flag', 'fleet']);
+    expect(MISSIONS.filter((mission) => mission.trial).map((mission) => mission.trial!.mode)).toEqual(['race', 'deathmatch', 'flag', 'fleet', 'deathmatch']);
   });
 
   it('fits the overdrive and Thrusters II at Miranda, Thrusters III after the Derelict: the Loose’s hack, and the thrusters two steps past stock, each paid as the laser is', () => {

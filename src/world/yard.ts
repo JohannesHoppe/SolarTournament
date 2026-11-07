@@ -15,6 +15,7 @@ import { GROUND_HALF as IAPETUS_HALF, groundRelief as iapetusRelief } from './ia
 import { GROUND_HALF as MIRANDA_HALF, groundRelief as mirandaRelief } from './miranda';
 import { GROUND_HALF as TRITON_HALF, groundRelief as tritonRelief } from './triton';
 import { GROUND_HALF as PLUTO_HALF, groundRelief as plutoRelief } from './pluto';
+import { DOME_HALF, GROUND_HALF as MOON_HALF, groundRelief as moonRelief } from './moon';
 import type { Relief } from './asteroids';
 
 /**
@@ -146,8 +147,8 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
  * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
  * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the places after them in PLACE_BOXES.
  */
-/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io), Ganymede's under the Tug Yards (see world/ganymede), the sea of Kraken Mare on Titan (see world/titan), Enceladus's polar plain at the Plumes (see world/enceladus), Iapetus's ridge at Two Faces (see world/iapetus), Miranda's cliff at Verona (see world/miranda), Triton's plain at Memorial and the Navy's Memorial Station on it (see world/triton), Pluto's heart at Last Light (see world/pluto). */
-const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF, GANYMEDE_HALF, SEA_HALF, ENCELADUS_HALF, IAPETUS_HALF, MIRANDA_HALF, TRITON_HALF, POST_HALF, PLUTO_HALF];
+/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io), Ganymede's under the Tug Yards (see world/ganymede), the sea of Kraken Mare on Titan (see world/titan), Enceladus's polar plain at the Plumes (see world/enceladus), Iapetus's ridge at Two Faces (see world/iapetus), Miranda's cliff at Verona (see world/miranda), Triton's plain at Memorial and the Navy's Memorial Station on it (see world/triton), Pluto's heart at Last Light (see world/pluto), the Moon's plain at the Ballroom and the Ballroom's dome on it (see world/moon). */
+const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF, GANYMEDE_HALF, SEA_HALF, ENCELADUS_HALF, IAPETUS_HALF, MIRANDA_HALF, TRITON_HALF, POST_HALF, PLUTO_HALF, MOON_HALF, DOME_HALF];
 export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, ...PLACE_BOXES];
 /** The template of the slope under Vesta's claims in the yards' set. */
 export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
@@ -183,7 +184,11 @@ export const TRITON_TYPE = WALL_TYPE + 12;
 export const MEMORIAL_TYPE = WALL_TYPE + 13;
 /** Pluto's ground at Last Light (see world/pluto): a box whose top is its relief, the heart's cells and the mountains beside it. */
 export const PLUTO_TYPE = WALL_TYPE + 14;
-/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's, Io's, Ganymede's, Enceladus's, Iapetus's, Miranda's, Triton's and Pluto's, and Titan's sea. */
+/** The Moon's ground at the Ballroom (see world/moon): a box whose top is its relief. */
+export const MOON_TYPE = WALL_TYPE + 15;
+/** The Ballroom's dome on the Moon (see world/moon). */
+export const BALLROOM_TYPE = WALL_TYPE + 16;
+/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's, Io's, Ganymede's, Enceladus's, Iapetus's, Miranda's, Triton's, Pluto's and the Moon's, and Titan's sea. */
 const RELIEFS = new Map<number, Relief>([
   [PHOBOS_TYPE, groundRelief],
   [CALLISTO_TYPE, callistoRelief],
@@ -196,6 +201,7 @@ const RELIEFS = new Map<number, Relief>([
   [MIRANDA_TYPE, mirandaRelief],
   [TRITON_TYPE, tritonRelief],
   [PLUTO_TYPE, plutoRelief],
+  [MOON_TYPE, moonRelief],
 ]);
 export const RACK_RELIEFS: readonly (Relief | null)[] = RACK_BOXES.map((_, type) => RELIEFS.get(type) ?? null);
 

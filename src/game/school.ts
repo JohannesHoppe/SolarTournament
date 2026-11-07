@@ -1725,11 +1725,13 @@ export class Markers {
   }
 
   /** A faint wire sphere around a point: the zone a drill wants the ship in. */
-  zone(position: THREE.Vector3, radius: number) {
+  zone(position: THREE.Vector3, radius: number): THREE.Mesh {
     const mesh = new THREE.Mesh(this.zoneGeometry, this.dim);
     mesh.scale.setScalar(radius);
     mesh.position.copy(position);
     this.root.add(mesh);
+    // a drill may move it on (the Parade's slot)
+    return mesh;
   }
 
   ring(position: THREE.Vector3, normal: THREE.Vector3) {

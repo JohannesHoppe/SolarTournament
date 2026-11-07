@@ -211,9 +211,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 19.1 | The Parade | formation | Fly with the other new Hosts' clones through ten of the Ministry's rings over the Ballroom's dome, Earth hanging above, staying within 60 m of the Magpie's slot marker. | · 500 | Rings; a moving marker |
-| 19.2 | Certification | story | The firmware. | — | A scene |
-| 19.3 | Your First Round | Games | A round of the Games in any arena and mode, in the Magpie. | the Magpie unlocked | The tournament |
+| 19.1 | The Parade | formation | Fly with the other new Hosts' clones through ten of the Ministry's rings over the Ballroom's dome, Earth hanging above, staying within 60 m of the Magpie's slot marker. (built: the slot moving along the rings; the other new Hosts' clones still to come) | · 500 | Rings; a moving marker |
+| 19.2 | Certification | story | The firmware. (built, over the comm: Nicole's last words in her own voice, then the Ministry's) | — | A scene |
+| 19.3 | Your First Round | Games | A round of the Games in any arena and mode, in the Magpie. (built: a deathmatch in the Rings, as the Ring Trials are flown; the Magpie for the tournament still to come) | the Magpie unlocked | The tournament |
 
 ### Side jobs on every job board
 
@@ -1054,7 +1054,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **QUILL**: Host! Congratulations on completing your Final Trial! Your ratings are, and I quote the Ministry's own figure, the highest since the Memorial Games. The President watched. He would love to meet you. Form one A, admission. Three tiny conditions. One, you forget what you found. Two, your flight computer is certified to the Ministry's current firmware. Three, we keep the stray. He's being admitted too, in a sense. Oh, and your debt! The Ministry has held it since Phobos. Your benefactor, that's us! Admission settles it. Sign here, and you will never owe anyone a coin again.
 
-### The Ballroom (chapter 19)
+### The Ballroom (chapter 19, built: Nicole's lines; the President's in person still to come)
 
 **PRESIDENT** *(radio)*: new hosts. tremendous hosts. i picked them myself
 

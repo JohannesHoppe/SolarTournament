@@ -7,11 +7,12 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
 import { CHARON_AT, groundPlacement as plutoGround, PLUTO_FALL } from './pluto';
+import { domePlacement, EARTH_AT as MOON_EARTH, groundPlacement as moonGround, MOON_FALL } from './moon';
 import { DEPOT_AT, ERIS_AT, HAUMEA_AT } from './ladder';
 import { COMET_AT, GRANARY_AT, KILN_MARK, LANTERN_AT } from './granary';
 import { GEYSER_COLUMNS, groundPlacement as tritonGround, memorialPlacement, NEPTUNE_AT, STATION_AT as MEMORIAL_AT, TRITON_FALL } from './triton';
@@ -57,7 +58,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -564,6 +565,21 @@ const MOODS: Record<ArenaId, Mood> = {
   eris: LADDER_MOOD,
   lantern: LADDER_MOOD,
   granary: LADDER_MOOD,
+  // the Ballroom: grey regolith under a black sky, Earth's blue over it, the dome's warm gold
+  ballroom: {
+    space: 0x010102,
+    sky: 0x8090a8,
+    ground: 0x2a2a2c,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.03, 0.035, 0.05], size: 540000, shape: 2, turn: 2.3 },
+      { at: [0.6, 0.3, 0.6], color: [0.05, 0.04, 0.03], size: 460000, shape: 1, turn: 1.0 },
+    ],
+    stars: 0.85,
+    starmap: true,
+    dust: [0.7, 0.7, 0.7],
+    grade: { gain: [1.02, 1, 0.98], lift: [0.0013, 0.0013, 0.0013], saturation: 0.95 },
+  },
 };
 
 /**
@@ -922,6 +938,23 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // at the store's near side, facing into it
     start: { at: [55000, 0, 35000], toward: [0, 0, 0] },
+    open: true,
+  },
+  {
+    id: 'ballroom',
+    name: msg('The Ballroom'),
+    tagline: msg('The President’s ballroom on the Moon, a dome of gold and glass on the grey plain, and Earth hanging over it.'),
+    // nothing loose: the plain, its craters and the dome
+    layout: { key: 'ballroom', seed: 19000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [moonGround(MOON_TYPE), domePlacement(BALLROOM_TYPE)], fall: MOON_FALL },
+    cooling: 1,
+    storms: false,
+    // at Earth's distance from the sun
+    sun: { size: 30000, intensity: 3.4, color: 0xfff4e6 },
+    mood: MOODS.ballroom,
+    preview: { from: [30000, 6000, 30000], at: [0, -12000, 0] },
+    references: [{ glyph: 'planet', label: msg('Earth'), position: MOON_EARTH, distance: false }],
+    // over the plain, facing the dome
+    start: { at: [50000, 0, 30000], toward: [0, -12000, 0] },
     open: true,
   },
 ];

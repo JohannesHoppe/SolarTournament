@@ -14,6 +14,7 @@ import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from 
 import { iceTug, sulfurFreighter, tug } from '../world/barge';
 import { DEPOT_AT } from '../world/ladder';
 import { COMET_AT, COURIER_BUOYS, inSensor } from '../world/granary';
+import { DOME_HEIGHT, surfaceHeight as moonHeight } from '../world/moon';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
@@ -1322,6 +1323,55 @@ const firstDeath: Drill = {
 
 /** Orbit (18.5): the Magpie flown into a stable orbit about the hole inside the disk's glare, as the flight school's orbit drill asks. */
 const lastOrbit: Drill = { ...DRILL.orbit, line: CAMPAIGN.lastOrbit, praise: undefined };
+
+/**
+ * The Parade (19.1): ten of the Ministry's rings in a line over the Ballroom's dome, PARADE_OVER
+ * over its crown; the Magpie's slot (a zone of SLOT_REACH, 60 m) moves along them at PARADE_SPEED
+ * (units/s, 100 m/s) from PARADE_FROM to PARADE_TO; out of the slot SLOT_GRACE seconds in a row
+ * breaks formation and starts it over; the slot at the line's end wins.
+ */
+const PARADE_RINGS = 10;
+const PARADE_OVER = 6000;
+const PARADE_SPEED = 2000;
+const SLOT_REACH = 1200;
+const SLOT_GRACE = 3;
+const PARADE_HEIGHT = moonHeight(0, 0) + DOME_HEIGHT + PARADE_OVER;
+export const PARADE_FROM = point(62000, PARADE_HEIGHT, 0);
+export const PARADE_TO = point(-62000, PARADE_HEIGHT, 0);
+const PARADE_WAY = point(-1, 0, 0);
+export const PARADE_COURSE = Array.from({ length: PARADE_RINGS }, (_, k) => new THREE.Vector3().lerpVectors(PARADE_FROM, PARADE_TO, (k + 0.5) / PARADE_RINGS));
+const slotNow = new THREE.Vector3();
+let slotMark: THREE.Mesh | null = null;
+
+/** Where the slot is `seconds` after the parade set out, stopped at the line's end. */
+export function slotAt(seconds: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.lerpVectors(PARADE_FROM, PARADE_TO, Math.min(1, (seconds * PARADE_SPEED) / PARADE_FROM.distanceTo(PARADE_TO)));
+}
+
+const parade: Drill = {
+  line: CAMPAIGN.parade,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'ballroom',
+  autopilot: true,
+  enter(ctx, a, markers) {
+    stop(ctx);
+    markers.clear();
+    for (const ring of PARADE_COURSE) markers.ring(ring, PARADE_WAY);
+    slotMark = markers.zone(slotAt(0, slotNow), SLOT_REACH);
+    ctx.me.flight.position.copy(PARADE_FROM);
+    // a.held: the seconds out of the slot in a row
+    a.held = 0;
+  },
+  done(ctx, a) {
+    slotAt(a.seconds, slotNow);
+    slotMark?.position.copy(slotNow);
+    a.held = ctx.me.flight.position.distanceTo(slotNow) > SLOT_REACH ? a.held + ctx.dt : 0;
+    return slotNow.distanceTo(PARADE_TO) < 1 && ctx.me.flight.position.distanceTo(slotNow) <= SLOT_REACH;
+  },
+  fail: (_, a) => (a.held >= SLOT_GRACE ? CAMPAIGN.paradeLost : null),
+  waypoint: () => slotNow,
+  mark: (ctx) => t('Slot · {meters} m', { meters: Math.round(ctx.me.flight.position.distanceTo(slotNow) * 0.05) }),
+};
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
@@ -2718,4 +2768,8 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, said(CAMPAIGN.firstDeathDone, 'hole')], pay: 0, ratings: 1500 },
   { id: 'lastOrbit', name: msg('Orbit'), drills: [lastOrbit, said(CAMPAIGN.lastOrbitDone, 'hole')], pay: 0, ratings: 2000 },
   { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },
+  // chapter 19, the Ballroom: the parade over the President's dome, the certification, the first round of the Games
+  { id: 'parade', name: msg('The Parade'), drills: [parade, said(CAMPAIGN.paradeDone, 'ballroom')], pay: 0, ratings: 500 },
+  { id: 'certification', name: msg('Certification'), drills: [said(CAMPAIGN.certification, 'ballroom'), said(CAMPAIGN.certified, 'ballroom')], pay: 0 },
+  { id: 'firstRound', name: msg('Your First Round'), drills: [said(CAMPAIGN.firstRound, 'rings')], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
 ];
