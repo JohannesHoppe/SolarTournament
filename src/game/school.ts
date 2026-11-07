@@ -3,7 +3,7 @@ import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import { patience, rayPatience, touchPatience } from '../world/patience';
-import { barge, iceTug, rayBarge, rayTug, touchBarge, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
+import { barge, iceTug, rayTug, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
 import { type HullBox, rayHull, touchHull } from '../world/boxes';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import type { Claim } from '../world/mining';
@@ -98,6 +98,10 @@ export interface SchoolContext {
   readonly rigWear: number;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
   brawl(): void;
+  /** The raiders spawned last are actors: their shots fly wide and hurt nothing (the Plume Yacht's staged bandits). */
+  blanks(): void;
+  /** New raiders at the same target (as spawnJumpers with no rock) shoot the ones there down and take their place (the Plume Yacht's real raiders and its actors). */
+  ambush(count: number, skill: number, names: readonly string[], hold: number): void;
   /** Each raider's kills so far, in the order they were named. */
   readonly jumperKills: readonly number[];
   /** The hull left to the raider named first (of 100; 0 without raiders). */
@@ -1692,8 +1696,9 @@ export class Markers {
   private canisterMaterial: THREE.Material | null = null;
   /** Patience moored where a drill wants her (see hauler), or null. */
   private patience: THREE.Object3D | null = null;
-  /** The ore barge a drill escorts (see world/barge), posed where it flies. */
+  /** The hull a drill escorts against raiders (the ore barge of world/barge, Crisp's yacht of world/yacht), posed where it flies, and the boxes it is built of. */
   private barge: THREE.Object3D | null = null;
+  private bargeBoxes: readonly HullBox[] = [];
   /** The Tallymen's tug (see world/barge), the beams of the Host that struck its winch, and the cable of its harpoon. */
   private tug: THREE.Object3D | null = null;
   winchHits = 0;
@@ -1857,7 +1862,7 @@ export class Markers {
 
   /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal)) || this.convoy.some(({ hull, boxes }) => touchHull(boxes, hull, position, radius, normal));
+    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchHull(this.bargeBoxes, this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal)) || this.convoy.some(({ hull, boxes }) => touchHull(boxes, hull, position, radius, normal));
   }
 
   /** Hull `index` of the convoy (an ice tug, or what `kind` builds) set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
@@ -1913,7 +1918,7 @@ export class Markers {
   /** How far along a beam a hull the drill set out stops it (Patience, the barge), nearer than `max`; null when none does. */
   hullRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
     const moored = this.patience ? rayPatience(this.patience, origin, direction, max) : null;
-    const escorted = this.barge ? rayBarge(this.barge, origin, direction, moored ?? max) : null;
+    const escorted = this.barge ? rayHull(this.bargeBoxes, this.barge, origin, direction, moored ?? max) : null;
     const tugged = this.tug ? rayTug(this.tug, origin, direction, escorted ?? moored ?? max) : null;
     const convoy = this.convoyRay(origin, direction, tugged ?? escorted ?? moored ?? max)?.distance ?? null;
     return convoy ?? tugged ?? escorted ?? moored;
@@ -1958,13 +1963,15 @@ export class Markers {
 
   /** Whether a beam meets the barge before anything else at `max` (see hullRay). */
   bargeRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
-    return this.barge ? rayBarge(this.barge, origin, direction, max) : null;
+    return this.barge ? rayHull(this.bargeBoxes, this.barge, origin, direction, max) : null;
   }
 
-  /** The ore barge, set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
-  bargeAt(position: THREE.Vector3, quaternion: THREE.Quaternion) {
+  /** The escorted hull of `kind` (the ore barge unless named), set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
+  bargeAt(position: THREE.Vector3, quaternion: THREE.Quaternion, kind: () => { root: THREE.Group; boxes: readonly HullBox[] } = barge) {
     if (!this.barge) {
-      this.barge = barge().root;
+      const built = kind();
+      this.barge = built.root;
+      this.bargeBoxes = built.boxes;
       this.root.add(this.barge);
     }
     this.barge.position.copy(position);

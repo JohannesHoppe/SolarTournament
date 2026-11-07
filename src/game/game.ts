@@ -650,6 +650,8 @@ const GRAIN_PATTER = 12;
 const GRAIN_PATTER_SPEED = 2000;
 /** The mist of ice crystals at the derelict's break (see world/derelict) patters on the hull about MIST_PATTER times a second where it is thickest, at GRAIN_PATTER_SPEED and faster. */
 const MIST_PATTER = 15;
+/** Enceladus's plumes (see world/enceladus) patter on the hull about PLUME_PATTER times a second at a plume's foot, at GRAIN_PATTER_SPEED and faster. */
+const PLUME_PATTER = 20;
 /**
  * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.hullPatter):
  * it patters on the hull about DUST_PATTER times a second in the heart of a plume at
@@ -718,6 +720,9 @@ const rivalOffset = new THREE.Vector3();
 const rivalAt = new THREE.Vector3();
 /** A laser beam's ends, reused shot after shot. */
 const beamEnd = new THREE.Vector3();
+/** An actor's blank shot (see SchoolContext.blanks) flies BLANK_MISS (rad, some 4°) over the nose's line: wide of whatever it is aimed at. */
+const BLANK_MISS = 0.07;
+const blankUp = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const ringNormal = new THREE.Vector3();
@@ -1316,7 +1321,7 @@ export class Game implements OnlineGame {
    * target's middle (moved with it), how far off it they hold, their hits on it so far; with
    * `spares`, they never finish a clone (see SPARED_HULL).
    */
-  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean; hooks: boolean; spares: boolean } | null = null;
+  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean; hooks: boolean; spares: boolean; blanks: boolean } | null = null;
   /**
    * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
    * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
@@ -4848,7 +4853,7 @@ export class Game implements OnlineGame {
       ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
       ship.protectedUntil = this.time;
     }
-    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard, hooks, spares: false };
+    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard, hooks, spares: false, blanks: false };
   }
 
   /**
@@ -5688,6 +5693,21 @@ export class Game implements OnlineGame {
       },
       brawl: () => {
         for (const bot of game.jumpers?.bots ?? []) bot.ship.team = -1;
+      },
+      blanks: () => {
+        if (game.jumpers) game.jumpers.blanks = true;
+      },
+      ambush: (count, skill, names, hold) => {
+        const actors = game.jumpers?.bots.map((bot) => bot.ship) ?? [];
+        const rig = game.jumpers?.rig ?? new THREE.Vector3();
+        // the actors stay out of the new raiders' removal: they go down to them instead
+        game.jumpers = null;
+        this.spawnJumpers(null, rig, count, skill, names, hold);
+        const raiders = game.jumpers!.bots;
+        actors.forEach((actor, i) => {
+          if (actor.alive) this.shipDestroyed(actor, raiders[i % raiders.length].ship, null, 'laser');
+          this.removeShip(actor);
+        });
       },
       get jumperKills() {
         return game.jumpers?.bots.map((bot) => bot.ship.kills) ?? [];
@@ -7050,6 +7070,13 @@ export class Game implements OnlineGame {
     }
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
+    // an actor's shot for the cameras (see SchoolContext.blanks): wide of its mark, harmless
+    if (this.jumpers?.blanks && this.jumpers.bots.some((bot) => bot.ship === shooter)) {
+      direction.addScaledVector(shooter.flight.up(blankUp), BLANK_MISS).normalize();
+      const start = shooter.muzzle(beamStart);
+      this.effects.beam(start, beamEnd.copy(origin).addScaledVector(direction, LASER_RANGE), shooter.color);
+      return;
+    }
     // in an arena's haze the beam scatters: it reaches as far as the eye sees (see world/air)
     // a cutter reaches short (see Perks.laserReach)
     const range = LASER_RANGE * shooter.perks.laserReach;
@@ -8006,7 +8033,7 @@ export class Game implements OnlineGame {
 
   /**
    * The own clone flying through something thin and harmless that patters on the hull: a ring's
-   * layer of ice grains, the ice crystals escaping at the derelict's break, the dust a drill hole
+   * layer of ice grains, the ice crystals escaping at the derelict's break, Enceladus's plumes, the dust a drill hole
    * blows (see Mining.dustAt). The thicker it is and the faster the ship flies, the more.
    */
   private hullPatter(me: Ship, dt: number) {
@@ -8015,6 +8042,7 @@ export class Game implements OnlineGame {
     const layer = this.venue.grains;
     if (layer) this.patter(me, dt, 1 - THREE.MathUtils.smoothstep(Math.abs(position.y), 0.8 * layer, layer), GRAIN_PATTER, GRAIN_PATTER_SPEED, 0.5);
     this.patter(me, dt, this.landmarks.mistAt(position), MIST_PATTER, GRAIN_PATTER_SPEED, 0.4);
+    this.patter(me, dt, this.landmarks.plumeAt(position), PLUME_PATTER, GRAIN_PATTER_SPEED, 0.5);
     this.patter(me, dt, this.mining.dustAt(position), DUST_PATTER, DUST_PATTER_SPEED, 0.6);
   }
 

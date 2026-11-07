@@ -23,6 +23,8 @@ import { io } from './flux';
 import { ganymede } from './yards';
 import { hazeBackdrop, hazeDeck } from './kraken';
 import { SATURN_AT, SATURN_SIZE } from './titan';
+import { plumeDensity, SATURN_AT as ENCELADUS_SATURN_AT, SATURN_SIZE as ENCELADUS_SATURN_SIZE } from './enceladus';
+import { enceladus, PLUME_GRAINS, plumes } from './plumes';
 /** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
 const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
@@ -852,6 +854,7 @@ export class Landmarks {
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
+    this.scenes.set('enceladus', this.enceladus());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -882,6 +885,11 @@ export class Landmarks {
   /** How thick the mist escaping at the derelict's break is at `point` (0..1; 0 in every other arena). */
   mistAt(point: THREE.Vector3): number {
     return this.shown === 'derelict' ? this.wreck.mistAt(point) : 0;
+  }
+
+  /** How thick Enceladus's plumes are at `point` (0..1; 0 in every other arena). */
+  plumeAt(point: THREE.Vector3): number {
+    return this.shown === 'enceladus' ? plumeDensity(point) : 0;
   }
 
   /**
@@ -915,6 +923,7 @@ export class Landmarks {
     this.grains.geometry.setDrawRange(0, count);
     this.streaks.geometry.setDrawRange(0, count * 2);
     this.wreck.setParticles(share);
+    this.plumes.geometry.setDrawRange(0, Math.round(PLUME_GRAINS * share));
   }
 
   /** The Solar Wall beyond its stretch by the field, and its searchlights' cones (see world/solarwall). */
@@ -1002,18 +1011,34 @@ export class Landmarks {
     return material;
   }
 
-  /**
-   * Titan's sky over Kraken Mare (see world/titan): the top of the haze as a sheet at the deck,
-   * and Saturn over it from its real map, its ring seen almost from its edge (Titan's orbit lies
-   * in the ring's plane), tilted SATURN_RING_TILT off it so it shows as a thin bright line.
-   */
+  /** Titan's sky over Kraken Mare (see world/titan): the top of the haze as a sheet at the deck, and Saturn over it (see saturnEdgeOn). */
   private titan(): THREE.Group {
+    return new THREE.Group().add(hazeDeck(), hazeBackdrop(), ...this.saturnEdgeOn(SATURN_AT, SATURN_SIZE));
+  }
+
+  /** The Plumes at Enceladus (see world/enceladus): the polar plain beyond the field, the plumes over the vents, and Saturn filling a quarter of the sky (see saturnEdgeOn). */
+  private enceladus(): THREE.Group {
+    this.plumes = plumes(this.light);
+    this.timed.push(this.plumes.material);
+    this.sized.push(this.plumes.material);
+    return enceladus().add(this.plumes, ...this.saturnEdgeOn(ENCELADUS_SATURN_AT, ENCELADUS_SATURN_SIZE));
+  }
+
+  /** The grains of Enceladus's plumes (see world/plumes). */
+  private plumes!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+
+  /**
+   * Saturn seen from a moon in its ring's plane (Titan, Enceladus) at `at`, `size` in radius, from
+   * its real map, its ring seen almost from its edge, tilted SATURN_RING_TILT off it so it shows
+   * as a thin bright line.
+   */
+  private saturnEdgeOn(at: THREE.Vector3, size: number): THREE.Object3D[] {
     const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, storms: false });
-    const planet = new THREE.Mesh(new THREE.SphereGeometry(SATURN_SIZE, 96, 48), material);
-    planet.position.copy(SATURN_AT);
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(size, 96, 48), material);
+    planet.position.copy(at);
     planet.userData.shadowless = true;
-    const inner = SATURN_SIZE * (RING_INNER / SATURN_RADIUS);
-    const outer = SATURN_SIZE * (RING_OUTER / SATURN_RADIUS);
+    const inner = size * (RING_INNER / SATURN_RADIUS);
+    const outer = size * (RING_OUTER / SATURN_RADIUS);
     const sheet = new THREE.RingGeometry(inner, outer, 256, 1);
     const uv = sheet.attributes.uv;
     const p = new THREE.Vector3();
@@ -1023,12 +1048,12 @@ export class Landmarks {
     }
     const ring = new THREE.Mesh(sheet, new THREE.MeshBasicMaterial({ map: this.maps.ring, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
     // the ring's plane holds the line of sight but for a tilt: its normal square to it and nearly level
-    const sight = SATURN_AT.clone().normalize();
+    const sight = at.clone().normalize();
     const normal = new THREE.Vector3(0, 1, 0).addScaledVector(sight, -sight.y).normalize().addScaledVector(sight, SATURN_RING_TILT).normalize();
     ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-    ring.position.copy(SATURN_AT);
+    ring.position.copy(at);
     ring.userData.shadowless = true;
-    return new THREE.Group().add(hazeDeck(), hazeBackdrop(), planet, ring);
+    return [planet, ring];
   }
 
   /** A moon of Jupiter beyond the field (`ground`) and Jupiter over it at `at`, `size` in radius, from its real map (see world/callisto, world/europa). */

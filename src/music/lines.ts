@@ -610,6 +610,11 @@ export const CAMPAIGN = {
   echoSevenHeard: 'Run. She said run. I think she told me that before, and I did not.',
   secondTube: 'Two torpedoes now, Host, as many as any ship in the Games carries.',
   thrustersOne: 'The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.',
+  plumeYacht: 'Stay with the yacht, Host. The bandits are actors, their shots fly wide. Look brave for the cameras.',
+  plumeYachtReal: 'Host, new ships out of the plumes. They shot the actors. These ones are real, and they want the yacht.',
+  plumeYachtLost: 'The yacht is holed. Crisp lives, his show does not. We fly it again.',
+  plumeYachtDone: 'The raiders are down and the yacht is whole. Crisp is already cutting it into an ad.',
+  platingTwo: 'Plating of the second grade, Host. Every hit hurts a little less again.',
   qualifyingHeat: 'Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.',
   qualifyingHeatLost: 'Three of them were home before us. We qualify again.',
   qualifyingHeatDone: 'Qualified. The Circuit has our name on a can now, Host.',
@@ -679,6 +684,7 @@ export const PIM = {
   hook: "Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.",
   secondTube: "Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.",
   thrustersOne: "Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.",
+  platingTwo: "Crisp's people dropped off plate of the second grade, three thousand on your paper. With their logo on it. I ground the logo off. Hold still.",
   tube: "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.",
   driveOne: "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.",
   plating: "The science outfit's got hull plate stacked in their hangar, rated for the radiation. Traded them for a weld job. Fifteen hundred on top, though. Every hit hurts a bit less now.",
@@ -699,6 +705,7 @@ export const HEDDA = {
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
   phobos: "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. He's never died. Not once. Top three, and Lanes Watch comes calling.",
   iceRun: "Paying work, out of the show's eye. Three ice tugs for Ganymede, and the Loose rob convoys here. They'd rather take the cargo than a clone. Keep them off it. Two thousand five hundred.",
+  enceladus: "Enceladus. Crisp wants an escort for his yacht through the plumes, for the cameras. Bandits on the schedule, he says. Actors. Five thousand for looking brave.",
   titan: "Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.",
   ganymede: "Ganymede. The tug yards. The Loose hide among the ice they haul in, and Lanes Watch has a bounty on their chief: Hollow Jack. Six thousand, and the ratings of your life. Careful. He's old, and he's good.",
   blackout: "Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.",
@@ -747,6 +754,9 @@ export const JACK = {
 /** Bellamy Crisp, Director of Excitement at Victory Cola: taglines and exclamation marks. Their own voice (see tools/voice). */
 export const CRISP = {
   hello: "Host! Bellamy Crisp, Director of Excitement, Victory Cola! Taste the win! We watched the Jack thing. Everybody watched the Jack thing! Ratings like that, you deserve a sponsor, and the sponsor is us!",
+  yacht: "Host! Welcome to the show! Our bandits shoot wide, you shoot back pretty, the plumes sparkle, everybody wins. Action!",
+  panic: "Those are not my bandits! That is not in the script! Somebody do something heroic! On camera!",
+  after: "Real raiders! Real explosions! Nobody could have planned that. Well. Somebody could have. Ha!",
   deal: "Here's the deal, Host! Our probes in your rounds, our logo on your hull, our cola in your clones. Every win, a little fizz for us. Sign here. And here. Welcome to the family!",
 } as const;
 

@@ -7,10 +7,11 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
+import { ENCELADUS_FALL, groundPlacement as enceladusGround, SATURN_AT as ENCELADUS_SATURN } from './enceladus';
 import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
@@ -50,7 +51,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -462,6 +463,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.8, 0.6, 0.38],
     grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
   },
+  // the Plumes: white ice under a black sky, Saturn's cream filling a quarter of it, the plumes glittering
+  enceladus: {
+    space: 0x010203,
+    sky: 0xb4ac98,
+    ground: 0x3a3e44,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.035, 0.04, 0.055], size: 540000, shape: 2, turn: 0.6 },
+      { at: [0.6, 0.3, 0.6], color: [0.05, 0.045, 0.035], size: 460000, shape: 1, turn: 2.9 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.8, 0.86, 0.94],
+    grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
+  },
 };
 
 /**
@@ -653,6 +669,23 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('Saturn'), position: TITAN_SATURN, distance: false }],
     // over the haze, facing down into it
     start: { at: [40000, 2000, 30000], toward: [0, -8000, 0] },
+    open: true,
+  },
+  {
+    id: 'enceladus',
+    name: msg('The Plumes'),
+    tagline: msg('Enceladus’s south pole: four tiger stripes in the white ice, jets of ice rising from them, and Saturn filling the sky.'),
+    // nothing loose: the ground, its stripes and their plumes
+    layout: { key: 'enceladus', seed: 10000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [enceladusGround(ENCELADUS_TYPE)], fall: ENCELADUS_FALL },
+    cooling: 1,
+    storms: false,
+    // 9.5 AU from the sun, as Titan's
+    sun: { size: 16000, intensity: 3, color: 0xfff0dd },
+    mood: MOODS.enceladus,
+    preview: { from: [30000, 6000, 30000], at: [0, -8000, 0] },
+    references: [{ glyph: 'planet', label: msg('Saturn'), position: ENCELADUS_SATURN, distance: false }],
+    // over the plain, facing across the stripes
+    start: { at: [40000, 0, 30000], toward: [0, -4000, 0] },
     open: true,
   },
 ];

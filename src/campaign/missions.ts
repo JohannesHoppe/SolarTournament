@@ -12,12 +12,14 @@ import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/eur
 import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { sulfurFreighter } from '../world/barge';
+import { yacht } from '../world/yacht';
+import { LAND as ENCELADUS_LAND, STRIPE_WAY } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -858,6 +860,13 @@ const fitThrustersOne = (campaign: Campaign) => {
   buy(campaign, THRUSTERS_ONE_PRICE);
 };
 
+/** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
+const fitPlatingTwo = (campaign: Campaign) => {
+  if (campaign.parts.includes('platingTwo')) return;
+  campaign.parts.push('platingTwo');
+  buy(campaign, PLATING_TWO_PRICE);
+};
+
 /**
  * Debt Day (4.2): Ma Tally's collectors, COLLECTORS of skill COLLECTOR_SKILL, come for the hull over
  * Phobos's grooves beyond Stickney's rim, fighting every ship they see (guards of the drill's
@@ -1130,6 +1139,65 @@ const iceRun: Drill = {
   leave: (ctx) => ctx.removeJumpers(),
   waypoint: (_, a) => convoyAt(1, a.seconds, waypointAt).add(convoyOff[1]),
   mark: () => t('Tugs {n}/{total} · lost {lost}', { n: CONVOY - convoyLost.filter(Boolean).length, total: CONVOY, lost: convoyLost.filter(Boolean).length }),
+};
+
+/**
+ * The Plume Yacht (10.1): Bellamy Crisp's yacht (see world/yacht) flies its lane across the tiger
+ * stripes, YACHT_OVER over Enceladus's plain and through the plumes, at YACHT_SPEED. First the
+ * show: ACTORS of Crisp's staged bandits, whose shots fly wide (see SchoolContext.blanks), for
+ * STAGED seconds; then real raiders, RAIDERS of RAIDER_SKILL, shoot the actors down and go for the
+ * yacht. All of them shot down wins; YACHT_HULL of their hits on the yacht fail it, and the
+ * attempt starts over.
+ */
+const YACHT_OVER = 8000;
+const YACHT_SPEED = 300;
+const YACHT_REACH = 55000;
+const YACHT_ACROSS = new THREE.Vector3(-STRIPE_WAY.z, 0, STRIPE_WAY.x);
+export const YACHT_FROM = YACHT_ACROSS.clone().multiplyScalar(-YACHT_REACH).setY(ENCELADUS_LAND + YACHT_OVER);
+export const YACHT_TO = YACHT_ACROSS.clone().multiplyScalar(YACHT_REACH).setY(ENCELADUS_LAND + YACHT_OVER);
+const YACHT_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), YACHT_ACROSS);
+const STAGED = 30;
+const ACTORS = 3;
+const ACTOR_SKILL = 0.35;
+/** The actors' stage names, and the raiders' (never translated). */
+const ACTOR_NAMES = ['Lance Steel', 'Rex Danger', 'Ace Hart'];
+const RAIDERS = 3;
+const RAIDER_SKILL = 0.65;
+const RAIDER_NAMES = ['Spite', 'Hex', 'Cinder'];
+const YACHT_HOLD = 8000;
+const YACHT_HULL = 400;
+const yachtNow = new THREE.Vector3();
+
+/** Where the yacht is `seconds` after it set out, on its lane, stopped at its end. */
+export function yachtAt(seconds: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(YACHT_FROM).addScaledVector(YACHT_ACROSS, Math.min(2 * YACHT_REACH, seconds * YACHT_SPEED));
+}
+
+const plumeYacht: Drill = {
+  ...escort(CAMPAIGN.plumeYacht, 'enceladus'),
+  // the show's calm until the raiders come, then the fight
+  turn: (_, a) => (a.count > 1 ? 'fight' : undefined),
+  enter(ctx, a, markers) {
+    startEscort(ctx, a, markers);
+    markers.bargeAt(yachtAt(0, yachtNow), YACHT_TURN, yacht);
+    ctx.spawnJumpers(null, yachtNow, ACTORS, ACTOR_SKILL, ACTOR_NAMES, YACHT_HOLD);
+    ctx.blanks();
+    a.count = 1;
+  },
+  done(ctx, a, markers) {
+    markers.bargeAt(yachtAt(a.seconds, yachtNow), YACHT_TURN, yacht);
+    ctx.moveJumpers(yachtNow);
+    if (a.count === 1 && a.seconds >= STAGED) {
+      ctx.ambush(RAIDERS, RAIDER_SKILL, RAIDER_NAMES, YACHT_HOLD);
+      ctx.say([CAMPAIGN.plumeYachtReal, CRISP.panic]);
+      a.count = 2;
+    }
+    return a.count === 2 && ctx.jumpersDown >= RAIDERS;
+  },
+  fail: (ctx, a) => (a.count === 2 && ctx.rigWear >= YACHT_HULL ? CAMPAIGN.plumeYachtLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => yachtNow,
+  mark: (ctx, a) => (a.count < 2 ? t('Yacht · on camera') : t('Raiders {n}/{total} · yacht hull {hull} %', { n: ctx.jumpersDown, total: RAIDERS, hull: Math.max(0, Math.round(100 * (1 - ctx.rigWear / YACHT_HULL))) })),
 };
 
 /** Plating I (6.4): plating of the first grade, every hit hurting less (see hullOf), at PLATING_PRICE. */
@@ -1918,4 +1986,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'methaneEcho', name: msg('Methane Echo'), drills: [echoAt(CAMPAIGN.echoSevenCall, 'titan', ECHO_SEVEN), said(CAMPAIGN.echoSeven, 'titan'), said(CAMPAIGN.echoSevenHeard, 'titan')], pay: 0, ratings: 40 },
   { id: 'secondTube', name: msg('Second Tube'), drills: [said(PIM.secondTube, 'titan'), said(CAMPAIGN.secondTube, 'titan')], pay: 0, fit: fitSecondTube },
   { id: 'thrustersOne', name: msg('Thrusters I'), drills: [said(PIM.thrustersOne, 'titan'), said(CAMPAIGN.thrustersOne, 'titan')], pay: 0, fit: fitThrustersOne },
+  // chapter 10, the Plumes at Enceladus: Crisp's show, and the raiders who were not in it
+  { id: 'plumeYacht', name: msg('Plume Yacht'), drills: [said(HEDDA.enceladus, 'enceladus'), said(CRISP.yacht, 'enceladus'), plumeYacht, said(CAMPAIGN.plumeYachtDone, 'enceladus'), said(CRISP.after, 'enceladus')], pay: 5000, ratings: 500 },
+  { id: 'platingTwo', name: msg('Plating II'), drills: [said(PIM.platingTwo, 'enceladus'), said(CAMPAIGN.platingTwo, 'enceladus')], pay: 0, fit: fitPlatingTwo },
 ];

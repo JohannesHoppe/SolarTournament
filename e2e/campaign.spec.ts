@@ -674,3 +674,32 @@ test('Methane Echo: the hull held still low over Kraken Mare hears the seventh e
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 9 flown too: the hull with its second tube and Thrusters I, at Enceladus. */
+const enceladusHull = (...done: string[]) => ({ ...titanHull('qualifyingHeat', 'pitFight', 'hazeDuel', 'circuitFinal', 'methaneEcho', 'secondTube', 'thrustersOne', ...done), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook', 'secondTube', 'thrustersOne'] });
+
+test('the Plume Yacht: Crisp’s actors fire wide and hurt nobody, then real raiders shoot them down and go for the yacht; all of them down wins', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, enceladusHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'enceladus' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots.map((bot: { ship: { name: string } }) => bot.ship.name))).toEqual(['Lance Steel', 'Rex Danger', 'Ace Hart']);
+  // the clone parked by an actor: its shots fly wide
+  const hull = await page.evaluate(async () => {
+    const game = window.game;
+    const start = game.time;
+    while (game.time - start < 10) {
+      const actor = game.jumpers.bots[0].ship;
+      game.me.flight.position.copy(actor.flight.position).add({ x: 0, y: 0, z: 1500 } as never);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return game.me.hull;
+  });
+  expect(hull).toBe(100);
+  await page.waitForFunction(() => window.game.jumpers?.bots[0]?.ship.name === 'Spite', null, { timeout: 60_000 });
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('plumeYacht')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

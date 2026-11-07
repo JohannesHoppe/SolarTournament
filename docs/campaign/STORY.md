@@ -163,7 +163,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 9.3 | Haze Duel | duel | Perihelion alone, in air where the eye sees 600 m and the radar twice that. Win. He breaks off at 35 % of his hull, before his clone dies (he always does). (built) | ☉ 3,000 · 400 | Duel; the senses in haze |
 | 9.4 | Circuit Final | race | The final: the Qualifying Heat's loop and field, win it. (built) | ☉ 6,000 · 800 | Race |
 | 9.5 | Methane Echo | exploration | Echo 7, low over the methane sea, where the haze hides it from the eye but not from the radar. (built) | 40 | Markers; radar |
-| 10.1 | Plume Yacht | escort | Escort Crisp's yacht through the plumes. Staged "bandits" fire to miss, for the cameras. Then real raiders (skill 0.65) shoot the actors and go for the yacht. | ☉ 5,000 · 500 | Escort; scripted waves |
+| 10.1 | Plume Yacht | escort | Escort Crisp's yacht through the plumes. Staged "bandits" fire to miss, for the cameras. Then real raiders (skill 0.65) shoot the actors and go for the yacht. (built) | ☉ 5,000 · 500 | Escort; scripted waves |
 | 10.2 | Hello, Host | story duel | A grey interceptor with "SPARE" sprayed on its flank fights exactly like the Host and breaks off at half health. His hail. | · 300 | Duel; new: a bot replaying the Host's recorded flight habits (optional, see section 10) |
 | 10.3 | Tiger Stripes | race | A time trial down the four stripes, through Ministry coils leased for a Victory Cola ad and moored at the vents. Gold under the ad's 60 s. | ☉ 2,500 · 300 | Race against the clock; the plumes as drill dust |
 | 11.1 | The Ridge | exploration | Fly the equatorial ridge low and find the cache (echo 8) before Spare's two wingmen do. | ☉ 2,000 · 300 | Surface; markers; bots racing to a point |
@@ -281,7 +281,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch (built: The Harpoon) |
 | 9 | Second tube | 2,000 | Two torpedoes: stock (built: Second Tube) |
 | 9 | Thrusters I | 1,000 | The thrusters push 8 % of a stock ship's harder, the hangar's first step (built: Thrusters I) |
-| 10 | Plating II | 3,000 | |
+| 10 | Plating II | 3,000 | Every hit hurts two of the hangar's steps less (built: Plating II, from Crisp's people) |
 | 11 | Main drive II, radiators II | 2,500 each | |
 | 12 | Torpedo tubes I | 1,500 | |
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift |
@@ -795,6 +795,26 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **BELLAMY CRISP**: Here's the deal, Host! Our probes in your rounds, our logo on your hull, our cola in your clones. Every win, a little fizz for us. Sign here. And here. Welcome to the family!
 
 **NICOLE**: Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.
+
+### Plume Yacht (chapter 10, built)
+
+**HEDDA**: Enceladus. Crisp wants an escort for his yacht through the plumes, for the cameras. Bandits on the schedule, he says. Actors. Five thousand for looking brave.
+
+**BELLAMY CRISP**: Host! Welcome to the show! Our bandits shoot wide, you shoot back pretty, the plumes sparkle, everybody wins. Action!
+
+**NICOLE**: Stay with the yacht, Host. The bandits are actors, their shots fly wide. Look brave for the cameras.
+
+**NICOLE** *(the raiders come)*: Host, new ships out of the plumes. They shot the actors. These ones are real, and they want the yacht.
+
+**BELLAMY CRISP**: Those are not my bandits! That is not in the script! Somebody do something heroic! On camera!
+
+**NICOLE** *(all of them down)*: The raiders are down and the yacht is whole. Crisp is already cutting it into an ad.
+
+**BELLAMY CRISP**: Real raiders! Real explosions! Nobody could have planned that. Well. Somebody could have. Ha!
+
+**PIM** *(Plating II)*: Crisp's people dropped off plate of the second grade, three thousand on your paper. With their logo on it. I ground the logo off. Hold still.
+
+**NICOLE**: Plating of the second grade, Host. Every hit hurts a little less again.
 
 ### Spare (chapter 10)
 
