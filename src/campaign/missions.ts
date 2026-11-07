@@ -9,6 +9,7 @@ import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
 import { ARENA_LIMIT } from '../world/arena';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
+import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { sulfurFreighter } from '../world/barge';
 import type { Asteroid } from '../world/asteroids';
@@ -16,7 +17,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -756,6 +757,106 @@ const qualifyingHeat = race({
   podium: 3,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
+
+/** The Circuit Final (9.4): the Qualifying Heat's loop over Kraken Mare, against the same field, home first. */
+const circuitFinal = race({
+  line: CAMPAIGN.circuitFinal,
+  lost: CAMPAIGN.circuitFinalLost,
+  arena: 'titan',
+  marks: HEAT_COURSE,
+  laps: HEAT_LAPS,
+  pipes: null,
+  rivals: CIRCUIT_RIVALS,
+  podium: 1,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/**
+ * The Pit Fight (9.2): the Host and five of the Circuit in the haze PIT_DEPTH under the deck, every
+ * ship for itself (see SchoolContext.brawl), for PIT_SECONDS; the Host's kills placed among
+ * theirs, among the first PIT_PODIUM wins (a tie counts for the Host); the clock run out
+ * placed lower starts it over.
+ */
+const PIT_SECONDS = 180;
+const PIT_PODIUM = 3;
+const PIT_FIELD = point(0, -12000, 0);
+const PIT_NAMES = ['Brix', 'Volta', 'Mako', 'Sable', 'Rook'];
+const PIT_SKILL = 0.4;
+/** The Host's place in the Pit Fight by kills: one more than the rivals with more. */
+const pitPlace = (ctx: SchoolContext) => 1 + ctx.jumperKills.filter((kills) => kills > ctx.me.kills).length;
+
+const pitFight: Drill = {
+  line: CAMPAIGN.pitFight,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'titan',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, PIT_FIELD, PIT_NAMES.length, PIT_SKILL, PIT_NAMES, 12000, true);
+    ctx.brawl();
+    ctx.me.kills = 0;
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done: (ctx, a) => a.seconds >= PIT_SECONDS && pitPlace(ctx) <= PIT_PODIUM,
+  fail: (ctx, a) => (a.seconds >= PIT_SECONDS && pitPlace(ctx) > PIT_PODIUM ? CAMPAIGN.pitFightLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => PIT_FIELD,
+  mark: (ctx, a) => t('Place {place} · {seconds} s left', { place: pitPlace(ctx), seconds: Math.max(0, Math.ceil(PIT_SECONDS - a.seconds)) }),
+};
+
+/**
+ * The Haze Duel (9.3): Perihelion alone (skill PERIHELION_SKILL), DUEL_DEPTH under Titan's deck,
+ * where the eye sees some 600 m and the radar twice that; once his hull is down to
+ * PERIHELION_BREAK (of 100) he breaks off, as he always does before his clone can die, and the
+ * duel is won.
+ */
+const PERIHELION_SKILL = 0.65;
+const PERIHELION_BREAK = 35;
+const DUEL_FIELD = point(0, -25000, 0);
+const DUEL_GONE = point(-60000, -10000, -20000);
+
+const hazeDuel: Drill = {
+  line: CAMPAIGN.hazeDuel,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'titan',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, DUEL_FIELD, 1, PERIHELION_SKILL, ['Perihelion'], 8000, true);
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx, a) {
+    if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
+    if (ctx.leaderDown || ctx.leaderHull <= PERIHELION_BREAK) {
+      ctx.standDown(DUEL_GONE);
+      ctx.say([CAMPAIGN.hazeDuelBreaks]);
+      a.doneAt = a.seconds + 4;
+    }
+    return false;
+  },
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => null,
+  mark: (ctx) => t('Perihelion · hull {hull} %', { hull: Math.round(ctx.leaderHull) }),
+};
+
+/** Methane Echo (9.5): the seventh echo, low over Kraken Mare, ECHO_SEVEN_OVER over the sea, where the haze hides it from the eye and not from the radar. */
+const ECHO_SEVEN_OVER = 1600;
+export const ECHO_SEVEN = point(25000, SEA_LEVEL + ECHO_SEVEN_OVER, -20000);
+
+/** The second tube (9.6), from the Circuit's pits: two torpedoes a clone (see hullOf), at SECOND_TUBE_PRICE. */
+const fitSecondTube = (campaign: Campaign) => {
+  if (campaign.parts.includes('secondTube')) return;
+  campaign.parts.push('secondTube');
+  buy(campaign, SECOND_TUBE_PRICE);
+};
+/** Thrusters I (9.6): the thrusters a step past stock (see hullOf), at THRUSTERS_ONE_PRICE. */
+const fitThrustersOne = (campaign: Campaign) => {
+  if (campaign.parts.includes('thrustersOne')) return;
+  campaign.parts.push('thrustersOne');
+  buy(campaign, THRUSTERS_ONE_PRICE);
+};
 
 /**
  * Debt Day (4.2): Ma Tally's collectors, COLLECTORS of skill COLLECTOR_SKILL, come for the hull over
@@ -1811,4 +1912,10 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'sponsorNight', name: msg('Sponsor Night'), drills: [said(CRISP.hello, 'ganymede'), said(CRISP.deal, 'ganymede'), said(CAMPAIGN.sponsored, 'ganymede')], pay: 0 },
   // chapter 9, the Victory Cola Circuit over Kraken Mare on Titan, in the haze
   { id: 'qualifyingHeat', name: msg('Qualifying Heat'), drills: [said(HEDDA.titan, 'titan'), qualifyingHeat, said(CAMPAIGN.qualifyingHeatDone, 'titan')], pay: 4000, ratings: 400, start: HEAT_START },
+  { id: 'pitFight', name: msg('Pit Fight'), drills: [said(CAMPAIGN.pitFightIntro, 'titan'), pitFight, said(CAMPAIGN.pitFightDone, 'titan')], pay: 4000, ratings: 500 },
+  { id: 'hazeDuel', name: msg('Haze Duel'), drills: [said(CAMPAIGN.hazeDuelIntro, 'titan'), hazeDuel, said(CAMPAIGN.hazeDuelDone, 'titan')], pay: 3000, ratings: 400 },
+  { id: 'circuitFinal', name: msg('Circuit Final'), drills: [circuitFinal, said(CAMPAIGN.circuitFinalDone, 'titan')], pay: 6000, ratings: 800, start: HEAT_START },
+  { id: 'methaneEcho', name: msg('Methane Echo'), drills: [echoAt(CAMPAIGN.echoSevenCall, 'titan', ECHO_SEVEN), said(CAMPAIGN.echoSeven, 'titan'), said(CAMPAIGN.echoSevenHeard, 'titan')], pay: 0, ratings: 40 },
+  { id: 'secondTube', name: msg('Second Tube'), drills: [said(PIM.secondTube, 'titan'), said(CAMPAIGN.secondTube, 'titan')], pay: 0, fit: fitSecondTube },
+  { id: 'thrustersOne', name: msg('Thrusters I'), drills: [said(PIM.thrustersOne, 'titan'), said(CAMPAIGN.thrustersOne, 'titan')], pay: 0, fit: fitThrustersOne },
 ];

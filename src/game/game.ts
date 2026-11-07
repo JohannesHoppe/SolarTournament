@@ -5686,6 +5686,15 @@ export class Game implements OnlineGame {
       get rigWear() {
         return game.jumpers?.hits ?? 0;
       },
+      brawl: () => {
+        for (const bot of game.jumpers?.bots ?? []) bot.ship.team = -1;
+      },
+      get jumperKills() {
+        return game.jumpers?.bots.map((bot) => bot.ship.kills) ?? [];
+      },
+      get leaderHull() {
+        return game.jumpers?.bots[0]?.ship.hull ?? 0;
+      },
       spareClones: () => {
         if (game.jumpers) game.jumpers.spares = true;
       },

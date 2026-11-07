@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
-import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK } from '../game/hangar';
+import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
@@ -141,6 +141,15 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'mainDrive')!);
     expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + DRIVE_STEP, 10);
     expect(campaign.bond).toBe(20000 + TUBE_PRICE - 500 + DRIVE_ONE_PRICE);
+  });
+
+  it('fits the second tube and Thrusters I at Titan: two torpedoes, a stock ship’s, and the thrusters a step past stock, each paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['tube' as const, 'thrusters' as const] };
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'secondTube')!);
+    expect(STOCK.torpedoes + TORPEDOES + hullOf(campaign).torpedoes).toBe(2);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'thrustersOne')!);
+    expect(hullOf(campaign).thrusters).toBeCloseTo(STOCK.thrusters + THRUSTER_STEP, 10);
+    expect(campaign.bond).toBe(20000 + SECOND_TUBE_PRICE + THRUSTERS_ONE_PRICE);
   });
 
   it('fits Plating I at Europa: every hit hurting a step less, paid as the laser is', () => {

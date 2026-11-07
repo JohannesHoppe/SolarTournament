@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -179,7 +179,7 @@ describe('Blackout on Io', () => {
 });
 
 describe('the echoes', () => {
-  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR]] as const) {
+  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR], ['the seventh, low over Kraken Mare under Titan’s haze', 'titan', ECHO_SEVEN]] as const) {
     it(`${name}: clear of every piece of the place, inside the arena`, () => {
       const field = testField(DETAIL);
       field.generate(arenaById(arena)!.layout);

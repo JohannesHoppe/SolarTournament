@@ -322,7 +322,7 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
 }
 
 /** The clone held still at an echo (the export `echo` of the missions), or at the drill's first point as it moves (`first`), while the mission is at drill `step`, until it moves on (20 s at most). */
-async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'first', step: number) {
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'ECHO_SEVEN' | 'first', step: number) {
   await page.evaluate(
     async ([path, echo, step]) => {
       const game = window.game;
@@ -637,5 +637,40 @@ test('chapter 9 opens on Titan: the Qualifying Heat lines up five rivals, Perihe
   const errors = await takeJobFrom(page, { ...chapterFive(...CHAPTER_SEVEN, 'hollowJack', 'harpoon', 'swingShift', 'sponsorNight'), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
   await linedUp(page, 'titan', 1);
   expect(await page.evaluate(() => !!window.game.field.air)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+/** Chapter 8 flown too: the hull with its hook, over Titan. */
+const CHAPTER_EIGHT = [...CHAPTER_SEVEN, 'hollowJack', 'harpoon', 'swingShift', 'sponsorNight'];
+const titanHull = (...done: string[]) => ({ ...chapterFive(...CHAPTER_EIGHT, ...done), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
+
+test('the Pit Fight sets five of the Circuit on each other and the Host in Titan’s haze, every ship for itself', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, titanHull('qualifyingHeat'));
+  await page.waitForFunction(() => window.game.venue?.id === 'titan' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 5, null, { timeout: 180_000 });
+  const allied = await page.evaluate(() => {
+    const ships = window.game.jumpers.bots.map((bot: { ship: { allyOf: (other: unknown) => boolean } }) => bot.ship);
+    return ships.some((ship: { allyOf: (other: unknown) => boolean }) => ships.some((other: unknown) => ship.allyOf(other)));
+  });
+  expect(allied).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('the Haze Duel: Perihelion breaks off once his hull is worn down, before his clone can die, and the duel is won', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, titanHull('qualifyingHeat', 'pitFight'));
+  await page.waitForFunction(() => window.game.venue?.id === 'titan' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 1, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Perihelion');
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.hull = 30));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('hazeDuel')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Methane Echo: the hull held still low over Kraken Mare hears the seventh echo', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, titanHull('qualifyingHeat', 'pitFight', 'hazeDuel', 'circuitFinal'));
+  await page.waitForFunction(() => window.game.venue?.id === 'titan' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await holdAtEcho(page, 'ECHO_SEVEN', 0);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

@@ -159,10 +159,10 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
 | 9.1 | Qualifying Heat | race | Three laps through Titan's haze over Kraken Mare, eight coils whose loop runs 150 m over the deck on one side and dips 300 m into the thick air on the other; Perihelion and four of the Circuit. Top three. (built) | ☉ 4,000 · 400 | Race; Jupiter's air on Titan |
-| 9.2 | Pit Fight | arena | A five-minute deathmatch in the haze, the announcer on air. Place top three. | ☉ 4,000 · 500 | Deathmatch; air |
-| 9.3 | Haze Duel | duel | Perihelion alone, in air where the eye sees 600 m and the radar twice that. Win. He breaks off before his clone dies (he always does). | ☉ 3,000 · 400 | Duel; the senses in haze |
-| 9.4 | Circuit Final | race | The final: win it. | ☉ 6,000 · 800 | Race |
-| 9.5 | Methane Echo | exploration | Echo 7, low over the methane sea, where the haze hides it from the eye but not from the radar. | 40 | Markers; radar |
+| 9.2 | Pit Fight | arena | A three-minute deathmatch in the haze, five of the Circuit and the Host, every ship for itself, placed by kills. Place top three. (built) | ☉ 4,000 · 500 | Deathmatch; air |
+| 9.3 | Haze Duel | duel | Perihelion alone, in air where the eye sees 600 m and the radar twice that. Win. He breaks off at 35 % of his hull, before his clone dies (he always does). (built) | ☉ 3,000 · 400 | Duel; the senses in haze |
+| 9.4 | Circuit Final | race | The final: the Qualifying Heat's loop and field, win it. (built) | ☉ 6,000 · 800 | Race |
+| 9.5 | Methane Echo | exploration | Echo 7, low over the methane sea, where the haze hides it from the eye but not from the radar. (built) | 40 | Markers; radar |
 | 10.1 | Plume Yacht | escort | Escort Crisp's yacht through the plumes. Staged "bandits" fire to miss, for the cameras. Then real raiders (skill 0.65) shoot the actors and go for the yacht. | ☉ 5,000 · 500 | Escort; scripted waves |
 | 10.2 | Hello, Host | story duel | A grey interceptor with "SPARE" sprayed on its flank fights exactly like the Host and breaks off at half health. His hail. | · 300 | Duel; new: a bot replaying the Host's recorded flight habits (optional, see section 10) |
 | 10.3 | Tiger Stripes | race | A time trial down the four stripes, through Ministry coils leased for a Victory Cola ad and moored at the vents. Gold under the ad's 60 s. | ☉ 2,500 · 300 | Race against the clock; the plumes as drill dust |
@@ -279,8 +279,8 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 7 | Torpedo tube | 2,000 | One torpedo per clone (built: Tube Fitting) |
 | 7 | Main drive I | 1,000 | The main drive pushes 5 % of a stock ship's harder, the hangar's first step (built: Main Drive I) |
 | 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch (built: The Harpoon) |
-| 9 | Second tube | 2,000 | Two torpedoes: stock |
-| 9 | Thrusters I | 1,000 | |
+| 9 | Second tube | 2,000 | Two torpedoes: stock (built: Second Tube) |
+| 9 | Thrusters I | 1,000 | The thrusters push 8 % of a stock ship's harder, the hangar's first step (built: Thrusters I) |
 | 10 | Plating II | 3,000 | |
 | 11 | Main drive II, radiators II | 2,500 each | |
 | 12 | Torpedo tubes I | 1,500 | |
@@ -671,6 +671,48 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: Eight coils, three laps. One side runs over the haze, the other dips into it: down there the air brakes us, and it hides the next coil until we are close. Home in the first three.
 
 **NICOLE** *(home among the first three)*: Qualified. The Circuit has our name on a can now, Host.
+
+### Pit Fight (chapter 9, built)
+
+**NICOLE**: The pit, Host: five of the Circuit and us, three minutes, everyone against everyone, the announcer on air. Place in the first three.
+
+**NICOLE**: Every ship for itself. Kills place us, nothing else. Mind the haze: they see as little as we do.
+
+**NICOLE** *(among the first three)*: In the first three of the pit. The crowd likes us, Host. I do not like the crowd.
+
+### Haze Duel (chapter 9, built)
+
+**NICOLE**: Perihelion wants us alone, down in the haze. Twelve hundred meters under the deck the eye sees six hundred, the radar twice that. Trust the radar, Host.
+
+**NICOLE**: There he is, somewhere. Wear him down. He has never died. Not once.
+
+**NICOLE** *(his hull worn down)*: He is breaking off, Host. Before his clone can die. He always does.
+
+**NICOLE**: He ran. The Undying, running from us. Nobody on the broadcast said it, but everyone saw it.
+
+### Circuit Final (chapter 9, built)
+
+**NICOLE**: The Circuit Final. The same loop, the same field, and only the first one home counts.
+
+**NICOLE** *(home first)*: We won the Circuit, Host. Victory Cola is already printing the cans.
+
+### Methane Echo (chapter 9, built)
+
+**NICOLE**: The old frequency, low over the sea, under the haze. The eye will not find it, Host. The radar will. Hold us still where it is.
+
+**ECHO 7**: Scout Two, you are faster than me. If I ever tell you to run, run.
+
+**NICOLE**: Run. She said run. I think she told me that before, and I did not.
+
+### Second Tube and Thrusters I (chapter 9, built)
+
+**PIM**: Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.
+
+**NICOLE**: Two torpedoes now, Host, as many as any ship in the Games carries.
+
+**PIM**: Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.
+
+**NICOLE**: The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.
 
 ### Flux Tube Race (chapter 7, built)
 

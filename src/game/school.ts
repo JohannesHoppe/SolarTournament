@@ -96,6 +96,12 @@ export interface SchoolContext {
   /** The raiders shot down so far, and their hits on their target. */
   readonly jumpersDown: number;
   readonly rigWear: number;
+  /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
+  brawl(): void;
+  /** Each raider's kills so far, in the order they were named. */
+  readonly jumperKills: readonly number[];
+  /** The hull left to the raider named first (of 100; 0 without raiders). */
+  readonly leaderHull: number;
   /** The raiders spawned last never finish a clone: a hull they wore down only scorches (The Quiet Man). */
   spareClones(): void;
   /** The raiders stop fighting and fly off to `to`; a ship that comes near them they still fight. */
