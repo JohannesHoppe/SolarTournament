@@ -108,7 +108,7 @@ Built: Venus, offered once Victory Cola has signed the Host (Sponsor Night, 8.4)
 
 Every mission names its type, its goal and how it fails in game terms, what it pays (coins ☉ before Rask's cut, and ratings) and what it is built from. "School" means the flight school's drill machinery (`src/game/school.ts`): markers, rings, buoys, debris, drones, sparring bots of a set skill, success and failure conditions, Nicole's lines and repetitions. A mission fails and repeats like a drill: Nicole says why, and the attempt starts over. Bot skills are the bots' skill values (0 to 1; the Games' middling bot is 0.5).
 
-Story missions run once; most others stay on the place's **job board** as repeatable contracts afterwards (full pay the first time, half after; a gold medal for time or a clean run pays a bonus once).
+Story missions run once; most others stay on the place's **job board** as repeatable contracts afterwards (full pay the first time; flown again they pay only their medal, see section 4, "Medals").
 
 ### Prologue and Act I: Debt
 
@@ -301,7 +301,7 @@ The looks come from Pim and cost little: neon trim and drive flame on the hangar
 
 - **Short loops.** A menial job lasts two to four minutes. The cutter is reached in about twenty minutes of play, the laser in about two hours.
 - **Every chapter shows on the ship.** Pim fits each part on the pad (the title screen's showcase), and the Magpie looks different afterwards (section 5).
-- **Medals.** Each repeatable contract has a gold time or a clean run, worth a bonus once. Speedrunners get their sport; others never need it.
+- **Medals.** Each job that pays has a medal for a clean run, worth a bonus once: flown from its first drill to its last without a clone lost, the first time or flown again from the job board, it pays a quarter of the job's pay, less the yard's cut while the debt is unpaid; the board marks it ★ (built; a trial's round has none). A gold time for the courier runs is still to come, with them. Speedrunners get their sport; others never need it.
 - **The tally.** Pim stencils a tally mark under the canopy for every clone lost. It is the Host's real count. Hedda glances at it now and then and says something.
 - **Nicole grows.** Her modules restore the HUD piece by piece (below), so a Host feels the ship getting smarter, not only stronger.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, hasMedal, medal, MEDAL_SHARE } from './campaign';
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
@@ -68,10 +68,36 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 } });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [] });
+    // a medal only for a job done that has one
+    const paying = MISSIONS.find((mission) => hasMedal(mission))!;
+    const unpaid = MISSIONS.find((mission) => !hasMedal(mission))!;
+    expect(campaignFrom(JSON.stringify({ done: [paying.id, unpaid.id], medals: [paying.id, unpaid.id, MISSIONS[MISSIONS.length - 1].id, 'later'] })).medals).toEqual([paying.id]);
     // the habits as kept, never more hits than shots nor more seconds up close than of fight
     expect(campaignFrom(JSON.stringify({ habits: { shots: 40, hits: 90, fight: 120.7, near: 500 } })).habits).toEqual({ shots: 40, hits: 40, fight: 120, near: 120 });
     expect(campaignFrom(JSON.stringify({ habits: 'all' })).habits).toEqual({ shots: 0, hits: 0, fight: 0, near: 0 });
+  });
+
+  it('pays a job’s medal once, for a clean run, less the yard’s cut while the debt is unpaid', () => {
+    const campaign = freshCampaign();
+    const job = MISSIONS.find((mission) => hasMedal(mission) && mission.pay >= 1000)!;
+    const bonus = Math.round(job.pay * MEDAL_SHARE);
+    // a clone lost: no medal
+    expect(medal(campaign, job, false)).toBeNull();
+    expect(campaign.medals).toEqual([]);
+    // clean: the bonus, the yard's cut taken from it
+    const coins = campaign.coins;
+    const bond = campaign.bond;
+    expect(medal(campaign, job, true)).toBe(bonus - Math.round(bonus * YARD_CUT));
+    expect(campaign.coins - coins).toBe(bonus - Math.round(bonus * YARD_CUT));
+    expect(bond - campaign.bond).toBe(Math.round(bonus * YARD_CUT));
+    // once only
+    expect(medal(campaign, job, true)).toBeNull();
+    // once the benefactor holds the debt, nobody takes a cut
+    const held = { ...freshCampaign(), held: true };
+    expect(medal(held, job, true)).toBe(bonus);
+    // a job that pays nothing, or a trial, has none
+    for (const mission of MISSIONS.filter((m) => m.pay === 0 || m.trial)) expect(medal(freshCampaign(), mission, true)).toBeNull();
   });
 
   it('lets Spare fight as the Host fought until Io: its aim by the hits, its daring by the time up close, fair either way', () => {

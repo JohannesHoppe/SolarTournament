@@ -2136,6 +2136,9 @@ export const ES: Catalog = {
   "What a ship. Very old. I like old things. I am one thousand years young. Never been better.": "Qué nave. Muy vieja. Me gustan las cosas viejas. Tengo mil años de juventud. Nunca he estado mejor.",
   "And the computer. Beautiful computer. Terrible firmware, very sad. My people will fix her. The best firmware in history.": "Y el ordenador. Precioso ordenador. Firmware terrible, muy triste. Mi gente la arreglará. El mejor firmware de la historia.",
   "The President": "El Presidente",
+  "Flown again, it pays nothing. ★ Medal: flown clean.": "Si lo vuelves a volar, no paga nada. ★ Medalla: volado limpio.",
+  "Flown again, it pays only its medal: {bonus} ☉ for a clean run, not one clone lost.": "Si lo vuelves a volar, solo paga su medalla: {bonus} ☉ por un vuelo limpio, sin perder un solo clon.",
+  "Medal: flown clean, not one clone lost. {bonus} ☉ bonus.": "Medalla: volado limpio, ningún clon perdido. {bonus} ☉ de prima.",
   "Comet in {seconds} s · Scout One {meters} m off its route": "Cometa en {seconds} s · Scout One a {meters} m de su trayectoria",
   "And now the comet, Host. They threw it at her; its head is three quarters of a minute out. Hook her and drag her off its route. Sideways, Host, not along it.": "Y ahora el cometa, Host. Se lo han lanzado a ella; su cabeza está a tres cuartos de minuto. Engánchala y arrástrala fuera de su trayectoria. De lado, Host, no a lo largo.",
 };

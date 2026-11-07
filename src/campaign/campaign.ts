@@ -244,6 +244,29 @@ export interface Campaign {
   crackle: boolean;
   /** How the Host fights, counted until the link cut at Io (see Habits). */
   habits: Habits;
+  /** The jobs flown clean, each worth its medal's bonus once (see medal). */
+  medals: MissionId[];
+}
+
+/** A medal's bonus: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
+export const MEDAL_SHARE = 0.25;
+
+/** Whether a job has a medal to win: one that pays, flown on the flight school's drills (a trial's round is judged by its place). */
+export const hasMedal = (mission: Mission) => mission.pay > 0 && !mission.trial;
+
+/**
+ * A job flown clean, from its first drill to its last without a clone lost, wins its medal, the
+ * first time it is flown so or on any flight again (see hasMedal): its bonus paid once, less the
+ * yard's cut while the debt is unpaid. The bonus kept, or null for no medal won now.
+ */
+export function medal(campaign: Campaign, mission: Mission, clean: boolean): number | null {
+  if (!clean || !hasMedal(mission) || campaign.medals.includes(mission.id)) return null;
+  campaign.medals.push(mission.id);
+  const bonus = Math.round(mission.pay * MEDAL_SHARE);
+  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(bonus * YARD_CUT));
+  campaign.bond -= cut;
+  campaign.coins += bonus - cut;
+  return bonus - cut;
 }
 
 /**
@@ -288,7 +311,7 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits() });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [] });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -307,7 +330,9 @@ export function campaignFrom(text: string | null): Campaign {
     const fight = number(fought.fight, 0, HABITS_MAX);
     // never more hits than shots, nor more seconds up close than of fight
     const habits = { shots, hits: Math.min(shots, number(fought.hits, 0, HABITS_MAX)), fight, near: Math.min(fight, number(fought.near, 0, HABITS_MAX)) };
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits };
+    // a medal only for a job done that has one
+    const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals };
   } catch {
     return fresh;
   }

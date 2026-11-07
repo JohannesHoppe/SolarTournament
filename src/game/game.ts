@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, HABIT_NEAR, hullOf, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -1246,6 +1246,8 @@ export class Game implements OnlineGame {
   private rigBeams = 0;
   /** What the running mission's pay is cut by, as its attempt stands (see SchoolContext.fine). */
   private missionFine = 0;
+  /** The running mission is flown clean so far: from its first drill, not one clone lost (see campaign/campaign, medal). */
+  private cleanRun = false;
   /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
   private readonly brokenAt = new THREE.Vector3();
   /** The scene in person the clone stands in (see campaign/scenes), or null in the cockpit. */
@@ -1742,7 +1744,13 @@ export class Game implements OnlineGame {
     $('board-side').replaceChildren(...trips.map((mission) => job(mission, `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`)));
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
-    $('board-done').replaceChildren(...done.map((mission) => job(mission, t('Flown again, it pays nothing.'))));
+    const again = (mission: Mission) =>
+      !hasMedal(mission)
+        ? t('Flown again, it pays nothing.')
+        : campaign.medals.includes(mission.id)
+          ? t('Flown again, it pays nothing. ★ Medal: flown clean.')
+          : t('Flown again, it pays only its medal: {bonus} ☉ for a clean run, not one clone lost.', { bonus: coinText(Math.round(mission.pay * MEDAL_SHARE)) });
+    $('board-done').replaceChildren(...done.map((mission) => job(mission, again(mission))));
     const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
     const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
     $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;
@@ -1770,6 +1778,8 @@ export class Game implements OnlineGame {
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.missionFine = 0;
     this.mission = mission;
+    // clean only from its first drill
+    this.cleanRun = this.missionStep() === 0;
     this.trialOf = null;
     this.startRound('school');
   }
@@ -1808,6 +1818,11 @@ export class Game implements OnlineGame {
     this.keepCampaign((campaign) => (paid = complete(campaign, mission, 0)));
     const done = t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings });
     return paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done;
+  }
+
+  /** What the screen says of a medal won (see campaign/campaign, medal): the clean run and its bonus as kept. */
+  private medalText(bonus: number): string {
+    return t('Medal: flown clean, not one clone lost. {bonus} ☉ bonus.', { bonus: coinText(bonus) });
   }
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
@@ -5641,21 +5656,30 @@ export class Game implements OnlineGame {
       this.startTrial(this.mission);
       return;
     }
-    // a mission flown again done: nothing paid, nothing kept, back to the job board
+    // a mission flown again done: nothing paid but its medal, if flown clean, back to the job board
     if (school.finished && this.mission && this.flyingAgain) {
+      const mission = this.mission;
+      let bonus: number | null = null;
+      this.keepCampaign((campaign) => (bonus = medal(campaign, mission, this.cleanRun)));
       this.flyingAgain = false;
       this.mission = null;
       this.schoolMark = this.schoolTrack = null;
       this.showMenu();
       this.showBoard(true);
+      if (bonus !== null) this.notice(this.medalText(bonus));
       return;
     }
-    // a mission of the campaign done: paid, and back to the menu
+    // a mission of the campaign done: paid (its medal too, if flown clean), and back to the menu
     if (school.finished && this.mission) {
       const mission = this.mission;
       let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null };
-      this.keepCampaign((campaign) => (paid = complete(campaign, mission, this.missionFine)));
+      let bonus: number | null = null;
+      this.keepCampaign((campaign) => {
+        paid = complete(campaign, mission, this.missionFine);
+        bonus = medal(campaign, mission, this.cleanRun);
+      });
       this.missionFine = 0;
+      this.cleanRun = true;
       // the story runs on into its next mission without the menu, from the pad; the menu only
       // once all that is built is flown, and the job board after a side trip
       this.mission = mission.side ? null : nextMission(this.campaign);
@@ -5669,7 +5693,8 @@ export class Game implements OnlineGame {
           : this.campaign.held
             ? t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings })
             : t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. You still owe {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) });
-      this.notice(paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done);
+      const ranked = paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done;
+      this.notice(bonus !== null ? `${ranked} ${this.medalText(bonus)}` : ranked);
       this.schoolMark = this.schoolTrack = null;
       return;
     }
@@ -7452,6 +7477,7 @@ export class Game implements OnlineGame {
    * rock, a battleship's hull or a gate struck, and how fast).
    */
   private shipDestroyed(victim: Ship, killer: Ship | null, cause: DeathCause = null, what?: string, impact = 0, note?: string) {
+    if (victim === this.me) this.cleanRun = false;
     // a crash soon after a shove is the shover's knockout; the victim's browser decides it
     const shover = victim.shovedBy;
     if (!killer && shover && victim.owner === null && KNOCKOUTS.has(cause) && this.time - victim.shovedAt <= KNOCKOUT_SECONDS) {

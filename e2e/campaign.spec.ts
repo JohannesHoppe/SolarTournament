@@ -281,10 +281,13 @@ test("after the docking lane the clone climbs out into Rask's office: Rask and H
 });
 
 test('the job board names the wallet, the Bond and the rank, takes the next job up where it was left, and flies a job done again from its start, keeping the story where it stands', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot', 'lamplighter'], step: 1, coins: 90, bond: 24940, ratings: 10, parts: ['patch'] })));
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot', 'lamplighter'], step: 1, coins: 90, bond: 24940, ratings: 10, parts: ['patch'], medals: [] })));
   const errors = await openGame(page, '/?campaign');
   await page.click('#campaign');
   await expect(page.locator('#board')).toBeVisible();
+  // a job that paid still has its medal to win, flown clean; one that paid nothing has none
+  await expect(page.locator('#board-done button', { hasText: 'Lamplighter' })).toContainText('pays only its medal');
+  await expect(page.locator('#board-done button', { hasText: 'Cold Boot' })).toContainText('pays nothing.');
   await expect(page.locator('#board-wallet')).toContainText('90 ☉');
   await expect(page.locator('#board-wallet')).toContainText('Unrated');
   await expect(page.locator('#board-next button')).toContainText('Live Target');
