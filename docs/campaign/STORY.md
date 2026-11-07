@@ -179,9 +179,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 13.1 | Verona Drop | exploration | Down the face of Verona Rupes to a hangar in the cliff: under 250 m/s, never more than 300 m off the face, through six buoys. | · 300 | Surface; markers |
-| 13.2 | Among the Loose | story | Spare's people. The overdrive, a reactor dump the Games license and the Loose hack in. | the overdrive | A scene |
-| 13.3 | The Sweep | defense | A Navy sweep (six at skill 0.5) at the hideout's mouth; Spare flies as the Host's wingman. Keep the mouth clear for 4 min. | ☉ 6,000 · 500 | Deathmatch with an ally (Capture the Flag's sides) |
+| 13.1 | Verona Drop | exploration | Down the face of Verona Rupes to a hangar in the cliff: under 150 m/s (250 m/s is every ship's limit), never more than 300 m off the face, through six buoys. (built) | · 300 | Surface; markers |
+| 13.2 | Among the Loose | story | Spare's people. The overdrive, a reactor dump the Games license and the Loose hack in. (built, over the comm) | the overdrive | A scene |
+| 13.3 | The Sweep | defense | A Navy sweep (six at skill 0.5) at the hideout's mouth; Spare flies as the Host's wingman. Keep the mouth clear for 4 min. (built: one of them 8 s within 300 m of the mouth fails it; all six down wins early) | ☉ 6,000 · 500 | Deathmatch with an ally (Capture the Flag's sides) |
 | 14.1 | Geyser Field | race | Through Triton's nitrogen geysers to the Navy's Memorial Station; a geyser's column shoves a ship it catches. | ☉ 3,000 · 300 | Race; new: columns that shove |
 | 14.2 | The Old Admiral | story | Fleet Admiral Vey's confession. | — | A scene |
 | 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). | ☉ 4,000 · 400 | The existing Derelict arena |
@@ -284,8 +284,8 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 10 | Plating II | 3,000 | Every hit hurts two of the hangar's steps less (built: Plating II, from Crisp's people) |
 | 11 | Main drive II, radiators II | 2,500 each | Each the hangar's second step (built: Drive II, paid with money Quill's office sent ahead) |
 | 12 | Torpedo tubes I | 1,500 | A torpedo more, the hangar's first step (built: Torpedo Tubes I) |
-| 13 | The overdrive | 3,000 (fitting) | The Loose's gift |
-| 13 | Thrusters II | 2,500 | |
+| 13 | The overdrive | 3,000 (fitting) | The Loose's gift (built: Among the Loose) |
+| 13 | Thrusters II | 2,500 | The hangar's second step (built: Thrusters II) |
 | 14 | Thrusters III | 5,000 | |
 | 15 | Plating III | 6,000 | |
 | 16 | Main drive III, radiators III | 5,000 each | |
@@ -887,6 +887,30 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **QUILL**: Host! Contender! Form one hundred: a personal invitation to your Final Trial, at the Ninth Planet. The Ministry will send the coordinates. Bring your lovely computer!
 
 **NICOLE**: The Ninth Planet, Host. Nobody goes there. Nobody comes back from there. And I know the way. I do not know how I know it.
+
+### Verona (chapter 13, built)
+
+**HEDDA**: Miranda. Uranus on its side, over a cliff twenty kilometers tall. Spare sent word: his people are in the face, and they'll talk. We go down to them, slowly.
+
+**NICOLE**: Down the face, Host, through six buoys to the hideout’s mouth. Under a hundred and fifty meters a second, and never more than three hundred off the face, or the Navy’s scopes see us.
+
+**NICOLE** *(at the mouth)*: We are at the mouth. Lights in the ice, Host. Somebody lives in there.
+
+**SPARE**: Welcome to the Loose, Host. Strays, mostly. Clones whose Hosts died, or quit, or lost the link. Nobody prints us. We print nothing. We just keep going.
+
+**SPARE**: Here. The overdrive: a reactor dump the Games license for their stars. We hack it into anything with a reactor. Burns you out of a well, or into a wall. Your choice.
+
+**PIM**: Fitting's three thousand, Spare says, Loose prices. I've seen the wiring. Worth it. Hold still, this one bites.
+
+**NICOLE**: The overdrive, Host. One button, a lot of fire. I will tell you when we need it.
+
+**HEDDA**: Navy sweep inbound. Six of them, for the hideout. Spare's flying with you. Keep them off the mouth.
+
+**SPARE**: On your wing, Host. Like old times. Well. Like one time.
+
+**NICOLE** *(the sweep turned back)*: The sweep has turned back. The Loose are safe, for now.
+
+**SPARE**: Thanks, Host. You fly like me. I mean, I fly like you. You know what I mean.
 
 ### Spare (chapter 10, built)
 

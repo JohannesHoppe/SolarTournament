@@ -13,6 +13,7 @@ import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { sulfurFreighter, tug } from '../world/barge';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
+import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { yacht } from '../world/yacht';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
@@ -20,7 +21,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -928,6 +929,116 @@ const fitTubesOne = (campaign: Campaign) => {
 
 /** The Ring Trials' arena (chapter 12): the Rings of Saturn, the Games' own. */
 const RINGS: ArenaId = 'rings';
+
+/**
+ * Verona Drop (13.1): down the face of Verona Rupes to the hideout's mouth through DROP_BUOYS
+ * buoys, each DROP_OFF_BUOY south of the face (units, 150 m), from near the top edge at
+ * DROP_FROM_X down and along to the mouth; reached within DROP_REACH, in order. Faster than
+ * DROP_SPEED (units/s, 150 m/s: slow beside the ships' 250 m/s), or once at the first buoy more than DROP_OFF (units, 300 m) off
+ * the face (south of it, below the top), and the Navy's scopes see the hull: it starts over.
+ */
+const DROP_BUOYS = 6;
+const DROP_FROM_X = 40000;
+const DROP_OFF_BUOY = 3000;
+const DROP_REACH = 1600;
+const DROP_SPEED = 3000;
+const DROP_OFF = 6000;
+export const DROP_COURSE = Array.from({ length: DROP_BUOYS }, (_, i) => {
+  const share = (i + 1) / DROP_BUOYS;
+  const x = DROP_FROM_X + (VERONA_MOUTH.x - DROP_FROM_X) * share;
+  const y = VERONA_TOP - 2000 + (VERONA_MOUTH.y - (VERONA_TOP - 2000)) * share;
+  return point(x, y, faceAt(x, y) + DROP_OFF_BUOY);
+});
+
+/** Where the drop starts: south of the face, over its top edge, east of the first buoy. */
+export const DROP_START = (() => {
+  const x = DROP_FROM_X + 15000;
+  return { at: [x, VERONA_TOP + 4000, faceAt(x, VERONA_TOP) + 6000] as const, toward: [DROP_COURSE[0].x, DROP_COURSE[0].y, DROP_COURSE[0].z] as const };
+})();
+
+const veronaDrop: Drill = {
+  line: CAMPAIGN.veronaDrop,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'miranda',
+  autopilot: false,
+  enter(_, a, markers) {
+    a.points = DROP_COURSE.map((buoy) => buoy.clone());
+    surveyMarkers(a, markers);
+  },
+  done(ctx, a, markers) {
+    if (ctx.me.flight.position.distanceTo(a.points[a.next]) >= DROP_REACH) return false;
+    a.next++;
+    surveyMarkers(a, markers);
+    return a.next >= a.points.length;
+  },
+  fail(ctx, a) {
+    const at = ctx.me.flight.position;
+    if (ctx.me.flight.velocity.length() > DROP_SPEED) return CAMPAIGN.veronaFast;
+    // how far south of the face the hull flies, at its own height
+    return a.next > 0 && at.y < VERONA_TOP && at.z - faceAt(at.x, at.y) > DROP_OFF ? CAMPAIGN.veronaOff : null;
+  },
+  waypoint: (_, a) => a.points[a.next] ?? null,
+  mark: (ctx, a) => t('Buoy {n}/{total} · {speed} m/s', { n: Math.min(a.next + 1, a.points.length), total: a.points.length, speed: Math.round(ctx.me.flight.velocity.length() * 0.05) }),
+};
+
+/** The overdrive (13.2), the Loose's reactor dump, fitted at OVERDRIVE_PRICE. */
+const fitOverdrive = (campaign: Campaign) => {
+  if (campaign.parts.includes('overdrive')) return;
+  campaign.parts.push('overdrive');
+  buy(campaign, OVERDRIVE_PRICE);
+};
+/** Thrusters II (13.4): the thrusters' second step (see hullOf), at THRUSTERS_TWO_PRICE. */
+const fitThrustersTwo = (campaign: Campaign) => {
+  if (campaign.parts.includes('thrustersTwo')) return;
+  campaign.parts.push('thrustersTwo');
+  buy(campaign, THRUSTERS_TWO_PRICE);
+};
+
+/**
+ * The Sweep (13.3): SWEEPERS Navy fighters of SWEEP_SKILL come for the hideout's mouth, holding
+ * SWEEP_HOLD off it (units, 200 m); Spare flies on the Host's wing (skill SPARE_SKILL). One of them
+ * within SWEEP_REACH of the mouth (units, 300 m) for SWEEP_SIT seconds in a row opens the hideout
+ * and starts it over; the mouth kept clear SWEEP_SECONDS, or all of them down, wins.
+ */
+const SWEEPERS = 6;
+const SWEEP_SKILL = 0.5;
+const SWEEP_HOLD = 4000;
+const SWEEP_REACH = 6000;
+const SWEEP_SIT = 8;
+const SWEEP_SECONDS = 240;
+/** The Navy pilots' names (never translated). */
+const SWEEP_NAMES = ['Lt. Marr', 'Lt. Okafor', 'Ens. Vale', 'Ens. Brandt', 'Ens. Sato', 'Lt. Reyes'];
+const SWEEP_FROM = point(30000, -6000, 50000);
+
+const theSweep: Drill = {
+  line: CAMPAIGN.sweep,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'miranda',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx, a) {
+    ctx.removeJumpers();
+    ctx.spawnJumpers(null, VERONA_MOUTH, SWEEPERS, SWEEP_SKILL, SWEEP_NAMES, SWEEP_HOLD);
+    ctx.wingman('Spare', SPARE_SKILL, SWEEP_FROM.clone().lerp(VERONA_MOUTH, 0.8));
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+    // a.jinks: the seconds a Navy ship has sat on the mouth in a row
+    a.jinks = 0;
+    a.lastShot = a.seconds;
+  },
+  done(ctx, a) {
+    const dt = stepOf(a);
+    a.jinks = ctx.jumperNear(VERONA_MOUTH, SWEEP_REACH) ? a.jinks + dt : 0;
+    return a.seconds >= SWEEP_SECONDS || ctx.jumpersDown >= SWEEPERS;
+  },
+  fail: (_, a) => (a.jinks >= SWEEP_SIT ? CAMPAIGN.sweepLost : null),
+  leave(ctx) {
+    ctx.removeJumpers();
+    ctx.removeWingman();
+  },
+  waypoint: () => VERONA_MOUTH,
+  mark: (ctx, a) => t('Navy {n}/{total} · {seconds} s left', { n: SWEEPERS - ctx.jumpersDown, total: SWEEPERS, seconds: Math.max(0, Math.ceil(SWEEP_SECONDS - a.seconds)) }),
+};
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
@@ -2152,4 +2263,9 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'trialCarrier', name: msg('Trial IV: the Battleship'), drills: [said(CAMPAIGN.trialCarrier, RINGS)], pay: 8000, ratings: 1600, trial: { mode: 'fleet', arena: RINGS, podium: 1 } },
   { id: 'tubesOne', name: msg('Torpedo Tubes I'), drills: [said(PIM.tubesOne, RINGS), said(CAMPAIGN.tubesOne, RINGS)], pay: 0, fit: fitTubesOne },
   { id: 'invitation', name: msg('The Invitation'), drills: [said(QUILL.invitation, RINGS), said(CAMPAIGN.invitation, RINGS)], pay: 0 },
+  // chapter 13, Verona on Miranda: down the cliff to the Loose, their overdrive, a Navy sweep at their door
+  { id: 'veronaDrop', name: msg('Verona Drop'), drills: [said(HEDDA.miranda, 'miranda'), veronaDrop, said(CAMPAIGN.veronaDone, 'miranda')], pay: 0, ratings: 300, start: DROP_START },
+  { id: 'amongTheLoose', name: msg('Among the Loose'), drills: [said(SPARE.hideout, 'miranda'), said(SPARE.overdrive, 'miranda'), said(PIM.overdrive, 'miranda'), said(CAMPAIGN.overdrive, 'miranda')], pay: 0, fit: fitOverdrive },
+  { id: 'theSweep', name: msg('The Sweep'), drills: [said(HEDDA.sweep, 'miranda'), said(SPARE.wing, 'miranda'), theSweep, said(CAMPAIGN.sweepDone, 'miranda'), said(SPARE.after, 'miranda')], pay: 6000, ratings: 500 },
+  { id: 'thrustersTwo', name: msg('Thrusters II'), drills: [said(PIM.thrustersTwo, 'miranda'), said(CAMPAIGN.thrustersTwo, 'miranda')], pay: 0, fit: fitThrustersTwo },
 ];

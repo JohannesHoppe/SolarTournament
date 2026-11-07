@@ -9,9 +9,10 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
+import { faceAt } from '../world/miranda';
 
 /** A middling bot: what a Host is asked to fly, it must manage (see CLAUDE.md, Plausibility). */
 const SKILL = 0.5;
@@ -76,6 +77,30 @@ describe('the races of the campaign', () => {
 
   it('the Tiger Stripes on Enceladus are flown by a middling bot: down one stripe and up the next through every coil, the ad’s clock beaten, without a crash', () => {
     flyTrial('enceladus', TIGER_COURSE, TIGER_NORMALS, TIGER_START.at, TIGER_TIME);
+  });
+
+  it('the Verona Drop on Miranda is flown by a middling bot: down the face through every buoy, under 150 m/s and never 300 m off the face, without a crash', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('miranda')!.layout);
+    const start = new THREE.Vector3(...DROP_START.at);
+    for (const buoy of DROP_COURSE) expect(buoy.length()).toBeLessThan(ARENA_LIMIT);
+    const points = DROP_COURSE.map((buoy) => buoy.clone());
+    const normals = points.map((buoy, i) => buoy.clone().sub(i ? points[i - 1] : start).normalize());
+    const line = new RacingLine(points, false, start);
+    let fastest = 0;
+    let farthest = -Infinity;
+    let reached = false;
+    const flight = flyRings(field, { points, normals, radius: 1600, core: 0, line, open: true }, start, normals[0], SKILL, RACE_SPEED, 240, 0, (ship) => {
+      fastest = Math.max(fastest, ship.velocity.length());
+      reached ||= ship.position.distanceTo(points[0]) < 1600;
+      const at = ship.position;
+      if (reached && at.y < 14000) farthest = Math.max(farthest, at.z - faceAt(at.x, at.y));
+      return false;
+    }, 2400);
+    expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(1)} s`).toBe(points.length);
+    expect(flight.crashed).toBe(false);
+    expect(fastest).toBeLessThan(3000);
+    expect(farthest).toBeLessThan(6000);
   });
 
   it('the Flux Tube Race on Io is flown by a middling bot: both laps through every ring, past the flux tube, nothing missed, without a crash; one side of its loop runs where the link crackles', () => {

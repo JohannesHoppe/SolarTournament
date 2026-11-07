@@ -7,10 +7,11 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
+import { groundPlacement as mirandaGround, MIRANDA_FALL, MOUTH as VERONA_MOUTH, URANUS_AT } from './miranda';
 import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SATURN } from './iapetus';
 import { ENCELADUS_FALL, groundPlacement as enceladusGround, SATURN_AT as ENCELADUS_SATURN } from './enceladus';
 import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
@@ -52,7 +53,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -494,6 +495,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.7, 0.66, 0.6],
     grade: { gain: [1.02, 1, 0.97], lift: [0.0014, 0.0013, 0.0012], saturation: 0.9 },
   },
+  // Verona: grey ice under a black sky, Uranus's pale cyan filling a fifth of it
+  miranda: {
+    space: 0x010203,
+    sky: 0x8fb4b8,
+    ground: 0x24282a,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.03, 0.045, 0.05], size: 540000, shape: 1, turn: 0.4 },
+      { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.05], size: 460000, shape: 0, turn: 2.1 },
+    ],
+    stars: 1,
+    starmap: true,
+    dust: [0.7, 0.78, 0.8],
+    grade: { gain: [0.97, 1, 1.03], lift: [0.0011, 0.0014, 0.0015], saturation: 0.9 },
+  },
 };
 
 /**
@@ -719,6 +735,26 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('Saturn'), position: IAPETUS_SATURN, distance: false }],
     // over the bright plain south of the ridge, facing it
     start: { at: [30000, 2000, 50000], toward: [0, -4000, 0] },
+    open: true,
+  },
+  {
+    id: 'miranda',
+    name: msg('Verona'),
+    tagline: msg('Verona Rupes on Miranda, the tallest cliff in the solar system, the Loose’s hideout in its face, and Uranus lying on its side in the sky.'),
+    // nothing loose: the upland, the cliff and its foot
+    layout: { key: 'miranda', seed: 13000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [mirandaGround(MIRANDA_TYPE)], fall: MIRANDA_FALL },
+    cooling: 1,
+    storms: false,
+    // 19 AU from the sun, a small, cold disk
+    sun: { size: 10000, intensity: 2.6, color: 0xfff0dd },
+    mood: MOODS.miranda,
+    preview: { from: [30000, 8000, 40000], at: [0, -6000, 0] },
+    references: [
+      { glyph: 'planet', label: msg('The hideout'), position: VERONA_MOUTH, distance: true },
+      { glyph: 'planet', label: msg('Uranus'), position: URANUS_AT, distance: false },
+    ],
+    // over the upland at the cliff's edge, facing south over it
+    start: { at: [40000, 20000, -20000], toward: [30000, 14000, 20000] },
     open: true,
   },
 ];

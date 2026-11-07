@@ -784,3 +784,34 @@ test('Trial I: after its briefing a whole race of the Games in the Rings, flown 
   expect(await page.evaluate(() => localStorage.getItem('solartournament.hangar'))).toBe(coins);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 12 flown too: the hull with its third tube, at Miranda. */
+const mirandaHull = (...done: string[]) => ({ ...trialsHull('trialRace', 'trialDeathmatch', 'trialFlag', 'trialCarrier', 'tubesOne', 'invitation', ...done), parts: [...trialsHull().parts, 'tubesOne'] });
+
+test('Verona Drop: down the cliff’s face through six buoys to the hideout’s mouth', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, mirandaHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'miranda' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
+  await visitPoints(page, 0);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('The Sweep: six Navy fighters for the hideout’s mouth, Spare on the Host’s wing on its side, all of them down wins', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...mirandaHull('veronaDrop', 'amongTheLoose'), parts: [...mirandaHull().parts, 'overdrive'] });
+  await page.waitForFunction(() => window.game.venue?.id === 'miranda' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 6, null, { timeout: 180_000 });
+  const sides = await page.evaluate(() => {
+    const spare = window.game.ships.find((ship: { name: string }) => ship.name === 'Spare');
+    return { spare: !!spare, ally: spare?.allyOf(window.game.me), enemy: spare?.allyOf(window.game.jumpers.bots[0].ship) };
+  });
+  expect(sides).toEqual({ spare: true, ally: true, enemy: false });
+  expect(await page.evaluate(() => window.game.me.perks.overdrive)).toBe(true);
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theSweep')), { timeout: 120_000 }).toBe(true);
+  expect(await page.evaluate(() => window.game.me?.team ?? -1)).toBe(-1);
+  expect(errors).toEqual([]);
+});

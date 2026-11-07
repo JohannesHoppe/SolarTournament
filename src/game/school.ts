@@ -96,6 +96,9 @@ export interface SchoolContext {
   /** The raiders shot down so far, and their hits on their target. */
   readonly jumpersDown: number;
   readonly rigWear: number;
+  /** A wingman on the Host's side (`name` of `skill`, at `at`): fights every ship not on it, gets no clone after its death (the Sweep's Spare). */
+  wingman(name: string, skill: number, at: THREE.Vector3): void;
+  removeWingman(): void;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
   brawl(): void;
   /** The raiders spawned last are actors: their shots fly wide and hurt nothing (the Plume Yacht's staged bandits). */

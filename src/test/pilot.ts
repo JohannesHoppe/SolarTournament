@@ -57,9 +57,10 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
 /**
  * A racing bot of the given skill flies a course of rings in a field (see flyCourse), from
  * `start` facing `facing` and drifting that way at `drift` (units/s). `each` sees the flight
- * after every step and ends it by returning true.
+ * after every step and ends it by returning true. With `cap` (units/s) it holds its speed under
+ * it as a careful Host does: the drive off over it, the thrusters braking over a tenth more.
  */
-export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each): Flight {
+export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each, cap = Infinity): Flight {
   const flight = startFlight(start, facing, drift);
   // the hull's heat the bot reads, as its HUD shows it (see flyCourse)
   const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
@@ -70,7 +71,12 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
     // as the game's racers do: along the line, and near a ring for its center where the way would clip the rim
     rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
     bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
-    return bot.think(seconds, [ship], field);
+    const controls = bot.think(seconds, [ship], field);
+    const fast = flight.velocity.length();
+    if (fast <= cap) return controls;
+    // braking along the flight: the thrusters push against it in the ship’s frame (forward is -z)
+    const back = flight.toLocalDirection(flight.velocity).normalize().negate();
+    return fast > cap * 1.1 ? { ...controls, thrust: 0, strafeX: back.x, strafeY: back.y, strafeZ: -back.z } : { ...controls, thrust: 0 };
   }, limit, undefined, each, ship);
 }
 

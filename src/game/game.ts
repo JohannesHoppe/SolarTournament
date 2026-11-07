@@ -713,6 +713,8 @@ const SAW_REACH = 200;
 const JUMPER_NOTICE = 16000;
 /** The claim-jumpers' side (see Ship.team): the three brothers fight together, the Host stays on none. */
 const JUMPER_TEAM = 1;
+/** The side the Host and a mission's wingman fly on (see SchoolContext.wingman), apart from the raiders'. */
+const ALLY_TEAM = 2;
 /** A mission's race rivals (see Game.racers): their names, the Rockborn kids', and how far apart they start beside the Host (units, 60 m). */
 const RIVAL_NAMES = ['Nix', 'Bean', 'Spark'];
 const RIVAL_GAP = 1200;
@@ -1315,6 +1317,8 @@ export class Game implements OnlineGame {
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
   private sparring: { bot: Bot; armed: boolean } | null = null;
+  /** A mission's wingman (see SchoolContext.wingman): a bot on the Host's side, ALLY_TEAM, no clone after its death. */
+  private wingman: Bot | null = null;
   /**
    * A mission's raiders at a target (see campaign/missions): the Saw Brothers sawing at a rig
    * (`rock` the rock it stands on), or scrappers at an ore barge (no rock: the hull the drill set
@@ -2920,6 +2924,7 @@ export class Game implements OnlineGame {
     this.drone = null;
     this.watchedShip = null;
     this.sparring = null;
+    this.wingman = null;
     this.jumpers = null;
     this.racers = null;
     // the clone climbs back in: no scene outlives its round
@@ -4100,7 +4105,7 @@ export class Game implements OnlineGame {
       }
       if (!ship.alive) {
         // a mission's claim-jumper shot down stays down
-        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
+        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || ship === this.wingman?.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
         else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();
@@ -4956,6 +4961,13 @@ export class Game implements OnlineGame {
     $('link-lost').hidden = !on;
   }
 
+  /** The wingman gone, and the Host on no side again. */
+  private removeWingman() {
+    if (this.wingman) this.removeShip(this.wingman.ship);
+    this.wingman = null;
+    if (this.me) this.me.team = -1;
+  }
+
   private removeJumpers() {
     for (const bot of this.jumpers?.bots ?? []) this.removeShip(bot.ship);
     this.jumpers = null;
@@ -5747,6 +5759,18 @@ export class Game implements OnlineGame {
       blanks: () => {
         if (game.jumpers) game.jumpers.blanks = true;
       },
+      wingman: (name, skill, at) => {
+        this.removeWingman();
+        const me = game.me!;
+        const ship = this.addShip('wingman', name, 'human', false);
+        const bot = new Bot(ship, evenSkills(skill));
+        this.bots.push(bot);
+        this.wingman = bot;
+        ship.team = me.team = ALLY_TEAM;
+        ship.spawn(at, lookingAt(at, me.flight.position, me.flight.up(upward)), this.time);
+        ship.protectedUntil = this.time;
+      },
+      removeWingman: () => this.removeWingman(),
       ambush: (count, skill, names, hold) => {
         const actors = game.jumpers?.bots.map((bot) => bot.ship) ?? [];
         const rig = game.jumpers?.rig ?? new THREE.Vector3();
