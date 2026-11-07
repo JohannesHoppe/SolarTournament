@@ -98,6 +98,18 @@ export const SPEAKERS = {
     reference: { text: 'Tallymen, this is Navy cutter Restraint. That paper has been bought in full, by a party who wishes to remain anonymous. Stand down and clear the lane.', speed: 1 },
     language: 'navy',
   },
+  jack: {
+    voice: 'am_michael',
+    speed: 0.95,
+    reference: { text: "Afternoon, Host. You're the one Lanes Watch is selling, and I'm the one they want you to shoot. Nothing personal. Nice shooting. Nobody's going to print me, you know.", speed: 1 },
+    language: 'jack',
+  },
+  crisp: {
+    voice: 'am_eric',
+    speed: 1.1,
+    reference: { text: "Host! Bellamy Crisp, Director of Excitement, Victory Cola! Taste the win! Here's the deal! Our probes in your rounds, our logo on your hull. Welcome to the family!", speed: 1 },
+    language: 'crisp',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

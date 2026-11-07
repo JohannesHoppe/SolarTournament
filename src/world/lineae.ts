@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
-import { horizonMesh } from './horizon';
+import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { GROUND_CELL, GROUND_HALF, groundRelief, inCrack, surfaceHeight } from './europa';
 import { listeningPost } from './valhalla';
@@ -32,15 +32,6 @@ const streaks = new Noise(6008);
 
 /** The shell beyond the field's ground, from 3.4 km out to its horizon some 25 km away, drawn behind everything. */
 export function europa(): THREE.Group {
-  const surface = horizonMesh({
-    rings: 140,
-    spokes: 360,
-    first: GROUND_HALF.x * 0.85,
-    reach: 25 * 20000,
-    height: surfaceHeight,
-    // the Crack's rim and long ridged bands stained brown, the ice between white
-    paint: (x, z, color) => color.copy(ICE).lerp(STREAK, Math.max(inCrack(x, z), Math.max(0, streaks.fractal(x / 200000, 0.3, z / 15000, 3) - 0.2) * 1.5)),
-    glow: EUROPA_GLOW,
-  });
-  return new THREE.Group().add(surface);
+  // the Crack's rim and long ridged bands stained brown, the ice between white
+  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, (x, z, color) => color.copy(ICE).lerp(STREAK, Math.max(inCrack(x, z), Math.max(0, streaks.fractal(x / 200000, 0.3, z / 15000, 3) - 0.2) * 1.5)), EUROPA_GLOW);
 }

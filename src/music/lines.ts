@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -591,6 +591,15 @@ export const CAMPAIGN = {
   doseFull: 'The dose is full. This clone has had more than a body can take. The next one goes again.',
   doseLost: 'They have dragged the tanker away. We start over.',
   doseDone: 'The tanker is through the belt. Our clone will feel this dose for the rest of its short life, Host. So will you.',
+  hollowJack: 'Hollow Jack and three of his, among the ice. Lanes Watch pays for Jack alone. He shoves, Host, and he hooks. Do not let him pin us against a block.',
+  jackNoLink: 'Host. He has no link. There is no one at the other end.',
+  jackGone: 'He is not coming back. That one was not coming back.',
+  swingShift: 'The tug crews swing blocks of ice on their cables all day. Their drill, Host: hook a block, swing round it, and let go faster than sixty-five meters a second. Three times.',
+  swingShiftDone: 'Three blocks, three swings. The tug crews clapped, Host. I think that was for us.',
+  sponsored: 'Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.',
+  harpoon: 'A piece of his wreck is drifting out of the yard, and his harpoon is still in it. Fly through it before it is gone, and it is ours.',
+  harpoonLost: 'It has drifted out of the yard. We go back for it.',
+  hook: 'A hook, Host. Hold the key, and it bites what is on our nose: rock, hull, a core. Swing round what it holds, and let go at the right moment.',
   blackout: 'The freighter flies straight through the flux tube, Host, and we stay with it. The static will be bad in there. I will keep talking as long as I can.',
   blackoutBoot: 'The link is up. A new clone, Host, printed on Patience. I lost the last one in the tube. I do not know what happened to it.',
   blackoutBlank: 'My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.',
@@ -648,6 +657,7 @@ export const PIM = {
   grind: "Hold still. I'm grinding the depot grey off before it flakes into your intakes. There's something under it.",
   paintOld: "That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.",
   panels: "The Navy yard here throws out armor like it's nothing. Got you a set for your bare side, fifteen hundred. No more hits counting double on your left. Hold still.",
+  hook: "Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.",
   tube: "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.",
   driveOne: "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.",
   plating: "The science outfit's got hull plate stacked in their hangar, rated for the radiation. Traded them for a weld job. Fifteen hundred on top, though. Every hit hurts a bit less now.",
@@ -668,6 +678,7 @@ export const HEDDA = {
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
   phobos: "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. He's never died. Not once. Top three, and Lanes Watch comes calling.",
   iceRun: "Paying work, out of the show's eye. Three ice tugs for Ganymede, and the Loose rob convoys here. They'd rather take the cargo than a clone. Keep them off it. Two thousand five hundred.",
+  ganymede: "Ganymede. The tug yards. The Loose hide among the ice they haul in, and Lanes Watch has a bounty on their chief: Hollow Jack. Six thousand, and the ratings of your life. Careful. He's old, and he's good.",
   blackout: "Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.",
   blackoutFreighter: "Freighter's out the other side. Made it on its own. Didn't need us after all.",
   blackoutLog: "Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.",
@@ -704,13 +715,26 @@ export const NAVY = {
   hail: 'Tallymen, this is Navy cutter Restraint. That paper has been bought in full, by a party who wishes to remain anonymous. Stand down and clear the lane.',
 } as const;
 
+/** Hollow Jack, chief of the Loose in the Jupiter lanes, over the comm: dry, tired, funny; a stray, no Host at the other end. Their own voice (see tools/voice). */
+export const JACK = {
+  hello: "Afternoon, Host. You're the one Lanes Watch is selling, and I'm the one they want you to shoot. Nothing personal. Let's see what you've got.",
+  hit: "Nice shooting, Host. Nobody's going to print me, you know. My Host died forty years back. I'm just what was left over.",
+  last: "You know where strays go when the Navy catches us? Watch the Games sometime. The house pilots. They never say no. Tell your sponsor I said",
+} as const;
+
+/** Bellamy Crisp, Director of Excitement at Victory Cola: taglines and exclamation marks. Their own voice (see tools/voice). */
+export const CRISP = {
+  hello: "Host! Bellamy Crisp, Director of Excitement, Victory Cola! Taste the win! We watched the Jack thing. Everybody watched the Jack thing! Ratings like that, you deserve a sponsor, and the sponsor is us!",
+  deal: "Here's the deal, Host! Our probes in your rounds, our logo on your hull, our cola in your clones. Every win, a little fizz for us. Sign here. And here. Welcome to the family!",
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -740,6 +764,10 @@ export function allLines(language: Language): string[] {
       return [...Object.values(TALLY)];
     case 'navy':
       return [...Object.values(NAVY)];
+    case 'jack':
+      return [...Object.values(JACK)];
+    case 'crisp':
+      return [...Object.values(CRISP)];
   }
 }
 

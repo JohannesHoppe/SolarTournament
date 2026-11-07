@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
-import { horizonMesh } from './horizon';
+import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { FLUX_AT, FLUX_RADIUS, GROUND_HALF, groundRelief, LAND, PATERA, PATERA_RADIUS, PIT_FLOOR, surfaceHeight } from './io';
 
@@ -89,20 +89,12 @@ function lakeTexture(): THREE.CanvasTexture {
 
 /** The plains beyond the field's ground, from 3.4 km out to their horizon some 25 km away, drawn behind everything. */
 export function io(): THREE.Group {
-  const surface = horizonMesh({
-    rings: 140,
-    spokes: 360,
-    first: GROUND_HALF.x * 0.85,
-    reach: 25 * 20000,
-    height: surfaceHeight,
-    paint: (x, z, color) => {
-      const p = patches.fractal(x / 50000, 0.4, z / 50000, 3);
-      color.copy(SULFUR).lerp(p > 0.1 ? ORANGE : FROST, Math.min(1, Math.abs(p) * 2));
-      // the black of fresh lava flows in long tongues
-      const flow = flows.fractal(x / 120000, 0.6, z / 20000, 3);
-      if (flow > 0.35) color.lerp(BASALT, Math.min(1, (flow - 0.35) * 5));
-    },
-    glow: IO_GLOW,
-  });
-  return new THREE.Group().add(surface, fluxScenery());
+  const paint = (x: number, z: number, color: THREE.Color) => {
+    const p = patches.fractal(x / 50000, 0.4, z / 50000, 3);
+    color.copy(SULFUR).lerp(p > 0.1 ? ORANGE : FROST, Math.min(1, Math.abs(p) * 2));
+    // the black of fresh lava flows in long tongues
+    const flow = flows.fractal(x / 120000, 0.6, z / 20000, 3);
+    if (flow > 0.35) color.lerp(BASALT, Math.min(1, (flow - 0.35) * 5));
+  };
+  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, paint, IO_GLOW).add(fluxScenery());
 }

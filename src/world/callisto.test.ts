@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GROUND_HALF, groundPlacement, groundRelief, RING_SPACING, ringAt, surfaceHeight, VALHALLA } from './callisto';
 import { CALLISTO_TYPE } from './yard';
-import { groundField } from '../test/field';
+import { groundField, reliefOutside } from '../test/field';
 import { ARENA_LIMIT } from './arena';
 
 describe('Valhalla on Callisto', () => {
@@ -11,13 +11,7 @@ describe('Valhalla on Callisto', () => {
   });
 
   it('keeps its relief inside its box over the whole square', () => {
-    for (let x = -GROUND_HALF.x; x <= GROUND_HALF.x; x += 500) {
-      for (let z = -GROUND_HALF.z; z <= GROUND_HALF.z; z += 500) {
-        const top = groundRelief(x, z);
-        expect(top).toBeLessThan(GROUND_HALF.y);
-        expect(top).toBeGreaterThan(-GROUND_HALF.y);
-      }
-    }
+    expect(reliefOutside(groundRelief, GROUND_HALF, 500)).toEqual([]);
   });
 
   it('crosses the field with Valhalla’s ridges, each rising gently away from the basin and dropping off in a scarp', () => {

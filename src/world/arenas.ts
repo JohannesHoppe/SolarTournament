@@ -7,8 +7,9 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
+import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { WALL_TOP, wallPlacement } from './wall';
@@ -47,7 +48,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -427,6 +428,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.72, 0.64, 0.42],
     grade: { gain: [1.03, 1, 0.94], lift: [0.0016, 0.0012, 0.0006], saturation: 0.95 },
   },
+  // the Tug Yards: grey ice over Ganymede's grey and brown ground, Jupiter's cream from above
+  ganymede: {
+    space: 0x020203,
+    sky: 0x9a968a,
+    ground: 0x2a2826,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.05, 0.04, 0.03], size: 540000, shape: 0, turn: 1.7 },
+      { at: [0.6, 0.3, 0.6], color: [0.035, 0.04, 0.05], size: 460000, shape: 2, turn: 0.2 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.66, 0.66, 0.66],
+    grade: { gain: [1, 1, 1], lift: [0.0013, 0.0013, 0.0013], saturation: 0.88 },
+  },
 };
 
 /**
@@ -583,6 +599,23 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the plain, facing the flux tube
     start: { at: [40000, 2000, 30000], toward: [2000, 0, -2000] },
+    open: true,
+  },
+  {
+    id: 'ganymede',
+    name: msg('The Tug Yards'),
+    tagline: msg('Blocks of ice the tugs hauled in, parked over the grooves of Ganymede, where the Loose hide.'),
+    // the yard's blocks of ice, floating in a layer 400 m thick over the ground far below
+    layout: { key: 'ganymede', seed: 8000, kind: 'ice', count: 28, minScale: 0.3, maxScale: 0.9, radius: FIELD_RADIUS, inner: 6000, flat: 4000, spin: SPIN_RATE, toughness: 600, placements: [ganymedeGround(GANYMEDE_TYPE)], fall: GANYMEDE_FALL },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    mood: MOODS.ganymede,
+    preview: { from: [30000, 8000, 30000], at: [0, -2000, 0] },
+    references: [{ glyph: 'planet', label: msg('Jupiter'), position: GANYMEDE_JUPITER, distance: false }],
+    // at the yard's edge, facing into it
+    start: { at: [45000, 1000, 30000], toward: [0, 0, 0] },
     open: true,
   },
 ];

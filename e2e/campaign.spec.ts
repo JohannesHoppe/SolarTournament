@@ -321,21 +321,28 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
   return errors;
 }
 
-/** The clone held still at an echo (the export `echo` of the missions) while the mission is at drill `step`, until it moves on (20 s at most). */
-async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR', step: number) {
+/** The clone held still at an echo (the export `echo` of the missions), or at the drill's first point as it moves (`first`), while the mission is at drill `step`, until it moves on (20 s at most). */
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'first', step: number) {
   await page.evaluate(
     async ([path, echo, step]) => {
       const game = window.game;
-      const at = ((await import(path)) as typeof import('../src/campaign/missions'))[echo];
+      const at = echo === 'first' ? null : ((await import(path)) as typeof import('../src/campaign/missions'))[echo];
       const start = game.time;
       while (game.school?.stepIndex === step && game.time - start < 20) {
-        game.me.flight.position.copy(at);
+        game.me.flight.position.copy(at ?? game.school.attempt.points[0]);
         game.me.flight.velocity.set(0, 0, 0);
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     },
     ['/src/campaign/missions.ts', echo, step] as const,
   );
+}
+
+/** A race of the campaign at `venue`, its drill `step` running: five rivals lined up, Perihelion among them, at eight rings. */
+async function linedUp(page: Page, venue: string, step: number) {
+  await page.waitForFunction(([venue, step]) => window.game.venue?.id === venue && window.game.school?.stepIndex === step && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, [venue, step] as const, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.racers.bots.map((bot: { ship: { name: string } }) => bot.ship.name))).toContain('Perihelion');
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
 }
 
 /** Chapter 2 flown: every mission of it done, the thrusters rebuilt, three thousand coins in the wallet. */
@@ -447,10 +454,7 @@ test('chapter 4 opens on Phobos: the Stickney Grand lines up five rivals, Perihe
   test.setTimeout(300_000);
   const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul'], coins: 2100, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive'], modules: ['targeting'] };
   const errors = await takeJobFrom(page, kept);
-  await page.waitForFunction(() => window.game.venue?.id === 'phobos' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
-  const names = await page.evaluate(() => window.game.racers.bots.map((bot: { ship: { name: string } }) => bot.ship.name));
-  expect(names).toContain('Perihelion');
-  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  await linedUp(page, 'phobos', 2);
   expect(errors).toEqual([]);
 });
 
@@ -586,9 +590,7 @@ for (const [outcome, ratings] of [['shot down', 250], ['let go', 100]] as const)
 test('chapter 7 opens on Io: the Flux Tube Race lines up five rivals, Perihelion among them, at eight rings past the flux tube', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating'));
-  await page.waitForFunction(() => window.game.venue?.id === 'io' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
-  expect(await page.evaluate(() => window.game.racers.bots.map((bot: { ship: { name: string } }) => bot.ship.name))).toContain('Perihelion');
-  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  await linedUp(page, 'io', 1);
   expect(errors).toEqual([]);
 });
 
@@ -601,5 +603,31 @@ test('Blackout: in the flux tube the link cuts, the picture white with LINK LOST
   await expect(page.locator('#link-lost')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('#link-lost')).toBeHidden({ timeout: 20_000 });
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('blackout')), { timeout: 180_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+/** Chapters 5 to 7 flown, all of them: the hull as far as Io fits it. */
+const CHAPTER_SEVEN = ['pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating', 'fluxTubeRace', 'tubeFitting', 'mainDrive', 'blackout'];
+
+test('chapter 8 opens over Ganymede: Hollow Jack and three of the Loose among the ice, Jack shot down ends the bounty; then his harpoon, flown through, is the hook', async ({ page }) => {
+  test.setTimeout(400_000);
+  const errors = await takeJobFrom(page, chapterFive(...CHAPTER_SEVEN));
+  await page.waitForFunction(() => window.game.venue?.id === 'ganymede' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 4, null, { timeout: 240_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Hollow Jack');
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('hollowJack')), { timeout: 240_000 }).toBe(true);
+  // The Harpoon: the clone held where the piece drifts
+  await page.waitForFunction(() => window.game.school?.stepIndex === 0 && window.game.school.attempt?.live && window.game.school.attempt.points.length === 1, null, { timeout: 120_000 });
+  await holdAtEcho(page, 'first', 0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).parts.includes('hook')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Swing Shift faces the hull to a block of ice of the tug yard, three times to hook and swing', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...chapterFive(...CHAPTER_SEVEN, 'hollowJack', 'harpoon'), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
+  await page.waitForFunction(() => window.game.venue?.id === 'ganymede' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 240_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(1);
+  expect(await page.evaluate(() => window.game.me.perks.hook)).toBe(true);
   expect(errors).toEqual([]);
 });

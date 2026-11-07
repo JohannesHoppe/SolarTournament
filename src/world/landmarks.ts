@@ -20,6 +20,8 @@ import { callisto } from './valhalla';
 import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { europa } from './lineae';
 import { io } from './flux';
+import { ganymede } from './yards';
+import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
 import { JUPITER_AT as IO_JUPITER_AT, JUPITER_SIZE as IO_JUPITER_SIZE } from './io';
 import { JUPITER_AT as EUROPA_JUPITER_AT, JUPITER_SIZE as EUROPA_JUPITER_SIZE } from './europa';
 import { BLOOM_THRESHOLD } from '../view/bloom';
@@ -844,6 +846,7 @@ export class Landmarks {
     this.scenes.set('callisto', this.underJupiter(callisto(), JUPITER_AT, JUPITER_SIZE));
     this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
+    this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);

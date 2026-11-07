@@ -8,6 +8,7 @@ import { GROUND_HALF as PHOBOS_HALF, groundRelief } from './phobos';
 import { GROUND_HALF as CALLISTO_HALF, groundRelief as callistoRelief, POST_HALF } from './callisto';
 import { GROUND_HALF as EUROPA_HALF, groundRelief as europaRelief } from './europa';
 import { GROUND_HALF as IO_HALF, groundRelief as ioRelief } from './io';
+import { GROUND_HALF as GANYMEDE_HALF, groundRelief as ganymedeRelief } from './ganymede';
 import type { Relief } from './asteroids';
 
 /**
@@ -139,8 +140,8 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
  * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
  * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the places after them in PLACE_BOXES.
  */
-/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io). */
-const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF];
+/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io), Ganymede's under the Tug Yards (see world/ganymede). */
+const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF, GANYMEDE_HALF];
 export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, ...PLACE_BOXES];
 /** The template of the slope under Vesta's claims in the yards' set. */
 export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
@@ -160,12 +161,15 @@ export const EUROPA_TYPE = WALL_TYPE + 4;
 export const STATION_TYPE = WALL_TYPE + 5;
 /** Io's ground at Flux (see world/io): a box whose top is the moon's relief, the patera and the mesa on it. */
 export const IO_TYPE = WALL_TYPE + 6;
-/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's and Io's. */
+/** Ganymede's ground under the Tug Yards (see world/ganymede): a box whose top is the moon's relief. */
+export const GANYMEDE_TYPE = WALL_TYPE + 7;
+/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's, Io's and Ganymede's. */
 const RELIEFS = new Map<number, Relief>([
   [PHOBOS_TYPE, groundRelief],
   [CALLISTO_TYPE, callistoRelief],
   [EUROPA_TYPE, europaRelief],
   [IO_TYPE, ioRelief],
+  [GANYMEDE_TYPE, ganymedeRelief],
 ]);
 export const RACK_RELIEFS: readonly (Relief | null)[] = RACK_BOXES.map((_, type) => RELIEFS.get(type) ?? null);
 

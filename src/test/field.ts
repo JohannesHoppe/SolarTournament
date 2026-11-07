@@ -63,6 +63,18 @@ export function groundField(key: string, placement: Placement, surface: (x: numb
   return { field, misses };
 }
 
+/** The points of a moon's ground, sampled every `step` over its box's square, where its relief leaves the box (above its top or below its bottom). */
+export function reliefOutside(relief: (x: number, z: number) => number, half: THREE.Vector3, step: number): string[] {
+  const outside: string[] = [];
+  for (let x = -half.x; x <= half.x; x += step) {
+    for (let z = -half.z; z <= half.z; z += step) {
+      const top = relief(x, z);
+      if (top >= half.y || top <= -half.y) outside.push(`${x}, ${z}: ${top}`);
+    }
+  }
+  return outside;
+}
+
 /** The Belt's mining plan by the rocks' detail, made once for all tests (it follows from the layout and the shapes). */
 const claims = new Map<number, Plan>();
 

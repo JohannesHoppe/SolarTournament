@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { block, lattice, macroUv, noUv, patchedPlating, PLATING_TILE, reliefGround, withCollider } from './boneyard';
 import { boxUv, industrialSurface, surfaced } from '../view/surfaces';
 import { rotateX, rotateZ } from '../detthree';
-import { horizonMesh } from './horizon';
+import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { GROUND_HALF, groundRelief, surfaceHeight } from './callisto';
 
@@ -61,14 +61,5 @@ const tone = new Noise(5006);
 
 /** The moon beyond the field's ground, from 7 km out to its horizon some 30 km away, drawn behind everything. */
 export function callisto(): THREE.Group {
-  const surface = horizonMesh({
-    rings: 140,
-    spokes: 360,
-    first: GROUND_HALF.x * 0.85,
-    reach: 30 * 20000,
-    height: surfaceHeight,
-    paint: (x, z, color) => color.copy(DUST).lerp(ICE, Math.max(0, tone.fractal(x / 40000, 0.5, z / 40000, 3) - 0.15)),
-    glow: CALLISTO_GLOW,
-  });
-  return new THREE.Group().add(surface);
+  return moonBeyond(GROUND_HALF.x, 30 * 20000, surfaceHeight, (x, z, color) => color.copy(DUST).lerp(ICE, Math.max(0, tone.fractal(x / 40000, 0.5, z / 40000, 3) - 0.15)), CALLISTO_GLOW);
 }

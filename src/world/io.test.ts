@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FLUX_AT, fluxStatic, GROUND_HALF, groundPlacement, groundRelief, LAND, MESA, PATERA, PATERA_RADIUS, PIT_FLOOR, surfaceHeight } from './io';
 import { IO_TYPE } from './yard';
-import { groundField } from '../test/field';
+import { groundField, reliefOutside } from '../test/field';
 
 describe('Flux on Io', () => {
   it('collides as its ground: on the plain, in the patera, on the mesa', () => {
@@ -11,13 +11,7 @@ describe('Flux on Io', () => {
   });
 
   it('keeps its relief inside its box over the whole square', () => {
-    for (let x = -GROUND_HALF.x; x <= GROUND_HALF.x; x += 1000) {
-      for (let z = -GROUND_HALF.z; z <= GROUND_HALF.z; z += 1000) {
-        const top = groundRelief(x, z);
-        expect(top).toBeLessThan(GROUND_HALF.y);
-        expect(top).toBeGreaterThan(-GROUND_HALF.y);
-      }
-    }
+    expect(reliefOutside(groundRelief, GROUND_HALF, 1000)).toEqual([]);
   });
 
   it('levels the patera’s floor under its lava lake, sunk 150 m into the plain, and raises the mesa 300 m over it', () => {

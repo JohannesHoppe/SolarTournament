@@ -47,6 +47,16 @@ export interface Horizon {
   glow: number;
 }
 
+/**
+ * A moon beyond its place's field ground (Phobos, Callisto, Europa, Io, Ganymede): its land from
+ * 85 % of the ground's half width `half` out to its horizon at `reach` (units), on 140 rings and
+ * 360 spokes, at the moon's `height`, in the colors `paint` gives, lit faintly by `glow`; a group
+ * the rest of its scenery is added to.
+ */
+export function moonBeyond(half: number, reach: number, height: Horizon['height'], paint: Horizon['paint'], glow: number): THREE.Group {
+  return new THREE.Group().add(horizonMesh({ rings: 140, spokes: 360, first: half * 0.85, reach, height, paint, glow }));
+}
+
 /** The land of `horizon` as one mesh, drawn behind everything with what is see-through, after the sky. */
 export function horizonMesh(horizon: Horizon): THREE.Mesh {
   const { rings, spokes } = horizon;

@@ -57,9 +57,9 @@ describe('the campaign Lot 7731', () => {
       expect(done.ratings).toBe(ratingsOf(mission, campaign));
       if (done.rank) ranks.push(done.rank);
     }
-    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones
+    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones, Hollow Jack's bounty to a sponsor's notice
     expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + ratingsOf(mission, campaign), 0));
-    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed']);
+    expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed', 'Sponsored']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
     expect(rankOf(49)).toBe('Unrated');

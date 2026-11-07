@@ -4833,14 +4833,14 @@ export class Game implements OnlineGame {
    * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
    * rig stands on, or null for a hull of the drill's; `guard`: guarding it instead.
    */
-  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number | readonly number[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
       const ship = this.addShip(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
       // brothers: one side, never at each other
       ship.team = JUMPER_TEAM;
-      const bot = new Bot(ship, evenSkills(skill));
+      const bot = new Bot(ship, evenSkills(typeof skill === 'number' ? skill : (skill[i] ?? skill[0])));
       this.bots.push(bot);
       bots.push(bot);
       const angle = (i / count) * Math.PI * 2;

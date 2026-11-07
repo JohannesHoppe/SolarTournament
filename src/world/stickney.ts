@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
-import { horizonMesh } from './horizon';
+import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { GROUND_HALF, groundRelief, surfaceHeight } from './phobos';
 
@@ -24,14 +24,5 @@ const tone = new Noise(4005);
 
 /** The moon beyond the field's ground, from 5 km out to its horizon some 20 km away, drawn behind everything. */
 export function phobos(): THREE.Group {
-  const surface = horizonMesh({
-    rings: 120,
-    spokes: 360,
-    first: GROUND_HALF.x * 0.85,
-    reach: 20 * 20000,
-    height: surfaceHeight,
-    paint: (x, z, color) => color.copy(DUST).lerp(DARKER, 0.5 + 0.5 * tone.fractal(x / 60000, 0.5, z / 60000, 3)),
-    glow: PHOBOS_GLOW,
-  });
-  return new THREE.Group().add(surface);
+  return moonBeyond(GROUND_HALF.x, 20 * 20000, surfaceHeight, (x, z, color) => color.copy(DUST).lerp(DARKER, 0.5 + 0.5 * tone.fractal(x / 60000, 0.5, z / 60000, 3)), PHOBOS_GLOW);
 }

@@ -149,10 +149,10 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 7.1 | Flux Tube Race | race | The sulfur miners' race, eight rings on an ellipse over Io's plain, one side running past the flux tube. The nearer the flux tube, the more the link glitches (the picture breaks up as on a hit). Two laps; Perihelion again (skill 0.65) and four miners. Top two. (built; still to come: the miners' beacon buoys in place of the rings, the plasma torus) | ☉ 4,000 · 350 | Race; the link glitch |
 | 7.2 | Tube Fitting | shop | The first torpedo tube (☉ 2,000), fitted by Io's sulfur miners: one torpedo a clone. Then Main Drive I (☉ 1,000), the miners' tuning on the drive's bell. (built) | — | Shipyard |
 | 7.3 | Blackout | story escort | Escort a sulfur freighter through the tube. Where its lane comes nearest the tube's axis the link cuts: the picture white, no datamosh, LINK LOST, for 5 s. A new clone boots on Patience's printer; the freighter made it alone. Then Patience's log: the Magpie recovered adrift, canopy open, cockpit empty; Nicole's logs blank for two hours. Cannot fail. (built) | ☉ 2,000 · 150 | Escort; new: the link cut |
-| 8.1 | Hollow Jack | bounty | Hollow Jack (skill 0.7, shoves and hooks) and three of the Loose among Ganymede's ice. Kill Jack. | ☉ 6,000 · 600 | Deathmatch; a named target |
-| 8.2 | The Harpoon | salvage | Fly through the piece of Jack's wreck that holds his harpoon before it drifts out of the arena. | the hook | Wreckage; probe pickup |
-| 8.3 | Swing Shift | skill | In a tug yard, hook three rocks in turn and let go faster than 65 m/s each time. | ☉ 1,000 · 100 | School: the hook drill |
-| 8.4 | Sponsor Night | story | Bellamy Crisp of Victory Cola signs the Host. Rank Sponsored. | — | A scene |
+| 8.1 | Hollow Jack | bounty | Hollow Jack (skill 0.7) and three of the Loose (skill 0.45) among Ganymede's ice, fighting every ship they see. Kill Jack; his ratings lift the Host to Sponsored. (built; still to come: Jack shoving and hooking as a bot, the announcer's line) | ☉ 6,000 · 600 | Raiders as guards; a named target |
+| 8.2 | The Harpoon | salvage | Fly through the piece of Jack's wreck that holds his harpoon, within 50 m, before it drifts out of the arena; Pim puts it on a tug's winch (☉ 1,500): the hook. (built) | the hook | A drifting prop |
+| 8.3 | Swing Shift | skill | In a tug yard, hook three blocks of ice in turn and let go faster than 65 m/s each time. (built) | ☉ 1,000 · 100 | School: the hook drill |
+| 8.4 | Sponsor Night | story | Bellamy Crisp of Victory Cola signs the Host, now ranked Sponsored. (built, over the comm; still to come: in person) | — | A scene |
 
 ### Act III: Ratings
 
@@ -278,7 +278,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 6 | Plating I | 1,500 | Every hit hurts 7 % of it less, the hangar's first step, from the science outfit at Europa (built: Plating I) |
 | 7 | Torpedo tube | 2,000 | One torpedo per clone (built: Tube Fitting) |
 | 7 | Main drive I | 1,000 | The main drive pushes 5 % of a stock ship's harder, the hangar's first step (built: Main Drive I) |
-| 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch |
+| 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch (built: The Harpoon) |
 | 9 | Second tube | 2,000 | Two torpedoes: stock |
 | 9 | Thrusters I | 1,000 | |
 | 10 | Plating II | 3,000 | |
@@ -382,7 +382,7 @@ Jupiter's moons lie inside a magnetic field that traps radiation fierce enough t
 - **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint. (Built: the field over Valhalla's ring zone, its ridges 150 m high and packed closer than the real ones, 1.5 km apart, so a sprint crosses several; some 260 craters of 40 to 700 m in radius; Callisto's eighth of a g, which a ship feels; Jupiter still in the sky, 34° up and 4.4° across, from its Cassini map; the Navy's old listening post among the craters. Still to come: the studio.)
 - **Europa: the Lineae.** About 3,120 km across, a shell of ice over an ocean, its face crossed by long reddish-brown cracks. Jupiter fills some 12° of its sky. The radiation is intense. A science station clings in a crack, its dish pointing at the ice; nobody has found life down there, and its last scientist keeps looking. Flown: the tanker through the belt, the dive into the crack. (Built: the field over the Crack, 200 m wide and some 800 m deep with nearly sheer walls, its lips raised into ridges 80 m high, older double ridges across the plain; the science station on the Crack's floor; Jupiter still in the sky, 30° up and 12° across; the radiation belt over the ice, a dose for the clone the higher it flies, none in the Crack.)
 - **Io: Flux.** About 3,640 km across, the most volcanic body known: hundreds of active volcanoes, a surface of sulfur yellow, orange and white, plumes rising high above it. Jupiter fills some 19° of its sky. Io sheds a ring of charged gas along its orbit, and between Io and Jupiter runs a current of millions of amperes along the field's lines: the flux tube, where Jupiter's auroras have a spot of their own. In the game the tube shows as a faint violet glow and a rising static on the link. Station: sulfur miners in shielded bunkers. Flown: the Flux Tube Race, the Blackout. (Built: the field over Io's sulfur plain, a patera with its lava lake, a mesa, the flux tube between them; Jupiter still in the sky, 45° up and 19° across. Still to come: the plumes, the miners' bunkers.)
-- **Ganymede.** About 5,270 km across, the largest moon in the solar system, larger than Mercury, the only moon with a magnetic field of its own (with auroras of its own); bright grooved ground beside dark old ground. The Loose hide in its tug yards. Flown: Hollow Jack, the harpoon, the hook yard.
+- **Ganymede.** About 5,270 km across, the largest moon in the solar system, larger than Mercury, the only moon with a magnetic field of its own (with auroras of its own); bright grooved ground beside dark old ground. The Loose hide in its tug yards. Flown: Hollow Jack, the harpoon, the hook yard. (Built: the tug yard's blocks of ice floating 600 m over the ground, its bright grooved bands and dark terrain; Jupiter still in the sky, 40° up and 7.6° across.)
 
 ### Saturn
 
@@ -457,13 +457,13 @@ The Host is silent. Everyone else has a voice; the existing ones keep theirs.
 
 **The Saw Brothers.** Claim-jumpers at Vesta, three of them, giggling over the comm while they cut other people's rigs off their rocks. The first fight.
 
-**Hollow Jack.** Chief of the Loose in the Jupiter lanes. Dry, tired, funny. He robs convoys and never kills a clone ("Clones are people too, Host. Mostly."). He is a stray of a famous Games pilot whose Host died forty years ago. His death in chapter 8 is final, and it is the first death in the game that is. His harpoon becomes the Magpie's hook.
+**Hollow Jack.** Chief of the Loose in the Jupiter lanes. Dry, tired, funny. He robs convoys and never kills a clone ("Clones are people too, Host. Mostly."). He is a stray of a famous Games pilot whose Host died forty years ago. His death in chapter 8 is final, and it is the first death in the game that is. His harpoon becomes the Magpie's hook. His hologram (built): a bust in the rust of an old hull, an old man in a work suit; his voice dry and tired.
 
 **Spare.** The Host's clone, lost to the flux tube at Io and living on. He has all of the Host's memories up to that minute, so he knows the Magpie, Nicole, Pim and Hedda as the Host does, and he has lived a year the Host has not. His voice is the first time the Host hears its own voice from outside: choose one that has neither Nicole's color nor the announcer's, and put it through a cockpit microphone. He is not the Host's enemy; he raided the Host's convoys to keep the Host from rising, because he read the Ministry's file. At the Ninth he flies beside the Host's clone and covers the escape; the Navy takes him. In the epilogue he is a house pilot of the Games, his link the Ministry's. The game's subtitles show his clone number, which is the real number of the clone the Host lost at Io; his lines never speak it.
 
 **Fleet Admiral Corwin Vey.** The Navy's oldest officer, at Triton, on his fortieth or so body; every transfer copied his confusion along. Courtly, gentle, drifting between centuries. He commanded the battle at the world ship and is proud of it; he tells the truth because he no longer knows it is a secret.
 
-**Bellamy Crisp.** Director of Excitement at Victory Cola. Speaks in taglines and exclamation marks. Sponsors the Host, the Circuit and, as chapter 10 reveals, the bandits on *Lanes Watch* (bandits are great for ratings).
+**Bellamy Crisp.** Director of Excitement at Victory Cola. Speaks in taglines and exclamation marks. Sponsors the Host, the Circuit and, as chapter 10 reveals, the bandits on *Lanes Watch* (bandits are great for ratings). His hologram (built): a bust in his cola's red, a sleek man in a dark suit; his voice bright and quick.
 
 **Odile.** Keeper of Last Light on Charon, the last bar before the dark. Old, slow, kind, sings the world ship's departure song when the bar is empty; nobody else alive knows it. She knew Nicole Aster's name before the Host did, and says nothing until asked.
 
@@ -710,9 +710,15 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **NICOLE**: Five stars, on this hull. I remember the brush. That is not possible, Host. I am a flight computer.
 
-### Hollow Jack (chapter 8)
+### Hollow Jack (chapter 8, built but the announcer's line)
 
-**JACK**: Nice shooting, Host. Nobody's going to print me, you know. My Host died forty years back. I'm just what was left over.
+**HEDDA**: Ganymede. The tug yards. The Loose hide among the ice they haul in, and Lanes Watch has a bounty on their chief: Hollow Jack. Six thousand, and the ratings of your life. Careful. He's old, and he's good.
+
+**JACK**: Afternoon, Host. You're the one Lanes Watch is selling, and I'm the one they want you to shoot. Nothing personal. Let's see what you've got.
+
+**NICOLE**: Hollow Jack and three of his, among the ice. Lanes Watch pays for Jack alone. He shoves, Host, and he hooks. Do not let him pin us against a block.
+
+**JACK** *(shot down)*: Nice shooting, Host. Nobody's going to print me, you know. My Host died forty years back. I'm just what was left over.
 
 **NICOLE** *(Voice I, very quiet)*: Host. He has no link. There is no one at the other end.
 
@@ -723,6 +729,22 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: He is not coming back. That one was not coming back.
 
 **ANNOUNCER**: and the bandit is down. permanently. ladies and gentlemen, the ratings.
+
+### The Harpoon, Swing Shift, Sponsor Night (chapter 8, built)
+
+**NICOLE**: A piece of his wreck is drifting out of the yard, and his harpoon is still in it. Fly through it before it is gone, and it is ours.
+
+**PIM**: Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.
+
+**NICOLE**: A hook, Host. Hold the key, and it bites what is on our nose: rock, hull, a core. Swing round what it holds, and let go at the right moment.
+
+**NICOLE**: The tug crews swing blocks of ice on their cables all day. Their drill, Host: hook a block, swing round it, and let go faster than sixty-five meters a second. Three times.
+
+**BELLAMY CRISP**: Host! Bellamy Crisp, Director of Excitement, Victory Cola! Taste the win! We watched the Jack thing. Everybody watched the Jack thing! Ratings like that, you deserve a sponsor, and the sponsor is us!
+
+**BELLAMY CRISP**: Here's the deal, Host! Our probes in your rounds, our logo on your hull, our cola in your clones. Every win, a little fizz for us. Sign here. And here. Welcome to the family!
+
+**NICOLE**: Victory Cola, Host. Every round we fly sells a can now. I liked us better when nobody was watching.
 
 ### Spare (chapter 10)
 

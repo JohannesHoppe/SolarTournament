@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, HEDDA, NAVY, PIM, RASK, SAW, TALLY } from '../music/lines';
-import { clear, CORE_SHARE, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, RASK, SAW, TALLY } from '../music/lines';
+import { clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
+import { ARENA_LIMIT } from '../world/arena';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { sulfurFreighter } from '../world/barge';
@@ -15,7 +16,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -787,22 +788,25 @@ const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
 const BOUNTY_SKILL = 0.4;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
-const pilotEpisode: Drill = {
-  line: CAMPAIGN.pilotEpisode,
+/** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
+const bounty = (line: string, arena: ArenaId, field: THREE.Vector3, names: readonly string[], skills: number | readonly number[]): Drill => ({
+  line,
   keys: ['turn', 'drive', 'fire'],
-  arena: 'callisto',
+  arena,
   autopilot: false,
   music: 'fight',
   enter(ctx) {
-    ctx.spawnJumpers(null, BOUNTY_FIELD, BOUNTY_NAMES.length, BOUNTY_SKILL, BOUNTY_NAMES, 12000, true);
+    ctx.spawnJumpers(null, field, names.length, skills, names, 12000, true);
     ctx.me.heat = 0;
     ctx.me.overheated = false;
   },
   done: (ctx) => ctx.leaderDown,
   leave: (ctx) => ctx.removeJumpers(),
-  waypoint: () => BOUNTY_FIELD,
-  mark: () => t('Bounty: {name}', { name: BOUNTY_NAMES[0] }),
-};
+  waypoint: () => field,
+  mark: () => t('Bounty: {name}', { name: names[0] }),
+});
+
+const pilotEpisode = bounty(CAMPAIGN.pilotEpisode, 'callisto', BOUNTY_FIELD, BOUNTY_NAMES, BOUNTY_SKILL);
 
 /**
  * Valhalla Sprint (5.3): SPRINT_COILS coils of the Ministry, which Lanes Watch leases for the show,
@@ -1054,6 +1058,59 @@ const blackout: Drill = {
   },
   waypoint: (_, a) => (Number.isNaN(a.doneAt) ? freighterNow : null),
   mark: () => t('Freighter'),
+};
+
+/**
+ * Hollow Jack (8.1): Lanes Watch's bounty on the chief of the Loose, among the blocks of ice of
+ * Ganymede's tug yards: Jack (skill JACK_SKILL) and three of his raiders (LOOSE_SKILL), fighting
+ * every ship they see; Jack shot down ends it. He is a stray: no Host, no printer, no next clone.
+ */
+const JACK_SKILL = 0.7;
+const JACK_FIELD = point(-10000, 0, -15000);
+
+const hollowJack = bounty(CAMPAIGN.hollowJack, 'ganymede', JACK_FIELD, ['Hollow Jack', ...LOOSE_NAMES.slice(0, 3)], [JACK_SKILL, LOOSE_SKILL]);
+
+/**
+ * The Harpoon (8.2): the piece of Jack's wreck that holds his harpoon drifts out of the yard,
+ * from HARPOON_FROM along HARPOON_WAY at HARPOON_DRIFT; flown through within HARPOON_REACH, it is
+ * the Magpie's (the hook, fitted for HOOK_PRICE); drifted out past HARPOON_GONE of the arena,
+ * it is gone and the attempt starts over.
+ */
+const HARPOON_FROM = point(-8000, 0, -14000);
+const HARPOON_WAY = new THREE.Vector3(-0.6, 0.1, -0.79).normalize();
+const HARPOON_DRIFT = 300;
+const HARPOON_REACH = 1000;
+const HARPOON_GONE = 0.95;
+const harpoonAt = new THREE.Vector3();
+
+const harpoon: Drill = {
+  line: CAMPAIGN.harpoon,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'ganymede',
+  autopilot: true,
+  enter(_, a, markers) {
+    markers.clear();
+    a.site.copy(HARPOON_FROM);
+    a.points = [markers.harpoonPiece(HARPOON_FROM).position];
+  },
+  done(ctx, a) {
+    harpoonAt.copy(a.site).addScaledVector(HARPOON_WAY, HARPOON_DRIFT * a.seconds);
+    a.points[0].copy(harpoonAt);
+    return ctx.me.flight.position.distanceTo(harpoonAt) < HARPOON_REACH;
+  },
+  fail: () => (harpoonAt.length() > ARENA_LIMIT * HARPOON_GONE ? CAMPAIGN.harpoonLost : null),
+  waypoint: (_, a) => a.points[0] ?? null,
+  mark: () => t('Harpoon'),
+};
+
+/** Swing Shift (8.3): the tug yard's drill with the new hook, the flight school's (see DRILL.hook), three times: hook a block of ice, swing round it, let go fast enough. */
+const swingShift: Drill = { ...DRILL.hook, line: CAMPAIGN.swingShift, praise: undefined, arena: 'ganymede', reps: 3 };
+
+/** The Harpoon: Jack's harpoon, fitted with a tug's winch as the Magpie's hook, at HOOK_PRICE. */
+const fitHook = (campaign: Campaign) => {
+  if (campaign.parts.includes('hook')) return;
+  campaign.parts.push('hook');
+  buy(campaign, HOOK_PRICE);
 };
 
 /** Tube Fitting (7.2): the first torpedo tube, one torpedo a clone (see hullOf), at TUBE_PRICE. */
@@ -1716,4 +1773,9 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'tubeFitting', name: msg('Tube Fitting'), drills: [said(PIM.tube, 'io'), said(CAMPAIGN.tube, 'io')], pay: 0, fit: fitTube },
   { id: 'mainDrive', name: msg('Main Drive I'), drills: [said(PIM.driveOne, 'io'), said(CAMPAIGN.driveOne, 'io')], pay: 0, fit: fitDriveOne },
   { id: 'blackout', name: msg('Blackout'), drills: [said(HEDDA.blackout, 'io'), blackout, said(CAMPAIGN.blackoutBoot, 'io'), said(HEDDA.blackoutFreighter, 'io'), said(HEDDA.blackoutLog, 'io'), said(CAMPAIGN.blackoutBlank, 'io')], pay: 2000, ratings: 150 },
+  // chapter 8, the Tug Yards over Ganymede: the bounty on Hollow Jack, and his harpoon
+  { id: 'hollowJack', name: msg('Hollow Jack'), drills: [said(HEDDA.ganymede, 'ganymede'), said(JACK.hello, 'ganymede'), hollowJack, said(JACK.hit, 'ganymede'), said(JACK.last, 'ganymede'), said(CAMPAIGN.jackNoLink, 'ganymede'), said(CAMPAIGN.jackGone, 'ganymede')], pay: 6000, ratings: 600 },
+  { id: 'harpoon', name: msg('The Harpoon'), drills: [harpoon, said(PIM.hook, 'ganymede'), said(CAMPAIGN.hook, 'ganymede')], pay: 0, fit: fitHook },
+  { id: 'swingShift', name: msg('Swing Shift'), drills: [swingShift, said(CAMPAIGN.swingShiftDone, 'ganymede')], pay: 1000, ratings: 100 },
+  { id: 'sponsorNight', name: msg('Sponsor Night'), drills: [said(CRISP.hello, 'ganymede'), said(CRISP.deal, 'ganymede'), said(CAMPAIGN.sponsored, 'ganymede')], pay: 0 },
 ];

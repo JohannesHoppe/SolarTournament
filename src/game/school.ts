@@ -88,8 +88,8 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
-  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
-  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
+  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` (or each its own of `skill`) named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number | readonly number[], names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
   /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
   moveJumpers(to: THREE.Vector3): void;
   removeJumpers(): void;
@@ -1621,6 +1621,8 @@ const TOW_LAG = 0.5;
 const CANISTER_SIZE = [40, 60] as const;
 /** The seed of the canister's plating. */
 const CANISTER_SEED = 7317;
+/** The seed of the steel of the piece of a wreck that holds a harpoon (see Markers.harpoonPiece). */
+const HARPOON_SEED = 8211;
 /**
  * An old ore line's pipe (see Markers.pipe): its bore's radius (units, 70 m), its wall (5 m),
  * its length (160 m), the legs it stands on (4 m square); its steel's seed. Built along +y.
@@ -1798,6 +1800,23 @@ export class Markers {
     mesh.userData.spin = true;
     this.root.add(mesh);
     return mesh;
+  }
+
+  /**
+   * A piece of a wreck holding a harpoon (Hollow Jack's): a torn plate of hull, 12 m across, its
+   * harpoon's shaft and barbed head sticking out of it, tumbling slowly; returns it.
+   */
+  harpoonPiece(position: THREE.Vector3): THREE.Object3D {
+    const steel = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(HARPOON_SEED), 1.2), color: 0x8a7e70, flatShading: true });
+    const piece = new THREE.Group();
+    piece.add(new THREE.Mesh(boxUv(new THREE.BoxGeometry(240, 40, 160).toNonIndexed(), STATION_TILE / 2), steel));
+    const shaft = rotateX(new THREE.CylinderGeometry(8, 8, 220, 8), Math.PI / 2).translate(0, 30, 110);
+    const head = rotateX(new THREE.ConeGeometry(22, 50, 6), Math.PI / 2).translate(0, 30, 240);
+    piece.add(new THREE.Mesh(boxUv(shaft.toNonIndexed(), STATION_TILE / 2), steel), new THREE.Mesh(boxUv(head.toNonIndexed(), STATION_TILE / 2), steel));
+    piece.position.copy(position);
+    piece.userData.spin = true;
+    this.root.add(piece);
+    return piece;
   }
 
   /**

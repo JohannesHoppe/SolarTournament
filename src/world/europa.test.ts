@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CRACK_DEPTH, CRACK_EDGE, CRACK_WIDTH, crackMiddle, GROUND_HALF, groundPlacement, groundRelief, inCrack, LAND, STATION_AT, stationPlacement, surfaceHeight } from './europa';
 import { POST_HALF } from './callisto';
 import { EUROPA_TYPE, STATION_TYPE } from './yard';
-import { groundField } from '../test/field';
+import { groundField, reliefOutside } from '../test/field';
 import { ARENA_LIMIT } from './arena';
 
 describe('the Lineae on Europa', () => {
@@ -26,13 +26,7 @@ describe('the Lineae on Europa', () => {
   });
 
   it('keeps its relief inside its box over the whole square', () => {
-    for (let x = -GROUND_HALF.x; x <= GROUND_HALF.x; x += 500) {
-      for (let z = -GROUND_HALF.z; z <= GROUND_HALF.z; z += 2000) {
-        const top = groundRelief(x, z);
-        expect(top).toBeLessThan(GROUND_HALF.y);
-        expect(top).toBeGreaterThan(-GROUND_HALF.y);
-      }
-    }
+    expect(reliefOutside(groundRelief, GROUND_HALF, 500)).toEqual([]);
   });
 
   it('cuts the Crack 200 m wide and some 800 m deep, its walls nearly sheer, all through the arena', () => {
