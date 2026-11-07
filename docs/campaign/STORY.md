@@ -192,9 +192,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 16.1 | Haumea's Ring | race | The depot crews' race between beacons on Haumea's ring while the elongated body turns beneath it once in four hours. Win. (built) | ☉ 6,000 · 600 | Race; ice of the Rings |
 | 16.2 | Rung Two | escort | A fuel barge to the depot at Eris. (built: two waves of three scavengers) | ☉ 6,000 · 400 | Escort |
 | 16.3 | The Hunter | duel | Perihelion and two Navy fighters at Eris. Win; he breaks off again, swearing. (built) | ☉ 5,000 · 600 | Duel |
-| 17.1 | Kiln | story | The settlers on Lantern who bought plots on the Ninth, with their brochures. Carry their letters to the Feeders. | · 200 | A courier run between buoys |
-| 17.2 | Granary | stealth | Slip into the Feeders' store of ice, out of the tugs' sensor cones, to the comet bound for the Ninth. Seen twice fails it. | · 400 | Searchlight cones again |
-| 17.3 | Ride the Comet | story | Hook the comet's nucleus and hold on in its coma while it is pushed out; its shower is the danger. | · 500 | Comets; the hook |
+| 17.1 | Kiln | story | The settlers on Lantern who bought plots on the Ninth, with their brochures. Carry their letters to the Feeders. (built: six beacons in turn within four minutes) | · 200 | A courier run between buoys |
+| 17.2 | Granary | stealth | Slip into the Feeders' store of ice, out of the tugs' sensor cones, to the comet bound for the Ninth. Seen twice fails it. (built) | · 400 | Searchlight cones again |
+| 17.3 | Ride the Comet | story | Hook the comet's nucleus and hold on in its coma while it is pushed out; its shower is the danger. (built: hooked and held 30 s; the shower still to come) | · 500 | Comets; the hook |
 
 ### Act IV's end: The Ninth
 
@@ -289,7 +289,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 14 | Thrusters III | 5,000 | The hangar's third step (built: Thrusters III) |
 | 15 | Plating III | 6,000 | The hangar's third step (built: Plating III, Feeder plate) |
 | 16 | Main drive III, radiators III | 5,000 each | Each the hangar's third step (built: Drive III) |
-| 17 | Torpedo tubes II, III | 3,000, 6,000 | Complete |
+| 17 | Torpedo tubes II, III | 3,000, 6,000 | Complete (built: Torpedo Tubes II and III) |
 
 The looks come from Pim and cost little: neon trim and drive flame on the hangar's three steps each, from chapter 9 on, at its prices. The nova core is the sponsors' and appears only as a probe, from rank Sponsored on.
 
@@ -975,6 +975,30 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: He will come back, Host. He always comes back.
 
 **PIM** *(Drive III)*: Depot crews swap drive bells like spoons. Third grade, and radiators to match, five thousand each. Fuel's free. Parts aren't.
+
+### Lantern and Granary (chapter 17, built)
+
+**HEDDA**: Lantern. Settlers, all of them waiting for passage to the Ninth. They bought plots from brochures. They want their letters carried to the Feeders. Free. Do it anyway.
+
+**NICOLE**: Six beacons, Host, six families’ letters. Call at each in turn.
+
+**NICOLE** *(every letter aboard)*: Every letter aboard. They showed me the brochures, Host. Blue seas, a gentle sun. The Ninth has neither.
+
+**HEDDA**: Granary. The Feeders' store. The comet for the Ninth leaves tonight, and we're riding it, unasked. Their tugs sweep the ring with sensors. Don't get caught in one twice.
+
+**NICOLE**: To the comet at the ring’s far side, Host, out of the tugs’ sensor cones. Once they may call it a glitch. Twice, and they come.
+
+**NICOLE** *(at the comet)*: We are at the comet. Nobody saw us. Patience is moving in behind it.
+
+**ECHO 11**: Orbit set. Pod sealed. Wake me when the stars are allowed.
+
+**NICOLE**: Wake me. She is asleep, Host. Somewhere out there, she is still asleep.
+
+**NICOLE**: Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma.
+
+**NICOLE** *(held on)*: We are riding it out. Next stop, the Ninth.
+
+**PIM** *(Torpedo Tubes II and III)*: Feeders' tubes, second and third grade, nine thousand together. Ice-breakers, they call them. That's every tube there is. Hold still.
 
 ### The admiral (chapter 14, built, over the comm, in three lines)
 

@@ -103,6 +103,53 @@ export function wallPiece(half: THREE.Vector3): THREE.Group {
 }
 
 /**
+ * A searchlight's or a sensor's cone of light (the Solar Wall's searchlights, the Feeders' tugs at
+ * Granary): `angle` its half opening (rad), `reach` its length (units) along +y from its foot,
+ * open at its far end, its light `tint` fading along it (vertex colors) and soft at its sides, by
+ * how squarely the eye looks through its face, none at its silhouette.
+ */
+export function lightCone(angle: number, reach: number, tint: THREE.Color): THREE.Mesh {
+  const radius = tan(angle) * reach;
+  const shape = new THREE.CylinderGeometry(radius, 30, reach, 32, 8, true).translate(0, reach / 2, 0);
+  const position = shape.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  for (let i = 0; i < position.count; i++) {
+    const fade = 1 - position.getY(i) / reach;
+    colors.set([fade * fade, fade * fade, fade * fade * 0.9], i * 3);
+  }
+  shape.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // soft at its sides: the cone's light by how squarely the eye looks through its face, none at its silhouette
+  const light = new THREE.ShaderMaterial({
+    uniforms: { tint: { value: tint } },
+    vertexShader: `
+      attribute vec3 color;
+      varying vec3 vShade;
+      varying float vFacing;
+      void main() {
+        vec4 eye = modelViewMatrix * vec4(position, 1.0);
+        vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-eye.xyz)));
+        vShade = color;
+        gl_Position = projectionMatrix * eye;
+      }`,
+    fragmentShader: `
+      uniform vec3 tint;
+      varying vec3 vShade;
+      varying float vFacing;
+      void main() {
+        gl_FragColor = vec4(tint * vShade * vFacing * vFacing, 1.0);
+      }`,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(shape, light);
+  mesh.frustumCulled = false;
+  mesh.userData.shadowless = true;
+  return mesh;
+}
+
+/**
  * The wall beyond its stretch by the field, out to the ends of its 340 km, and its searchlights'
  * cones: drawn behind everything that flies, a dark band under a line of lights; and the cones,
  * each a long see-through cone of light, brightest at its foot, turned each frame to where its
@@ -133,47 +180,11 @@ export class WallScene {
     dots.renderOrder = -1;
     dots.frustumCulled = false;
     this.group.add(dots);
-    // the cones: open at their far end, their light fading along them (vertex colors)
-    const radius = tan(LIGHT_ANGLE) * LIGHT_REACH;
-    const shape = new THREE.CylinderGeometry(radius, 30, LIGHT_REACH, 32, 8, true).translate(0, LIGHT_REACH / 2, 0);
-    const position = shape.getAttribute('position');
-    const colors = new Float32Array(position.count * 3);
-    for (let i = 0; i < position.count; i++) {
-      const fade = 1 - position.getY(i) / LIGHT_REACH;
-      colors.set([fade * fade, fade * fade, fade * fade * 0.9], i * 3);
-    }
-    shape.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    // soft at its sides: the cone's light by how squarely the eye looks through its face, none at its silhouette
-    const light = new THREE.ShaderMaterial({
-      uniforms: { tint: { value: new THREE.Color(1, 0.96, 0.85).multiplyScalar(0.16) } },
-      vertexShader: `
-        attribute vec3 color;
-        varying vec3 vShade;
-        varying float vFacing;
-        void main() {
-          vec4 eye = modelViewMatrix * vec4(position, 1.0);
-          vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-eye.xyz)));
-          vShade = color;
-          gl_Position = projectionMatrix * eye;
-        }`,
-      fragmentShader: `
-        uniform vec3 tint;
-        varying vec3 vShade;
-        varying float vFacing;
-        void main() {
-          gl_FragColor = vec4(tint * vShade * vFacing * vFacing, 1.0);
-        }`,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
+    const cone = lightCone(LIGHT_ANGLE, LIGHT_REACH, new THREE.Color(1, 0.96, 0.85).multiplyScalar(0.16));
     for (let i = 0; i < LIGHTS; i++) {
-      const cone = new THREE.Mesh(shape, light);
-      cone.frustumCulled = false;
-      cone.userData.shadowless = true;
-      this.cones.push(cone);
-      this.group.add(cone);
+      const copy = cone.clone();
+      this.cones.push(copy);
+      this.group.add(copy);
     }
   }
 

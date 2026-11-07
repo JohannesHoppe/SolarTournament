@@ -914,3 +914,24 @@ test('The Hunter: Perihelion and two Navy fighters at Eris; worn down to a third
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theHunter')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 16 flown too: the hull with Drive III, at Lantern. */
+const lanternHull = (...done: string[]) => ({ ...ladderHull('haumeaRing', 'rungTwo', 'theHunter', 'driveThree', ...done), parts: [...ladderHull().parts, 'driveThree', 'radiatorsThree'] });
+
+test('chapter 17: Kiln’s six beacons called at in turn over Lantern; at Granary the comet bound for the Ninth is reached', async ({ page }) => {
+  test.setTimeout(400_000);
+  const errors = await takeJobFrom(page, lanternHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'lantern' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
+  await visitPoints(page, 0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('kiln')), { timeout: 120_000 }).toBe(true);
+  // Granary: the hull set beside the comet, out of every cone
+  await page.waitForFunction(() => window.game.venue?.id === 'granary' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await page.evaluate(() => {
+    const game = window.game;
+    game.me.flight.position.copy(game.school.attempt.points[0]).add({ x: 0, y: 4000, z: 0 } as never);
+    game.me.flight.velocity.set(0, 0, 0);
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('granary')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

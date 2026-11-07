@@ -13,6 +13,7 @@ import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
 import { iceTug, sulfurFreighter, tug } from '../world/barge';
 import { DEPOT_AT } from '../world/ladder';
+import { COMET_AT, COURIER_BUOYS, inSensor } from '../world/granary';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
@@ -25,7 +26,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -1122,6 +1123,110 @@ const fitDriveThree = (campaign: Campaign) => {
     if (campaign.parts.includes(part)) continue;
     campaign.parts.push(part);
     buy(campaign, DRIVE_THREE_PRICE);
+  }
+};
+
+/**
+ * Kiln (17.1): the settlers' letters from Lantern, the courier calling at each of their beacons
+ * (COURIER_BUOYS, see world/granary) in turn, within COURIER_REACH, inside KILN_WINDOW seconds.
+ */
+const COURIER_REACH = 1600;
+const KILN_WINDOW = 240;
+const kiln: Drill = {
+  line: CAMPAIGN.kiln,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'lantern',
+  autopilot: true,
+  enter(_, a, markers) {
+    a.points = COURIER_BUOYS.map((buoy) => buoy.clone());
+    surveyMarkers(a, markers);
+  },
+  done(ctx, a, markers) {
+    if (ctx.me.flight.position.distanceTo(a.points[a.next]) >= COURIER_REACH) return false;
+    a.next++;
+    surveyMarkers(a, markers);
+    return a.next >= a.points.length;
+  },
+  fail: (_, a) => (a.seconds > KILN_WINDOW ? CAMPAIGN.kilnLate : null),
+  waypoint: (_, a) => a.points[a.next] ?? null,
+  mark: (_, a) => t('Beacon {n}/{total} · {seconds} s left', { n: Math.min(a.next + 1, a.points.length), total: a.points.length, seconds: Math.max(0, Math.ceil(KILN_WINDOW - a.seconds)) }),
+};
+
+/** The comet bound for the Ninth at Granary: the field's piece nearest COMET_AT (see world/granary). */
+function cometOf(ctx: SchoolContext): THREE.Vector3 {
+  let best: THREE.Vector3 = COMET_AT;
+  let nearest = Infinity;
+  for (const piece of ctx.field.asteroids.values()) {
+    const far = piece.object.position.distanceTo(COMET_AT);
+    if (far < nearest) {
+      nearest = far;
+      best = piece.object.position;
+    }
+  }
+  return best;
+}
+
+/**
+ * Granary (17.2): into the Feeders' store, to the comet bound for the Ninth (cometOf), within
+ * COMET_REACH of it; a tug's sensor cone holding the hull SENSOR_HOLD seconds sees it once (see
+ * inSensor); seen twice fails it.
+ */
+const COMET_REACH = 8000;
+const SENSOR_HOLD = 0.4;
+const granaryStealth: Drill = {
+  line: CAMPAIGN.granary,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'granary',
+  autopilot: true,
+  enter(ctx, a, markers) {
+    a.points = [cometOf(ctx)];
+    markers.clear();
+    markers.zone(a.points[0], COMET_REACH);
+    // a.held: the hull's time in a cone; a.count: how often it was seen
+    a.held = 0;
+    a.count = 0;
+  },
+  done(ctx, a) {
+    if (inSensor(ctx.me.flight.position, ctx.field.clock)) {
+      a.held += ctx.dt;
+      if (a.held >= SENSOR_HOLD && a.held - ctx.dt < SENSOR_HOLD) {
+        a.count++;
+        if (a.count === 1) ctx.say([CAMPAIGN.granarySeen]);
+      }
+    } else a.held = 0;
+    return ctx.me.flight.position.distanceTo(a.points[0]) < COMET_REACH;
+  },
+  fail: (_, a) => (a.count >= 2 ? CAMPAIGN.granaryLost : null),
+  waypoint: (_, a) => a.points[0] ?? null,
+  mark: (_, a) => t('Seen {n} of 2', { n: a.count }),
+};
+
+/** The eleventh echo (17.3), among the parked comets at Granary. */
+export const ECHO_ELEVEN = point(-30000, 4000, 10000);
+
+/** Ride the Comet (17.4): the comet hooked and held on to for RIDE_SECONDS while Patience pushes it out. */
+const RIDE_SECONDS = 30;
+const rideComet: Drill = {
+  line: CAMPAIGN.rideComet,
+  keys: ['hook', 'turn', 'drive'],
+  arena: 'granary',
+  autopilot: false,
+  keepsDrift: () => true,
+  enter(ctx, a) {
+    a.points = [cometOf(ctx)];
+    a.held = 0;
+  },
+  done: (ctx, a) => holdFor(ctx, a, ctx.hooked, RIDE_SECONDS),
+  waypoint: (_, a) => a.points[0] ?? null,
+  mark: (ctx, a) => (ctx.hooked ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
+};
+
+/** Torpedo tubes II and III (17.5), from the Feeders: the tubes' second and third steps, at TUBES_TWO_PRICE and TUBES_THREE_PRICE. */
+const fitTubes = (campaign: Campaign) => {
+  for (const [part, price] of [['tubesTwo', TUBES_TWO_PRICE], ['tubesThree', TUBES_THREE_PRICE]] as const) {
+    if (campaign.parts.includes(part)) continue;
+    campaign.parts.push(part);
+    buy(campaign, price);
   }
 };
 
@@ -2507,4 +2612,10 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'rungTwo', name: msg('Rung Two'), drills: [said(HEDDA.rungTwo, 'eris'), rungTwo, said(CAMPAIGN.rungTwoDone, 'eris')], pay: 6000, ratings: 400 },
   { id: 'theHunter', name: msg('The Hunter'), drills: [said(HEDDA.hunter, 'eris'), hunter, said(CAMPAIGN.hunterDone, 'eris')], pay: 5000, ratings: 600 },
   { id: 'driveThree', name: msg('Drive III'), drills: [said(PIM.driveThree, 'eris'), said(CAMPAIGN.driveThree, 'eris')], pay: 0, fit: fitDriveThree },
+  // chapter 17, Lantern and Granary: the settlers' letters, the Feeders' store, the comet bound for the Ninth
+  { id: 'kiln', name: msg('Kiln'), drills: [said(HEDDA.lantern, 'lantern'), kiln, said(CAMPAIGN.kilnDone, 'lantern')], pay: 0, ratings: 200 },
+  { id: 'granary', name: msg('Granary'), drills: [said(HEDDA.granary, 'granary'), granaryStealth, said(CAMPAIGN.granaryDone, 'granary')], pay: 0, ratings: 400 },
+  { id: 'granaryEcho', name: msg('Granary Echo'), drills: [echoAt(CAMPAIGN.echoElevenCall, 'granary', ECHO_ELEVEN), said(CAMPAIGN.echoEleven, 'granary'), said(CAMPAIGN.echoElevenHeard, 'granary')], pay: 0, ratings: 40 },
+  { id: 'rideComet', name: msg('Ride the Comet'), drills: [rideComet, said(CAMPAIGN.rideCometDone, 'granary')], pay: 0, ratings: 500 },
+  { id: 'tubesComplete', name: msg('Torpedo Tubes II and III'), drills: [said(PIM.tubesComplete, 'granary'), said(CAMPAIGN.tubesComplete, 'granary')], pay: 0, fit: fitTubes },
 ];

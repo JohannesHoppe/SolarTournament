@@ -13,6 +13,7 @@ import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_F
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
 import { CHARON_AT, groundPlacement as plutoGround, PLUTO_FALL } from './pluto';
 import { DEPOT_AT, ERIS_AT, HAUMEA_AT } from './ladder';
+import { COMET_AT, GRANARY_AT, KILN_MARK, LANTERN_AT } from './granary';
 import { GEYSER_COLUMNS, groundPlacement as tritonGround, memorialPlacement, NEPTUNE_AT, STATION_AT as MEMORIAL_AT, TRITON_FALL } from './triton';
 import { groundPlacement as mirandaGround, MIRANDA_FALL, MOUTH as VERONA_MOUTH, URANUS_AT } from './miranda';
 import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SATURN } from './iapetus';
@@ -56,7 +57,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -196,7 +197,7 @@ function derelict(): Placement[] {
  * the ring's glow, the sun's streamers), kept faint where they would cover the Milky Way as a
  * second, made-up one.
  */
-/** The Long Ladder's rungs (Haumea, Eris): ice in the dark, a body's white below, the sun a star among the others. */
+/** The Long Ladder's rungs (Haumea, Eris, Lantern, Granary): ice in the dark, a body's white below, the sun a star among the others. */
 const LADDER_MOOD: Mood = {
   space: 0x010102,
   sky: 0x80848c,
@@ -561,6 +562,8 @@ const MOODS: Record<ArenaId, Mood> = {
   },
   haumea: LADDER_MOOD,
   eris: LADDER_MOOD,
+  lantern: LADDER_MOOD,
+  granary: LADDER_MOOD,
 };
 
 /**
@@ -880,6 +883,45 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // on the field's far side from the depot, facing it
     start: { at: [50000, 0, 30000], toward: [-50000, 4000, -30000] },
+    open: true,
+  },
+  {
+    id: 'lantern',
+    name: msg('Kiln'),
+    tagline: msg('The settlers’ beacons over Lantern, a black world as big as Mars, warm under its thick air, its night lit by lightning and heat wells.'),
+    // nothing loose: the settlers' beacons over the black world
+    layout: { key: 'lantern', seed: 17000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800 },
+    cooling: 1,
+    storms: false,
+    // 200 AU from the sun: a star among the others
+    sun: { size: 2000, intensity: 1.6, color: 0xfff0dd },
+    mood: MOODS.lantern,
+    preview: { from: [30000, 8000, 30000], at: [0, 0, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Kiln'), position: KILN_MARK, distance: true },
+      { glyph: 'planet', label: msg('Lantern'), position: LANTERN_AT, distance: false },
+    ],
+    start: { at: [50000, 0, 40000], toward: [40000, 3000, 20000] },
+    open: true,
+  },
+  {
+    id: 'granary',
+    name: msg('Granary'),
+    tagline: msg('The Feeders’ store of comets, thousands parked in a ring round a small ice world, the Feeders’ tugs sweeping it with their sensors.'),
+    // the parked comets: a layer of ice 300 m thick across the field
+    layout: { key: 'granary', seed: 17100, kind: 'ice', count: 40, minScale: 0.5, maxScale: 1.3, radius: FIELD_RADIUS, inner: 6000, flat: 3000, spin: SPIN_RATE, toughness: 600 },
+    cooling: 1,
+    storms: false,
+    // 350 AU from the sun: a star among the others
+    sun: { size: 1500, intensity: 1.5, color: 0xfff0dd },
+    mood: MOODS.granary,
+    preview: { from: [30000, 8000, 30000], at: [0, 0, 0] },
+    references: [
+      { glyph: 'planet', label: msg('The comet'), position: COMET_AT, distance: true },
+      { glyph: 'planet', label: msg('Granary'), position: GRANARY_AT, distance: false },
+    ],
+    // at the store's near side, facing into it
+    start: { at: [55000, 0, 35000], toward: [0, 0, 0] },
     open: true,
   },
 ];

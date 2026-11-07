@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -181,6 +181,14 @@ describe('the campaign Lot 7731', () => {
     expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + 3 * DRIVE_STEP, 10);
     expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
     expect(campaign.bond).toBe(20000 + 2 * DRIVE_THREE_PRICE);
+  });
+
+  it('fits Torpedo tubes II and III at Granary: four torpedoes a clone, every tube there is, each paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['tube' as const, 'secondTube' as const, 'tubesOne' as const] };
+    expect(STOCK.torpedoes + TORPEDOES + hullOf(campaign).torpedoes).toBe(3);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'tubesComplete')!);
+    expect(STOCK.torpedoes + TORPEDOES + hullOf(campaign).torpedoes).toBe(4);
+    expect(campaign.bond).toBe(20000 + TUBES_TWO_PRICE + TUBES_THREE_PRICE);
   });
 
   it('fits Plating III at Pluto: every hit hurts three of the hangar’s steps less, paid as the laser is', () => {

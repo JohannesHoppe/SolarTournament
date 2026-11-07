@@ -31,6 +31,7 @@ import { miranda } from './verona';
 import { triton, TRITON_JETS } from './geysers';
 import { pluto } from './heart';
 import { eris, haumea } from './ladder';
+import { GranaryScene, lantern } from './granary';
 /** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
 const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
@@ -865,6 +866,10 @@ export class Landmarks {
     this.scenes.set('pluto', pluto());
     this.scenes.set('haumea', haumea());
     this.scenes.set('eris', eris());
+    const night = lantern();
+    this.timed.push(night.material);
+    this.scenes.set('lantern', night.group);
+    this.scenes.set('granary', this.granary.group);
     this.scenes.set('triton', triton().add(this.jets(TRITON_JETS)));
     this.scenes.set('iapetus', iapetus().add(...this.saturnEdgeOn(IAPETUS_SATURN_AT, IAPETUS_SATURN_SIZE, IAPETUS_RING_TILT)));
     for (const scene of this.scenes.values()) {
@@ -940,6 +945,8 @@ export class Landmarks {
 
   /** The Solar Wall beyond its stretch by the field, and its searchlights' cones (see world/solarwall). */
   private readonly wall = new WallScene();
+  /** Granary's store, its tugs and their sensor cones (see world/granary). */
+  private readonly granary = new GranaryScene();
 
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
@@ -949,6 +956,7 @@ export class Landmarks {
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
     if (this.shown === 'derelict') this.wreck.update(time);
     if (this.shown === 'wall') this.wall.update(time);
+    if (this.shown === 'granary') this.granary.update(time);
   }
 
   /**
