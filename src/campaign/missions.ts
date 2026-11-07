@@ -19,6 +19,7 @@ import { DOME_HEIGHT, surfaceHeight as moonHeight } from '../world/moon';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
+import { bridgeTower, DECKS, HATCHES, LOG, TOWER_HALF } from '../world/bridgetower';
 import { surfaceHeight as plutoHeight } from '../world/pluto';
 import { ridgeNorth, surfaceHeight as mercuryHeight } from '../world/mercury';
 import { BIODOME_FOUR, DECK as VENUS_DECK, hallAt, HALL_HALF } from '../world/venus';
@@ -2490,24 +2491,49 @@ export const GEYSER_START = { at: [GEYSER_FROM.x, GEYSER_FROM.y, GEYSER_FROM.z] 
 const geyserField = timeTrial({ line: CAMPAIGN.geyserField, arena: 'triton', points: GEYSER_COURSE, normals: GEYSER_NORMALS, time: GEYSER_TIME, missed: CAMPAIGN.geyserFieldMissed, slow: CAMPAIGN.geyserFieldSlow });
 
 /**
- * The Memorial (14.3): the ninth echo before the Derelict's bow, in the gap where it tore (ECHO_NINE, 300 m off its torn end), the hull
- * held still there while a Navy guard of GUARDS at GUARD_SKILL fights it; Grave Shift (14.4): the
- * guard on the hull's tail, out to the arena's edge (within EDGE_SHARE of ARENA_LIMIT).
+ * The Memorial (14.3): the bow's bridge tower (see world/bridgetower), torn off and drifting in the
+ * gap before the bow's torn end, its open bottom at TOWER_AT; into it from below and up through
+ * the hatch of every deck in turn (passed once the hull is above it inside the shaft) to the
+ * bridge, where the ninth echo is the log (ECHO_NINE), held still there; a Navy guard of GUARDS
+ * at GUARD_SKILL fights outside. Grave Shift (14.4): the guard on the hull's tail, out of the
+ * tower to the arena's edge (within EDGE_SHARE of ARENA_LIMIT).
  */
-export const ECHO_NINE = point(-8000, 0, 0);
+export const TOWER_AT = point(-8000, -2600, 0);
+export const ECHO_NINE = TOWER_AT.clone().add(LOG);
+const TOWER_HATCHES = HATCHES.map((hatch) => hatch.clone().add(TOWER_AT));
+const TOWER_TURN = new THREE.Quaternion();
 const GUARDS = 4;
 const GUARD_SKILL = 0.5;
 const GUARD_NAMES = ['Lt. Hale', 'Ens. Dorn', 'Ens. Pike', 'Lt. Wen'];
 const EDGE_SHARE = 0.92;
 const memorialEcho = echoAt(CAMPAIGN.memorial, 'derelict', ECHO_NINE);
+
+/** The tower set out where it drifts (see Markers.iceTugAt). */
+const setTower = (markers: Markers) => markers.iceTugAt(0, TOWER_AT, TOWER_TURN, bridgeTower);
+/** Whether a point is inside the tower's shaft above a height. */
+const inShaftAbove = (at: THREE.Vector3, y: number) => Math.abs(at.x - TOWER_AT.x) < TOWER_HALF && Math.abs(at.z - TOWER_AT.z) < TOWER_HALF && at.y > y;
+
 const theMemorial: Drill = {
   ...memorialEcho,
   keys: ['turn', 'drive', 'brake', 'fire'],
+  autopilot: false,
   music: 'fight',
   enter(ctx, a, markers) {
     memorialEcho.enter!(ctx, a, markers);
-    ctx.spawnJumpers(null, ECHO_NINE, GUARDS, GUARD_SKILL, GUARD_NAMES, 10000, true);
+    setTower(markers);
+    // a.next: the hatches climbed through so far
+    a.next = 0;
+    ctx.spawnJumpers(null, TOWER_AT, GUARDS, GUARD_SKILL, GUARD_NAMES, 10000, true);
   },
+  done(ctx, a, markers) {
+    if (a.next < TOWER_HATCHES.length) {
+      if (inShaftAbove(ctx.me.flight.position, TOWER_HATCHES[a.next].y)) a.next++;
+      return false;
+    }
+    return memorialEcho.done(ctx, a, markers);
+  },
+  waypoint: (_, a) => TOWER_HATCHES[a.next] ?? ECHO_NINE,
+  mark: (_, a) => (a.next < TOWER_HATCHES.length ? t('Deck {n} of {total}', { n: a.next + 1, total: DECKS }) : t('Signal')),
   leave: (ctx) => ctx.removeJumpers(),
 };
 const graveShift: Drill = {
@@ -2516,8 +2542,10 @@ const graveShift: Drill = {
   arena: 'derelict',
   autopilot: false,
   music: 'fight',
-  enter(ctx) {
-    ctx.spawnJumpers(null, ctx.me.flight.position.clone(), GUARDS, GUARD_SKILL, GUARD_NAMES, 6000, true);
+  enter(ctx, _, markers) {
+    // the guard waits round the tower the hull climbed: down its hatches and out under it
+    setTower(markers);
+    ctx.spawnJumpers(null, TOWER_AT, GUARDS, GUARD_SKILL, GUARD_NAMES, 6000, true);
   },
   done: (ctx) => ctx.me.flight.position.length() > ARENA_LIMIT * EDGE_SHARE,
   leave: (ctx) => ctx.removeJumpers(),

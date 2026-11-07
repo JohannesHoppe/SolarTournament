@@ -875,13 +875,25 @@ test('Geyser Field: coils past Triton’s geysers to the Memorial Station; a gey
   expect(errors).toEqual([]);
 });
 
-test('The Memorial and Grave Shift: the ninth echo held at the Derelict’s torn bow past a Navy guard, then out to the arena’s edge with the guard on the tail', async ({ page }) => {
+test('The Memorial and Grave Shift: up the bridge tower’s decks to the ninth echo past a Navy guard, then out to the arena’s edge with the guard on the tail', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, tritonHull('geyserField', 'oldAdmiral'));
   await page.waitForFunction(() => window.game.venue?.id === 'derelict' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 4, null, { timeout: 180_000 });
   await page.evaluate(() => {
     for (const bot of window.game.jumpers.bots) bot.ship.protectedUntil = Infinity;
   });
+  // over the tower from outside, no deck is climbed: only up its shaft
+  const decks = await page.evaluate(async (path) => {
+    const { TOWER_AT } = (await import(path)) as typeof import('../src/campaign/missions');
+    const game = window.game;
+    for (let frame = 0; frame < 10; frame++) {
+      game.me.flight.position.copy(TOWER_AT).add(TOWER_AT.clone().set(4000, 9000, 0));
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return game.school.attempt.next;
+  }, '/src/campaign/missions.ts');
+  expect(decks).toBe(0);
   await holdAtEcho(page, 'ECHO_NINE', 1);
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theMemorial')), { timeout: 120_000 }).toBe(true);

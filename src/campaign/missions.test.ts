@@ -9,7 +9,8 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT } from './missions';
+import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 import { faceAt } from '../world/miranda';
@@ -264,5 +265,30 @@ describe('the echoes', () => {
     const hit = field.raycast(ECHO_THREE, new THREE.Vector3(0, -1, 0), 10000);
     expect(hit).not.toBeNull();
     expect(ECHO_THREE.y - hit!.distance).toBeGreaterThan(POST_AT.y - POST_HALF.y + 300);
+  });
+});
+
+describe('the Derelict’s bridge tower', () => {
+  it('drifts clear of every piece of the Derelict, inside the arena, its hatches wide enough for a ship and the log on its bridge', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('derelict')!.layout);
+    const { boxes } = bridgeTower();
+    // every box of it, sampled every 20 m through it, clear of the field's pieces
+    const STEP = 400;
+    const point = new THREE.Vector3();
+    for (const box of boxes) {
+      const center = box.center.clone().add(TOWER_AT);
+      const steps = box.half.clone().divideScalar(STEP).floor();
+      for (let i = -steps.x; i <= steps.x; i++)
+        for (let j = -steps.y; j <= steps.y; j++)
+          for (let k = -steps.z; k <= steps.z; k++) {
+            point.set(i * STEP, j * STEP, k * STEP).add(center);
+            expect(field.overlap(point, STEP), `${point.toArray()}`).toBeNull();
+          }
+      expect(center.length() + box.half.length()).toBeLessThan(ARENA_LIMIT);
+    }
+    // a hatch passes an interceptor (35 m long) with room: 60 m a side
+    expect(HATCH_HALF * 2 * 0.05).toBeGreaterThanOrEqual(60);
+    expect(ECHO_NINE.distanceTo(TOWER_AT.clone().add(LOG))).toBe(0);
   });
 });

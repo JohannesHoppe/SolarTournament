@@ -188,7 +188,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 13.3 | The Sweep | defense | A Navy sweep (six at skill 0.5) at the hideout's mouth; Spare flies as the Host's wingman. Keep the mouth clear for 4 min. (built: one of them 8 s within 300 m of the mouth fails it; all six down wins early) | ☉ 6,000 · 500 | Deathmatch with an ally (Capture the Flag's sides) |
 | 14.1 | Geyser Field | race | Through Triton's nitrogen geysers to the Navy's Memorial Station; a geyser's column shoves a ship it catches. (built: a time trial past the geysers, each column pushing 6 g up, more than the thrusters) | ☉ 3,000 · 300 | Race; new: columns that shove |
 | 14.2 | The Old Admiral | story | Fleet Admiral Vey's confession. (built, over the comm) | — | A scene |
-| 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). (built: the echo held before the bow's torn end; the decks of the bridge tower still to come) | ☉ 4,000 · 400 | The existing Derelict arena |
+| 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). (built: the bridge tower torn off the bow and drifting before its torn end, four decks of 80 m, in from below where it tore and up through each deck's hatch, 60 m a side on alternate sides, to the log on the bridge, held still there) | ☉ 4,000 · 400 | The existing Derelict arena |
 | 14.4 | Grave Shift | fight | Out again with the guard on the Magpie's tail; reach the arena's edge. (built) | ☉ 3,000 · 300 | Deathmatch; the edge as the goal |
 | 15.1 | Heart Run | race | The Feeder pilots' race over the nitrogen plain of Pluto's heart. Win it, and the Feeders take Patience on. (built) | ☉ 5,000 · 500 | Race; surface |
 | 15.2 | The File | story | Spare comes aboard Patience unarmed. (built: in person, in the galley) | — | A scene |
@@ -946,7 +946,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **HEDDA**: The Derelict. A Navy guard on it, four of them. The bridge log's in the bow. Get it and get out.
 
-**NICOLE**: The bow’s torn end, Host. The ninth echo is there, in the cold. Hold still in it, guard or no guard.
+**NICOLE**: The bridge tower, Host, torn off the bow. In from below, where it tore, and up through the hatches, deck by deck. The ninth echo is the log, on the bridge. Hold still in it, guard or no guard.
 
 **ECHO 9**: Scout Two is taken. I am alone in Scout One. Course: the dark mass. Cold sleep at arrival.
 

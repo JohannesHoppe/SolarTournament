@@ -682,7 +682,7 @@ export const CAMPAIGN = {
   geyserFieldSlow: 'Too slow, Host. The station’s watch has changed. Again.',
   geyserFieldDone: 'At the station. The admiral expects nobody. He will talk to us anyway.',
   veyHeard: 'He broke it, Host. The world ship. The Derelict is no memorial. It is where they did it. And its bridge still holds a log.',
-  memorial: 'The bow’s torn end, Host. The ninth echo is there, in the cold. Hold still in it, guard or no guard.',
+  memorial: 'The bridge tower, Host, torn off the bow. In from below, where it tore, and up through the hatches, deck by deck. The ninth echo is the log, on the bridge. Hold still in it, guard or no guard.',
   echoNine: 'Scout Two is taken. I am alone in Scout One. Course: the dark mass. Cold sleep at arrival.',
   echoNineHeard: 'Scout One. The dark mass. I know where she went, Host. I know where I went.',
   graveShift: 'The guard is on our tail. Out, Host, to the arena’s edge. Do not stop to fight.',
