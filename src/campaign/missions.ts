@@ -1313,14 +1313,13 @@ function shedPiece(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers) {
   shed.push({ at: markers.debris(start, along, SHED_RADIUS), along });
 }
 
-/** The pieces in flight that strike the hull pelt it and go; those that burst on rock or flew past are taken away. */
-function shower(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers) {
-  const near = SHED_RADIUS + ctx.me.radius;
+/** The pieces in flight that strike the hull (or `also`, Scout One) pelt it and go; those that burst on rock or flew past `comet` are taken away. */
+function shower(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers, also: Ship | null = null) {
   for (let i = shed.length - 1; i >= 0; i--) {
     const { at, along } = shed[i];
-    const strikes = ctx.me.alive && at.distanceTo(ctx.me.flight.position) < near;
-    if (strikes) ctx.pelt(at, shedAim.copy(along).normalize());
-    if (strikes || burstOnRock(at) || at.distanceTo(comet) > SHED_REACH) {
+    const struck = [ctx.me, also].find((ship) => !!ship?.alive && at.distanceTo(ship.flight.position) < SHED_RADIUS + ship.radius) ?? null;
+    if (struck) ctx.pelt(at, shedAim.copy(along).normalize(), struck);
+    if (struck || burstOnRock(at) || at.distanceTo(comet) > SHED_REACH) {
       markers.remove(at);
       shed.splice(i, 1);
     }
@@ -1446,6 +1445,28 @@ const TOW_HEAD_RADIUS = 400;
 /** How far off the head's route Scout One has to lie when it passes (units, 75 m): the head and her hull clear of each other. */
 const TOW_CLEAR = 1500;
 const towOff = new THREE.Vector3();
+/**
+ * The shower running ahead of the head: from TOW_SHOWER_FROM to TOW_SHOWER_TO seconds into the
+ * tow, every TOW_SHOWER_EVERY seconds a piece of SHED_RADIUS comes down the route at
+ * TOW_PIECE_SPEED (160 m/s) from TOW_PIECE_FROM (2 km) up it, along the route through where
+ * Scout One lies moored, give or take TOW_PIECE_SPREAD (45 m) off it: towed off the route, she
+ * leaves its way; a piece that strikes her or the hull hits as hard as one of the Games' shower
+ * (see shower).
+ */
+const TOW_SHOWER_FROM = 10;
+const TOW_SHOWER_TO = 32;
+const TOW_SHOWER_EVERY = 1.5;
+const TOW_PIECE_SPEED = 3200;
+const TOW_PIECE_FROM = 40000;
+const TOW_PIECE_SPREAD = 900;
+
+/** A piece of the head's shower, coming down the route through SCOUT_AT, give or take TOW_PIECE_SPREAD off it. */
+function showerAt(markers: Markers) {
+  shedAim.set(shedding.range(-1, 1), shedding.range(-1, 1), shedding.range(-1, 1)).multiplyScalar(TOW_PIECE_SPREAD).add(SCOUT_AT);
+  const start = shedAim.clone().addScaledVector(TOW_ROUTE, -TOW_PIECE_FROM);
+  const along = TOW_ROUTE.clone().multiplyScalar(TOW_PIECE_SPEED);
+  shed.push({ at: markers.debris(start, along, SHED_RADIUS), along });
+}
 
 /** How far Scout One lies off the head's route (units). */
 function offRoute(at: THREE.Vector3): number {
@@ -1464,14 +1485,26 @@ const towScout: Drill = {
     parkScout(ctx);
     // a.told: Scout One has been on the hook, and lies free of her moorings
     a.told = false;
+    a.lastShot = 0;
+    shed.length = 0;
+    shedding = new Randomizer(1803);
     const start = SCOUT_AT.clone().addScaledVector(TOW_ROUTE, -TOW_HEAD_SPEED * TOW_SECONDS);
     a.points = [markers.debris(start, TOW_ROUTE.clone().multiplyScalar(TOW_HEAD_SPEED), TOW_HEAD_RADIUS)];
   },
-  done(ctx, a) {
+  done(ctx, a, markers) {
     const scout = ctx.drone;
     if (ctx.hookedShip && ctx.hookedShip === scout) a.told = true;
     if (!a.told && scout?.alive) parkScout(ctx);
+    // the shower running ahead of the head, down its route
+    if (scout?.alive && a.seconds >= TOW_SHOWER_FROM && a.seconds < TOW_SHOWER_TO && a.seconds - a.lastShot >= TOW_SHOWER_EVERY) {
+      a.lastShot = a.seconds;
+      showerAt(markers);
+    }
+    shower(ctx, SCOUT_AT, markers, scout);
     return a.seconds >= TOW_SECONDS && !!scout?.alive && offRoute(scout.flight.position) >= TOW_CLEAR;
+  },
+  leave: () => {
+    shed.length = 0;
   },
   fail: (ctx, a) => (!ctx.drone?.alive || (a.seconds >= TOW_SECONDS && offRoute(ctx.drone.flight.position) < TOW_CLEAR) ? CAMPAIGN.feedersCometLost : null),
   waypoint: (_, a) => (a.told ? null : SCOUT_AT),

@@ -1095,6 +1095,8 @@ test('The Feeders’ Comet: Scout One on the hook comes free of her moorings and
   await page.waitForFunction((start) => window.game.drone.flight.position.distanceTo(start) > 2000, start, { timeout: 30_000 });
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })));
   expect(await page.evaluate(() => window.game.school.attempt.told)).toBe(true);
+  // the shower comes down the route ahead of the head: the head and its pieces in flight
+  await page.waitForFunction(() => window.game.school.markers.moving.length > 1, null, { timeout: 30_000 });
   // clear of the route when the head passes: the drill is done
   await page.waitForFunction(() => window.game.school.stepIndex >= 2, null, { timeout: 90_000 });
   expect(errors).toEqual([]);

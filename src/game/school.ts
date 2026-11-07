@@ -106,8 +106,8 @@ export interface SchoolContext {
   removeWingman(): void;
   /** Spare's skills: the Host's own habits in the campaign's fights up to Io (see campaign/campaign, spareSkills). */
   readonly spare: Skills;
-  /** A piece of a comet's shower strikes the own hull at `at`, flying along `direction`: as hard as a piece of the Games' shower (see Game.cometStrike). */
-  pelt(at: THREE.Vector3, direction: THREE.Vector3): void;
+  /** A piece of a comet's shower strikes a hull at `at`, flying along `direction` (the own unless `ship` names another, a drill's Scout One): as hard as a piece of the Games' shower (see Game.cometStrike). */
+  pelt(at: THREE.Vector3, direction: THREE.Vector3, ship?: Ship): void;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
   brawl(): void;
   /** The raiders spawned last are actors: their shots fly wide and hurt nothing (the Plume Yacht's staged bandits). */
