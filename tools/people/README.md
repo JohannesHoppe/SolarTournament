@@ -14,5 +14,5 @@ Not part of a build: run only when a person changes. It needs Blender (5.2 LTS) 
 B=/Applications/Blender.app/Contents/MacOS/Blender
 $B -b --python tools/people/people.py -- /tmp/people
 for who in rask pim hedda saw tally navy jack crisp spare quill vey; do $B -b /tmp/people/$who.blend --python tools/people/bust.py -- public/assets/people/$who.bin 3600; done
-for who in rask pim hedda quill; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
+for who in rask pim hedda quill spare; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
 ```

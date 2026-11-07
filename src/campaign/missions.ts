@@ -15,6 +15,7 @@ import { sulfurFreighter, tug } from '../world/barge';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
+import { surfaceHeight as plutoHeight } from '../world/pluto';
 import { yacht } from '../world/yacht';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
@@ -22,7 +23,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -1041,6 +1042,47 @@ const theSweep: Drill = {
   mark: (ctx, a) => t('Navy {n}/{total} · {seconds} s left', { n: SWEEPERS - ctx.jumpersDown, total: SWEEPERS, seconds: Math.max(0, Math.ceil(SWEEP_SECONDS - a.seconds)) }),
 };
 
+/**
+ * Heart Run (15.1): the Feeder pilots' race over Pluto's heart, HEART_LAPS laps of HEART_RINGS
+ * rings on an ellipse over the plain east of the mountains, clear of them, HEART_OVER over the ground; only first
+ * home wins, and the Feeders take Patience on.
+ */
+const HEART_RINGS = 8;
+export const HEART_LAPS = 2;
+/** The rings' height over the ground (units, 300 m): more than twice a ring's radius, so no ring is set clear of the ground (see clear). */
+const HEART_OVER = 6000;
+const heartLoop = groundLoop(HEART_RINGS, [24000, 0], 38000, 30000, HEART_OVER, plutoHeight);
+export const HEART_COURSE = heartLoop.course;
+export const HEART_START = heartLoop.start;
+const heartRun = race({
+  line: CAMPAIGN.heartRun,
+  lost: CAMPAIGN.heartRunLost,
+  arena: 'pluto',
+  marks: HEART_COURSE,
+  laps: HEART_LAPS,
+  pipes: null,
+  rivals: { names: ['Wick', 'Ember', 'Lumen', 'Cinder', 'Ash'], skills: [0.6, 0.5, 0.45, 0.45, 0.4] },
+  podium: 1,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/** The tenth echo (15.2), over the edge of the mountains by Pluto's heart, ECHO_TEN_OVER over their ground. */
+const ECHO_TEN_X = -36000;
+const ECHO_TEN_Z = 12000;
+const ECHO_TEN_OVER = 1500;
+export const ECHO_TEN = point(ECHO_TEN_X, plutoHeight(ECHO_TEN_X, ECHO_TEN_Z) + ECHO_TEN_OVER, ECHO_TEN_Z);
+
+/** Wells (15.4): Nicole's escape gauge and orbit readout (see Module). */
+const fitWells = (campaign: Campaign) => {
+  if (!campaign.modules.includes('wells')) campaign.modules.push('wells');
+};
+/** Plating III (15.5): the plating's third step (see hullOf), at PLATING_THREE_PRICE. */
+const fitPlatingThree = (campaign: Campaign) => {
+  if (campaign.parts.includes('platingThree')) return;
+  campaign.parts.push('platingThree');
+  buy(campaign, PLATING_THREE_PRICE);
+};
+
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
   if (campaign.parts.includes('platingTwo')) return;
@@ -1410,6 +1452,33 @@ const plumeYacht: Drill = {
   leave: (ctx) => ctx.removeJumpers(),
   waypoint: () => yachtNow,
   mark: (ctx, a) => (a.count < 2 ? t('Yacht · on camera') : t('Raiders {n}/{total} · yacht hull {hull} %', { n: ctx.jumpersDown, total: RAIDERS, hull: Math.max(0, Math.round(100 * (1 - ctx.rigWear / YACHT_HULL))) })),
+};
+
+/**
+ * Last Light (15.3): Patience moored where the Feeder convoy forms up (LAST_BERTH), PICKETS
+ * Ministry pickets of PICKET_SKILL firing at her, holding PICKET_HOLD off; all of them down wins,
+ * PATIENCE_HULL of their hits on her start it over.
+ */
+const LAST_BERTH = point(20000, -2000, -20000);
+const PICKETS = 6;
+const PICKET_SKILL = 0.55;
+const PICKET_HOLD = 12000;
+const PATIENCE_HULL = 500;
+/** The pickets' names (never translated). */
+const PICKET_NAMES = ['Warden 1', 'Warden 2', 'Warden 3', 'Warden 4', 'Warden 5', 'Warden 6'];
+const lastLight: Drill = {
+  ...escort(CAMPAIGN.lastLight, 'pluto'),
+  turn: () => 'fight',
+  enter(ctx, a, markers) {
+    startEscort(ctx, a, markers);
+    markers.hauler(LAST_BERTH);
+    ctx.spawnJumpers(null, LAST_BERTH, PICKETS, PICKET_SKILL, PICKET_NAMES, PICKET_HOLD);
+  },
+  done: (ctx) => ctx.jumpersDown >= PICKETS,
+  fail: (ctx) => (ctx.rigWear >= PATIENCE_HULL ? CAMPAIGN.lastLightLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => LAST_BERTH,
+  mark: (ctx) => t('Pickets {n}/{total} · Patience {hull} %', { n: PICKETS - ctx.jumpersDown, total: PICKETS, hull: Math.max(0, Math.round(100 * (1 - ctx.rigWear / PATIENCE_HULL))) }),
 };
 
 /** Plating I (6.4): plating of the first grade, every hit hurting less (see hullOf), at PLATING_PRICE. */
@@ -2348,4 +2417,21 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'theMemorial', name: msg('The Memorial'), drills: [said(HEDDA.memorial, 'derelict'), theMemorial, said(CAMPAIGN.echoNine, 'derelict'), said(CAMPAIGN.echoNineHeard, 'derelict')], pay: 4000, ratings: 400 },
   { id: 'graveShift', name: msg('Grave Shift'), drills: [graveShift, said(CAMPAIGN.graveShiftDone, 'derelict')], pay: 3000, ratings: 300 },
   { id: 'thrustersThree', name: msg('Thrusters III'), drills: [said(PIM.thrustersThree, 'derelict'), said(CAMPAIGN.thrustersThree, 'derelict')], pay: 0, fit: fitThrustersThree },
+  // chapter 15, Last Light at Pluto: the Feeders' race, Spare's file, the tenth echo, the pickets at the last dock
+  { id: 'heartRun', name: msg('Heart Run'), drills: [said(HEDDA.pluto, 'pluto'), heartRun, said(CAMPAIGN.heartRunDone, 'pluto')], pay: 5000, ratings: 500, start: HEART_START },
+  {
+    id: 'theFile',
+    name: msg('The File'),
+    drills: [
+      climbOut('file', msg('Patience lies at Pluto’s last dock. Spare has come aboard, unarmed; your clone climbs up to the galley.'), 'pluto'),
+      inRoom(SPARE.file, 'pluto'),
+      inRoom(SPARE.road, 'pluto'),
+      climbIn(CAMPAIGN.fileAnswer, 'pluto'),
+    ],
+    pay: 0,
+  },
+  { id: 'plutoEcho', name: msg('Pluto Echo'), drills: [echoAt(CAMPAIGN.echoTenCall, 'pluto', ECHO_TEN), said(CAMPAIGN.echoTen, 'pluto'), said(CAMPAIGN.echoTenHeard, 'pluto')], pay: 0, ratings: 40 },
+  { id: 'lastLight', name: msg('Last Light'), drills: [said(HEDDA.lastLight, 'pluto'), lastLight, said(CAMPAIGN.lastLightDone, 'pluto')], pay: 6000, ratings: 400 },
+  { id: 'wells', name: msg('Wells'), drills: [said(CAMPAIGN.wells, 'pluto'), said(CAMPAIGN.wellsAhead, 'pluto')], pay: 0, fit: fitWells },
+  { id: 'platingThree', name: msg('Plating III'), drills: [said(PIM.platingThree, 'pluto'), said(CAMPAIGN.platingThree, 'pluto')], pay: 0, fit: fitPlatingThree },
 ];

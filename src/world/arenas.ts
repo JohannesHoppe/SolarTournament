@@ -7,10 +7,11 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
+import { CHARON_AT, groundPlacement as plutoGround, PLUTO_FALL } from './pluto';
 import { GEYSER_COLUMNS, groundPlacement as tritonGround, memorialPlacement, NEPTUNE_AT, STATION_AT as MEMORIAL_AT, TRITON_FALL } from './triton';
 import { groundPlacement as mirandaGround, MIRANDA_FALL, MOUTH as VERONA_MOUTH, URANUS_AT } from './miranda';
 import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SATURN } from './iapetus';
@@ -54,7 +55,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -526,6 +527,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.4, 0.36, 0.34],
     grade: { gain: [1, 0.99, 1.02], lift: [0.0013, 0.0012, 0.0016], saturation: 0.9 },
   },
+  // Last Light: pale ice in a dusk at noon, Charon grey over it, the sun a bright star
+  pluto: {
+    space: 0x010102,
+    sky: 0x8c8a90,
+    ground: 0x2a2624,
+    ambient: 1.4,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.035, 0.035, 0.045], size: 540000, shape: 0, turn: 0.7 },
+      { at: [0.6, 0.3, 0.6], color: [0.04, 0.03, 0.03], size: 460000, shape: 2, turn: 2.5 },
+    ],
+    stars: 1.05,
+    starmap: true,
+    dust: [0.7, 0.68, 0.66],
+    grade: { gain: [1, 0.99, 0.99], lift: [0.0012, 0.0012, 0.0013], saturation: 0.88 },
+  },
 };
 
 /**
@@ -791,6 +807,23 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the plain, facing the geyser field
     start: { at: [55000, 0, 40000], toward: [0, -6000, 0] },
+    open: true,
+  },
+  {
+    id: 'pluto',
+    name: msg('Last Light'),
+    tagline: msg('The edge of Pluto’s heart, a plain of nitrogen ice in slowly overturning cells, its mountains of water ice, and Charon fixed in the sky.'),
+    // nothing loose: the heart's plain and its mountains
+    layout: { key: 'pluto', seed: 15000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [plutoGround(PLUTO_TYPE)], fall: PLUTO_FALL },
+    cooling: 1,
+    storms: false,
+    // 49 AU from the sun in 2584: a bright star, noon as dim as dusk on Earth
+    sun: { size: 5000, intensity: 2, color: 0xfff0dd },
+    mood: MOODS.pluto,
+    preview: { from: [30000, 6000, 30000], at: [0, -8000, 0] },
+    references: [{ glyph: 'planet', label: msg('Charon'), position: CHARON_AT, distance: false }],
+    // over the plain, facing the mountains
+    start: { at: [50000, 0, 30000], toward: [-30000, -6000, 0] },
     open: true,
   },
 ];

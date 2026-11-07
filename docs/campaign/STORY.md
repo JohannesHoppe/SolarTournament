@@ -186,9 +186,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 14.2 | The Old Admiral | story | Fleet Admiral Vey's confession. (built, over the comm) | — | A scene |
 | 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). (built: the echo held before the bow's torn end; the decks of the bridge tower still to come) | ☉ 4,000 · 400 | The existing Derelict arena |
 | 14.4 | Grave Shift | fight | Out again with the guard on the Magpie's tail; reach the arena's edge. (built) | ☉ 3,000 · 300 | Deathmatch; the edge as the goal |
-| 15.1 | Heart Run | race | The Feeder pilots' race over the nitrogen plain of Pluto's heart. Win it, and the Feeders take Patience on. | ☉ 5,000 · 500 | Race; surface |
-| 15.2 | The File | story | Spare comes aboard Patience unarmed. | — | A scene |
-| 15.3 | Last Light | escort | Patience joins a Feeder convoy past Charon; the Ministry's pickets (skill 0.55) check every ship. | ☉ 6,000 · 400 | Escort |
+| 15.1 | Heart Run | race | The Feeder pilots' race over the nitrogen plain of Pluto's heart. Win it, and the Feeders take Patience on. (built) | ☉ 5,000 · 500 | Race; surface |
+| 15.2 | The File | story | Spare comes aboard Patience unarmed. (built: in person, in the galley) | — | A scene |
+| 15.3 | Last Light | escort | Patience joins a Feeder convoy past Charon; the Ministry's pickets (skill 0.55) check every ship. (built: Patience moored where the convoy forms up, six pickets firing at her) | ☉ 6,000 · 400 | Escort |
 | 16.1 | Haumea's Ring | race | The depot crews' race between beacons on Haumea's ring while the elongated body turns beneath it once in four hours. Win. | ☉ 6,000 · 600 | Race; ice of the Rings |
 | 16.2 | Rung Two | escort | A fuel barge to the depot at Eris. | ☉ 6,000 · 400 | Escort |
 | 16.3 | The Hunter | duel | Perihelion and two Navy fighters at Eris. Win; he breaks off again, swearing. | ☉ 5,000 · 600 | Duel |
@@ -287,7 +287,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift (built: Among the Loose) |
 | 13 | Thrusters II | 2,500 | The hangar's second step (built: Thrusters II) |
 | 14 | Thrusters III | 5,000 | The hangar's third step (built: Thrusters III) |
-| 15 | Plating III | 6,000 | |
+| 15 | Plating III | 6,000 | The hangar's third step (built: Plating III, Feeder plate) |
 | 16 | Main drive III, radiators III | 5,000 each | |
 | 17 | Torpedo tubes II, III | 3,000, 6,000 | Complete |
 
@@ -314,7 +314,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | 5 | Radar | The radar sphere (built: Pilot Episode) |
 | 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown (built: Dose) |
 | 10 | Voice II | Her own voice, clean (built: from a voice board out of Crisp's yacht; until then she sounds thin, through a narrow band) |
-| 15 | Wells | The escape gauge and the orbit readout |
+| 15 | Wells | The escape gauge and the orbit readout (built: Wells, after Last Light) |
 | 19 | Ministry certification | The Games' Nicole (the end) |
 
 **Her voice, stage by stage.** It is always the same woman: the same voice model, only a different filter and a different way of speaking. The Host should hear the tournament's Nicole under the static long before understanding why.
@@ -958,7 +958,35 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **VEY**: Ah, a visitor. Is it the launch already? Tell the President the world ship has not cleared the pickets. No. No, that was. What year is it? Never mind. He said: nobody leaves. A beautiful order. Short. So I gave it to the guns. The habitat ring first, he said, the cameras like the ring. Do you know, they cheered? On Earth. The Memorial Games, they called it. I got a medal. I have it somewhere. I have had it in forty bodies.
 
-### The file (chapter 15)
+### Last Light (chapter 15, built)
+
+**HEDDA**: Pluto. Last stop before the dark. The Feeders push comets out to the hole for the Ministry, and they take on haulers, if their pilots think we can fly. They race on the heart. Win it.
+
+**NICOLE**: Two laps over the heart, Host, eight rings, the Feeders’ best against us. Only first counts.
+
+**NICOLE** *(first home)*: First. The Feeders will take Patience on. Hedda is already haggling.
+
+*Patience's galley at Pluto's last dock. Hedda at the head of the table; at the counter, Spare, unarmed, the Host's own face gone thin.*
+
+**NICOLE** *(the tenth echo, over the mountains' edge)*: The old frequency, Host, once more, from the mountains’ edge. Hold us still over it.
+
+**ECHO 10**: If you are hearing this, you have my voice, and I have no idea what they made of it. I am sorry.
+
+**NICOLE**: She is sorry. For me. She knew they would take her voice and make something of it. They made me.
+
+**HEDDA**: Feeder convoy forms up here. Ministry pickets check every ship that leaves for the dark. They know whose hull you are. Keep them off Patience.
+
+**NICOLE**: Ministry pickets, Host, six of them, and they are not checking papers. They are shooting at Patience. Keep them off her.
+
+**NICOLE** *(all six down)*: The pickets are down and the convoy is moving. Patience is a Feeder now, Host.
+
+**NICOLE** *(Wells)*: Host. I remember wells: masses that hold you, and how to fall around them. I can show you now. The escape gauge, the orbit.
+
+**NICOLE**: Watch the gauge near anything heavy, Host. The dark ahead holds nothing but heavy things.
+
+**PIM** *(Plating III)*: Feeder plate, third grade, six thousand. Built for ice hitting at a hundredth of light. Should stop a laser.
+
+### The file (chapter 15, built, in person; Spare's line in two)
 
 **SPARE**: Rask sold you the day you signed. Not the debt. The hull, and her. Operation Lullaby. Quill's been clearing the road for you for a year, so Nicole would trust somebody enough to remember where she went. You're not a Contender, Host. You're a sniffer dog.
 

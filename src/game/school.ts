@@ -1964,9 +1964,10 @@ export class Markers {
     } else this.harpoon.geometry.setFromPoints([winchPoint, to]);
   }
 
-  /** Whether a beam meets the barge before anything else at `max` (see hullRay). */
+  /** Whether a beam meets the hull the drill escorts (the barge, or Patience moored) before anything else at `max` (see hullRay). */
   bargeRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
-    return this.barge ? rayHull(this.bargeBoxes, this.barge, origin, direction, max) : null;
+    if (this.barge) return rayHull(this.bargeBoxes, this.barge, origin, direction, max);
+    return this.patience ? rayPatience(this.patience, origin, direction, max) : null;
   }
 
   /** The escorted hull of `kind` (the ore barge unless named), set out at `position` turned by `quaternion` (its bow along -x), or moved there. */

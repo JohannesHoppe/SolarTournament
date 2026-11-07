@@ -29,6 +29,7 @@ import { RING_TILT as IAPETUS_RING_TILT, SATURN_AT as IAPETUS_SATURN_AT, SATURN_
 import { iapetus } from './twofaces';
 import { miranda } from './verona';
 import { triton, TRITON_JETS } from './geysers';
+import { pluto } from './heart';
 /** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
 const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
@@ -860,6 +861,7 @@ export class Landmarks {
     this.scenes.set('titan', this.titan());
     this.scenes.set('enceladus', this.enceladus());
     this.scenes.set('miranda', miranda());
+    this.scenes.set('pluto', pluto());
     this.scenes.set('triton', triton().add(this.jets(TRITON_JETS)));
     this.scenes.set('iapetus', iapetus().add(...this.saturnEdgeOn(IAPETUS_SATURN_AT, IAPETUS_SATURN_SIZE, IAPETUS_RING_TILT)));
     for (const scene of this.scenes.values()) {

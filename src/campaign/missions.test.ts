@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, HEART_COURSE, HEART_LAPS, HEART_START, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 import { faceAt } from '../world/miranda';
@@ -24,6 +24,16 @@ const GRAND_SECONDS = 360;
 const FLUX_SECONDS = 240;
 /** The Qualifying Heat's three laps over Kraken Mare are flown within this many seconds by a middling bot. */
 const HEAT_SECONDS = 420;
+/** The Heart Run's two laps: long enough for a middling bot. */
+const HEART_SECONDS = 300;
+
+/** A middling bot flies a mission's race (see flyRace): every lap through every mark, nothing missed, without a crash. */
+function expectRaced(arena: string, course: readonly THREE.Vector3[], laps: number, radius: number, seconds: number, from?: readonly [number, number, number]) {
+  const { flight, total } = flyRace(arena, course, laps, radius, seconds, from);
+  expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
+  expect(flight.missed).toBe(0);
+  expect(flight.crashed).toBe(false);
+}
 
 /**
  * A middling bot flies a mission's time trial at `arena` (see timeTrial): from `from`, through each
@@ -107,29 +117,24 @@ describe('the races of the campaign', () => {
     flyTrial('triton', GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START.at, GEYSER_TIME);
   });
 
+  it('the Heart Run on Pluto is flown by a middling bot: both laps over the heart through every ring, nothing missed, without a crash', () => {
+    expectRaced('pluto', HEART_COURSE, HEART_LAPS, RING_RADIUS, HEART_SECONDS, HEART_START.at);
+  });
+
   it('the Flux Tube Race on Io is flown by a middling bot: both laps through every ring, past the flux tube, nothing missed, without a crash; one side of its loop runs where the link crackles', () => {
-    const { flight, total } = flyRace('io', FLUX_COURSE, FLUX_LAPS, RING_RADIUS, FLUX_SECONDS, FLUX_START.at);
-    expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
-    expect(flight.missed).toBe(0);
-    expect(flight.crashed).toBe(false);
+    expectRaced('io', FLUX_COURSE, FLUX_LAPS, RING_RADIUS, FLUX_SECONDS, FLUX_START.at);
     expect(Math.max(...FLUX_COURSE.map((ring) => fluxStatic(ring)))).toBeGreaterThan(0.3);
   });
 
   it('the Qualifying Heat over Kraken Mare is flown by a middling bot: three laps through every coil, over Titan’s haze and down into it, nothing missed, without a crash', () => {
-    const { flight, total } = flyRace('titan', HEAT_COURSE, HEAT_LAPS, RING_RADIUS, HEAT_SECONDS, HEAT_START.at);
-    expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
-    expect(flight.missed).toBe(0);
-    expect(flight.crashed).toBe(false);
+    expectRaced('titan', HEAT_COURSE, HEAT_LAPS, RING_RADIUS, HEAT_SECONDS, HEAT_START.at);
     // one side over the deck, the other in the haze under it
     expect(Math.max(...HEAT_COURSE.map((ring) => ring.y))).toBeGreaterThan(0);
     expect(Math.min(...HEAT_COURSE.map((ring) => ring.y))).toBeLessThan(-4000);
   });
 
   it('the Stickney Grand on Phobos is flown by a middling bot: three laps through every ring, down into the crater and out, nothing missed, without a crash', () => {
-    const { flight, total } = flyRace('phobos', GRAND_COURSE, GRAND_LAPS, RING_RADIUS, GRAND_SECONDS, GRAND_START.at);
-    expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
-    expect(flight.missed).toBe(0);
-    expect(flight.crashed).toBe(false);
+    expectRaced('phobos', GRAND_COURSE, GRAND_LAPS, RING_RADIUS, GRAND_SECONDS, GRAND_START.at);
   });
 });
 
@@ -219,7 +224,7 @@ describe('Blackout on Io', () => {
 });
 
 describe('the echoes', () => {
-  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR], ['the seventh, low over Kraken Mare under Titan’s haze', 'titan', ECHO_SEVEN], ['the eighth, over the crest of Iapetus’s ridge', 'iapetus', ECHO_EIGHT], ['the ninth, at the Derelict’s torn bow', 'derelict', ECHO_NINE]] as const) {
+  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR], ['the seventh, low over Kraken Mare under Titan’s haze', 'titan', ECHO_SEVEN], ['the eighth, over the crest of Iapetus’s ridge', 'iapetus', ECHO_EIGHT], ['the ninth, at the Derelict’s torn bow', 'derelict', ECHO_NINE], ['the tenth, over the mountains by Pluto’s heart', 'pluto', ECHO_TEN]] as const) {
     it(`${name}: clear of every piece of the place, inside the arena`, () => {
       const field = testField(DETAIL);
       field.generate(arenaById(arena)!.layout);

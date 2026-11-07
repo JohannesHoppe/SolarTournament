@@ -859,3 +859,37 @@ test('The Memorial and Grave Shift: the ninth echo held at the Derelict’s torn
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('graveShift')), { timeout: 60_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 14 flown too: the hull with Thrusters III, at Pluto. */
+const plutoHull = (...done: string[]) => ({ ...tritonHull('geyserField', 'oldAdmiral', 'theMemorial', 'graveShift', 'thrustersThree', ...done), parts: [...tritonHull().parts, 'thrustersThree'] });
+
+test('chapter 15 at Pluto: the Heart Run lines up five Feeders at eight rings over the heart, every ring inside the arena', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, plutoHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'pluto' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
+  const rings = await page.evaluate(() => window.game.school.attempt.points.map((p: { length: () => number }) => p.length()));
+  expect(rings.length).toBe(8);
+  for (const reach of rings) expect(reach).toBeLessThan(67500);
+  expect(errors).toEqual([]);
+});
+
+test('The File: Spare aboard Patience in the flesh, Hedda at the table', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, plutoHull('heartRun'));
+  await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 120_000 });
+  await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('pluto');
+  expect(errors).toEqual([]);
+});
+
+test('Last Light: Ministry pickets fire at Patience moored at the last dock; all six down wins, and Nicole’s wells come with the next job', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, plutoHull('heartRun', 'theFile', 'plutoEcho'));
+  await page.waitForFunction(() => window.game.venue?.id === 'pluto' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 6, null, { timeout: 180_000 });
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('lastLight')), { timeout: 120_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).modules.includes('wells')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

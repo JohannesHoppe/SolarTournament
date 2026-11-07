@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -66,7 +66,7 @@ describe('the campaign Lot 7731', () => {
     expect(rankOf(12000)).toBe('Contender');
   });
 
-  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser, the racing line at the Stickney Grand, the radar in Pilot Episode, the threat warnings in Dose and her own voice at Enceladus', () => {
+  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, targeting with its laser, the racing line at the Stickney Grand, the radar in Pilot Episode, the threat warnings in Dose, her own voice at Enceladus and the wells at Pluto', () => {
     const campaign = freshCampaign();
     expect(campaign.modules).toEqual([]);
     for (const mission of MISSIONS) {
@@ -77,7 +77,7 @@ describe('the campaign Lot 7731', () => {
       if (mission.id === 'voiceTwo') expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat']);
       complete(campaign, mission);
     }
-    expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat', 'voice']);
+    expect(campaign.modules).toEqual(['targeting', 'racingLine', 'radar', 'threat', 'voice', 'wells']);
     expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
   });
 
@@ -172,6 +172,13 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'thrustersThree')!);
     expect(hullOf(campaign).thrusters).toBeCloseTo(STOCK.thrusters + 3 * THRUSTER_STEP, 10);
     expect(campaign.bond).toBe(20000 + OVERDRIVE_PRICE + THRUSTERS_TWO_PRICE + THRUSTERS_THREE_PRICE);
+  });
+
+  it('fits Plating III at Pluto: every hit hurts three of the hangar’s steps less, paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['plating' as const, 'platingTwo' as const] };
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'platingThree')!);
+    expect(hullOf(campaign).damage).toBeCloseTo(STOCK.damage - 3 * PLATING_STEP, 10);
+    expect(campaign.bond).toBe(20000 + PLATING_THREE_PRICE);
   });
 
   it('fits Main Drive II and Radiators II at Iapetus: each the hangar’s second step, each paid as the laser is', () => {
