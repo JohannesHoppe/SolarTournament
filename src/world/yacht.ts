@@ -28,14 +28,24 @@ const PLATES = 10101;
 
 let built: { root: THREE.Group; boxes: readonly HullBox[] } | null = null;
 
+/**
+ * Victory Cola's finish, on its yacht and its city over Venus (see world/highball): lacquer in a
+ * color over polished plates of seed `plates` (see armorSurface), with no rivet or scratch on
+ * them, and polished gold.
+ */
+export function brandFinish(plates: number): { paint: (color: number) => THREE.MeshPhysicalMaterial; gold: THREE.MeshPhysicalMaterial } {
+  const plating = armorSurface(plates);
+  const paint = (color: number) =>
+    lacquer(new THREE.MeshPhysicalMaterial({ color, map: plating.map, roughnessMap: plating.orm, metalnessMap: plating.orm, roughness: 0.8, metalness: 0.5, normalMap: plating.normal, envMap: shine(), envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.06 }));
+  const gold = lacquer(new THREE.MeshPhysicalMaterial({ color: GOLD, metalness: 1, roughness: 0.3, envMap: shine(), envMapIntensity: 2.6, clearcoat: 0.5, clearcoatRoughness: 0.2 }));
+  return { paint, gold };
+}
+
 /** The yacht's model and its boxes, built at its first use (a drill takes the model and poses it). */
 export function yacht(): { root: THREE.Group; boxes: readonly HullBox[] } {
   if (built) return built;
   const root = new THREE.Group();
-  const plating = armorSurface(PLATES);
-  const paint = (color: number) =>
-    lacquer(new THREE.MeshPhysicalMaterial({ color, map: plating.map, roughnessMap: plating.orm, metalnessMap: plating.orm, roughness: 0.8, metalness: 0.5, normalMap: plating.normal, envMap: shine(), envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.06 }));
-  const gold = lacquer(new THREE.MeshPhysicalMaterial({ color: GOLD, metalness: 1, roughness: 0.3, envMap: shine(), envMapIntensity: 2.6, clearcoat: 0.5, clearcoatRoughness: 0.2 }));
+  const { paint, gold } = brandFinish(PLATES);
   const glass = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.78, 0.5).multiplyScalar(1.4), toneMapped: false });
   const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.35, 0.3).multiplyScalar(2.2), toneMapped: false });
 

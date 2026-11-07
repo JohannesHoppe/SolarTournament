@@ -40,10 +40,13 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'terminatorRun')!);
     expect(campaign.step).toBe(3);
     expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['mercuryEcho']);
+    // Venus once Victory Cola has signed the Host (Sponsor Night)
+    campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'sponsorNight') + 1).map((mission) => mission.id);
+    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun', 'cloudLine']);
     // the whole story done, the side trips still wait
     campaign.done = story.map((mission) => mission.id);
     expect(nextMission(campaign)).toBeNull();
-    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun']);
+    expect(sideTrips(campaign).map((mission) => mission.id)).toEqual(['terminatorRun', 'cloudLine']);
   });
 
   it('takes what the Host lost on the job off the pay before the yard takes its cut, never below nothing', () => {

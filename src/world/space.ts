@@ -323,7 +323,8 @@ export class Space {
   /** Shows the real sky or the generated stars as the mood asks, the glow as sharp as wanted and loaded. */
   private showSky() {
     const real = this.realSky && !!this.starmap;
-    this.stars.visible = !real;
+    // no stars at all where the sky is bright (Venus's thick air): drawn black they would speck it
+    this.stars.visible = !real && this.starShare > 0;
     this.stars.material.color.setScalar(this.starShare);
     if (!this.starmap || !this.files) return;
     this.starmap.group.visible = real;

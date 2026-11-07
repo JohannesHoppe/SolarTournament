@@ -20,6 +20,7 @@ import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miran
 import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
 import { surfaceHeight as plutoHeight } from '../world/pluto';
 import { ridgeNorth, surfaceHeight as mercuryHeight } from '../world/mercury';
+import { BIODOME_FOUR, DECK as VENUS_DECK, hallAt, HALL_HALF } from '../world/venus';
 import { yacht } from '../world/yacht';
 import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
@@ -1102,6 +1103,36 @@ const terminatorRun = race({
 const ECHO_MERCURY_X = -20000;
 const ECHO_MERCURY_OVER = 1500;
 export const ECHO_MERCURY = point(ECHO_MERCURY_X, mercuryHeight(ECHO_MERCURY_X, ridgeNorth(ECHO_MERCURY_X)) + ECHO_MERCURY_OVER, ridgeNorth(ECHO_MERCURY_X));
+
+/**
+ * Cloud Line (a side trip to Venus): Victory Cola's race round Highball, CLOUD_LAPS laps of
+ * CLOUD_RINGS rings on an ellipse, its eastern half CLOUD_DIP under the acid clouds' deck (units,
+ * 150 m, where the haze hides a ring until it is close and the air brakes and heats the hull), its
+ * western half at CLOUD_HIGH (units, 200 m under the field's middle, 800 m over the deck, a little
+ * over the city's halls); only first home wins.
+ */
+const CLOUD_RINGS = 8;
+export const CLOUD_LAPS = 2;
+const CLOUD_DIP = 3000;
+const CLOUD_HIGH = -4000;
+const cloudLoop = groundLoop(CLOUD_RINGS, [0, 0], 40000, 32000, 0, (x) => (x > 0 ? VENUS_DECK - CLOUD_DIP : CLOUD_HIGH));
+export const CLOUD_COURSE = cloudLoop.course;
+export const CLOUD_START = cloudLoop.start;
+const cloudLine = race({
+  line: CAMPAIGN.cloudLine,
+  lost: CAMPAIGN.cloudLineLost,
+  arena: 'venus',
+  marks: CLOUD_COURSE,
+  laps: CLOUD_LAPS,
+  pipes: null,
+  rivals: { names: ['Fizz', 'Sparkle', 'Syrup', 'Bubbles', 'Caramel'], skills: [0.6, 0.5, 0.5, 0.45, 0.4] },
+  podium: 1,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+
+/** Venus's echo (a side trip), over the roof of biodome four, ECHO_VENUS_OVER over it. */
+const ECHO_VENUS_OVER = 1500;
+export const ECHO_VENUS = hallAt(BIODOME_FOUR).add(point(0, HALL_HALF.y + ECHO_VENUS_OVER, 0));
 
 /** The tenth echo (15.2), over the edge of the mountains by Pluto's heart, ECHO_TEN_OVER over their ground. */
 const ECHO_TEN_X = -36000;
@@ -2805,4 +2836,7 @@ export const MISSIONS: readonly Mission[] = [
   // the side trips, from Act II on: Mercury's sun miners and their race, and an echo there
   { id: 'terminatorRun', name: msg('Terminator Run'), drills: [said(HEDDA.mercury, 'mercury'), terminatorRun, said(CAMPAIGN.terminatorRunDone, 'mercury')], pay: 4000, ratings: 300, start: TERMINATOR_START, side: 'pilotEpisode' },
   { id: 'mercuryEcho', name: msg('Mercury Echo'), drills: [echoAt(CAMPAIGN.echoMercuryCall, 'mercury', ECHO_MERCURY), said(CAMPAIGN.echoMercury, 'mercury'), said(CAMPAIGN.echoMercuryHeard, 'mercury')], pay: 0, ratings: 40, side: 'terminatorRun' },
+  // and once Victory Cola has signed the Host: its city over Venus, the Cloud Line through the acid clouds, and an echo there
+  { id: 'cloudLine', name: msg('Cloud Line'), drills: [said(HEDDA.venus, 'venus'), cloudLine, said(CAMPAIGN.cloudLineDone, 'venus')], pay: 5000, ratings: 400, start: CLOUD_START, side: 'sponsorNight' },
+  { id: 'venusEcho', name: msg('Venus Echo'), drills: [echoAt(CAMPAIGN.echoVenusCall, 'venus', ECHO_VENUS), said(CAMPAIGN.echoVenus, 'venus'), said(CAMPAIGN.echoVenusHeard, 'venus')], pay: 0, ratings: 40, side: 'cloudLine' },
 ];

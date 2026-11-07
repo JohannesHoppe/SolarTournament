@@ -7,7 +7,9 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES } from './yard';
+import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
+import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL } from './mercury';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
@@ -59,7 +61,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -596,6 +598,18 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.75, 0.7, 0.62],
     grade: { gain: [1.03, 1, 0.96], lift: [0.0012, 0.0012, 0.0011], saturation: 0.9 },
   },
+  // Highball: a pale yellow-white sky of thick air over the acid clouds, the stars gone, the city's red and gold
+  venus: {
+    space: 0xa89a70,
+    sky: 0xe8dcb0,
+    ground: 0x8a7440,
+    ambient: 1.6,
+    nebulae: [],
+    stars: 0,
+    starmap: false,
+    dust: [0.9, 0.85, 0.6],
+    grade: { gain: [1.02, 1, 0.94], lift: [0.004, 0.0036, 0.002], saturation: 0.95 },
+  },
 };
 
 /**
@@ -989,6 +1003,24 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('Sun miners’ camp'), position: CAMP_AT, distance: true }],
     // over the plain, facing the camp
     start: { at: [50000, 0, 30000], toward: [0, -12000, 0] },
+    open: true,
+  },
+  {
+    id: 'venus',
+    name: msg('Highball'),
+    tagline: msg('Victory Cola’s floating city over Venus: a platform of red and gold on the air, gardens under glass, a bottle for a tower, and the acid clouds below.'),
+    // nothing loose: the city, on the air over the acid clouds
+    layout: { key: 'venus', seed: 21000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: cityPlacements(CITY_TYPES), fall: VENUS_FALL, air: VENUS_AIR },
+    cooling: 0.8,
+    storms: false,
+    // 0.72 AU from the sun: 1.4 times as wide as at Earth, softened by the thick air over the city
+    sun: { size: 42000, intensity: 3.6, color: 0xfff2d6 },
+    mood: MOODS.venus,
+    hazeLight: { deck: VENUS_DECK_LIGHT, deep: VENUS_DEEP_LIGHT },
+    preview: { from: [30000, 4000, 30000], at: [0, -2000, 0] },
+    references: [{ glyph: 'planet', label: msg('Biodome four'), position: hallAt(BIODOME_FOUR), distance: true }],
+    // off the city's edge, facing it
+    start: { at: [45000, 0, 30000], toward: [0, -2000, 0] },
     open: true,
   },
 ];

@@ -4,6 +4,7 @@ import { flatGrid, withCollider } from './boneyard';
 import { pixelTexture } from '../view/textures';
 import { Noise } from './noise';
 import { SEA, seaHeight, TITAN_AIR } from './titan';
+import type { Air } from './air';
 
 /**
  * How Kraken Mare on Titan looks (where things are in world/titan): the sea of liquid methane,
@@ -102,8 +103,8 @@ function cloudTexture(): THREE.CanvasTexture {
   return pixelTexture(256, (x, y, rgb) => rgb.fill(0.75 + 0.45 * billows.fractal(x / 32, 0.6, y / 32, 4)));
 }
 
-/** The top of Titan's haze, a sheet at its deck (see TITAN_AIR): a dull orange, the same seen from over and under it. */
-export function hazeDeck(): THREE.Mesh {
+/** The top of an air's haze, a sheet at its deck (Titan's, see TITAN_AIR; Venus's acid clouds) in its `color`, a dull orange for Titan, the same seen from over and under it. */
+export function hazeDeck(air: Air = TITAN_AIR, color = DECK_COLOR): THREE.Mesh {
   const positions: number[] = [];
   const index: number[] = [];
   positions.push(0, 0, 0);
@@ -112,7 +113,7 @@ export function hazeDeck(): THREE.Mesh {
     const r = DECK_REACH * (ring / RINGS) * (ring / RINGS);
     for (let spoke = 0; spoke < SPOKES; spoke++) {
       const angle = (spoke / SPOKES) * Math.PI * 2;
-      positions.push(r * cos(angle), -(r * r) / (2 * TITAN_AIR.radius), r * sin(angle));
+      positions.push(r * cos(angle), -(r * r) / (2 * air.radius), r * sin(angle));
     }
   }
   for (let spoke = 0; spoke < SPOKES; spoke++) index.push(0, 1 + ((spoke + 1) % SPOKES), 1 + spoke);
@@ -130,8 +131,8 @@ export function hazeDeck(): THREE.Mesh {
   for (let i = 0; i < positions.length; i += 3) uv.push(positions[i] / CLOUD_TILE, positions[i + 2] / CLOUD_TILE);
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geometry.setIndex(index);
-  const deck = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: cloudTexture(), color: DECK_COLOR, transparent: true, opacity: DECK_OPACITY, side: THREE.DoubleSide, depthWrite: false }));
+  const deck = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: cloudTexture(), color, transparent: true, opacity: DECK_OPACITY, side: THREE.DoubleSide, depthWrite: false }));
   deck.userData.shadowless = true;
-  deck.position.y = TITAN_AIR.center.y + TITAN_AIR.radius;
+  deck.position.y = air.center.y + air.radius;
   return deck;
 }
