@@ -5726,10 +5726,7 @@ export class Game implements OnlineGame {
         game.jumpers.rig.copy(to);
         game.jumpers.hold = 0;
       },
-      jumperNear: (point, reach) => {
-        const first = game.jumpers?.bots[0]?.ship;
-        return !!first && first.alive && first.flight.position.distanceTo(point) < reach;
-      },
+      jumperNear: (point, reach) => !!game.jumpers?.bots.some((bot) => bot.ship.alive && bot.ship.flight.position.distanceTo(point) < reach),
       choose: (choice) =>
         this.keepCampaign((campaign) => {
           if (!campaign.choices.includes(choice)) campaign.choices.push(choice);

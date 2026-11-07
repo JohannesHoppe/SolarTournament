@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -610,6 +610,14 @@ export const CAMPAIGN = {
   echoSevenHeard: 'Run. She said run. I think she told me that before, and I did not.',
   secondTube: 'Two torpedoes now, Host, as many as any ship in the Games carries.',
   thrustersOne: 'The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.',
+  theRidge: 'The eighth echo, Host, up on the ridge, on its dark side. Spare’s two are racing us to it. Get there first and hold still.',
+  theRidgeLost: 'They got there before us. We try again.',
+  echoEight: 'They are firing on the habitat ring. They are firing on the habitat ring.',
+  echoEightHeard: 'The habitat ring. Children lived there, Host. I remember the children. I do not remember who fired.',
+  quillGone: 'She asked about me, Host. Nobody asks about a flight computer. I did not like how she asked.',
+  driveTwo: 'The main drive pushes harder again, Host, and the radiators shed more heat.',
+  lastTallymen: 'Ma Tally and three escorts round her tug, in the dark. All four, Host.',
+  lastTallymenDone: 'The Tallymen are closed. For good, this time.',
   tigerStripes: 'Eight coils, two over each stripe, down one and back up the next. The clock starts at the first, and the ad runs seventy-five seconds. Mind the plumes: they patter, they do not hurt.',
   tigerStripesMissed: 'We missed a coil. The ad wants all eight. Again.',
   tigerStripesSlow: 'The ad is over, and we are not through. Again, faster.',
@@ -692,6 +700,7 @@ export const PIM = {
   hook: "Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.",
   secondTube: "Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.",
   thrustersOne: "Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.",
+  driveTwo: "Drive bell of the second grade and radiators to match, two and a half each. Quill's office sent the money before I asked. Don't like that.",
   voiceTwo: "Crisp's yacht had a voice board in its lounge, top of the line. It fell into my bag. Hold still, Nicole, you're getting your own voice back.",
   platingTwo: "Crisp's people dropped off plate of the second grade, three thousand on your paper. With their logo on it. I ground the logo off. Hold still.",
   tube: "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.",
@@ -714,6 +723,9 @@ export const HEDDA = {
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
   phobos: "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. He's never died. Not once. Top three, and Lanes Watch comes calling.",
   iceRun: "Paying work, out of the show's eye. Three ice tugs for Ganymede, and the Loose rob convoys here. They'd rather take the cargo than a clone. Keep them off it. Two thousand five hundred.",
+  iapetus: "Iapetus. Half soot, half snow, and a ridge down the middle like a scar. Your computer's frequency again, up on the ridge. And company: two of Spare's lot, heading the same way.",
+  quill: "And what does the Ministry want for it?",
+  lastTallymen: "Ma Tally's tug, out at the dark face. Her paper's gone, her firm with it, but she's still out here. Lanes Watch wants the last Tallyman. Five thousand.",
   spare: "Something out of the stripes. One ship, grey, no transponder. It's hailing you. By name.",
   enceladus: "Enceladus. Crisp wants an escort for his yacht through the plumes, for the cameras. Bandits on the schedule, he says. Actors. Five thousand for looking brave.",
   titan: "Titan. Victory Cola's Circuit, now that they own your rounds. Air races over Kraken Mare, down in the haze. Qualifying heat first. Top three, or you're not in.",
@@ -747,6 +759,7 @@ export const TALLY = {
   noted: 'Noted. Your arrears have been increased accordingly. We will see you on your next statement.',
   debtDay: 'Statement of account, hull seven seven three one. Payment in full is now due. We have brought six collectors. Please do not make this expensive.',
   closed: 'Noted. The account is closed. For now.',
+  last: 'Host of hull seven seven three one. Your account was sold over my head. I do not accept that. Final statement.',
 } as const;
 
 /** The officer of a Navy cutter over the comm: clipped, bored, used to being obeyed. Their own voice (see tools/voice). */
@@ -783,13 +796,24 @@ export const SPARE = {
   stop: "Stop flying where they want you, Host. Please. I know how you think. That's the problem.",
 } as const;
 
+/**
+ * Commissioner Dolores Quill of the Ministry of War's Office of Admissions: bright, chirpy, form
+ * numbers and congratulations, on her ninth body. Her own voice (see tools/voice).
+ */
+export const QUILL = {
+  hello: "Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Don't get up. Well, you can't, you're a clone. Ha! Form seventy-seven B: congratulations!",
+  track: "Your ratings, Host! Prime time! The Ministry keeps a fast track for pilots like you. Two trials, and you're a Contender. And then, oh, the Games themselves.",
+  nothing: "Want? Nothing at all, Captain! Only that the Host keeps rising. And keeps that lovely old flight computer. They don't make them like her.",
+  body: "Oh, don't mind the face. It's my ninth. I liked the seventh better, but you know how it is.",
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -825,6 +849,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(CRISP)];
     case 'spare':
       return [...Object.values(SPARE)];
+    case 'quill':
+      return [...Object.values(QUILL)];
   }
 }
 

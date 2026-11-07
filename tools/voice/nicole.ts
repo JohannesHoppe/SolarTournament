@@ -116,6 +116,12 @@ export const SPEAKERS = {
     reference: { text: "Hello, Host. Don't shoot. You'd only be killing yourself. Again. Hi, Nicole. You sound better. They call us strays. I call myself Spare.", speed: 1 },
     language: 'spare',
   },
+  quill: {
+    voice: 'af_sky',
+    speed: 1.05,
+    reference: { text: "Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Form seventy-seven B: congratulations! Oh, don't mind the face. It's my ninth.", speed: 1 },
+    language: 'quill',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, RASK, SAW, SPARE, TALLY } from '../music/lines';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, QUILL, RASK, SAW, SPARE, TALLY } from '../music/lines';
 import { clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -11,7 +11,8 @@ import { ARENA_LIMIT } from '../world/arena';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
 import { SEA as SEA_LEVEL } from '../world/titan';
 import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
-import { sulfurFreighter } from '../world/barge';
+import { sulfurFreighter, tug } from '../world/barge';
+import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { yacht } from '../world/yacht';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
@@ -19,7 +20,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -909,6 +910,15 @@ export const TIGER_START = { at: [TIGER_FROM.x, TIGER_FROM.y, TIGER_FROM.z] as c
 
 const tigerStripes = timeTrial({ line: CAMPAIGN.tigerStripes, arena: 'enceladus', points: TIGER_COURSE, normals: TIGER_NORMALS, time: TIGER_TIME, missed: CAMPAIGN.tigerStripesMissed, slow: CAMPAIGN.tigerStripesSlow });
 
+/** Main drive II and Radiators II (11.2), paid by the Ministry's money: each the hangar's second step (see hullOf), at DRIVE_TWO_PRICE each. */
+const fitDriveTwo = (campaign: Campaign) => {
+  for (const part of ['driveTwo', 'radiatorsTwo'] as const) {
+    if (campaign.parts.includes(part)) continue;
+    campaign.parts.push(part);
+    buy(campaign, DRIVE_TWO_PRICE);
+  }
+};
+
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
   if (campaign.parts.includes('platingTwo')) return;
@@ -997,6 +1007,27 @@ const bounty = (line: string, arena: ArenaId, field: THREE.Vector3, names: reado
 });
 
 const pilotEpisode = bounty(CAMPAIGN.pilotEpisode, 'callisto', BOUNTY_FIELD, BOUNTY_NAMES, BOUNTY_SKILL);
+
+/**
+ * Last of the Tallymen (11.3): Ma Tally (skill LAST_TALLY_SKILL) and LAST_TALLY_ESCORTS escorts round her
+ * last tug (see world/barge), moored over Iapetus's dark face; all of them shot down wins.
+ */
+const LAST_TALLY_SKILL = 0.55;
+const LAST_TALLY_ESCORTS = 3;
+const ESCORT_SKILL = 0.5;
+const LAST_TALLY_FIELD = point(10000, -2000, -50000);
+const TALLY_TUG_TURN = new THREE.Quaternion();
+const LAST_TALLY_NAMES = ['Ma Tally', 'Docket', 'Lien', 'Escrow'];
+const tallyBounty = bounty(CAMPAIGN.lastTallymen, 'iapetus', LAST_TALLY_FIELD, LAST_TALLY_NAMES, [LAST_TALLY_SKILL, ESCORT_SKILL]);
+const lastTallymen: Drill = {
+  ...tallyBounty,
+  enter(ctx, a, markers) {
+    tallyBounty.enter!(ctx, a, markers);
+    markers.bargeAt(LAST_TALLY_FIELD.clone().setY(LAST_TALLY_FIELD.y - 3000), TALLY_TUG_TURN, tug);
+  },
+  done: (ctx) => ctx.jumpersDown > LAST_TALLY_ESCORTS,
+  mark: (ctx) => t('Tallymen {n}/{total}', { n: ctx.jumpersDown, total: LAST_TALLY_ESCORTS + 1 }),
+};
 
 /**
  * Valhalla Sprint (5.3): SPRINT_COILS coils of the Ministry, which Lanes Watch leases for the show,
@@ -1743,6 +1774,41 @@ const echoAt = (call: string, arena: ArenaId, at: THREE.Vector3): Drill => ({
 const echoTwo = echoAt(CAMPAIGN.echoTwoCall, 'occator', ECHO_TWO);
 
 /**
+ * The Ridge (11.1): the eighth echo, from a cache on Iapetus's ridge (see world/iapetus), the hull
+ * held ECHO_EIGHT_OVER over the crest at x ECHO_EIGHT_X; WINGMEN_AFTER seconds in, two of Spare's
+ * strays (WINGMEN of WINGMAN_SKILL) set out for it from the ridge's far end, fighting a ship that
+ * comes near them; one of them there first (within ECHO_REACH) starts it over.
+ */
+const ECHO_EIGHT_X = -45000;
+const ECHO_EIGHT_OVER = 1000;
+export const ECHO_EIGHT = point(ECHO_EIGHT_X, iapetusHeight(ECHO_EIGHT_X, crestZ(ECHO_EIGHT_X)) + ECHO_EIGHT_OVER, crestZ(ECHO_EIGHT_X));
+const WINGMEN_AFTER = 8;
+const WINGMAN_SKILL = 0.45;
+/** Spare's strays (never translated). */
+const WINGMEN = ['Fade', 'Mute'];
+const WINGMEN_FROM = point(60000, 0, -30000);
+const ridgeEcho = echoAt(CAMPAIGN.theRidge, 'iapetus', ECHO_EIGHT);
+const theRidge: Drill = {
+  ...ridgeEcho,
+  keys: ['turn', 'drive', 'brake', 'fire'],
+  enter(ctx, a, markers) {
+    ridgeEcho.enter!(ctx, a, markers);
+    ctx.removeJumpers();
+    a.count = 0;
+  },
+  done(ctx, a, markers) {
+    if (a.count === 0 && a.seconds >= WINGMEN_AFTER) {
+      ctx.spawnJumpers(null, WINGMEN_FROM, WINGMEN.length, WINGMAN_SKILL, WINGMEN, 2000);
+      ctx.standDown(ECHO_EIGHT);
+      a.count = 1;
+    }
+    return ridgeEcho.done!(ctx, a, markers);
+  },
+  fail: (ctx, a) => (a.count === 1 && ctx.jumperNear(ECHO_EIGHT, ECHO_REACH) ? CAMPAIGN.theRidgeLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+};
+
+/**
  * Callisto Echo (5.4): the third echo, from the Navy's old listening post among Valhalla's
  * craters (see world/callisto), the hull held ECHO_THREE_OVER over the dish.
  */
@@ -2051,4 +2117,22 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'voiceTwo', name: msg('Voice II'), drills: [said(PIM.voiceTwo, 'enceladus'), said(CAMPAIGN.voiceTwo, 'enceladus')], pay: 0, fit: fitVoice },
   { id: 'helloHost', name: msg('Hello, Host'), drills: [said(HEDDA.spare, 'enceladus'), said(SPARE.hello, 'enceladus'), helloHost, said(SPARE.io, 'enceladus'), said(CAMPAIGN.spareFlight, 'enceladus'), said(SPARE.nicole, 'enceladus'), said(SPARE.stop, 'enceladus')], pay: 0, ratings: 300 },
   { id: 'tigerStripes', name: msg('Tiger Stripes'), drills: [said(CRISP.tigerStripes, 'enceladus'), tigerStripes, said(CAMPAIGN.tigerStripesDone, 'enceladus')], pay: 2500, ratings: 300, start: TIGER_START },
+  // chapter 11, Two Faces on Iapetus: the eighth echo, the Ministry's visit, the last of the Tallymen
+  { id: 'theRidge', name: msg('The Ridge'), drills: [said(HEDDA.iapetus, 'iapetus'), theRidge, said(CAMPAIGN.echoEight, 'iapetus'), said(CAMPAIGN.echoEightHeard, 'iapetus')], pay: 2000, ratings: 300 },
+  {
+    id: 'officeHours',
+    name: msg('Office Hours'),
+    drills: [
+      climbOut('visit', msg('Patience holds over Iapetus. A Ministry shuttle has docked; your clone climbs up to the galley, where a guest is waiting.'), 'iapetus'),
+      inRoom(QUILL.hello, 'iapetus'),
+      inRoom(QUILL.body, 'iapetus'),
+      inRoom(QUILL.track, 'iapetus'),
+      inRoom(HEDDA.quill, 'iapetus'),
+      inRoom(QUILL.nothing, 'iapetus'),
+      climbIn(CAMPAIGN.quillGone, 'iapetus'),
+    ],
+    pay: 0,
+  },
+  { id: 'driveTwo', name: msg('Drive II'), drills: [said(PIM.driveTwo, 'iapetus'), said(CAMPAIGN.driveTwo, 'iapetus')], pay: 0, fit: fitDriveTwo },
+  { id: 'lastTallymen', name: msg('Last of the Tallymen'), drills: [said(HEDDA.lastTallymen, 'iapetus'), said(TALLY.last, 'iapetus'), lastTallymen, said(CAMPAIGN.lastTallymenDone, 'iapetus')], pay: 5000, ratings: 500 },
 ];

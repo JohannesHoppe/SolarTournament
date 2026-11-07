@@ -12,10 +12,10 @@ import type { Mood } from '../music/radio';
  * into one (see campaign/missions, `climbOut`) and its lines are then said in the room, not over
  * the comm.
  */
-export type SceneName = 'office' | 'galley';
+export type SceneName = 'office' | 'galley' | 'visit';
 
-/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour. */
-export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright' };
+/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour; Quill's visit to it is quiet. */
+export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null };
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {
@@ -58,8 +58,15 @@ function galleyPlan(): ScenePlan {
   };
 }
 
-const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan };
-const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley };
+/** Commissioner Quill's visit to Patience's galley: Hedda at the head of the table, Quill at the counter where Pim stands. */
+function visitPlan(): ScenePlan {
+  const plan = galleyPlan();
+  plan.people[1] = { ...plan.people[1], who: 'quill' };
+  return plan;
+}
+
+const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan };
+const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley };
 
 /** A scene's plan. */
 export const planOf = (name: SceneName) => PLANS[name]();

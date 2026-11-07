@@ -322,7 +322,7 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
 }
 
 /** The clone held still at an echo (the export `echo` of the missions), or at the drill's first point as it moves (`first`), while the mission is at drill `step`, until it moves on (20 s at most). */
-async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'ECHO_SEVEN' | 'first', step: number) {
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'ECHO_SEVEN' | 'ECHO_EIGHT' | 'first', step: number) {
   await page.evaluate(
     async ([path, echo, step]) => {
       const game = window.game;
@@ -721,5 +721,42 @@ test('Tiger Stripes: eight coils over the four stripes at Enceladus, the clock n
   await page.waitForFunction(() => window.game.venue?.id === 'enceladus' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
   expect(await page.evaluate(() => Number.isFinite(window.game.school.attempt.clockFrom))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+/** Chapter 10 flown too: the hull with Plating II and Nicole's own voice, at Iapetus. */
+const iapetusHull = (...done: string[]) => ({ ...enceladusHull('plumeYacht', 'platingTwo', 'voiceTwo', 'helloHost', 'tigerStripes', ...done), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook', 'secondTube', 'thrustersOne', 'platingTwo'], modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice'] });
+
+test('The Ridge: the hull held still over the crest of Iapetus’s ridge hears the eighth echo, while Spare’s two strays race for it', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, iapetusHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'iapetus' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await page.waitForFunction(() => window.game.jumpers?.bots.length === 2, null, { timeout: 30_000 });
+  await holdAtEcho(page, 'ECHO_EIGHT', 1);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('Office Hours: the clone climbs up to Patience’s galley, Hedda and Commissioner Quill in the flesh', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, iapetusHull('theRidge'));
+  await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 120_000 });
+  await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('iapetus');
+  expect(errors).toEqual([]);
+});
+
+test('Last of the Tallymen: Ma Tally and three escorts round her tug at Iapetus’s dark face; all four down wins', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...iapetusHull('theRidge', 'officeHours', 'driveTwo'), parts: [...iapetusHull().parts, 'driveTwo', 'radiatorsTwo'] });
+  await page.waitForFunction(() => window.game.venue?.id === 'iapetus' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 4, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Ma Tally');
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots.slice(0, 3)) bot.ship.alive = false;
+  });
+  await page.waitForTimeout(2000);
+  expect(await page.evaluate(() => window.game.school?.stepIndex)).toBe(2);
+  await page.evaluate(() => (window.game.jumpers.bots[3].ship.alive = false));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('lastTallymen')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });

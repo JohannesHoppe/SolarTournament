@@ -13,7 +13,7 @@ TEXTURE = 1024
 # how each person stands: the upper arms turned down from the rig's A-pose about the axis from
 # front to back (deg; Pim's and Hedda's hang at their sides), or turned in about their own
 # axis (Rask's hands folded on his belly)
-POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35)}
+POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35), 'quill': ('down', 35)}
 # each texture's largest side by the part it colors, the first match of its object's name (px):
 # the skin TEXTURE, seen most closely, the clothes half of it, the small parts a quarter; what is
 # cut out by its alpha (hair, eyebrows) stays PNG

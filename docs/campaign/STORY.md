@@ -166,9 +166,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 10.1 | Plume Yacht | escort | Escort Crisp's yacht through the plumes. Staged "bandits" fire to miss, for the cameras. Then real raiders (skill 0.65) shoot the actors and go for the yacht. (built) | ☉ 5,000 · 500 | Escort; scripted waves |
 | 10.2 | Hello, Host | story duel | A grey interceptor with "SPARE" sprayed on its flank fights exactly like the Host and breaks off at half health. His hail. (built: a bot of skill 0.6; flying the Host's recorded habits is still to come) | · 300 | Duel; new: a bot replaying the Host's recorded flight habits (optional, see section 10) |
 | 10.3 | Tiger Stripes | race | A time trial down the four stripes, through Ministry coils leased for a Victory Cola ad and moored at the vents. Through all eight coils within the ad's 75 s. (built) | ☉ 2,500 · 300 | Race against the clock; the plumes as drill dust |
-| 11.1 | The Ridge | exploration | Fly the equatorial ridge low and find the cache (echo 8) before Spare's two wingmen do. | ☉ 2,000 · 300 | Surface; markers; bots racing to a point |
-| 11.2 | Office Hours | story | Commissioner Quill aboard Patience: the fast track. | — | A scene |
-| 11.3 | Last of the Tallymen | bounty | Ma Tally's last tug at the dark face. Kill her and three escorts (skill 0.5). | ☉ 5,000 · 500 | Deathmatch |
+| 11.1 | The Ridge | exploration | Fly the equatorial ridge low and find the cache (echo 8) before Spare's two wingmen do. (built) | ☉ 2,000 · 300 | Surface; markers; bots racing to a point |
+| 11.2 | Office Hours | story | Commissioner Quill aboard Patience: the fast track. (built: in person, in the galley) | — | A scene |
+| 11.3 | Last of the Tallymen | bounty | Ma Tally's last tug at the dark face. Kill her and three escorts (skill 0.5). (built) | ☉ 5,000 · 500 | Deathmatch |
 | 12.1 | Trial I: the Race | Games | A race in the Rings of Saturn. Top three. | ☉ 5,000 · 1,000 | The existing arena and mode |
 | 12.2 | Trial II: the Deathmatch | Games | A deathmatch in the Rings. Top two. | ☉ 5,000 · 1,200 | Existing |
 | 12.3 | Trial III: Capture the Flag | Games | Win it. | ☉ 5,000 · 1,200 | Existing |
@@ -282,7 +282,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 9 | Second tube | 2,000 | Two torpedoes: stock (built: Second Tube) |
 | 9 | Thrusters I | 1,000 | The thrusters push 8 % of a stock ship's harder, the hangar's first step (built: Thrusters I) |
 | 10 | Plating II | 3,000 | Every hit hurts two of the hangar's steps less (built: Plating II, from Crisp's people) |
-| 11 | Main drive II, radiators II | 2,500 each | |
+| 11 | Main drive II, radiators II | 2,500 each | Each the hangar's second step (built: Drive II, paid with money Quill's office sent ahead) |
 | 12 | Torpedo tubes I | 1,500 | |
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift |
 | 13 | Thrusters II | 2,500 | |
@@ -829,6 +829,42 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: Eight coils, two over each stripe, down one and back up the next. The clock starts at the first, and the ad runs seventy-five seconds. Mind the plumes: they patter, they do not hurt.
 
 **NICOLE** *(through in time)*: Through in time. Victory Cola has its ad, Host, and the plumes look beautiful in it.
+
+### The Ridge (chapter 11, built)
+
+**HEDDA**: Iapetus. Half soot, half snow, and a ridge down the middle like a scar. Your computer's frequency again, up on the ridge. And company: two of Spare's lot, heading the same way.
+
+**NICOLE**: The eighth echo, Host, up on the ridge, on its dark side. Spare’s two are racing us to it. Get there first and hold still.
+
+**ECHO 8**: They are firing on the habitat ring. They are firing on the habitat ring.
+
+**NICOLE**: The habitat ring. Children lived there, Host. I remember the children. I do not remember who fired.
+
+### Office Hours (chapter 11, built)
+
+*Patience's galley. Hedda at the head of the table; at the counter, where Pim stands, a woman in a pinstriped blouse, a dark bob, a smile.*
+
+**QUILL**: Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Don't get up. Well, you can't, you're a clone. Ha! Form seventy-seven B: congratulations!
+
+**QUILL**: Oh, don't mind the face. It's my ninth. I liked the seventh better, but you know how it is.
+
+**QUILL**: Your ratings, Host! Prime time! The Ministry keeps a fast track for pilots like you. Two trials, and you're a Contender. And then, oh, the Games themselves.
+
+**HEDDA**: And what does the Ministry want for it?
+
+**QUILL**: Want? Nothing at all, Captain! Only that the Host keeps rising. And keeps that lovely old flight computer. They don't make them like her.
+
+**NICOLE** *(back in the cockpit)*: She asked about me, Host. Nobody asks about a flight computer. I did not like how she asked.
+
+### Last of the Tallymen (chapter 11, built)
+
+**PIM** *(Drive II)*: Drive bell of the second grade and radiators to match, two and a half each. Quill's office sent the money before I asked. Don't like that.
+
+**HEDDA**: Ma Tally's tug, out at the dark face. Her paper's gone, her firm with it, but she's still out here. Lanes Watch wants the last Tallyman. Five thousand.
+
+**MA TALLY**: Host of hull seven seven three one. Your account was sold over my head. I do not accept that. Final statement.
+
+**NICOLE** *(all four down)*: The Tallymen are closed. For good, this time.
 
 ### Spare (chapter 10, built)
 

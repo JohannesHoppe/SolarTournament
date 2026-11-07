@@ -25,6 +25,8 @@ import { hazeBackdrop, hazeDeck } from './kraken';
 import { SATURN_AT, SATURN_SIZE } from './titan';
 import { plumeDensity, SATURN_AT as ENCELADUS_SATURN_AT, SATURN_SIZE as ENCELADUS_SATURN_SIZE } from './enceladus';
 import { enceladus, PLUME_GRAINS, plumes } from './plumes';
+import { RING_TILT as IAPETUS_RING_TILT, SATURN_AT as IAPETUS_SATURN_AT, SATURN_SIZE as IAPETUS_SATURN_SIZE } from './iapetus';
+import { iapetus } from './twofaces';
 /** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
 const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
@@ -855,6 +857,7 @@ export class Landmarks {
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
     this.scenes.set('enceladus', this.enceladus());
+    this.scenes.set('iapetus', iapetus().add(...this.saturnEdgeOn(IAPETUS_SATURN_AT, IAPETUS_SATURN_SIZE, IAPETUS_RING_TILT)));
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -1028,11 +1031,11 @@ export class Landmarks {
   private plumes!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
   /**
-   * Saturn seen from a moon in its ring's plane (Titan, Enceladus) at `at`, `size` in radius, from
-   * its real map, its ring seen almost from its edge, tilted SATURN_RING_TILT off it so it shows
-   * as a thin bright line.
+   * Saturn seen from one of its moons at `at`, `size` in radius, from its real map, its ring opened
+   * by `tilt` (rad) from its edge: from a moon in the ring's plane (Titan, Enceladus) SATURN_RING_TILT,
+   * so it shows as a thin bright line; from Iapetus's tilted orbit, wider.
    */
-  private saturnEdgeOn(at: THREE.Vector3, size: number): THREE.Object3D[] {
+  private saturnEdgeOn(at: THREE.Vector3, size: number, tilt = SATURN_RING_TILT): THREE.Object3D[] {
     const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, storms: false });
     const planet = new THREE.Mesh(new THREE.SphereGeometry(size, 96, 48), material);
     planet.position.copy(at);
@@ -1049,7 +1052,7 @@ export class Landmarks {
     const ring = new THREE.Mesh(sheet, new THREE.MeshBasicMaterial({ map: this.maps.ring, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
     // the ring's plane holds the line of sight but for a tilt: its normal square to it and nearly level
     const sight = at.clone().normalize();
-    const normal = new THREE.Vector3(0, 1, 0).addScaledVector(sight, -sight.y).normalize().addScaledVector(sight, SATURN_RING_TILT).normalize();
+    const normal = new THREE.Vector3(0, 1, 0).addScaledVector(sight, -sight.y).normalize().addScaledVector(sight, tilt).normalize();
     ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
     ring.position.copy(at);
     ring.userData.shadowless = true;

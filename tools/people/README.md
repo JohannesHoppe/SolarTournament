@@ -1,6 +1,6 @@
 # tools/people
 
-The campaign's people (Rask, Pim, Hedda, the Saw Brothers, three in one bust, Ma Tally, the Navy cutter's officer, Hollow Jack, Bellamy Crisp and Spare), made from figures of MakeHuman: their busts as their holograms call in, and their figures in the flesh for the scenes in person. MakeHuman's assets (base mesh, targets, skins, clothes, hair) are CC0, and its project makes no claim on what is made with them (its `LICENSE.md`, section D), so the busts are the game's own.
+The campaign's people (Rask, Pim, Hedda, the Saw Brothers, three in one bust, Ma Tally, the Navy cutter's officer, Hollow Jack, Bellamy Crisp, Spare and Commissioner Quill), made from figures of MakeHuman: their busts as their holograms call in, and their figures in the flesh for the scenes in person. MakeHuman's assets (base mesh, targets, skins, clothes, hair) are CC0, and its project makes no claim on what is made with them (its `LICENSE.md`, section D), so the busts are the game's own.
 
 Not part of a build: run only when a person changes. It needs Blender (5.2 LTS) with the extension MPFB (2.0.18, from Blender's extension platform) and MakeHuman's system assets (`makehuman_system_assets_cc0.zip`, loaded into MPFB). These are Python scripts Blender runs.
 
@@ -13,6 +13,6 @@ Not part of a build: run only when a person changes. It needs Blender (5.2 LTS) 
 ```
 B=/Applications/Blender.app/Contents/MacOS/Blender
 $B -b --python tools/people/people.py -- /tmp/people
-for who in rask pim hedda saw tally navy jack crisp spare; do $B -b /tmp/people/$who.blend --python tools/people/bust.py -- public/assets/people/$who.bin 3600; done
-for who in rask pim hedda; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
+for who in rask pim hedda saw tally navy jack crisp spare quill; do $B -b /tmp/people/$who.blend --python tools/people/bust.py -- public/assets/people/$who.bin 3600; done
+for who in rask pim hedda quill; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
 ```

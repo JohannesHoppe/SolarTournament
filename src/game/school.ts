@@ -110,7 +110,7 @@ export interface SchoolContext {
   spareClones(): void;
   /** The raiders stop fighting and fly off to `to`; a ship that comes near them they still fight. */
   standDown(to: THREE.Vector3): void;
-  /** Whether the raider named first is alive and within `reach` of `point`. */
+  /** Whether a raider alive is within `reach` of `point`. */
   jumperNear(point: THREE.Vector3, reach: number): boolean;
   /** The Host made a choice the story remembers (see Campaign.choices). */
   choose(choice: Choice): void;

@@ -65,12 +65,14 @@ export const SECOND_TUBE_PRICE = 2000;
 export const THRUSTERS_ONE_PRICE = 1000;
 /** Plating II (chapter 10), at Enceladus: the hangar's second step of the plating (see PLATING_STEP), its price (☉), paid as the laser's is. */
 export const PLATING_TWO_PRICE = 3000;
+/** Main drive II and Radiators II (chapter 11), at Iapetus: each the hangar's second step (see DRIVE_STEP, RADIATOR_STEP), each at this price (☉), paid as the laser's is. */
+export const DRIVE_TWO_PRICE = 2500;
 
-/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps, a torpedo tube, the main drive's first step, the hook, the second tube, the thrusters' first step, the plating's second; and the depot's grey ground off it (Scout Two). */
-export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating' | 'tube' | 'driveOne' | 'hook' | 'secondTube' | 'thrustersOne' | 'platingTwo';
-const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating', 'tube', 'driveOne', 'hook', 'secondTube', 'thrustersOne', 'platingTwo'];
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul, the armor panels, the radiators' and the plating's first steps, a torpedo tube, the main drive's first step, the hook, the second tube, the thrusters' first step, the plating's second, the main drive's and the radiators' second; and the depot's grey ground off it (Scout Two). */
+export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive' | 'panels' | 'radiators' | 'plating' | 'tube' | 'driveOne' | 'hook' | 'secondTube' | 'thrustersOne' | 'platingTwo' | 'driveTwo' | 'radiatorsTwo';
+const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'radiators', 'plating', 'tube', 'driveOne', 'hook', 'secondTube', 'thrustersOne', 'platingTwo', 'driveTwo', 'radiatorsTwo'];
 /** What the job board calls each part fitted. */
-export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade'), tube: msg('a torpedo tube'), driveOne: msg('the main drive of the first grade'), hook: msg('the hook, Hollow Jack’s harpoon'), secondTube: msg('a second torpedo tube'), thrustersOne: msg('the thrusters of the first grade'), platingTwo: msg('plating of the second grade') };
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock'), panels: msg('armor panels on the bare flank'), radiators: msg('radiators of the first grade'), plating: msg('plating of the first grade'), tube: msg('a torpedo tube'), driveOne: msg('the main drive of the first grade'), hook: msg('the hook, Hollow Jack’s harpoon'), secondTube: msg('a second torpedo tube'), thrustersOne: msg('the thrusters of the first grade'), platingTwo: msg('plating of the second grade'), driveTwo: msg('the main drive of the second grade'), radiatorsTwo: msg('radiators of the second grade') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -102,6 +104,7 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('panels')) hull.bareFlank = false;
   // the radiators a step up, the missing fin's share still short
   if (campaign.parts.includes('radiators')) hull.cooling += RADIATOR_STEP;
+  if (campaign.parts.includes('radiatorsTwo')) hull.cooling += RADIATOR_STEP;
   // the plating a step up: every hit hurts less
   if (campaign.parts.includes('plating')) hull.damage -= PLATING_STEP;
   // and a second step on the first
@@ -110,6 +113,8 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('tube')) hull.torpedoes = 1 - TORPEDOES;
   // the main drive a step past a stock ship's, once it is overhauled to stock
   if (campaign.parts.includes('driveOne')) hull.drive = STOCK.drive + DRIVE_STEP;
+  // and a second step on the first
+  if (campaign.parts.includes('driveTwo')) hull.drive = STOCK.drive + 2 * DRIVE_STEP;
   // Jack's harpoon on a tug's winch: the hook
   if (campaign.parts.includes('hook')) hull.hook = true;
   // the second tube: two torpedoes, a stock ship's
@@ -119,7 +124,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen';
 
 export interface Mission {
   id: MissionId;

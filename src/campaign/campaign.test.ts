@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -149,6 +149,15 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'voiceTwo')!);
     expect(campaign.modules).toContain('voice');
     expect(campaign.bond).toBe(20000);
+  });
+
+  it('fits Main Drive II and Radiators II at Iapetus: each the hangar’s second step, each paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['drive' as const, 'driveOne' as const, 'radiators' as const] };
+    const before = hullOf(campaign).cooling;
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'driveTwo')!);
+    expect(hullOf(campaign).drive).toBeCloseTo(STOCK.drive + 2 * DRIVE_STEP, 10);
+    expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
+    expect(campaign.bond).toBe(20000 + 2 * DRIVE_TWO_PRICE);
   });
 
   it('fits Plating II at Enceladus: every hit hurts two steps of the hangar less than a stock ship’s, paid as the laser is', () => {

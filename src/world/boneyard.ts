@@ -7,9 +7,10 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, RACK_RELIEFS } from './yard';
 import { seaPiece } from './kraken';
 import { enceladusGround } from './plumes';
+import { iapetusGround } from './twofaces';
 import { ganymedeGround } from './yards';
 import { ioGround } from './flux';
 import { europaGround, scienceStation } from './lineae';
@@ -84,6 +85,7 @@ export function rackSet(): TemplateSet {
     if (type === GANYMEDE_TYPE) return ganymedeGround(half);
     if (type === TITAN_TYPE) return seaPiece(half);
     if (type === ENCELADUS_TYPE) return enceladusGround(half);
+    if (type === IAPETUS_TYPE) return iapetusGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -850,14 +852,33 @@ const RELIEF_CELL = 1500;
  * A ground whose top is a relief (see Relief), in its box's frame (`half` its half extents): the
  * relief on a grid of `cell` (units, 75 m unless a place needs it finer), in groundMaterial's
  * layers in `color` lit a little by `emissive`; the yards' set gives the field the same relief
- * (RACK_RELIEFS in world/yard), so it collides as this very ground.
+ * (RACK_RELIEFS in world/yard), so it collides as this very ground; `shade` gives each vertex a tone of its own over the tint.
  */
-export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL): THREE.Group {
+export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void): THREE.Group {
   const geometry = flatGrid(half, cell);
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(groundUv(geometry), groundMaterial(color, emissive, 0.04));
+  const material = groundMaterial(color, emissive, 0.04);
+  // a ground of more than one tone: each vertex's own over the tint (Iapetus's two faces)
+  if (shade) {
+    const tone = new THREE.Color();
+    const colors = new Float32Array(position.count * 3);
+    for (let i = 0; i < position.count; i++) {
+      shade(position.getX(i), position.getZ(i), tone);
+      tone.toArray(colors, i * 3);
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    material.vertexColors = true;
+    // the faint glow takes the vertex's tone too: soot stays dark however the ice is lit
+    const compile = material.onBeforeCompile;
+    material.onBeforeCompile = (shader, renderer) => {
+      compile(shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vColor.rgb;');
+    };
+    material.customProgramCacheKey = () => 'ground-toned';
+  }
+  const mesh = new THREE.Mesh(groundUv(geometry), material);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
   return withCollider(new THREE.Group().add(mesh), half);
