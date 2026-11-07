@@ -102,6 +102,8 @@ export interface SchoolContext {
   removeWingman(): void;
   /** Spare's skills: the Host's own habits in the campaign's fights up to Io (see campaign/campaign, spareSkills). */
   readonly spare: Skills;
+  /** A piece of a comet's shower strikes the own hull at `at`, flying along `direction`: as hard as a piece of the Games' shower (see Game.cometStrike). */
+  pelt(at: THREE.Vector3, direction: THREE.Vector3): void;
   /** The raiders spawned last fight each other too, every ship for itself (the Pit Fight). */
   brawl(): void;
   /** The raiders spawned last are actors: their shots fly wide and hurt nothing (the Plume Yacht's staged bandits). */
@@ -277,6 +279,8 @@ const DEBRIS_RADIUS = 300;
 const DEBRIS_FILL = 0.8;
 /** The debris that burst on rock (see Markers.update), by its live position: it threatens nobody any more. */
 const burst = new WeakSet<THREE.Vector3>();
+/** Whether a chunk of debris (its live position, see Markers.debris) burst on rock. */
+export const burstOnRock = (position: THREE.Vector3) => burst.has(position);
 /** Speed of the debris: 60 m/s. */
 const DEBRIS_SPEED = 1200;
 /** Turning more than this (rad, about 45°) breaks a drill that forbids turning; a mouse pointer slightly off-center does not get there. */

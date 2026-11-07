@@ -1030,6 +1030,29 @@ test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over
   expect(errors).toEqual([]);
 });
 
+test('Ride the Comet: the comet hooked sheds its shower at the hull on the cable', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, lanternHull('kiln', 'granary', 'granaryEcho'));
+  await page.waitForFunction(() => window.game.venue?.id === 'granary' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  // the hull at rest 250 m from the comet's face, its nose on the comet, and the hook fired
+  await page.evaluate(() => {
+    const game = window.game;
+    const comet = game.school.attempt.points[0];
+    const flight = game.me.flight;
+    const toward = comet.clone().sub(flight.position).normalize();
+    const face = game.field.raycast(flight.position, toward, 1e9);
+    flight.position.addScaledVector(toward, face.distance - 5000);
+    flight.velocity.set(0, 0, 0);
+    const nose = flight.forward(comet.clone());
+    flight.orientation.premultiply(flight.orientation.clone().setFromUnitVectors(nose, toward));
+  });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
+  await page.waitForFunction(() => window.game.tethers.get(window.game.me)?.anchor && window.game.tethers.get(window.game.me).flying <= 0, null, { timeout: 30_000 });
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
+  await page.waitForFunction(() => window.game.school.markers.moving.length > 0, null, { timeout: 10_000 });
+  expect(errors).toEqual([]);
+});
+
 test('Certification: the President in the flesh on his dais under the Ballroom’s dome, Quill at its foot', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath', 'lastOrbit', 'theDeal', 'parade'));

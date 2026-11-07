@@ -5849,6 +5849,10 @@ export class Game implements OnlineGame {
       get spare() {
         return spareSkills(game.campaign.habits);
       },
+      pelt: (at, direction) => {
+        const me = game.me;
+        if (me?.alive) this.applyLaserHit(me, at, direction, null, undefined, 'shower', SHOWER_WEIGHT);
+      },
       ambush: (count, skill, names, hold) => {
         const actors = game.jumpers?.bots.map((bot) => bot.ship) ?? [];
         const rig = game.jumpers?.rig ?? new THREE.Vector3();

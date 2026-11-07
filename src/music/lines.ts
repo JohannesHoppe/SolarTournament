@@ -650,7 +650,7 @@ export const CAMPAIGN = {
   echoVenusCall: 'The old frequency, Host, here too, over biodome four. Hold us still over it.',
   echoVenus: 'Biodome four has tomatoes today. Ines cried over them. Real tomatoes, under a real roof, going somewhere real.',
   echoVenusHeard: 'Ines, the gardener. They grow tomatoes here too, under glass, for a cola. Nobody here is going anywhere.',
-  rideComet: 'Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma.',
+  rideComet: 'Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma. It sheds as it goes. Swing out of the pieces’ way.',
   rideCometDone: 'We are riding it out. Next stop, the Ninth.',
   tubesComplete: 'Four torpedoes now, Host. Every tube a ship can carry.',
   haumeaRing: 'Two laps between the ring’s beacons, Host, among its ice. Only first counts.',

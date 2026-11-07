@@ -198,7 +198,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 16.3 | The Hunter | duel | Perihelion and two Navy fighters at Eris. Win; he breaks off again, swearing. (built) | ☉ 5,000 · 600 | Duel |
 | 17.1 | Kiln | story | The settlers on Lantern who bought plots on the Ninth, with their brochures. Carry their letters to the Feeders. (built: six beacons in turn within four minutes) | · 200 | A courier run between buoys |
 | 17.2 | Granary | stealth | Slip into the Feeders' store of ice, out of the tugs' sensor cones, to the comet bound for the Ninth. Seen twice fails it. (built) | · 400 | Searchlight cones again |
-| 17.3 | Ride the Comet | story | Hook the comet's nucleus and hold on in its coma while it is pushed out; its shower is the danger. (built: hooked and held 30 s; the shower still to come) | · 500 | Comets; the hook |
+| 17.3 | Ride the Comet | story | Hook the comet's nucleus and hold on in its coma while it is pushed out; its shower is the danger. (built: hooked and held 30 s; while it hangs on the hook, every 1.6 s a piece of 3 m breaks off the comet's face towards the hull at 80 m/s, aimed where the hull will be give or take 30 m, and strikes as hard as a piece of the Games' shower) | · 500 | Comets; the hook |
 
 ### Act IV's end: The Ninth
 
@@ -998,7 +998,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **NICOLE**: Wake me. She is asleep, Host. Somewhere out there, she is still asleep.
 
-**NICOLE**: Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma.
+**NICOLE**: Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma. It sheds as it goes. Swing out of the pieces’ way.
 
 **NICOLE** *(held on)*: We are riding it out. Next stop, the Ninth.
 

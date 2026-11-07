@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
-import { aimError, clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -1272,8 +1272,59 @@ const granaryStealth: Drill = {
 /** The eleventh echo (17.3), among the parked comets at Granary. */
 export const ECHO_ELEVEN = point(-30000, 4000, 10000);
 
-/** Ride the Comet (17.4): the comet hooked and held on to for RIDE_SECONDS while Patience pushes it out. */
+/**
+ * Ride the Comet (17.4): the comet hooked and held on to for RIDE_SECONDS while Patience pushes it
+ * out. As it is pushed it sheds its shower: while the hull hangs on the hook, every SHED_EVERY
+ * seconds a piece of SHED_RADIUS breaks off the comet's face towards the hull at SHED_SPEED,
+ * aimed where the hull will be, give or take SHED_SPREAD, so swinging on the cable takes it out of
+ * their way; a piece that strikes the hull hits as hard as one of the Games' shower (ctx.pelt), a
+ * piece that meets rock bursts there, and one SHED_REACH off the comet is gone.
+ */
 const RIDE_SECONDS = 30;
+const SHED_EVERY = 1.6;
+/** A piece of the shower: 3 m across, 80 m/s (units). */
+const SHED_RADIUS = 60;
+const SHED_SPEED = 1600;
+/** How far off the hull's way a piece may be aimed (units, 30 m), and how far from the comet it flies (units, 3 km). */
+const SHED_SPREAD = 600;
+const SHED_REACH = 60000;
+/** The pieces in flight: each one's live position (see Markers.debris) and its flight. */
+const shed: { at: THREE.Vector3; along: THREE.Vector3 }[] = [];
+const shedFace = new THREE.Vector3();
+const shedAim = new THREE.Vector3();
+let shedding = new Randomizer(1704);
+
+/** The comet sheds a piece towards the hull (see rideComet): from where the line from the hull to the comet meets its face. */
+function shedPiece(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers) {
+  const me = ctx.me.flight;
+  shedFace.subVectors(comet, me.position).normalize();
+  const reach = me.position.distanceTo(comet);
+  const face = ctx.field.raycast(me.position, shedFace, reach);
+  // out of the comet's face, twice its size towards the hull
+  const start = me.position.clone().addScaledVector(shedFace, (face?.distance ?? reach) - SHED_RADIUS * 2);
+  const flight = start.distanceTo(me.position) / SHED_SPEED;
+  shedAim.copy(me.position).addScaledVector(me.velocity, flight);
+  shedAim.x += shedding.range(-1, 1) * SHED_SPREAD;
+  shedAim.y += shedding.range(-1, 1) * SHED_SPREAD;
+  shedAim.z += shedding.range(-1, 1) * SHED_SPREAD;
+  const along = shedAim.sub(start).setLength(SHED_SPEED).clone();
+  shed.push({ at: markers.debris(start, along, SHED_RADIUS), along });
+}
+
+/** The pieces in flight that strike the hull pelt it and go; those that burst on rock or flew past are taken away. */
+function shower(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers) {
+  const near = SHED_RADIUS + ctx.me.radius;
+  for (let i = shed.length - 1; i >= 0; i--) {
+    const { at, along } = shed[i];
+    const strikes = ctx.me.alive && at.distanceTo(ctx.me.flight.position) < near;
+    if (strikes) ctx.pelt(at, shedAim.copy(along).normalize());
+    if (strikes || burstOnRock(at) || at.distanceTo(comet) > SHED_REACH) {
+      markers.remove(at);
+      shed.splice(i, 1);
+    }
+  }
+}
+
 const rideComet: Drill = {
   line: CAMPAIGN.rideComet,
   keys: ['hook', 'turn', 'drive'],
@@ -1283,8 +1334,23 @@ const rideComet: Drill = {
   enter(ctx, a) {
     a.points = [cometOf(ctx)];
     a.held = 0;
+    shed.length = 0;
+    shedding = new Randomizer(1704);
+    // a.lastShot: when the comet shed its last piece (attempt seconds)
+    a.lastShot = 0;
   },
-  done: (ctx, a) => holdFor(ctx, a, ctx.hooked, RIDE_SECONDS),
+  done(ctx, a, markers) {
+    const comet = a.points[0];
+    if (ctx.hooked && a.seconds - a.lastShot >= SHED_EVERY) {
+      a.lastShot = a.seconds;
+      shedPiece(ctx, comet, markers);
+    }
+    shower(ctx, comet, markers);
+    return holdFor(ctx, a, ctx.hooked, RIDE_SECONDS);
+  },
+  leave: () => {
+    shed.length = 0;
+  },
   waypoint: (_, a) => a.points[0] ?? null,
   mark: (ctx, a) => (ctx.hooked ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
 };

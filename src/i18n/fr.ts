@@ -1982,7 +1982,7 @@ export const FR: Catalog = {
   "The old frequency, Host, among the parked comets. Hold us still.": "La vieille fréquence, Hôte, parmi les comètes garées. Tiens-nous immobiles.",
   "Orbit set. Pod sealed. Wake me when the stars are allowed.": "Orbite fixée. Capsule scellée. Réveillez-moi quand les étoiles seront permises.",
   "Wake me. She is asleep, Host. Somewhere out there, she is still asleep.": "Réveillez-moi. Elle dort, Hôte. Quelque part là-bas, elle dort encore.",
-  "Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma.": "Accroche la comète, Hôte, et tiens bon. Patience la pousse vers l’extérieur, et on voyage dans sa coma.",
+  "Hook the comet, Host, and hold on. Patience pushes it out, and we ride along in its coma. It sheds as it goes. Swing out of the pieces’ way.": "Accroche la comète, Hôte, et tiens bon. Patience la pousse vers l’extérieur, et on voyage dans sa coma. Elle perd des morceaux en route. Balance-nous hors de leur chemin.",
   "We are riding it out. Next stop, the Ninth.": "On la chevauche. Prochain arrêt, le Neuvième.",
   "Four torpedoes now, Host. Every tube a ship can carry.": "Quatre torpilles maintenant, Hôte. Tous les tubes qu’un vaisseau peut porter.",
   "Feeders' tubes, second and third grade, nine thousand together. Ice-breakers, they call them. That's every tube there is. Hold still.": "Des tubes des Feeders, deuxième et troisième niveau, neuf mille ensemble. Des brise-glace, ils les appellent. Il n’y a pas plus de tubes. Bouge pas.",
