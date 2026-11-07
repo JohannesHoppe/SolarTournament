@@ -5667,7 +5667,7 @@ export class Game implements OnlineGame {
       get drone() {
         return game.drone;
       },
-      spawnDrone: (position, velocity) => this.spawnDrone(position, velocity),
+      spawnDrone: (position, velocity, name) => this.spawnDrone(position, velocity, name),
       removeDrone: () => {
         if (this.drone) this.removeShip(this.drone);
         this.drone = null;
@@ -5855,9 +5855,10 @@ export class Game implements OnlineGame {
   }
 
   /** A defenseless target for the flight school, its drive towards the pilot: the one place a laser hurts. */
-  private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3) {
+  private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name = t('Target drone')) {
     const me = this.me!;
-    this.drone ??= this.addShip('drone', t('Target drone'), me.type === 'human' ? 'alien' : 'human', false);
+    this.drone ??= this.addShip('drone', name, me.type === 'human' ? 'alien' : 'human', false);
+    this.drone.name = name;
     this.drone.spawn(position, lookingAt(me.flight.position, position, me.flight.up(upward)), this.time);
     this.drone.flight.velocity.copy(velocity);
     this.drone.protectedUntil = this.time;

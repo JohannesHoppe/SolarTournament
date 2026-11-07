@@ -44,6 +44,7 @@ export function sources(root: string): Map<string, string[]> {
   for (const line of allLines('navy')) add(line, 'src/music/lines.ts (Navy officer)');
   for (const line of allLines('jack')) add(line, 'src/music/lines.ts (Hollow Jack, chief of the bandits)');
   for (const line of allLines('crisp')) add(line, 'src/music/lines.ts (sponsor executive)');
+  for (const line of allLines('perihelion')) add(line, 'src/music/lines.ts (Perihelion, the Ministry\'s hunter)');
   for (const line of allLines('vey')) add(line, 'src/music/lines.ts (Admiral Vey of the Navy)');
   for (const line of allLines('quill')) add(line, 'src/music/lines.ts (Commissioner Quill of the Ministry)');
   for (const line of allLines('spare')) add(line, 'src/music/lines.ts (Spare, the Host\'s lost clone)');

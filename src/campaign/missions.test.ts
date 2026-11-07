@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, HEART_COURSE, HEART_LAPS, HEART_START, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 import { faceAt } from '../world/miranda';
@@ -234,7 +234,7 @@ describe('Blackout on Io', () => {
 });
 
 describe('the echoes', () => {
-  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR], ['the seventh, low over Kraken Mare under Titan’s haze', 'titan', ECHO_SEVEN], ['the eighth, over the crest of Iapetus’s ridge', 'iapetus', ECHO_EIGHT], ['the ninth, at the Derelict’s torn bow', 'derelict', ECHO_NINE], ['the tenth, over the mountains by Pluto’s heart', 'pluto', ECHO_TEN], ['the eleventh, among the parked comets at Granary', 'granary', ECHO_ELEVEN]] as const) {
+  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR], ['the seventh, low over Kraken Mare under Titan’s haze', 'titan', ECHO_SEVEN], ['the eighth, over the crest of Iapetus’s ridge', 'iapetus', ECHO_EIGHT], ['the ninth, at the Derelict’s torn bow', 'derelict', ECHO_NINE], ['the tenth, over the mountains by Pluto’s heart', 'pluto', ECHO_TEN], ['the eleventh, among the parked comets at Granary', 'granary', ECHO_ELEVEN], ['Scout One, among the Feeders’ ice by the hole', 'hole', SCOUT_AT]] as const) {
     it(`${name}: clear of every piece of the place, inside the arena`, () => {
       const field = testField(DETAIL);
       field.generate(arenaById(arena)!.layout);

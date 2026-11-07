@@ -17,6 +17,7 @@ PEOPLE = {
     'spare': dict(phenotype=dict(gender=1.0, age=0.36, muscle=0.45, weight=0.28, height=0.55, proportions=0.5), hair='', eyebrows='eyebrow003', clothes=['male_worksuit01', 'shoes04'], skin='young_caucasian_male', targets={'l-cheek-volume-decr': 0.8, 'r-cheek-volume-decr': 0.8}),
     'quill': dict(phenotype=dict(gender=0.0, age=0.4, muscle=0.45, weight=0.42, height=0.58, proportions=0.7), hair='bob01', eyebrows='eyebrow001', clothes=['female_elegantsuit01', 'shoes01'], skin='young_caucasian_female'),
     'vey': dict(phenotype=dict(gender=1.0, age=0.9, muscle=0.35, weight=0.4, height=0.55, proportions=0.4), hair='short01', eyebrows='eyebrow010', clothes=['male_elegantsuit01', 'shoes02'], skin='old_caucasian_male', targets={'head-age-incr': 1.0, 'l-cheek-volume-decr': 0.5, 'r-cheek-volume-decr': 0.5}),
+    'perihelion': dict(phenotype=dict(gender=1.0, age=0.45, muscle=0.7, weight=0.45, height=0.62, proportions=0.7), hair='short03', eyebrows='eyebrow007', clothes=['male_casualsuit04', 'shoes01'], skin='young_caucasian_male2', targets={'l-cheek-bones-incr': 0.5, 'r-cheek-bones-incr': 0.5}),
     'saw': dict(phenotype=dict(gender=1.0, age=0.4, muscle=0.55, weight=0.3, height=0.52, proportions=0.45), hair='short04', eyebrows='eyebrow011', clothes=['male_casualsuit05', 'fedora_cocked', 'shoes06'], skin='young_asian_male', targets={'l-cheek-volume-decr': 0.6, 'r-cheek-volume-decr': 0.6}),
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
-import { clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
+import { aimError, clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
@@ -1229,6 +1229,99 @@ const fitTubes = (campaign: Campaign) => {
     buy(campaign, price);
   }
 };
+
+/**
+ * The Ninth (chapter 18), at the primordial black hole (the Event Horizon): Scout One, the
+ * Magpie's twin, parked among the Feeders' ice at SCOUT_AT, held there (a ship the HUD names; see
+ * SchoolContext.spawnDrone). The Drain (18.1): the crosshair held on it SCAN_HOLD seconds, within
+ * SCAN_ANGLE and SCAN_REACH, scans it, and the search is over.
+ */
+export const SCOUT_AT = point(-26000, 3000, 30000);
+const SCAN_HOLD = 2;
+const SCAN_ANGLE = 0.05;
+const SCAN_REACH = 30000;
+const SCOUT_NAME = 'Scout One';
+const scoutStill = new THREE.Vector3();
+
+/** Scout One where she lies, held still among the ice (the hole's pull on her answered by the Feeders' moorings). */
+function parkScout(ctx: SchoolContext) {
+  if (!ctx.drone || ctx.drone.name !== SCOUT_NAME) ctx.spawnDrone(SCOUT_AT, scoutStill, SCOUT_NAME);
+  ctx.drone!.flight.position.copy(SCOUT_AT);
+  ctx.drone!.flight.velocity.set(0, 0, 0);
+}
+
+const theDrain: Drill = {
+  line: CAMPAIGN.drain,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'hole',
+  autopilot: true,
+  enter(ctx, a) {
+    parkScout(ctx);
+    a.held = 0;
+  },
+  done(ctx, a) {
+    parkScout(ctx);
+    return holdFor(ctx, a, aimError(ctx, SCOUT_AT) < SCAN_ANGLE && ctx.me.flight.position.distanceTo(SCOUT_AT) < SCAN_REACH, SCAN_HOLD);
+  },
+  waypoint: () => null,
+  mark: (_, a) => (a.held > 0 ? t('Scanning · {seconds} s', { seconds: Math.max(0, SCAN_HOLD - a.held).toFixed(1) }) : t('Hold the crosshair on a body')),
+};
+
+/**
+ * The Feeders' Comet (18.3): Navy fighters, GUNS of GUN_SKILL, firing at Scout One where she lies
+ * (raiders at her, see SchoolContext.spawnJumpers); all of them down wins, Scout One hit to death
+ * fails it.
+ */
+const GUNS = 3;
+const GUN_SKILL = 0.5;
+const GUN_NAMES = ['Lt. Ravel', 'Ens. Quint', 'Ens. Mott'];
+const feedersComet: Drill = {
+  line: CAMPAIGN.feedersComet,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'hole',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    parkScout(ctx);
+    ctx.drone!.hull = 100;
+    ctx.spawnJumpers(null, SCOUT_AT, GUNS, GUN_SKILL, GUN_NAMES, 8000);
+  },
+  done(ctx) {
+    if (ctx.drone?.alive) parkScout(ctx);
+    return ctx.jumpersDown >= GUNS;
+  },
+  fail: (ctx) => (!ctx.drone?.alive ? CAMPAIGN.feedersCometLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => SCOUT_AT,
+  mark: (ctx) => t('Navy {n}/{total} · Scout One {hull} %', { n: GUNS - ctx.jumpersDown, total: GUNS, hull: Math.max(0, Math.round(ctx.drone?.hull ?? 0)) }),
+};
+
+/** First Death (18.4): Perihelion (FINAL_SKILL) and four Navy fighters (0.5), Spare on the Host's wing; Perihelion shot down ends it, no breaking off. */
+const FINAL_SKILL = 0.75;
+const FINAL_FIELD = point(-10000, 2000, 20000);
+const firstDeath: Drill = {
+  line: CAMPAIGN.firstDeath,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'hole',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, FINAL_FIELD, 5, [FINAL_SKILL, 0.5], ['Perihelion', 'Lt. Ames', 'Ens. Kolb', 'Lt. Hale', 'Ens. Dorn'], 10000, true);
+    ctx.wingman('Spare', 0.6, ctx.me.flight.position.clone().add(point(2000, 500, 0)));
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done: (ctx) => ctx.leaderDown,
+  leave(ctx) {
+    ctx.removeJumpers();
+    ctx.removeWingman();
+  },
+  waypoint: () => null,
+  mark: (ctx) => t('Perihelion · hull {hull} %', { hull: Math.round(ctx.leaderHull) }),
+};
+
+/** Orbit (18.5): the Magpie flown into a stable orbit about the hole inside the disk's glare, as the flight school's orbit drill asks. */
+const lastOrbit: Drill = { ...DRILL.orbit, line: CAMPAIGN.lastOrbit, praise: undefined };
 
 /** Plating II (10.2): the plating's second step (see hullOf), at PLATING_TWO_PRICE. */
 const fitPlatingTwo = (campaign: Campaign) => {
@@ -2618,4 +2711,11 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'granaryEcho', name: msg('Granary Echo'), drills: [echoAt(CAMPAIGN.echoElevenCall, 'granary', ECHO_ELEVEN), said(CAMPAIGN.echoEleven, 'granary'), said(CAMPAIGN.echoElevenHeard, 'granary')], pay: 0, ratings: 40 },
   { id: 'rideComet', name: msg('Ride the Comet'), drills: [rideComet, said(CAMPAIGN.rideCometDone, 'granary')], pay: 0, ratings: 500 },
   { id: 'tubesComplete', name: msg('Torpedo Tubes II and III'), drills: [said(PIM.tubesComplete, 'granary'), said(CAMPAIGN.tubesComplete, 'granary')], pay: 0, fit: fitTubes },
+  // chapter 18, the Ninth: the hole, Scout One among the Feeders' ice, Perihelion's first death, the deal
+  { id: 'theDrain', name: msg('The Drain'), drills: [said(HEDDA.ninth, 'hole'), theDrain, said(CAMPAIGN.drainFound, 'hole')], pay: 0, ratings: 500 },
+  { id: 'scoutOne', name: msg('Scout One'), drills: [said(CAMPAIGN.helloMe, 'hole'), said(CAMPAIGN.stove, 'hole'), said(SPARE.company, 'hole'), said(PERIHELION.evening, 'hole')], pay: 0 },
+  { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800 },
+  { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, said(CAMPAIGN.firstDeathDone, 'hole')], pay: 0, ratings: 1500 },
+  { id: 'lastOrbit', name: msg('Orbit'), drills: [lastOrbit, said(CAMPAIGN.lastOrbitDone, 'hole')], pay: 0, ratings: 2000 },
+  { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },
 ];

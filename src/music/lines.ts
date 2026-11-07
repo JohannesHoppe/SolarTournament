@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill, vey: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill, vey, perihelion: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -610,6 +610,17 @@ export const CAMPAIGN = {
   echoSevenHeard: 'Run. She said run. I think she told me that before, and I did not.',
   secondTube: 'Two torpedoes now, Host, as many as any ship in the Games carries.',
   thrustersOne: 'The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.',
+  drain: 'Among the parked ice, Host, one body is not ice. Hold the crosshair on a body for two seconds, and I will scan it.',
+  drainFound: 'There. A ship. Small, dark, frosted. The Magpie’s twin, Host.',
+  helloMe: 'Hello, me.',
+  stove: 'She looks so young. I always thought I would feel something grand. I feel like I left the stove on for a very long time.',
+  feedersComet: 'They are firing at Scout One, Host. At her. Keep them off her.',
+  feedersCometLost: 'Scout One is hit. Her pod. Again, Host, please.',
+  feedersCometDone: 'They pulled back. She is still asleep. She did not even notice.',
+  firstDeath: 'Perihelion, Host, and four of the Navy. Spare is with us. This time he does not get to break off.',
+  firstDeathDone: 'He is down. Perihelion. The Undying. His first death, Host. The whole system will see it, three days from now.',
+  lastOrbit: 'Patience is crippled, Host, and her printer is gone. No clone after this one. Put us into a stable orbit inside the glare, and hold it.',
+  lastOrbitDone: 'Stable orbit. She will circle here, asleep, out of their reach. So will the secret.',
   kiln: 'Six beacons, Host, six families’ letters. Call at each in turn.',
   kilnLate: 'The convoy will not wait. Again, quicker.',
   kilnDone: 'Every letter aboard. They showed me the brochures, Host. Blue seas, a gentle sun. The Ninth has neither.',
@@ -792,6 +803,7 @@ export const HEDDA = {
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
   phobos: "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. He's never died. Not once. Top three, and Lanes Watch comes calling.",
   iceRun: "Paying work, out of the show's eye. Three ice tugs for Ganymede, and the Loose rob convoys here. They'd rather take the cargo than a clone. Keep them off it. Two thousand five hundred.",
+  ninth: "The Ninth. There's no planet. There's a hole, and the Feeders feed it. Your computer says the course ends here. Find what she's looking for.",
   lantern: "Lantern. Settlers, all of them waiting for passage to the Ninth. They bought plots from brochures. They want their letters carried to the Feeders. Free. Do it anyway.",
   granary: "Granary. The Feeders' store. The comet for the Ninth leaves tonight, and we're riding it, unasked. Their tugs sweep the ring with sensors. Don't get caught in one twice.",
   haumea: "Haumea. First rung of the Ladder. The depot crews race their ring between the beacons while the rock spins under them. Win, and the depot fuels us for free.",
@@ -877,6 +889,7 @@ export const SPARE = {
   hideout: 'Welcome to the Loose, Host. Strays, mostly. Clones whose Hosts died, or quit, or lost the link. Nobody prints us. We print nothing. We just keep going.',
   overdrive: "Here. The overdrive: a reactor dump the Games license for their stars. We hack it into anything with a reactor. Burns you out of a well, or into a wall. Your choice.",
   wing: 'On your wing, Host. Like old times. Well. Like one time.',
+  company: 'Company. Navy cruiser, four fighters, and him.',
   file: "Rask sold you the day you signed. Not the debt. The hull, and her. Operation Lullaby.",
   road: "Quill's been clearing the road for you for a year, so Nicole would trust somebody enough to remember where she went. You're not a Contender, Host. You're a sniffer dog.",
   after: "Thanks, Host. You fly like me. I mean, I fly like you. You know what I mean.",
@@ -889,6 +902,9 @@ export const SPARE = {
 export const QUILL = {
   trials: "The Ring Trials, Host! Four broadcast qualifiers in the Rings of Saturn, the whole system watching. Race, deathmatch, flag, and, oh, you'll love this: the President lends his own battleship. Good luck! Form eighty-one: good luck!",
   invitation: "Host! Contender! Form one hundred: a personal invitation to your Final Trial, at the Ninth Planet. The Ministry will send the coordinates. Bring your lovely computer!",
+  final: "Host! Congratulations on completing your Final Trial! Your ratings are, and I quote the Ministry's own figure, the highest since the Memorial Games. The President watched. He would love to meet you.",
+  conditions: "Form one A, admission. Three tiny conditions. One, you forget what you found. Two, your flight computer is certified to the Ministry's current firmware. Three, we keep the stray. He's being admitted too, in a sense.",
+  benefactor: "Oh, and your debt! The Ministry has held it since Phobos. Your benefactor, that's us! Admission settles it. Sign here, and you will never owe anyone a coin again.",
   hello: "Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Don't get up. Well, you can't, you're a clone. Ha! Form seventy-seven B: congratulations!",
   track: "Your ratings, Host! Prime time! The Ministry keeps a fast track for pilots like you. Two trials, and you're a Contender. And then, oh, the Games themselves.",
   nothing: "Want? Nothing at all, Captain! Only that the Host keeps rising. And keeps that lovely old flight computer. They don't make them like her.",
@@ -902,13 +918,18 @@ export const VEY = {
   medal: 'Do you know, they cheered? On Earth. The Memorial Games, they called it. I got a medal. I have it somewhere. I have had it in forty bodies.',
 } as const;
 
+/** Perihelion, the Undying of the Circuit, now the Ministry's hunter: cool, polite, tired of losing. His own voice (see tools/voice). */
+export const PERIHELION = {
+  evening: 'Evening, scrap. Nothing personal. They promised me the Games.',
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey' | 'perihelion';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill', vey: 'Admiral Vey' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold, Admiral Vey the Navy's faded blue. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d', vey: '#7f9cc8' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL), vey: Object.values(VEY) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill', vey: 'Admiral Vey', perihelion: 'Perihelion' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold, Admiral Vey the Navy's faded blue, Perihelion the Circuit's white gold. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d', vey: '#7f9cc8', perihelion: '#f0e0a0' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL), vey: Object.values(VEY), perihelion: Object.values(PERIHELION) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -948,6 +969,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(QUILL)];
     case 'vey':
       return [...Object.values(VEY)];
+    case 'perihelion':
+      return [...Object.values(PERIHELION)];
   }
 }
 

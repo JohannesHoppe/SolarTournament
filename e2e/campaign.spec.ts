@@ -935,3 +935,43 @@ test('chapter 17: Kiln’s six beacons called at in turn over Lantern; at Granar
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('granary')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 17 flown too: the hull with every tube, at the Ninth. */
+const ninthHull = (...done: string[]) => ({ ...lanternHull('kiln', 'granary', 'granaryEcho', 'rideComet', 'tubesComplete', ...done), parts: [...lanternHull().parts, 'tubesTwo', 'tubesThree'] });
+
+test('The Drain: Scout One lies among the Feeders’ ice by the hole, named on the HUD; the crosshair held on her scans her', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.drone?.name === 'Scout One', null, { timeout: 180_000 });
+  // the nose held on her from a kilometer off until the scan is done
+  await page.evaluate(async () => {
+    const game = window.game;
+    const scout = game.drone.flight.position;
+    const Vector = scout.constructor;
+    const ahead = new Vector(0, 0, -1);
+    const west = new Vector(-1, 0, 0);
+    const start = game.time;
+    while (game.school?.stepIndex === 1 && game.time - start < 15) {
+      game.me.flight.position.copy(scout).add(new Vector(20000, 0, 0));
+      game.me.flight.velocity.set(0, 0, 0);
+      game.me.flight.angularVelocity.set(0, 0, 0);
+      game.me.flight.orientation.setFromUnitVectors(ahead, west);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('First Death: Perihelion and four Navy fighters, Spare on the Host’s side; Perihelion shot down ends it, with no breaking off', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet'));
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.attempt?.live && window.game.jumpers?.bots.length === 5, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.ships.find((ship: { name: string; allyOf: (o: unknown) => boolean }) => ship.name === 'Spare')?.allyOf(window.game.me))).toBe(true);
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.hull = 30));
+  await page.waitForTimeout(3000);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('firstDeath'))).toBe(false);
+  await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('firstDeath')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

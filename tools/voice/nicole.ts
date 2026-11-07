@@ -128,6 +128,12 @@ export const SPEAKERS = {
     reference: { text: 'Ah, a visitor. Is it the launch already? He said: nobody leaves. A beautiful order. Short. I got a medal. I have had it in forty bodies.', speed: 1 },
     language: 'vey',
   },
+  perihelion: {
+    voice: 'am_fenrir',
+    speed: 1,
+    reference: { text: 'Evening, scrap. Nothing personal. They promised me the Games. I have never died. Not once. Not for anyone.', speed: 1 },
+    language: 'perihelion',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

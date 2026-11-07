@@ -200,12 +200,12 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 18.1 | The Drain | exploration | The "planet" is the hole. Find Scout One among the ice the Feeders parked: hold the crosshair on a body for 2 s to scan it. | · 500 | The Event Horizon's field; new: the scan |
-| 18.2 | Scout One | story | Dock beside it. The pod. Nicole Aster. | — | A scene |
-| 18.3 | The Feeders' Comet | defense | The Ministry throws a comet at Scout One. Hook Scout One and drag it out of the route before the head arrives, then shoot the shower's pieces near it. | · 800 | Comets aimed at the hole (they are already); hook towing a body |
-| 18.4 | First Death | duel | Perihelion and four Navy fighters; Spare beside the Host's clone. Kill Perihelion. His first death, on every screen in the system three days later, as light allows. | · 1,500 | Duel with an ally |
-| 18.5 | Orbit | final | Patience is crippled and her printer wrecked: no clone comes after this one. A death goes black, without an ad, and the mission restarts at its checkpoint; three days later, in the cellar on Psyche, the Host lives whatever happened. Tow Scout One on the hook into a stable orbit inside the disk's glare until the orbit readout says STABLE ORBIT, then let go. Scout One in the hole, or the orbit leaving the arena, fails it. | · 2,000 | Orbit readout; the hook towing; new: no printer |
-| 18.6 | The Deal | story | Quill on the cruiser's channel. | admission | A scene |
+| 18.1 | The Drain | exploration | The "planet" is the hole. Find Scout One among the ice the Feeders parked: hold the crosshair on a body for 2 s to scan it. (built) | · 500 | The Event Horizon's field; new: the scan |
+| 18.2 | Scout One | story | Dock beside it. The pod. Nicole Aster. (built, over the comm) | — | A scene |
+| 18.3 | The Feeders' Comet | defense | The Ministry throws a comet at Scout One. Hook Scout One and drag it out of the route before the head arrives, then shoot the shower's pieces near it. (built: three Navy fighters firing at Scout One, kept off her; the comet and the hook's tow still to come) | · 800 | Comets aimed at the hole (they are already); hook towing a body |
+| 18.4 | First Death | duel | Perihelion and four Navy fighters; Spare beside the Host's clone. Kill Perihelion. His first death, on every screen in the system three days later, as light allows. (built) | · 1,500 | Duel with an ally |
+| 18.5 | Orbit | final | Patience is crippled and her printer wrecked: no clone comes after this one. A death goes black, without an ad, and the mission restarts at its checkpoint; three days later, in the cellar on Psyche, the Host lives whatever happened. Tow Scout One on the hook into a stable orbit inside the disk's glare until the orbit readout says STABLE ORBIT, then let go. Scout One in the hole, or the orbit leaving the arena, fails it. (built: the Magpie flown into a stable orbit; Scout One on the hook and the death without a printer still to come) | · 2,000 | Orbit readout; the hook towing; new: no printer |
+| 18.6 | The Deal | story | Quill on the cruiser's channel. (built, in three lines) | admission | A scene |
 
 ### Act V: The Games
 
@@ -1038,7 +1038,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **NICOLE** *(Voice II)*: Then let us be faster than the hunters, Host. I know the way. I have always known the way. I only needed a reason to remember it.
 
-### Scout One (chapter 18)
+### Scout One (chapter 18, built, the stage lines aside)
 
 *The disk's glare. Among the parked ice a small ship, dark and frosted, long nose, a hump behind its cockpit: the Magpie's twin. Through the pod's window a woman sleeps, five stars on her shoulder.*
 
@@ -1050,7 +1050,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **PERIHELION**: Evening, scrap. Nothing personal. They promised me the Games.
 
-### The deal (chapter 18)
+### The deal (chapter 18, built, in three lines)
 
 **QUILL**: Host! Congratulations on completing your Final Trial! Your ratings are, and I quote the Ministry's own figure, the highest since the Memorial Games. The President watched. He would love to meet you. Form one A, admission. Three tiny conditions. One, you forget what you found. Two, your flight computer is certified to the Ministry's current firmware. Three, we keep the stray. He's being admitted too, in a sense. Oh, and your debt! The Ministry has held it since Phobos. Your benefactor, that's us! Admission settles it. Sign here, and you will never owe anyone a coin again.
 
