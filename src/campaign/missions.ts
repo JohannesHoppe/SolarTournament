@@ -1866,10 +1866,45 @@ function courier(arena: ArenaId): Drill {
   return timeTrial({ line: CAMPAIGN.courier, arena, points: [], normals: [], ...courierTimes(arena), missed: CAMPAIGN.courierMissed, slow: CAMPAIGN.courierSlow, lay: (field) => layCourier(field, arena) });
 }
 
+/**
+ * The ambushes (docs/campaign/STORY.md, "Side jobs on every job board"): at each place of
+ * COURIER_PLACES, once its first job is done, AMBUSHERS bandits of AMBUSH_SKILL lie in wait on the
+ * client's lane, round the courier course's first beacon (clear of the place's ground) AMBUSH_HOLD
+ * off it (units, 300 m), fighting every ship they see; all of them down wins.
+ */
+const AMBUSHERS = 3;
+const AMBUSH_SKILL = 0.45;
+const AMBUSH_HOLD = 6000;
+/** The bandits' names (never translated). */
+const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
+const AMBUSH_PAY = 1000;
+const AMBUSH_RATINGS = 80;
+
+function ambush(arena: ArenaId): Drill {
+  return {
+    line: CAMPAIGN.ambush,
+    keys: ['turn', 'drive', 'fire'],
+    arena,
+    autopilot: false,
+    music: 'fight',
+    enter(ctx) {
+      ctx.spawnJumpers(null, layCourier(ctx.field, arena).points[0], AMBUSHERS, AMBUSH_SKILL, AMBUSH_NAMES, AMBUSH_HOLD, true);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+    },
+    done: (ctx) => ctx.jumpersDown >= AMBUSHERS,
+    leave: (ctx) => ctx.removeJumpers(),
+    waypoint: () => null,
+    mark: (ctx) => t('Bandits {n}/{total}', { n: AMBUSHERS - ctx.jumpersDown, total: AMBUSHERS }),
+  };
+}
+
 /** The courier runs as jobs: one per place, offered once its first job is done (see Mission.side), paying COURIER_PAY the first time. */
 const COURIER_PAY = 800;
 const COURIER_RATINGS = 60;
 const couriers: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `courier:${arena}`, name: msg('Courier Run'), drills: [courier(arena)], pay: COURIER_PAY, ratings: COURIER_RATINGS, side: after, courier: arena }));
+/** The ambushes as jobs: one per place of the courier runs, offered as they are. */
+const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambush:${arena}`, name: msg('Ambush'), drills: [ambush(arena)], pay: AMBUSH_PAY, ratings: AMBUSH_RATINGS, side: after, ambush: arena }));
 
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
@@ -3146,4 +3181,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'venusEcho', name: msg('Venus Echo'), drills: [echoAt(CAMPAIGN.echoVenusCall, 'venus', ECHO_VENUS), said(CAMPAIGN.echoVenus, 'venus'), said(CAMPAIGN.echoVenusHeard, 'venus')], pay: 0, ratings: 40, side: 'cloudLine' },
   // the courier runs, one at each place, offered once its first job is done
   ...couriers,
+  // and an ambush at each of them
+  ...ambushes,
 ];

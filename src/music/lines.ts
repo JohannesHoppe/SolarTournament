@@ -582,6 +582,7 @@ export const CAMPAIGN = {
   courier: 'A courier run, Host. Six beacons in order, and the client pays for speed. The clock starts at the first.',
   courierMissed: 'We missed a beacon, Host. From the start.',
   courierSlow: 'Too slow. The client wants it again.',
+  ambush: 'An ambush on the client’s lane, Host. Three of them, lying in wait. Clear it, and the client pays.',
   valhallaSprintMissed: 'We missed a coil. Back to the start, and once more.',
   valhallaSprintDone: 'Six coils, and the clock beaten. The ridges went by like waves, Host.',
   echoThreeCall: 'The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.',

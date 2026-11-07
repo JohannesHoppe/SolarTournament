@@ -354,6 +354,17 @@ test('a courier run on the job board: six beacons laid at its place from its sta
   expect(errors).toEqual([]);
 });
 
+test('an ambush on the job board: three bandits round the client’s lane at its place, all of them down wins', async ({ page }) => {
+  const errors = await boardAfterPilotEpisode(page, 0);
+  await page.locator('#board-side button', { hasText: 'Ambush' }).filter({ hasText: 'Valhalla' }).click();
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto' && window.game.jumpers?.bots.length === 3, null, { timeout: 90_000 });
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('ambush:callisto')), { timeout: 60_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 /** The running mission at its drill `step`, without an error on the page. */
 async function movesOn(page: Page, step: number, errors: string[]) {
   await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(step);

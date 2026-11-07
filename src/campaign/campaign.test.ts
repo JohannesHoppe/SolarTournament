@@ -32,7 +32,7 @@ describe('the campaign Lot 7731', () => {
     const campaign = freshCampaign();
     const story = MISSIONS.filter((mission) => !mission.side);
     // the side trips to Mercury and Venus; the courier runs come once each place's first job is done
-    const trips = (c: typeof campaign) => sideTrips(c).filter((mission) => !mission.courier).map((mission) => mission.id);
+    const trips = (c: typeof campaign) => sideTrips(c).filter((mission) => !mission.courier && !mission.ambush).map((mission) => mission.id);
     const upTo = story.findIndex((mission) => mission.id === 'pilotEpisode');
     campaign.done = story.slice(0, upTo).map((mission) => mission.id);
     expect(trips(campaign)).toEqual([]);
@@ -51,6 +51,7 @@ describe('the campaign Lot 7731', () => {
     expect(nextMission(campaign)).toBeNull();
     expect(trips(campaign)).toEqual(['terminatorRun', 'cloudLine']);
     expect(sideTrips(campaign).filter((mission) => mission.courier).length).toBe(COURIER_PLACES.length);
+    expect(sideTrips(campaign).filter((mission) => mission.ambush).length).toBe(COURIER_PLACES.length);
     // a place's courier run only once its first job is done
     campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'rheasilvia')).map((mission) => mission.id);
     expect(sideTrips(campaign).some((mission) => mission.courier === 'rheasilvia')).toBe(false);
@@ -380,7 +381,7 @@ describe('the campaign Lot 7731', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
       // a trial at least its briefing; a courier run's one drill briefs itself
-      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.courier ? 0 : 1);
+      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.courier || mission.ambush ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });
