@@ -122,6 +122,12 @@ export const SPEAKERS = {
     reference: { text: "Hello, hello! Commissioner Dolores Quill, Office of Admissions, Ministry of War. Form seventy-seven B: congratulations! Oh, don't mind the face. It's my ninth.", speed: 1 },
     language: 'quill',
   },
+  vey: {
+    voice: 'bm_lewis',
+    speed: 0.9,
+    reference: { text: 'Ah, a visitor. Is it the launch already? He said: nobody leaves. A beautiful order. Short. I got a medal. I have had it in forty bodies.', speed: 1 },
+    language: 'vey',
+  },
 } as const;
 export type Speaker = keyof typeof SPEAKERS;
 export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];

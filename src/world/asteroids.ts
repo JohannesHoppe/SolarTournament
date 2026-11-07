@@ -180,6 +180,20 @@ export interface FieldLayout {
   rest?: { height: number; rise: number };
   /** The air of a planet the arena dips into (see world/air): its haze hides, brakes and heats. */
   air?: Air;
+  /** Columns of gas rising from the ground that shove whatever flies in them upwards (Triton's geysers, see Column). */
+  columns?: readonly Column[];
+}
+
+/**
+ * A column of gas rising from `at` on the ground to `height` over it (units), `radius` wide: it
+ * pushes whatever flies in it straight up with `push` (units/s²) on its axis at its foot, less
+ * towards its edge and its top; the same on every browser, as gravity is.
+ */
+export interface Column {
+  at: THREE.Vector3;
+  radius: number;
+  height: number;
+  push: number;
 }
 export interface Asteroid {
   id: string;
@@ -459,6 +473,8 @@ export class AsteroidField {
   well: Well | null = null;
   /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
   fall = 0;
+  /** The columns that shove (see FieldLayout.columns). */
+  columns: readonly Column[] = [];
   /** The air of the arena, if it dips into a planet's (see world/air). */
   air: Air | null = null;
   /** Something else in the field that blocks the line of sight and torpedoes, if a round has one. */
@@ -538,6 +554,7 @@ export class AsteroidField {
     this.layout = layout;
     this.well = layout.well ?? null;
     this.fall = layout.fall ?? 0;
+    this.columns = layout.columns ?? [];
     this.air = layout.air ?? null;
     this.clear();
     this.clock = 0;
@@ -1407,6 +1424,7 @@ export class AsteroidField {
    */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
     target.set(0, -this.fall, 0);
+    for (const column of this.columns) target.y += columnPush(column, position);
     const well = this.well;
     if (well) {
       pull.subVectors(well.position, position);
@@ -1415,6 +1433,17 @@ export class AsteroidField {
     }
     return target;
   }
+}
+
+/** How hard `column` pushes up at `position` (units/s²): full on its axis at its foot, fading smoothly to its edge and linearly to its top. */
+export function columnPush(column: Column, position: THREE.Vector3): number {
+  const up = position.y - column.at.y;
+  if (up <= 0 || up >= column.height) return 0;
+  const dx = position.x - column.at.x;
+  const dz = position.z - column.at.z;
+  const across = Math.sqrt(dx * dx + dz * dz) / column.radius;
+  if (across >= 1) return 0;
+  return column.push * (1 - across * across) * (1 - across * across) * (1 - up / column.height);
 }
 
 /** A solid box standing on a piece (see AsteroidField.attach): `matrix` takes the box's own frame into the piece's object frame, `inverse` back; `half` its half extents in its own frame. */

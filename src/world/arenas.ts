@@ -7,10 +7,11 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
+import { GEYSER_COLUMNS, groundPlacement as tritonGround, memorialPlacement, NEPTUNE_AT, STATION_AT as MEMORIAL_AT, TRITON_FALL } from './triton';
 import { groundPlacement as mirandaGround, MIRANDA_FALL, MOUTH as VERONA_MOUTH, URANUS_AT } from './miranda';
 import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SATURN } from './iapetus';
 import { ENCELADUS_FALL, groundPlacement as enceladusGround, SATURN_AT as ENCELADUS_SATURN } from './enceladus';
@@ -53,7 +54,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -510,6 +511,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.7, 0.78, 0.8],
     grade: { gain: [0.97, 1, 1.03], lift: [0.0011, 0.0014, 0.0015], saturation: 0.9 },
   },
+  // Memorial: pinkish ice under a black sky, Neptune's blue over it, the geysers' dark dust
+  triton: {
+    space: 0x010103,
+    sky: 0x8a9cc0,
+    ground: 0x2c2628,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.03, 0.04, 0.06], size: 540000, shape: 2, turn: 1.3 },
+      { at: [0.6, 0.3, 0.6], color: [0.05, 0.035, 0.04], size: 460000, shape: 1, turn: 0.2 },
+    ],
+    stars: 1,
+    starmap: true,
+    dust: [0.4, 0.36, 0.34],
+    grade: { gain: [1, 0.99, 1.02], lift: [0.0013, 0.0012, 0.0016], saturation: 0.9 },
+  },
 };
 
 /**
@@ -755,6 +771,26 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the upland at the cliff's edge, facing south over it
     start: { at: [40000, 20000, -20000], toward: [30000, 14000, 20000] },
+    open: true,
+  },
+  {
+    id: 'triton',
+    name: msg('Memorial'),
+    tagline: msg('Triton’s pinkish plain, its geysers throwing dark dust and anything that flies into them, the Navy’s oldest station, and Neptune in the sky.'),
+    // nothing loose: the plain, its geysers and the station
+    layout: { key: 'triton', seed: 14000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [tritonGround(TRITON_TYPE), memorialPlacement(MEMORIAL_TYPE, POST_HALF)], fall: TRITON_FALL, columns: GEYSER_COLUMNS },
+    cooling: 1,
+    storms: false,
+    // 30 AU from the sun, a bright star more than a disk
+    sun: { size: 7000, intensity: 2.4, color: 0xfff0dd },
+    mood: MOODS.triton,
+    preview: { from: [30000, 6000, 30000], at: [0, -8000, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Memorial Station'), position: MEMORIAL_AT, distance: true },
+      { glyph: 'planet', label: msg('Neptune'), position: NEPTUNE_AT, distance: false },
+    ],
+    // over the plain, facing the geyser field
+    start: { at: [55000, 0, 40000], toward: [0, -6000, 0] },
     open: true,
   },
 ];

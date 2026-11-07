@@ -322,7 +322,7 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
 }
 
 /** The clone held still at an echo (the export `echo` of the missions), or at the drill's first point as it moves (`first`), while the mission is at drill `step`, until it moves on (20 s at most). */
-async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'ECHO_SEVEN' | 'ECHO_EIGHT' | 'first', step: number) {
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR' | 'ECHO_SEVEN' | 'ECHO_EIGHT' | 'ECHO_NINE' | 'first', step: number) {
   await page.evaluate(
     async ([path, echo, step]) => {
       const game = window.game;
@@ -813,5 +813,49 @@ test('The Sweep: six Navy fighters for the hideout’s mouth, Spare on the Host�
   });
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theSweep')), { timeout: 120_000 }).toBe(true);
   expect(await page.evaluate(() => window.game.me?.team ?? -1)).toBe(-1);
+  expect(errors).toEqual([]);
+});
+
+/** Chapter 13 flown too: the hull with the overdrive and Thrusters II, at Triton. */
+const tritonHull = (...done: string[]) => ({ ...mirandaHull('veronaDrop', 'amongTheLoose', 'theSweep', 'thrustersTwo', ...done), parts: [...mirandaHull().parts, 'overdrive', 'thrustersTwo'] });
+
+test('Geyser Field: coils past Triton’s geysers to the Memorial Station; a geyser’s column throws the hull up', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, tritonHull());
+  await page.waitForFunction(() => window.game.venue?.id === 'triton' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBeGreaterThan(4);
+  const climb = await page.evaluate(async (path) => {
+    const { GEYSERS_AT } = (await import(path)) as typeof import('../src/world/triton');
+    const game = window.game;
+    const at = GEYSERS_AT[0].clone();
+    at.y += 1000;
+    game.me.flight.position.copy(at);
+    game.me.flight.velocity.set(0, 0, 0);
+    const start = game.time;
+    while (game.time - start < 1) await new Promise((resolve) => requestAnimationFrame(resolve));
+    return game.me.flight.velocity.y;
+  }, '/src/world/triton.ts');
+  // thrown up though the flight computer fights it (see GEYSER_PUSH)
+  expect(climb).toBeGreaterThan(100);
+  expect(errors).toEqual([]);
+});
+
+test('The Memorial and Grave Shift: the ninth echo held at the Derelict’s torn bow past a Navy guard, then out to the arena’s edge with the guard on the tail', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, tritonHull('geyserField', 'oldAdmiral'));
+  await page.waitForFunction(() => window.game.venue?.id === 'derelict' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 4, null, { timeout: 180_000 });
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.protectedUntil = Infinity;
+  });
+  await holdAtEcho(page, 'ECHO_NINE', 1);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('theMemorial')), { timeout: 120_000 }).toBe(true);
+  // Grave Shift: the hull set past the edge's mark
+  await page.waitForFunction(() => window.game.school?.mission?.id === 'graveShift' && window.game.school.attempt?.live, null, { timeout: 120_000 });
+  await page.evaluate(() => {
+    window.game.me.flight.position.set(64000, 0, 0);
+    window.game.me.flight.velocity.set(0, 0, 0);
+  });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('graveShift')), { timeout: 60_000 }).toBe(true);
   expect(errors).toEqual([]);
 });

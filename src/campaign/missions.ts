@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, QUILL, RASK, SAW, SPARE, TALLY } from '../music/lines';
+import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PIM, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { clear, CORE_SHARE, DRILL, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -14,6 +14,7 @@ import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from 
 import { sulfurFreighter, tug } from '../world/barge';
 import { crestZ, surfaceHeight as iapetusHeight } from '../world/iapetus';
 import { faceAt, MOUTH as VERONA_MOUTH, TOP as VERONA_TOP } from '../world/miranda';
+import { GEYSER_RADIUS, GEYSERS_AT, LAND as TRITON_LAND, STATION_AT as MEMORIAL_AT } from '../world/triton';
 import { yacht } from '../world/yacht';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
@@ -21,7 +22,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -1895,6 +1896,79 @@ const echoAt = (call: string, arena: ArenaId, at: THREE.Vector3): Drill => ({
 const echoTwo = echoAt(CAMPAIGN.echoTwoCall, 'occator', ECHO_TWO);
 
 /**
+ * Geyser Field (14.1): a time trial from the field's south-east to the Memorial Station through
+ * GEYSER_COILS coils of the Navy, each beside a geyser on the way, GEYSER_OFF from its axis
+ * (units, 200 m: the coil's rim passes just outside the column), GEYSER_OVER over the plain; a
+ * geyser's column throws a ship up (see Column); the clock starts at the first coil.
+ */
+const GEYSER_FROM = point(48000, TRITON_LAND + 3000, 36000);
+const GEYSER_OFF = GEYSER_RADIUS + 2400;
+const GEYSER_OVER = 3000;
+export const GEYSER_TIME = 60;
+const GEYSER_WAY = new THREE.Vector3().subVectors(MEMORIAL_AT, GEYSER_FROM).setY(0).normalize();
+const GEYSER_SIDE = new THREE.Vector3(-GEYSER_WAY.z, 0, GEYSER_WAY.x);
+/** The geysers on the way, in the order the way passes them: those within GEYSER_LANE of its line (units, 1.5 km). */
+const GEYSER_LANE = 30000;
+const GEYSER_LENGTH = GEYSER_FROM.clone().setY(0).distanceTo(MEMORIAL_AT.clone().setY(0));
+export const GEYSER_COURSE = (() => {
+  const along = (p: THREE.Vector3) => new THREE.Vector3().subVectors(p, GEYSER_FROM).setY(0).dot(GEYSER_WAY);
+  const across = (p: THREE.Vector3) => new THREE.Vector3().subVectors(p, GEYSER_FROM).setY(0).dot(GEYSER_SIDE);
+  const passed = GEYSERS_AT.filter((g) => along(g) > 8000 && along(g) < GEYSER_LENGTH - 8000 && Math.abs(across(g)) < GEYSER_LANE).sort((a, b) => along(a) - along(b));
+  // each coil on the line's side of its geyser, the column just outside its rim
+  const coils = passed.map((g) => g.clone().addScaledVector(GEYSER_SIDE, across(g) > 0 ? -GEYSER_OFF : GEYSER_OFF).setY(TRITON_LAND + GEYSER_OVER));
+  // and the last before the station
+  coils.push(MEMORIAL_AT.clone().addScaledVector(GEYSER_WAY, -6000).setY(TRITON_LAND + GEYSER_OVER));
+  return coils;
+})();
+export const GEYSER_NORMALS = GEYSER_COURSE.map((coil, i) => coil.clone().sub(i ? GEYSER_COURSE[i - 1] : GEYSER_FROM).setY(0).normalize());
+export const GEYSER_START = { at: [GEYSER_FROM.x, GEYSER_FROM.y, GEYSER_FROM.z] as const, toward: [GEYSER_COURSE[0].x, GEYSER_COURSE[0].y, GEYSER_COURSE[0].z] as const };
+
+const geyserField = timeTrial({ line: CAMPAIGN.geyserField, arena: 'triton', points: GEYSER_COURSE, normals: GEYSER_NORMALS, time: GEYSER_TIME, missed: CAMPAIGN.geyserFieldMissed, slow: CAMPAIGN.geyserFieldSlow });
+
+/**
+ * The Memorial (14.3): the ninth echo before the Derelict's bow, in the gap where it tore (ECHO_NINE, 300 m off its torn end), the hull
+ * held still there while a Navy guard of GUARDS at GUARD_SKILL fights it; Grave Shift (14.4): the
+ * guard on the hull's tail, out to the arena's edge (within EDGE_SHARE of ARENA_LIMIT).
+ */
+export const ECHO_NINE = point(-8000, 0, 0);
+const GUARDS = 4;
+const GUARD_SKILL = 0.5;
+const GUARD_NAMES = ['Lt. Hale', 'Ens. Dorn', 'Ens. Pike', 'Lt. Wen'];
+const EDGE_SHARE = 0.92;
+const memorialEcho = echoAt(CAMPAIGN.memorial, 'derelict', ECHO_NINE);
+const theMemorial: Drill = {
+  ...memorialEcho,
+  keys: ['turn', 'drive', 'brake', 'fire'],
+  music: 'fight',
+  enter(ctx, a, markers) {
+    memorialEcho.enter!(ctx, a, markers);
+    ctx.spawnJumpers(null, ECHO_NINE, GUARDS, GUARD_SKILL, GUARD_NAMES, 10000, true);
+  },
+  leave: (ctx) => ctx.removeJumpers(),
+};
+const graveShift: Drill = {
+  line: CAMPAIGN.graveShift,
+  keys: ['turn', 'drive', 'overdrive'],
+  arena: 'derelict',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    ctx.spawnJumpers(null, ctx.me.flight.position.clone(), GUARDS, GUARD_SKILL, GUARD_NAMES, 6000, true);
+  },
+  done: (ctx) => ctx.me.flight.position.length() > ARENA_LIMIT * EDGE_SHARE,
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: (ctx) => ctx.me.flight.position.clone().setLength(ARENA_LIMIT),
+  mark: (ctx) => t('Edge · {meters} m', { meters: Math.max(0, Math.round((ARENA_LIMIT * EDGE_SHARE - ctx.me.flight.position.length()) * 0.05)) }),
+};
+
+/** Thrusters III (14.5): the thrusters' third step (see hullOf), at THRUSTERS_THREE_PRICE. */
+const fitThrustersThree = (campaign: Campaign) => {
+  if (campaign.parts.includes('thrustersThree')) return;
+  campaign.parts.push('thrustersThree');
+  buy(campaign, THRUSTERS_THREE_PRICE);
+};
+
+/**
  * The Ridge (11.1): the eighth echo, from a cache on Iapetus's ridge (see world/iapetus), the hull
  * held ECHO_EIGHT_OVER over the crest at x ECHO_EIGHT_X; WINGMEN_AFTER seconds in, two of Spare's
  * strays (WINGMEN of WINGMAN_SKILL) set out for it from the ridge's far end, fighting a ship that
@@ -2268,4 +2342,10 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'amongTheLoose', name: msg('Among the Loose'), drills: [said(SPARE.hideout, 'miranda'), said(SPARE.overdrive, 'miranda'), said(PIM.overdrive, 'miranda'), said(CAMPAIGN.overdrive, 'miranda')], pay: 0, fit: fitOverdrive },
   { id: 'theSweep', name: msg('The Sweep'), drills: [said(HEDDA.sweep, 'miranda'), said(SPARE.wing, 'miranda'), theSweep, said(CAMPAIGN.sweepDone, 'miranda'), said(SPARE.after, 'miranda')], pay: 6000, ratings: 500 },
   { id: 'thrustersTwo', name: msg('Thrusters II'), drills: [said(PIM.thrustersTwo, 'miranda'), said(CAMPAIGN.thrustersTwo, 'miranda')], pay: 0, fit: fitThrustersTwo },
+  // chapter 14, Memorial: Triton's geysers to the Navy's oldest admiral, then the Derelict's bow and its log
+  { id: 'geyserField', name: msg('Geyser Field'), drills: [said(HEDDA.triton, 'triton'), geyserField, said(CAMPAIGN.geyserFieldDone, 'triton')], pay: 3000, ratings: 300, start: GEYSER_START },
+  { id: 'oldAdmiral', name: msg('The Old Admiral'), drills: [said(VEY.visitor, 'triton'), said(VEY.order, 'triton'), said(VEY.medal, 'triton'), said(CAMPAIGN.veyHeard, 'triton')], pay: 0 },
+  { id: 'theMemorial', name: msg('The Memorial'), drills: [said(HEDDA.memorial, 'derelict'), theMemorial, said(CAMPAIGN.echoNine, 'derelict'), said(CAMPAIGN.echoNineHeard, 'derelict')], pay: 4000, ratings: 400 },
+  { id: 'graveShift', name: msg('Grave Shift'), drills: [graveShift, said(CAMPAIGN.graveShiftDone, 'derelict')], pay: 3000, ratings: 300 },
+  { id: 'thrustersThree', name: msg('Thrusters III'), drills: [said(PIM.thrustersThree, 'derelict'), said(CAMPAIGN.thrustersThree, 'derelict')], pay: 0, fit: fitThrustersThree },
 ];

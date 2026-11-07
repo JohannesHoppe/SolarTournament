@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw, tally, navy, jack, crisp, spare, quill, vey: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -610,6 +610,17 @@ export const CAMPAIGN = {
   echoSevenHeard: 'Run. She said run. I think she told me that before, and I did not.',
   secondTube: 'Two torpedoes now, Host, as many as any ship in the Games carries.',
   thrustersOne: 'The thrusters push harder than a stock ship. We turn and slide a little quicker than they do.',
+  geyserField: 'Coils past the geysers to the Memorial Station, Host. A minute from the first. A geyser’s column throws a ship up like a leaf. Fly past them, not through.',
+  geyserFieldMissed: 'A coil missed. Again.',
+  geyserFieldSlow: 'Too slow, Host. The station’s watch has changed. Again.',
+  geyserFieldDone: 'At the station. The admiral expects nobody. He will talk to us anyway.',
+  veyHeard: 'He broke it, Host. The world ship. The Derelict is no memorial. It is where they did it. And its bridge still holds a log.',
+  memorial: 'The bow’s torn end, Host. The ninth echo is there, in the cold. Hold still in it, guard or no guard.',
+  echoNine: 'Scout Two is taken. I am alone in Scout One. Course: the dark mass. Cold sleep at arrival.',
+  echoNineHeard: 'Scout One. The dark mass. I know where she went, Host. I know where I went.',
+  graveShift: 'The guard is on our tail. Out, Host, to the arena’s edge. Do not stop to fight.',
+  graveShiftDone: 'Out. They will not follow us past the edge. Not yet.',
+  thrustersThree: 'The thrusters push harder than a stock ship’s ever will, Host.',
   veronaDrop: 'Down the face, Host, through six buoys to the hideout’s mouth. Under a hundred and fifty meters a second, and never more than three hundred off the face, or the Navy’s scopes see us.',
   veronaFast: 'Too fast, Host. The scopes see a burn like that. Up and down again.',
   veronaOff: 'Too far off the face. The scopes see us against the sky. Again.',
@@ -715,6 +726,7 @@ export const PIM = {
   hook: "Jack's harpoon. Took it out of his plate, put it on a tug's winch from the yard, fifteen hundred. It's a hook now. Use it better than he did.",
   secondTube: "Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.",
   thrustersOne: "Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.",
+  thrustersThree: "Last of the Loose's thrusters, third grade, five thousand. Spare paid half. Don't ask me why.",
   overdrive: "Fitting's three thousand, Spare says, Loose prices. I've seen the wiring. Worth it. Hold still, this one bites.",
   thrustersTwo: "Loose thrusters, second grade, two and a half. Spare's people make them out of Navy wrecks. Fitting, isn't it.",
   tubesOne: "Trial prize: a third tube, fifteen hundred off the purse. Navy fittings, Ministry stamps on every bolt. Hold still.",
@@ -741,6 +753,8 @@ export const HEDDA = {
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
   phobos: "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. He's never died. Not once. Top three, and Lanes Watch comes calling.",
   iceRun: "Paying work, out of the show's eye. Three ice tugs for Ganymede, and the Loose rob convoys here. They'd rather take the cargo than a clone. Keep them off it. Two thousand five hundred.",
+  triton: "Triton. The Navy's oldest station is out past the geysers, and its oldest admiral with it. Spare says he talks. Mind the geysers. They throw ships.",
+  memorial: "The Derelict. A Navy guard on it, four of them. The bridge log's in the bow. Get it and get out.",
   miranda: "Miranda. Uranus on its side, over a cliff twenty kilometers tall. Spare sent word: his people are in the face, and they'll talk. We go down to them, slowly.",
   sweep: "Navy sweep inbound. Six of them, for the hideout. Spare's flying with you. Keep them off the mouth.",
   iapetus: "Iapetus. Half soot, half snow, and a ridge down the middle like a scar. Your computer's frequency again, up on the ridge. And company: two of Spare's lot, heading the same way.",
@@ -833,13 +847,20 @@ export const QUILL = {
   body: "Oh, don't mind the face. It's my ninth. I liked the seventh better, but you know how it is.",
 } as const;
 
+/** Fleet Admiral Corwin Vey of the Navy, at Triton, on his fortieth or so body: courtly, gentle, drifting between centuries. His own voice (see tools/voice). */
+export const VEY = {
+  visitor: 'Ah, a visitor. Is it the launch already? Tell the President the world ship has not cleared the pickets. No. No, that was. What year is it? Never mind.',
+  order: 'He said: nobody leaves. A beautiful order. Short. So I gave it to the guns. The habitat ring first, he said, the cameras like the ring.',
+  medal: 'Do you know, they cheered? On Earth. The Memorial Games, they called it. I got a medal. I have it somewhere. I have had it in forty bodies.',
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw' | 'tally' | 'navy' | 'jack' | 'crisp' | 'spare' | 'quill' | 'vey';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw', tally: 'Ma Tally', navy: 'Restraint', jack: 'Hollow Jack', crisp: 'Bellamy Crisp', spare: 'Spare', quill: 'Quill', vey: 'Admiral Vey' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime, Ma Tally the cold violet of a bank's sign, the Navy the pale steel blue of its uniforms, Hollow Jack the rust of an old hull, Bellamy Crisp his cola's red, Spare the grey of his interceptor, Quill the Ministry's gold, Admiral Vey the Navy's faded blue. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a', tally: '#b07cff', navy: '#9fb4d0', jack: '#c87a4a', crisp: '#ff3b3b', spare: '#c4cad2', quill: '#ffd34d', vey: '#7f9cc8' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW), tally: Object.values(TALLY), navy: Object.values(NAVY), jack: Object.values(JACK), crisp: Object.values(CRISP), spare: Object.values(SPARE), quill: Object.values(QUILL), vey: Object.values(VEY) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -877,6 +898,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(SPARE)];
     case 'quill':
       return [...Object.values(QUILL)];
+    case 'vey':
+      return [...Object.values(VEY)];
   }
 }
 

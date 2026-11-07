@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -161,7 +161,7 @@ describe('the campaign Lot 7731', () => {
     expect(MISSIONS.filter((mission) => mission.trial).map((mission) => mission.trial!.mode)).toEqual(['race', 'deathmatch', 'flag', 'fleet']);
   });
 
-  it('fits the overdrive and Thrusters II at Miranda: the Loose’s hack, and the thrusters two steps past stock, each paid as the laser is', () => {
+  it('fits the overdrive and Thrusters II at Miranda, Thrusters III after the Derelict: the Loose’s hack, and the thrusters two steps past stock, each paid as the laser is', () => {
     const campaign = { ...freshCampaign(), coins: 0, bond: 20000, parts: ['thrusters' as const, 'thrustersOne' as const] };
     expect(hullOf(campaign).overdrive).toBe(false);
     complete(campaign, MISSIONS.find((mission) => mission.id === 'amongTheLoose')!);
@@ -169,6 +169,9 @@ describe('the campaign Lot 7731', () => {
     expect(hullOf(campaign).overdrive).toBe(true);
     expect(hullOf(campaign).thrusters).toBeCloseTo(STOCK.thrusters + 2 * THRUSTER_STEP, 10);
     expect(campaign.bond).toBe(20000 + OVERDRIVE_PRICE + THRUSTERS_TWO_PRICE);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'thrustersThree')!);
+    expect(hullOf(campaign).thrusters).toBeCloseTo(STOCK.thrusters + 3 * THRUSTER_STEP, 10);
+    expect(campaign.bond).toBe(20000 + OVERDRIVE_PRICE + THRUSTERS_TWO_PRICE + THRUSTERS_THREE_PRICE);
   });
 
   it('fits Main Drive II and Radiators II at Iapetus: each the hangar’s second step, each paid as the laser is', () => {

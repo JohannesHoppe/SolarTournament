@@ -36,33 +36,52 @@ export function enceladus(): THREE.Group {
 }
 
 /**
- * The plumes' grains on the full picture (fewer on a cheaper one, see Landmarks.setGrains), shared
- * among the vents; every HAZE_EVERY-th of them a faint, wide puff of vapor instead of a grain. A
- * grain rises at RISE (units/s, 40 m/s, a jet's vapor is far faster but the grains it carries
- * fall back), crossing its plume in some 75 s.
+ * Jets of grains rising from vents (Enceladus's plumes, Triton's geysers), one draw call: GRAINS of
+ * them shared among the vents; every HAZE_EVERY-th a faint, wide puff instead of a grain. A grain
+ * rises at `rise` (units/s) to `reach` over its vent, the jet widening from `start` to `end` in
+ * radius, and leaning along `wind` (units of sideways drift at the top, the jet bent by thin air);
+ * bright jets add their light (ice scattering the sun), dark ones cover what is behind (dust).
  */
-export const PLUME_GRAINS = 9000;
+export interface Jets {
+  vents: readonly THREE.Vector3[];
+  reach: number;
+  start: number;
+  end: number;
+  rise: number;
+  wind: THREE.Vector3;
+  dark: boolean;
+  /** The grains' tone over the sun's light. */
+  tone: THREE.Color;
+  seed: number;
+}
+export const GRAINS = 9000;
 const HAZE_EVERY = 6;
-const RISE = 800;
 /** A grain's size (units, 2 m) and how large it may grow on screen (device px); a puff's size (units, 120 m) and its cap. */
 const GRAIN_SIZE = 40;
 const GRAIN_PIXELS = 5;
 const PUFF_SIZE = 2400;
 const PUFF_PIXELS = 220;
+/** How much a puff shows at a jet's foot: vapor's faint glow, dust's thicker cover. */
+const PUFF_VAPOR = 0.07;
+const PUFF_DUST = 0.22;
 
-const plumeVertex = /* glsl */ `
+const jetVertex = /* glsl */ `
   attribute vec4 seed;
   attribute vec3 vent;
   uniform float time;
   uniform float viewport;
+  uniform vec4 shape;
+  uniform vec3 wind;
+  uniform float puff;
   varying float vShade;
   varying float vPuff;
   void main() {
-    float s = fract(seed.x + time * ${(RISE / PLUME_REACH).toFixed(6)});
-    // spread over the plume's round section, winding slowly as it rises
+    // shape: reach, start radius, end radius, rise
+    float s = fract(seed.x + time * shape.w / shape.x);
+    // spread over the jet's round section, winding slowly as it rises, bent along the wind
     float turn = seed.y * 6.2832 + s * 2.0;
-    float out = sqrt(seed.z) * mix(${PLUME_START.toFixed(1)}, ${PLUME_END.toFixed(1)}, s) * 0.8;
-    vec3 at = vent + vec3(cos(turn) * out, s * ${PLUME_REACH.toFixed(1)}, sin(turn) * out);
+    float out = sqrt(seed.z) * mix(shape.y, shape.z, s) * 0.8;
+    vec3 at = vent + vec3(cos(turn) * out, s * shape.x, sin(turn) * out) + wind * s * s;
     vec4 view = modelViewMatrix * vec4(at, 1.0);
     gl_Position = projectionMatrix * view;
     vPuff = seed.w;
@@ -71,12 +90,14 @@ const plumeVertex = /* glsl */ `
     gl_PointSize = clamp(pixels, 1.5, vPuff > 0.5 ? ${PUFF_PIXELS.toFixed(1)} : ${GRAIN_PIXELS.toFixed(1)});
     // a grain smaller than its point keeps its light, spread thinner, so it never twinkles
     float thin = min(1.0, pixels / gl_PointSize);
-    vShade = (1.0 - s) * (1.0 - s) * smoothstep(0.0, 0.02, s) * (vPuff > 0.5 ? 0.07 : 0.9 * max(thin, 0.25));
+    vShade = (1.0 - s) * (1.0 - s) * smoothstep(0.0, 0.02, s) * (vPuff > 0.5 ? puff : 0.9 * max(thin, 0.25));
   }
 `;
 
-const plumeFragment = /* glsl */ `
+const jetFragment = /* glsl */ `
   uniform vec3 light;
+  uniform vec3 tone;
+  uniform float dark;
   varying float vShade;
   varying float vPuff;
   void main() {
@@ -84,30 +105,41 @@ const plumeFragment = /* glsl */ `
     float d = dot(at, at) * 4.0;
     float shape = vPuff > 0.5 ? exp(-d * 2.5) * (1.0 - d) : 1.0 - smoothstep(0.25, 1.0, d);
     if (shape <= 0.0) discard;
-    // the grains scatter the sun forward, a little bluer than it shines
-    gl_FragColor = vec4(light * vec3(0.85, 0.94, 1.08) * shape * vShade, 1.0);
+    // a bright jet adds the sun it scatters; a dark one covers, in its own tone, lit a little
+    float cover = shape * vShade;
+    gl_FragColor = dark > 0.5 ? vec4(light * tone, min(1.0, cover * 4.0)) : vec4(light * tone * cover, 1.0);
   }
 `;
 
-/** The plumes over the vents, one draw call: each grain's vent, where it starts on its way up and where across. `light` is the sun's color. */
-export function plumes(light: THREE.Color): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {
-  const r = new Randomizer(10009);
-  const seeds = new Float32Array(PLUME_GRAINS * 4);
-  const vents = new Float32Array(PLUME_GRAINS * 3);
-  for (let i = 0; i < PLUME_GRAINS; i++) {
+/** The jets of `spec` over its vents, one draw call: each grain's vent, where it starts on its way up and where across. `light` is the sun's color. */
+export function jets(light: THREE.Color, spec: Jets): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  const r = new Randomizer(spec.seed);
+  const seeds = new Float32Array(GRAINS * 4);
+  const vents = new Float32Array(GRAINS * 3);
+  for (let i = 0; i < GRAINS; i++) {
     seeds.set([r.nextFloat(), r.nextFloat(), r.nextFloat(), i % HAZE_EVERY === 0 ? 1 : 0], i * 4);
-    VENTS[i % VENTS.length].toArray(vents, i * 3);
+    spec.vents[i % spec.vents.length].toArray(vents, i * 3);
   }
   const geometry = new THREE.BufferGeometry();
   // the points lie where the shader puts them; the attribute only sizes the draw
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PLUME_GRAINS * 3), 3));
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(GRAINS * 3), 3));
   geometry.setAttribute('seed', new THREE.BufferAttribute(seeds, 4));
   geometry.setAttribute('vent', new THREE.BufferAttribute(vents, 3));
   const material = new THREE.ShaderMaterial({
-    uniforms: { time: { value: 0 }, viewport: { value: 1000 }, light: { value: light } },
-    vertexShader: plumeVertex,
-    fragmentShader: plumeFragment,
-    blending: THREE.AdditiveBlending,
+    uniforms: {
+      time: { value: 0 },
+      viewport: { value: 1000 },
+      light: { value: light },
+      shape: { value: new THREE.Vector4(spec.reach, spec.start, spec.end, spec.rise) },
+      wind: { value: spec.wind },
+      tone: { value: spec.tone },
+      dark: { value: spec.dark ? 1 : 0 },
+      // a puff of dust covers more than one of vapor shines
+      puff: { value: spec.dark ? PUFF_DUST : PUFF_VAPOR },
+    },
+    vertexShader: jetVertex,
+    fragmentShader: jetFragment,
+    blending: spec.dark ? THREE.NormalBlending : THREE.AdditiveBlending,
     depthWrite: false,
     transparent: true,
     toneMapped: false,
@@ -117,3 +149,6 @@ export function plumes(light: THREE.Color): THREE.Points<THREE.BufferGeometry, T
   points.userData.shadowless = true;
   return points;
 }
+
+/** Enceladus's plumes: grains of ice rising at 40 m/s (a jet's vapor is far faster but the grains it carries fall back), crossing a plume in some 75 s, scattering the sun a little bluer than it shines. */
+export const ENCELADUS_JETS: Jets = { vents: VENTS, reach: PLUME_REACH, start: PLUME_START, end: PLUME_END, rise: 800, wind: new THREE.Vector3(), dark: false, tone: new THREE.Color(0.85, 0.94, 1.08), seed: 10009 };

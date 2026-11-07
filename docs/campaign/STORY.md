@@ -182,10 +182,10 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 13.1 | Verona Drop | exploration | Down the face of Verona Rupes to a hangar in the cliff: under 150 m/s (250 m/s is every ship's limit), never more than 300 m off the face, through six buoys. (built) | · 300 | Surface; markers |
 | 13.2 | Among the Loose | story | Spare's people. The overdrive, a reactor dump the Games license and the Loose hack in. (built, over the comm) | the overdrive | A scene |
 | 13.3 | The Sweep | defense | A Navy sweep (six at skill 0.5) at the hideout's mouth; Spare flies as the Host's wingman. Keep the mouth clear for 4 min. (built: one of them 8 s within 300 m of the mouth fails it; all six down wins early) | ☉ 6,000 · 500 | Deathmatch with an ally (Capture the Flag's sides) |
-| 14.1 | Geyser Field | race | Through Triton's nitrogen geysers to the Navy's Memorial Station; a geyser's column shoves a ship it catches. | ☉ 3,000 · 300 | Race; new: columns that shove |
-| 14.2 | The Old Admiral | story | Fleet Admiral Vey's confession. | — | A scene |
-| 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). | ☉ 4,000 · 400 | The existing Derelict arena |
-| 14.4 | Grave Shift | fight | Out again with the guard on the Magpie's tail; reach the arena's edge. | ☉ 3,000 · 300 | Deathmatch; the edge as the goal |
+| 14.1 | Geyser Field | race | Through Triton's nitrogen geysers to the Navy's Memorial Station; a geyser's column shoves a ship it catches. (built: a time trial past the geysers, each column pushing 6 g up, more than the thrusters) | ☉ 3,000 · 300 | Race; new: columns that shove |
+| 14.2 | The Old Admiral | story | Fleet Admiral Vey's confession. (built, over the comm) | — | A scene |
+| 14.3 | The Memorial | exploration | The Derelict: into the bow's torn end and up the bridge tower's decks to its log (echo 9), past a Navy guard (four at skill 0.5). (built: the echo held before the bow's torn end; the decks of the bridge tower still to come) | ☉ 4,000 · 400 | The existing Derelict arena |
+| 14.4 | Grave Shift | fight | Out again with the guard on the Magpie's tail; reach the arena's edge. (built) | ☉ 3,000 · 300 | Deathmatch; the edge as the goal |
 | 15.1 | Heart Run | race | The Feeder pilots' race over the nitrogen plain of Pluto's heart. Win it, and the Feeders take Patience on. | ☉ 5,000 · 500 | Race; surface |
 | 15.2 | The File | story | Spare comes aboard Patience unarmed. | — | A scene |
 | 15.3 | Last Light | escort | Patience joins a Feeder convoy past Charon; the Ministry's pickets (skill 0.55) check every ship. | ☉ 6,000 · 400 | Escort |
@@ -286,7 +286,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 12 | Torpedo tubes I | 1,500 | A torpedo more, the hangar's first step (built: Torpedo Tubes I) |
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift (built: Among the Loose) |
 | 13 | Thrusters II | 2,500 | The hangar's second step (built: Thrusters II) |
-| 14 | Thrusters III | 5,000 | |
+| 14 | Thrusters III | 5,000 | The hangar's third step (built: Thrusters III) |
 | 15 | Plating III | 6,000 | |
 | 16 | Main drive III, radiators III | 5,000 each | |
 | 17 | Torpedo tubes II, III | 3,000, 6,000 | Complete |
@@ -930,7 +930,31 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **SPARE**: Stop flying where they want you, Host. Please. I know how you think. That's the problem.
 
-### The admiral (chapter 14)
+### Memorial (chapter 14, built)
+
+**HEDDA**: Triton. The Navy's oldest station is out past the geysers, and its oldest admiral with it. Spare says he talks. Mind the geysers. They throw ships.
+
+**NICOLE**: Coils past the geysers to the Memorial Station, Host. A minute from the first. A geyser’s column throws a ship up like a leaf. Fly past them, not through.
+
+**NICOLE** *(at the station)*: At the station. The admiral expects nobody. He will talk to us anyway.
+
+**NICOLE** *(after the admiral)*: He broke it, Host. The world ship. The Derelict is no memorial. It is where they did it. And its bridge still holds a log.
+
+**HEDDA**: The Derelict. A Navy guard on it, four of them. The bridge log's in the bow. Get it and get out.
+
+**NICOLE**: The bow’s torn end, Host. The ninth echo is there, in the cold. Hold still in it, guard or no guard.
+
+**ECHO 9**: Scout Two is taken. I am alone in Scout One. Course: the dark mass. Cold sleep at arrival.
+
+**NICOLE**: Scout One. The dark mass. I know where she went, Host. I know where I went.
+
+**NICOLE**: The guard is on our tail. Out, Host, to the arena’s edge. Do not stop to fight.
+
+**NICOLE** *(at the edge)*: Out. They will not follow us past the edge. Not yet.
+
+**PIM** *(Thrusters III)*: Last of the Loose's thrusters, third grade, five thousand. Spare paid half. Don't ask me why.
+
+### The admiral (chapter 14, built, over the comm, in three lines)
 
 **VEY**: Ah, a visitor. Is it the launch already? Tell the President the world ship has not cleared the pickets. No. No, that was. What year is it? Never mind. He said: nobody leaves. A beautiful order. Short. So I gave it to the guns. The habitat ring first, he said, the cameras like the ring. Do you know, they cheered? On Earth. The Memorial Games, they called it. I got a medal. I have it somewhere. I have had it in forty bodies.
 

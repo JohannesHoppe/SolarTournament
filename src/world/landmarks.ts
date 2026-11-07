@@ -24,10 +24,11 @@ import { ganymede } from './yards';
 import { hazeBackdrop, hazeDeck } from './kraken';
 import { SATURN_AT, SATURN_SIZE } from './titan';
 import { plumeDensity, SATURN_AT as ENCELADUS_SATURN_AT, SATURN_SIZE as ENCELADUS_SATURN_SIZE } from './enceladus';
-import { enceladus, PLUME_GRAINS, plumes } from './plumes';
+import { enceladus, ENCELADUS_JETS, GRAINS as JET_GRAINS, jets, type Jets } from './plumes';
 import { RING_TILT as IAPETUS_RING_TILT, SATURN_AT as IAPETUS_SATURN_AT, SATURN_SIZE as IAPETUS_SATURN_SIZE } from './iapetus';
 import { iapetus } from './twofaces';
 import { miranda } from './verona';
+import { triton, TRITON_JETS } from './geysers';
 /** How far Saturn's ring is tilted off the line of sight from Titan (rad, 2°): nearly edge on, a thin line. */
 const SATURN_RING_TILT = 0.035;
 import { JUPITER_AT as GANYMEDE_JUPITER_AT, JUPITER_SIZE as GANYMEDE_JUPITER_SIZE } from './ganymede';
@@ -859,6 +860,7 @@ export class Landmarks {
     this.scenes.set('titan', this.titan());
     this.scenes.set('enceladus', this.enceladus());
     this.scenes.set('miranda', miranda());
+    this.scenes.set('triton', triton().add(this.jets(TRITON_JETS)));
     this.scenes.set('iapetus', iapetus().add(...this.saturnEdgeOn(IAPETUS_SATURN_AT, IAPETUS_SATURN_SIZE, IAPETUS_RING_TILT)));
     for (const scene of this.scenes.values()) {
       scene.visible = false;
@@ -928,7 +930,7 @@ export class Landmarks {
     this.grains.geometry.setDrawRange(0, count);
     this.streaks.geometry.setDrawRange(0, count * 2);
     this.wreck.setParticles(share);
-    this.plumes.geometry.setDrawRange(0, Math.round(PLUME_GRAINS * share));
+    for (const set of this.jetSets) set.geometry.setDrawRange(0, Math.round(JET_GRAINS * share));
   }
 
   /** The Solar Wall beyond its stretch by the field, and its searchlights' cones (see world/solarwall). */
@@ -1023,14 +1025,20 @@ export class Landmarks {
 
   /** The Plumes at Enceladus (see world/enceladus): the polar plain beyond the field, the plumes over the vents, and Saturn filling a quarter of the sky (see saturnEdgeOn). */
   private enceladus(): THREE.Group {
-    this.plumes = plumes(this.light);
-    this.timed.push(this.plumes.material);
-    this.sized.push(this.plumes.material);
-    return enceladus().add(this.plumes, ...this.saturnEdgeOn(ENCELADUS_SATURN_AT, ENCELADUS_SATURN_SIZE));
+    return enceladus().add(this.jets(ENCELADUS_JETS), ...this.saturnEdgeOn(ENCELADUS_SATURN_AT, ENCELADUS_SATURN_SIZE));
   }
 
-  /** The grains of Enceladus's plumes (see world/plumes). */
-  private plumes!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** A place's jets of grains (see world/plumes), timed and sized with the others, their share drawn by the picture's quality. */
+  private jets(spec: Jets): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {
+    const points = jets(this.light, spec);
+    this.timed.push(points.material);
+    this.sized.push(points.material);
+    this.jetSets.push(points);
+    return points;
+  }
+
+  /** Every place's jets (see jets). */
+  private readonly jetSets: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>[] = [];
 
   /**
    * Saturn seen from one of its moons at `at`, `size` in radius, from its real map, its ring opened
