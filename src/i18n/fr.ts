@@ -2023,4 +2023,5 @@ export const FR: Catalog = {
   "Welcome to the Games, darling. You were made for this.": "Bienvenue aux Jeux, mon chéri. Tu es fait pour ça.",
   "Nicole’s voice: through the old board’s crackle": "La voix de Nicole : à travers le grésillement de l’ancienne carte",
   "Nicole’s voice: her own, clean": "La voix de Nicole : la sienne, claire",
+  "NO CLONE": "PLUS DE CLONE",
 };

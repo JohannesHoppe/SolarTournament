@@ -2664,7 +2664,8 @@ body.touch #touch {
 
 /* an edited hangar or flight school (see game/seal): named across the whole screen, over menu and round, until it is put back; it takes no input */
 #tampered,
-#link-lost {
+#link-lost,
+#no-clone {
   position: fixed;
   inset: 0;
   z-index: 3000;
@@ -2695,7 +2696,14 @@ body.touch #touch {
   background: #eef1f4;
 }
 
-#link-lost strong {
+/* the last clone dead, no printer to wake the next (see Drill.lastClone): black, no ad */
+#no-clone {
+  z-index: 2999;
+  background: #000;
+}
+
+#link-lost strong,
+#no-clone strong {
   max-width: 100%;
   font-family: var(--font-display);
   font-size: clamp(1.5rem, 6vw, 6rem);
@@ -2703,6 +2711,10 @@ body.touch #touch {
   letter-spacing: 0.12em;
   text-align: center;
   color: #5a6470;
+}
+
+#no-clone strong {
+  color: #2a2e34;
 }
 
 #tampered p {

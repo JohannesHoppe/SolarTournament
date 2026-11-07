@@ -2098,4 +2098,5 @@ export const ES: Catalog = {
   "Welcome to the Games, darling. You were made for this.": "Bienvenido a los Juegos, cariño. Naciste para esto.",
   "Nicole’s voice: through the old board’s crackle": "La voz de Nicole: con el chisporroteo de la placa vieja",
   "Nicole’s voice: her own, clean": "La voz de Nicole: la suya, limpia",
+  "NO CLONE": "SIN CLON",
 };

@@ -242,6 +242,8 @@ export interface Drill {
   keepsDrift?(ctx: SchoolContext, attempt: Attempt): boolean;
   /** The drill does not apply to the Host's device: it is passed over without a word. */
   skip?(ctx: SchoolContext): boolean;
+  /** No printer for the next clone (the Ninth's Orbit): the clone's death goes black for a few seconds, no clone's link booting, before the attempt starts over. */
+  lastClone?: boolean;
   /** The arena the drill is flown in; without one, the school's home (the default arena). */
   arena?: ArenaId;
   /** The line is only shown, never said (a screen's message: the flight computer crashing). */
@@ -2130,6 +2132,11 @@ export class FlightSchool {
   /** The arena the current drill is flown in (see Drill.arena); null for the school's home. */
   get arena(): ArenaId | null {
     return this.drills[Math.min(this.index, this.drills.length - 1)].arena ?? null;
+  }
+
+  /** Whether the current drill has no printer for the next clone (see Drill.lastClone). */
+  get lastClone(): boolean {
+    return !!this.drills[Math.min(this.index, this.drills.length - 1)].lastClone;
   }
 
   /** Group of the drills' props; the game adds it to the scene. */

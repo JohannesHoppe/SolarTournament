@@ -1013,3 +1013,18 @@ test('the job board offers Nicole’s voice clean or with the old board’s crac
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).crackle)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('Orbit at the Ninth: Patience’s printer gone, the clone’s death goes black, no ad, and the attempt starts over', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath'));
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.attempt?.live && window.game.school?.lastClone, null, { timeout: 180_000 });
+  await page.evaluate(() => {
+    window.game.me.alive = false;
+    window.game.me.respawnAt = window.game.time;
+  });
+  await expect(page.locator('#no-clone')).toBeVisible();
+  await expect(page.locator('#sponsor')).toBeHidden();
+  await page.waitForFunction(() => window.game.me?.alive, null, { timeout: 30_000 });
+  await expect(page.locator('#no-clone')).toBeHidden();
+  expect(errors).toEqual([]);
+});

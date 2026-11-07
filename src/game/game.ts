@@ -715,6 +715,8 @@ const JUMPER_NOTICE = 16000;
 const JUMPER_TEAM = 1;
 /** The side the Host and a mission's wingman fly on (see SchoolContext.wingman), apart from the raiders'. */
 const ALLY_TEAM = 2;
+/** How long the screen stays black when the last clone dies, with no printer for the next (see Drill.lastClone; s). */
+const NO_CLONE_SECONDS = 4;
 /** A mission's race rivals (see Game.racers): their names, the Rockborn kids', and how far apart they start beside the Host (units, 60 m). */
 const RIVAL_NAMES = ['Nix', 'Bean', 'Spark'];
 const RIVAL_GAP = 1200;
@@ -986,6 +988,8 @@ export class Game implements OnlineGame {
   private mission: Mission | null = null;
   /** The mission whose trial round is being flown (see Mission.trial), its drills done. */
   private trialOf: Mission | null = null;
+  /** The last clone dead and the screen black (see Drill.lastClone). */
+  private noClone = false;
   /** The mission flown is one done before, flown again for nothing: it keeps no drill reached and runs on into no other. */
   private flyingAgain = false;
   /** The campaign's job board is open (see showBoard). */
@@ -2961,6 +2965,8 @@ export class Game implements OnlineGame {
   private startRound(mode: 'solo' | 'school' | 'online') {
     if (this.input.touchActive) this.enterFullscreen();
     this.showLinkLost(false);
+    $('no-clone').hidden = true;
+    this.noClone = false;
     // cleaned as every peer cleans it, so no callsign leaves nothing visible
     const callsign = cleanName($<HTMLInputElement>('callsign').value) || 'Host';
     $<HTMLInputElement>('callsign').value = callsign;
@@ -4119,6 +4125,17 @@ export class Game implements OnlineGame {
       if (!ship.alive) {
         // a mission's claim-jumper shot down stays down
         if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || ship === this.wingman?.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
+        // the last clone, no printer: black first, then the attempt again (see Drill.lastClone)
+        if (ship === me && this.school?.lastClone && !this.noClone) {
+          this.noClone = true;
+          ship.respawnAt = now + NO_CLONE_SECONDS;
+          $('no-clone').hidden = false;
+          continue;
+        }
+        if (ship === me && this.noClone) {
+          this.noClone = false;
+          $('no-clone').hidden = true;
+        }
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
         else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();

@@ -1321,8 +1321,8 @@ const firstDeath: Drill = {
   mark: (ctx) => t('Perihelion · hull {hull} %', { hull: Math.round(ctx.leaderHull) }),
 };
 
-/** Orbit (18.5): the Magpie flown into a stable orbit about the hole inside the disk's glare, as the flight school's orbit drill asks. */
-const lastOrbit: Drill = { ...DRILL.orbit, line: CAMPAIGN.lastOrbit, praise: undefined };
+/** Orbit (18.5): the Magpie flown into a stable orbit about the hole inside the disk's glare, as the flight school's orbit drill asks; Patience's printer is gone, so a death goes black first (see Drill.lastClone). */
+const lastOrbit: Drill = { ...DRILL.orbit, line: CAMPAIGN.lastOrbit, praise: undefined, lastClone: true };
 
 /**
  * The Parade (19.1): ten of the Ministry's rings in a line over the Ballroom's dome, PARADE_OVER
