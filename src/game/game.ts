@@ -828,6 +828,8 @@ const crossingPoint = new THREE.Vector3();
 const crossingAcross = new THREE.Vector3();
 
 /** The turn of a ship at `eye` that looks at `target`, `up` as up; a fresh quaternion for a new clone. */
+/** Where a flock's ship looks as it is set out (see SchoolContext.flock). */
+const flockAhead = new THREE.Vector3();
 const lookingAt = (eye: THREE.Vector3, target: THREE.Vector3, up: THREE.Vector3) => new THREE.Quaternion().setFromRotationMatrix(facing.lookAt(eye, target, up));
 
 /** 1st, 2nd, 3rd, 4th … */
@@ -1348,6 +1350,8 @@ export class Game implements OnlineGame {
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
   private sparring: { bot: Bot; armed: boolean } | null = null;
+  /** A drill's flock (see SchoolContext.flock): ships held where the drill puts them, flying no will of their own (the Parade's other new Hosts' clones). */
+  private flockShips: Ship[] = [];
   /** A mission's wingman (see SchoolContext.wingman): a bot on the Host's side, ALLY_TEAM, no clone after its death. */
   private wingman: Bot | null = null;
   /**
@@ -3011,6 +3015,7 @@ export class Game implements OnlineGame {
     this.streaks.reset();
     this.me = null;
     this.drone = null;
+    this.flockShips = [];
     this.watchedShip = null;
     this.sparring = null;
     this.wingman = null;
@@ -5919,6 +5924,21 @@ export class Game implements OnlineGame {
       removeWingman: () => this.removeWingman(),
       get spare() {
         return spareSkills(game.campaign.habits);
+      },
+      flock: (positions, names, velocity) => {
+        while (this.flockShips.length > positions.length) this.removeShip(this.flockShips.pop()!);
+        positions.forEach((at, i) => {
+          let ship = this.flockShips[i];
+          if (!ship) {
+            ship = this.addShip(`flock${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
+            ship.spawn(at, lookingAt(at, flockAhead.copy(at).add(velocity), upward.set(0, 1, 0)), this.time);
+            // in formation, never a target
+            ship.protectedUntil = Infinity;
+            this.flockShips.push(ship);
+          }
+          ship.flight.position.copy(at);
+          ship.flight.velocity.copy(velocity);
+        });
       },
       goldTime: () => {
         this.goldRun = true;

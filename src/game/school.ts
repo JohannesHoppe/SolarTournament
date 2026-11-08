@@ -106,6 +106,8 @@ export interface SchoolContext {
   removeWingman(): void;
   /** Spare's skills: the Host's own habits in the campaign's fights up to Io (see campaign/campaign, spareSkills). */
   readonly spare: Skills;
+  /** A flock of ships held at `positions` this frame, flying at `velocity`, named from `names` (the Parade's other new Hosts' clones); none for an empty list. */
+  flock(positions: readonly THREE.Vector3[], names: readonly string[], velocity: THREE.Vector3): void;
   /** The running time trial was flown within its gold time (see Drill.gold): the job's gold is won once the mission is done. */
   goldTime(): void;
   /** A piece of a comet's shower strikes a hull at `at`, flying along `direction` (the own unless `ship` names another, a drill's Scout One): as hard as a piece of the Games' shower (see Game.cometStrike). */

@@ -215,7 +215,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 19.1 | The Parade | formation | Fly with the other new Hosts' clones through ten of the Ministry's rings over the Ballroom's dome, Earth hanging above, staying within 60 m of the Magpie's slot marker. (built: the slot moving along the rings; the other new Hosts' clones still to come) | · 500 | Rings; a moving marker |
+| 19.1 | The Parade | formation | Fly with the other new Hosts' clones through ten of the Ministry's rings over the Ballroom's dome, Earth hanging above, staying within 60 m of the Magpie's slot marker. (built: the slot moving along the rings, and the other new Hosts' clones, Kestrel, Halcyon, Vireo and Jackdaw, flying in a diamond 120 m round it) | · 500 | Rings; a moving marker |
 | 19.2 | Certification | story | The President in person; the firmware. (built: in person, on the Ballroom's floor before his dais, Quill a step below him; then in the cockpit Nicole's last words in her own voice, and the Ministry's) | — | A scene |
 | 19.3 | Your First Round | Games | A round of the Games in any arena and mode, in the Magpie. (built: a deathmatch in the Rings, as the Ring Trials are flown) | the Magpie unlocked | The tournament |
 

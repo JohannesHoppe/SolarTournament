@@ -1586,6 +1586,19 @@ const PARADE_WAY = point(-1, 0, 0);
 export const PARADE_COURSE = Array.from({ length: PARADE_RINGS }, (_, k) => new THREE.Vector3().lerpVectors(PARADE_FROM, PARADE_TO, (k + 0.5) / PARADE_RINGS));
 const slotNow = new THREE.Vector3();
 let slotMark: THREE.Mesh | null = null;
+/** The other new Hosts' clones in the parade, in a diamond round the Magpie's slot, FLOCK_SPACING off it (units, 120 m); their callsigns (never translated). */
+const FLOCK_SPACING = 2400;
+const FLOCK_OFFSETS = [point(0, FLOCK_SPACING, 0), point(0, -FLOCK_SPACING, 0), point(0, 0, FLOCK_SPACING), point(0, 0, -FLOCK_SPACING)];
+const FLOCK_NAMES = ['Kestrel', 'Halcyon', 'Vireo', 'Jackdaw'];
+const flockAt = FLOCK_OFFSETS.map(() => new THREE.Vector3());
+const flockVelocity = new THREE.Vector3();
+
+/** The flock where the slot is: each clone at its place round it, flying the parade's way at its speed, or at rest at its end. */
+function flyFlock(ctx: SchoolContext) {
+  FLOCK_OFFSETS.forEach((offset, i) => flockAt[i].copy(slotNow).add(offset));
+  flockVelocity.copy(PARADE_WAY).multiplyScalar(slotNow.distanceTo(PARADE_TO) < 1 ? 0 : PARADE_SPEED);
+  ctx.flock(flockAt, FLOCK_NAMES, flockVelocity);
+}
 
 /** Where the slot is `seconds` after the parade set out, stopped at the line's end. */
 export function slotAt(seconds: number, out: THREE.Vector3): THREE.Vector3 {
@@ -1603,16 +1616,20 @@ const parade: Drill = {
     for (const ring of PARADE_COURSE) markers.ring(ring, PARADE_WAY);
     slotMark = markers.zone(slotAt(0, slotNow), SLOT_REACH);
     ctx.me.flight.position.copy(PARADE_FROM);
+    slotAt(0, slotNow);
+    flyFlock(ctx);
     // a.held: the seconds out of the slot in a row
     a.held = 0;
   },
   done(ctx, a) {
     slotAt(a.seconds, slotNow);
     slotMark?.position.copy(slotNow);
+    flyFlock(ctx);
     a.held = ctx.me.flight.position.distanceTo(slotNow) > SLOT_REACH ? a.held + ctx.dt : 0;
     return slotNow.distanceTo(PARADE_TO) < 1 && ctx.me.flight.position.distanceTo(slotNow) <= SLOT_REACH;
   },
   fail: (_, a) => (a.held >= SLOT_GRACE ? CAMPAIGN.paradeLost : null),
+  leave: (ctx) => ctx.flock([], FLOCK_NAMES, flockVelocity),
   waypoint: () => slotNow,
   mark: (ctx) => t('Slot · {meters} m', { meters: Math.round(ctx.me.flight.position.distanceTo(slotNow) * 0.05) }),
 };

@@ -1077,10 +1077,12 @@ test('First Death: Perihelion and four Navy fighters, Spare on the Host’s side
   expect(errors).toEqual([]);
 });
 
-test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over the dome; kept to it, the parade is flown', async ({ page }) => {
+test('chapter 19 at the Ballroom: the Parade’s slot moves along ten rings over the dome, the other new Hosts’ clones round it; kept to it, the parade is flown', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, ninthHull('theDrain', 'scoutOne', 'feedersComet', 'firstDeath', 'lastOrbit', 'theDeal'));
   await page.waitForFunction(() => window.game.venue?.id === 'ballroom' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  // the other new Hosts' clones fly round the Magpie's slot
+  expect(await page.evaluate(() => window.game.flockShips.map((ship: { name: string }) => ship.name))).toEqual(['Kestrel', 'Halcyon', 'Vireo', 'Jackdaw']);
   await page.evaluate(
     async ([path]) => {
       const { slotAt } = (await import(path)) as typeof import('../src/campaign/missions');
