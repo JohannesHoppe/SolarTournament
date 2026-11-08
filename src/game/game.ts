@@ -4302,7 +4302,9 @@ export class Game implements OnlineGame {
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
       // in the clamps of a round's opening the ship is held: no push, no pull, no shot
       if (clamped) ship.flight.velocity.set(0, 0, 0);
-      const controls = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
+      const steered = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
+      // a raider who spares clones fires only into a drive: with the armor on his nose he holds his fire (see jumpers)
+      const controls = steered.fire && this.sparesClones(ship) && !this.onDrive(ship) ? { ...steered, fire: false } : steered;
       this.outside(ship.flight, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
@@ -7306,6 +7308,18 @@ export class Game implements OnlineGame {
    * either side), a torpedo, the battleship, a wreck or an asteroid, which takes one hit, or
    * whatever else is solid (see solidRay); each is looked for only before the nearest found so far.
    */
+  /** Whether a ship is a raider who spares clones (see jumpers, The Quiet Man). */
+  private sparesClones(ship: Ship): boolean {
+    return !!this.jumpers?.spares && this.jumpers.bots.some((bot) => bot.ship === ship);
+  }
+
+  /** Whether the first hull on a ship's nose within the laser's reach shows it its drive. */
+  private onDrive(shooter: Ship): boolean {
+    const direction = shooter.flight.forward(forward);
+    const hull = firstHull(this.ships, shooter, shooter.nose(muzzle), direction, LASER_RANGE * shooter.perks.laserReach);
+    return !!hull?.ship && hull.ship.tailToward(direction);
+  }
+
   private fireLaser(shooter: Ship) {
     shooter.loudAt = this.time;
     // shooting ends the own spawn protection: nobody fires from behind it
@@ -7509,7 +7523,7 @@ export class Game implements OnlineGame {
       return;
     }
     // a raider who spares clones (see jumpers) only scorches a hull he has worn down
-    if (shooter && ship.hull <= SPARED_HULL && this.jumpers?.spares && this.jumpers.bots.some((bot) => bot.ship === shooter)) {
+    if (shooter && ship.hull <= SPARED_HULL && this.sparesClones(shooter)) {
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter.color, 30);
       return;
     }

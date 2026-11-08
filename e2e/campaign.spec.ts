@@ -653,6 +653,20 @@ for (const [outcome, ratings] of [['shot down', 250], ['let go', 100]] as const)
     const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae'));
     await page.waitForFunction(() => window.game.venue?.id === 'europa' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 1, null, { timeout: 180_000 });
     const before: number = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).ratings);
+    // he fires only into a drive: the hull 300 m before his nose, its armor towards him and then its drive
+    const onDrive = await page.evaluate(() => {
+      const game = window.game;
+      const him = game.jumpers.bots[0].ship;
+      const flight = game.me.flight;
+      const ahead = him.flight.forward(flight.position.clone());
+      flight.position.copy(him.flight.position).addScaledVector(ahead, 6000);
+      const turn = (toward: { x: number; y: number; z: number }) => flight.orientation.premultiply(flight.orientation.clone().setFromUnitVectors(flight.forward(ahead.clone()), toward as never));
+      turn(ahead.clone().negate());
+      const armor = game.onDrive(him);
+      turn(ahead.clone());
+      return [game.sparesClones(him), armor, game.onDrive(him)];
+    });
+    expect(onDrive).toEqual([true, false, true]);
     // the clone worn down to where he spares it: he turns away
     await page.evaluate(() => (window.game.me.hull = 20));
     await page.waitForFunction(() => window.game.school.attempt.count === 1, null, { timeout: 30_000 });
