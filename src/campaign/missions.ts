@@ -595,9 +595,13 @@ export const PEAK_COURSE = Array.from({ length: PEAK_RINGS }, (_, k) => {
 /**
  * A race of a mission against rivals (see Game.racers): `laps` laps through `marks` (each facing
  * along the loop, from the mark before it to the mark after it), pipes of PIPE_BORE standing on
- * `ground` (a height by x) or rings of the Games of RING_RADIUS; home among the first `podium`
- * wins, later the race is flown again (`lost` said).
+ * `ground` (a height by x), rings of the Games of RING_RADIUS, or with `buoys` a pair of beacon
+ * buoys a mark (the opening between them as wide as a ring's, BUOY_GATE of RING_RADIUS off its
+ * middle on either side, level); home among the first `podium` wins, later the race is flown
+ * again (`lost` said).
  */
+const BUOY_GATE = 0.9;
+const buoyAcross = new THREE.Vector3();
 interface RaceSpec {
   line: string;
   lost: string;
@@ -605,6 +609,7 @@ interface RaceSpec {
   marks: readonly THREE.Vector3[];
   laps: number;
   pipes: { ground: (x: number) => number } | null;
+  buoys?: boolean;
   rivals: { names: readonly string[]; skills: readonly number[] };
   podium: number;
   /** What a mark is called under the waypoint, with the lap: a text marked with msg(). */
@@ -625,7 +630,14 @@ function race(spec: RaceSpec): Drill {
       stop(ctx);
       a.points = spec.marks.map((mark) => clear(ctx, mark.clone(), bore * 2));
       a.normals = a.points.map((_, i) => a.points[(i + 1) % count].clone().sub(a.points[(i + count - 1) % count]).normalize());
-      a.points.forEach((mark, i) => (spec.pipes ? markers.pipe(mark, a.normals[i], spec.pipes.ground(mark.x)) : markers.ring(mark, a.normals[i])));
+      a.points.forEach((mark, i) => {
+        if (spec.pipes) markers.pipe(mark, a.normals[i], spec.pipes.ground(mark.x));
+        else if (spec.buoys) {
+          buoyAcross.set(-a.normals[i].z, 0, a.normals[i].x).normalize().multiplyScalar(RING_RADIUS * BUOY_GATE);
+          markers.buoy(mark.clone().add(buoyAcross));
+          markers.buoy(mark.clone().sub(buoyAcross));
+        } else markers.ring(mark, a.normals[i]);
+      });
       a.pipes = !!spec.pipes;
       a.next = 0;
       a.side = NaN;
@@ -730,9 +742,11 @@ const fluxRace = race({
   marks: FLUX_COURSE,
   laps: FLUX_LAPS,
   pipes: null,
+  // the sulfur miners' own race: their beacon buoys, not the Ministry's rings
+  buoys: true,
   rivals: { names: ['Perihelion', 'Brimstone', 'Cinder', 'Kade', 'Moth'], skills: [0.65, 0.4, 0.35, 0.35, 0.3] },
   podium: FLUX_PODIUM,
-  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+  mark: msg('Lap {lap}/{laps} · beacons {n}/{total}'),
 });
 /** The race, the link crackling by the tube (see fluxStatic). */
 const fluxTubeRace: Drill = {

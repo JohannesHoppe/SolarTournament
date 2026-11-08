@@ -692,7 +692,7 @@ for (const [outcome, ratings] of [['shot down', 250], ['let go', 100]] as const)
   });
 }
 
-test('chapter 7 opens on Io: the Flux Tube Race lines up five rivals, Perihelion among them, at eight rings past the flux tube', async ({ page }) => {
+test('chapter 7 opens on Io: the Flux Tube Race lines up five rivals, Perihelion among them, at eight pairs of the miners’ beacon buoys past the flux tube', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating'));
   await linedUp(page, 'io', 1);

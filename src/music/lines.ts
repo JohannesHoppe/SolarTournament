@@ -758,7 +758,7 @@ export const CAMPAIGN = {
   blackoutBlank: 'My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.',
   tube: 'A torpedo tube, Host, and one torpedo in it each time a clone wakes. It homes on a hull and goes off at it. Our laser can shoot one down, and so can theirs.',
   driveOne: 'The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.',
-  fluxTubeRace: 'Eight rings, two laps, and one side of the loop runs past the flux tube. Near it the link crackles, Host: the picture breaks up, as on a hit. Fly through it anyway. Home in the first two.',
+  fluxTubeRace: 'Eight pairs of the miners’ beacon buoys, two laps, and one side of the loop runs past the flux tube. Near it the link crackles, Host: the picture breaks up, as on a hit. Fly through it anyway. Home in the first two.',
   fluxTubeRaceLost: 'Two of them were home before us. The miners race again.',
   fluxTubeRaceDone: 'In the first two, through the static. Perihelion was not pleased, Host. He looked at us the whole last lap.',
   quietMan: 'There he is. They say he has never finished a clone, Host. They say he does not need to.',

@@ -1,17 +1,43 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
-import { moonBeyond } from './horizon';
+import { behindAll, moonBeyond } from './horizon';
 import { pixelTexture } from '../view/textures';
 import { Noise } from './noise';
-import { FLUX_AT, FLUX_RADIUS, GROUND_HALF, groundRelief, LAND, PATERA, PATERA_RADIUS, PIT_FLOOR, surfaceHeight } from './io';
+import { FLUX_AT, FLUX_RADIUS, GROUND_HALF, groundRelief, JUPITER_AT, LAND, PATERA, PATERA_RADIUS, PIT_FLOOR, surfaceHeight } from './io';
 
 /**
  * How Flux on Io looks (where things are in world/io): the ground of the field as the piece it
  * collides as (its relief, see Relief), the crater floor's photograph tinted to Io's sulfur
  * yellow; the lava lake glowing on the patera's floor; the flux tube, a column of faint violet
- * light up into the sky; and the plains beyond, in patches of yellow, orange, white and black,
- * drawn behind everything.
+ * light up into the sky; the plains beyond, in patches of yellow, orange, white and black, and
+ * the plasma torus, Io's own sulfur ionized and spread round Jupiter along Io's orbit, which Io
+ * flies inside: a faint violet band across the sky through Jupiter, drawn behind everything.
  */
+
+/** The torus's band: a cylinder TORUS_REACH round the field, TORUS_WIDTH of it tall, its middle brightest; violet, faint (TORUS_GLOW), added to the sky. */
+const TORUS_REACH = 230000;
+const TORUS_WIDTH = 0.3;
+const TORUS_GLOW = 0.22;
+const TORUS_COLOR = 0xb070ff;
+
+/** The plasma torus as Io sees it from inside: a band across the sky in the plane of Io's orbit, through Jupiter (see world/io, JUPITER_AT). */
+function plasmaTorus(): THREE.Mesh {
+  const toward = JUPITER_AT.clone().normalize();
+  const along = new THREE.Vector3().crossVectors(toward, new THREE.Vector3(0, 1, 0)).normalize();
+  const axis = new THREE.Vector3().crossVectors(toward, along).normalize();
+  // the cylinder's own axis (y) turned onto the orbit's pole, without trigonometry
+  const turn = new THREE.Matrix4().makeBasis(along, axis, new THREE.Vector3().crossVectors(along, axis));
+  const fade = pixelTexture(64, (_, y, rgb) => {
+    const middle = 1 - Math.abs((y / 63) * 2 - 1);
+    rgb[0] = rgb[1] = rgb[2] = middle * middle;
+  });
+  const band = new THREE.Mesh(
+    new THREE.CylinderGeometry(TORUS_REACH, TORUS_REACH, TORUS_REACH * TORUS_WIDTH, 128, 1, true).applyMatrix4(turn),
+    behindAll(new THREE.MeshBasicMaterial({ color: TORUS_COLOR, map: fade, transparent: true, opacity: TORUS_GLOW, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })),
+  );
+  band.userData.shadowless = true;
+  return band;
+}
 
 /** Io's sulfur: pale yellow, lit faintly by Jupiter's glow and the lava's. */
 const IO_TINT = 0xf2e2a0;
@@ -82,5 +108,5 @@ export function io(): THREE.Group {
     const flow = flows.fractal(x / 120000, 0.6, z / 20000, 3);
     if (flow > 0.35) color.lerp(BASALT, Math.min(1, (flow - 0.35) * 5));
   };
-  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, paint, IO_GLOW).add(fluxScenery());
+  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, paint, IO_GLOW).add(fluxScenery(), plasmaTorus());
 }
