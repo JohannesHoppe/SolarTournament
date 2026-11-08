@@ -40,6 +40,11 @@ describe('the scenes in person', () => {
     expectPlan('galley', (point) => Math.abs(point.x - GALLEY.x) < 90 && Math.abs(point.z - GALLEY.z) < 60, 'hedda');
   });
 
+  it('Bellamy Crisp’s visit: in Patience’s galley, Crisp at the counter, the clone looking at Hedda', () => {
+    expectPlan('sponsor', (point) => Math.abs(point.x - GALLEY.x) < 90 && Math.abs(point.z - GALLEY.z) < 60, 'hedda');
+    expect(planOf('sponsor').people.map((person) => person.who)).toEqual(['hedda', 'crisp']);
+  });
+
   it('the Ballroom: everyone under the dome, the President and Quill a few meters off and facing the clone, the clone looking up at the President', () => {
     expectPlan('ballroom', (point) => hypot(point.x, point.z) < DOME_RADIUS, 'president');
     // the President stands on his dais, above the clone's floor

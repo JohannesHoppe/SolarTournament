@@ -156,7 +156,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 8.1 | Hollow Jack | bounty | Hollow Jack (skill 0.7) and three of the Loose (skill 0.45) among Ganymede's ice, fighting every ship they see. Kill Jack; his ratings lift the Host to Sponsored. (built: Jack with a Games bot's gear, hooking and shoving as their bots do, and the announcer calling the bounty) | ☉ 6,000 · 600 | Raiders as guards; a named target |
 | 8.2 | The Harpoon | salvage | Fly through the piece of Jack's wreck that holds his harpoon, within 50 m, before it drifts out of the arena; Pim puts it on a tug's winch (☉ 1,500): the hook. (built) | the hook | A drifting prop |
 | 8.3 | Swing Shift | skill | In a tug yard, hook three blocks of ice in turn and let go faster than 65 m/s each time. (built) | ☉ 1,000 · 100 | School: the hook drill |
-| 8.4 | Sponsor Night | story | Bellamy Crisp of Victory Cola signs the Host, now ranked Sponsored. (built, over the comm; still to come: in person) | — | A scene |
+| 8.4 | Sponsor Night | story | Bellamy Crisp of Victory Cola signs the Host, now ranked Sponsored. (built, in person: Crisp in Patience's galley, Hedda at the table) | — | A scene |
 
 ### Act III: Ratings
 

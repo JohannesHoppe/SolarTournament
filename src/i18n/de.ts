@@ -2122,6 +2122,7 @@ export const DE: Catalog = {
   "A mining run, Host. Break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break.": "Eine Bergbaufahrt, Host. Brich Fels und flieg das Erz ein, bevor der Lastkahn des Käufers ablegt. Die Uhr läuft ab dem ersten Bruch.",
   "The barge left without our ore. Again, Host.": "Der Lastkahn ist ohne unser Erz abgelegt. Noch einmal, Host.",
   "+{ratings} ratings": "+{ratings} Quotenpunkte",
+  "Patience holds over the tug yards. A shuttle in Victory Cola’s red has docked; your clone climbs up to the galley, where its man is waiting.": "Patience hält über den Schlepperwerften. Ein Shuttle in Victory Colas Rot hat angedockt; dein Klon klettert hinauf in die Kombüse, wo dessen Mann wartet.",
   "Courier Run": "Kurierfahrt",
   "At {place}: six beacons in order against the clock, whenever you like.": "{place}: sechs Baken der Reihe nach gegen die Uhr, wann immer du willst.",
   "At {place}.": "{place}.",

@@ -8,11 +8,11 @@ Not part of a build: run only when a person changes. It needs Blender (5.2 LTS) 
 |---|---|
 | `people.py` | Builds each person in MPFB from a phenotype (gender, age, weight, muscle, …), a few targets (Rask's fat face and double chin, Hedda's age), hair, eyebrows and clothes; saves `<who>.blend` and a picture of the bust for review; every person, or only those named after the folder |
 | `bust.py` | Cuts the bust out of a figure (head and neck of the skin, the clothes and hair down to the chest, the arms away), thins it out to a budget of triangles, turns it to the game's axes and writes `public/assets/people/<who>.bin` (see `bustParts` in `src/view/products.ts`) |
-| `figure.py` | Poses a figure of `people.py` (the upper arms down at the sides, or Rask's folded on his belly), bakes the pose into its meshes, thins them out, gives each part one plain texture (the skin at 1,024 px, clothes at 512, small parts at 256; JPEG but for what is cut out by its alpha), lays a person's own colors over a texture where MakeHuman has none (`TINTS`: the President's sprayed-on tan and his hair dyed gold) and writes `public/assets/people/<who>.glb` for the scenes in person |
+| `figure.py` | Poses a figure of `people.py` (the upper arms down at the sides, or Rask's folded on his belly), bakes the pose into its meshes, thins them out, gives each part one plain texture (the skin at 1,024 px, clothes at 512, small parts at 256; JPEG but for what is cut out by its alpha), lays a person's own colors over a texture where MakeHuman has none (`TINTS`: the President's sprayed-on tan and his hair dyed gold, Bellamy Crisp's suit in his cola's red) and writes `public/assets/people/<who>.glb` for the scenes in person |
 
 ```
 B=/Applications/Blender.app/Contents/MacOS/Blender
 $B -b --python tools/people/people.py -- /tmp/people
 for who in rask pim hedda saw tally navy jack crisp spare quill vey perihelion president; do $B -b /tmp/people/$who.blend --python tools/people/bust.py -- public/assets/people/$who.bin 3600; done
-for who in rask pim hedda quill spare president; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
+for who in rask pim hedda quill spare president crisp; do $B -b /tmp/people/$who.blend --python tools/people/figure.py -- $who public/assets/people/$who.glb 24000; done
 ```

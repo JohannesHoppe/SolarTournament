@@ -3153,7 +3153,17 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'hollowJack', name: msg('Hollow Jack'), drills: [said(HEDDA.ganymede, 'ganymede'), said(JACK.hello, 'ganymede'), hollowJack, said(JACK.hit, 'ganymede'), said(JACK.last, 'ganymede'), said(CAMPAIGN.jackNoLink, 'ganymede'), said(CAMPAIGN.jackGone, 'ganymede')], pay: 6000, ratings: 600 },
   { id: 'harpoon', name: msg('The Harpoon'), drills: [harpoon, said(PIM.hook, 'ganymede'), said(CAMPAIGN.hook, 'ganymede')], pay: 0, fit: fitHook },
   { id: 'swingShift', name: msg('Swing Shift'), drills: [swingShift, said(CAMPAIGN.swingShiftDone, 'ganymede')], pay: 1000, ratings: 100 },
-  { id: 'sponsorNight', name: msg('Sponsor Night'), drills: [said(CRISP.hello, 'ganymede'), said(CRISP.deal, 'ganymede'), said(CAMPAIGN.sponsored, 'ganymede')], pay: 0 },
+  {
+    id: 'sponsorNight',
+    name: msg('Sponsor Night'),
+    drills: [
+      climbOut('sponsor', msg('Patience holds over the tug yards. A shuttle in Victory Cola’s red has docked; your clone climbs up to the galley, where its man is waiting.'), 'ganymede'),
+      inRoom(CRISP.hello, 'ganymede'),
+      inRoom(CRISP.deal, 'ganymede'),
+      climbIn(CAMPAIGN.sponsored, 'ganymede'),
+    ],
+    pay: 0,
+  },
   // chapter 9, the Victory Cola Circuit over Kraken Mare on Titan, in the haze
   { id: 'qualifyingHeat', name: msg('Qualifying Heat'), drills: [said(HEDDA.titan, 'titan'), announcing(qualifyingHeat, ANNOUNCER_TITAN), said(CAMPAIGN.qualifyingHeatDone, 'titan')], pay: 4000, ratings: 400, start: HEAT_START },
   { id: 'pitFight', name: msg('Pit Fight'), drills: [said(CAMPAIGN.pitFightIntro, 'titan'), pitFight, said(CAMPAIGN.pitFightDone, 'titan')], pay: 4000, ratings: 500 },

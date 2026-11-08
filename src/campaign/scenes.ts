@@ -13,10 +13,10 @@ import type { Mood } from '../music/radio';
  * into one (see campaign/missions, `climbOut`) and its lines are then said in the room, not over
  * the comm.
  */
-export type SceneName = 'office' | 'galley' | 'visit' | 'file' | 'ballroom';
+export type SceneName = 'office' | 'galley' | 'visit' | 'sponsor' | 'file' | 'ballroom';
 
-/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour; Quill's visit to it and Spare's are quiet; the Ballroom has its ball. */
-export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, file: null, ballroom: 'bright' };
+/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour, and Crisp brings his own; Quill's visit to it and Spare's are quiet; the Ballroom has its ball. */
+export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, sponsor: 'bright', file: null, ballroom: 'bright' };
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {
@@ -66,6 +66,13 @@ function visitPlan(): ScenePlan {
   return plan;
 }
 
+/** Bellamy Crisp's visit to Patience's galley, with the deal, at the counter where Pim stands. */
+function sponsorPlan(): ScenePlan {
+  const plan = galleyPlan();
+  plan.people[1] = { ...plan.people[1], who: 'crisp' };
+  return plan;
+}
+
 /** Spare's visit to Patience's galley, unarmed, at the counter where Pim stands. */
 function filePlan(): ScenePlan {
   const plan = galleyPlan();
@@ -88,8 +95,8 @@ function ballroomPlan(): ScenePlan {
   };
 }
 
-const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, file: filePlan, ballroom: ballroomPlan };
-const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, file: galley, ballroom: hall };
+const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, sponsor: sponsorPlan, file: filePlan, ballroom: ballroomPlan };
+const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, sponsor: galley, file: galley, ballroom: hall };
 
 /** A scene's plan. */
 export const planOf = (name: SceneName) => PLANS[name]();

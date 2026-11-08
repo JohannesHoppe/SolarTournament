@@ -739,6 +739,16 @@ test('Swing Shift faces the hull to a block of ice of the tug yard, three times 
   expect(errors).toEqual([]);
 });
 
+test('Sponsor Night: Bellamy Crisp in Patience’s galley in the flesh, Hedda at the table', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, { ...chapterFive(...CHAPTER_SEVEN, 'hollowJack', 'harpoon', 'swingShift'), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
+  await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 120_000 });
+  // the set, Hedda and Crisp
+  await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('ganymede');
+  expect(errors).toEqual([]);
+});
+
 test('chapter 9 opens on Titan: the Qualifying Heat lines up five rivals, Perihelion among them, at eight coils over and into the haze, the air the place’s own', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, { ...chapterFive(...CHAPTER_SEVEN, 'hollowJack', 'harpoon', 'swingShift', 'sponsorNight'), parts: ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive', 'panels', 'hook'] });
