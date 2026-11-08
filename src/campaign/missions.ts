@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { ANNOUNCER_BOUNTY, CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
+import { ANNOUNCER_ADMITTED, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
 import { MASS } from '../world/bodies';
@@ -2262,15 +2262,26 @@ const JACK_SKILL = 0.7;
 const JACK_FIELD = point(-10000, 0, -15000);
 
 const jackBounty = bounty(CAMPAIGN.hollowJack, 'ganymede', JACK_FIELD, ['Hollow Jack', ...LOOSE_NAMES.slice(0, 3)], [JACK_SKILL, LOOSE_SKILL]);
-/** Jack flies with a Games bot's gear, the hook and the nanobots, and the broadcast calls his bounty. */
-const hollowJack: Drill = {
-  ...jackBounty,
+/** A drill as it is, the announcer saying `line` on the broadcast as it begins. */
+const announcing = (drill: Drill, line: string): Drill => ({
+  ...drill,
   enter(ctx, a, markers) {
-    jackBounty.enter!(ctx, a, markers);
-    ctx.armLeader();
-    ctx.announce(ANNOUNCER_BOUNTY);
+    drill.enter?.(ctx, a, markers);
+    ctx.announce(line);
   },
-};
+});
+
+/** Jack flies with a Games bot's gear, the hook and the nanobots, and the broadcast calls his bounty. */
+const hollowJack: Drill = announcing(
+  {
+    ...jackBounty,
+    enter(ctx, a, markers) {
+      jackBounty.enter!(ctx, a, markers);
+      ctx.armLeader();
+    },
+  },
+  ANNOUNCER_BOUNTY,
+);
 
 /**
  * The Harpoon (8.2): the piece of Jack's wreck that holds his harpoon drifts out of the yard,
@@ -3144,7 +3155,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'swingShift', name: msg('Swing Shift'), drills: [swingShift, said(CAMPAIGN.swingShiftDone, 'ganymede')], pay: 1000, ratings: 100 },
   { id: 'sponsorNight', name: msg('Sponsor Night'), drills: [said(CRISP.hello, 'ganymede'), said(CRISP.deal, 'ganymede'), said(CAMPAIGN.sponsored, 'ganymede')], pay: 0 },
   // chapter 9, the Victory Cola Circuit over Kraken Mare on Titan, in the haze
-  { id: 'qualifyingHeat', name: msg('Qualifying Heat'), drills: [said(HEDDA.titan, 'titan'), qualifyingHeat, said(CAMPAIGN.qualifyingHeatDone, 'titan')], pay: 4000, ratings: 400, start: HEAT_START },
+  { id: 'qualifyingHeat', name: msg('Qualifying Heat'), drills: [said(HEDDA.titan, 'titan'), announcing(qualifyingHeat, ANNOUNCER_TITAN), said(CAMPAIGN.qualifyingHeatDone, 'titan')], pay: 4000, ratings: 400, start: HEAT_START },
   { id: 'pitFight', name: msg('Pit Fight'), drills: [said(CAMPAIGN.pitFightIntro, 'titan'), pitFight, said(CAMPAIGN.pitFightDone, 'titan')], pay: 4000, ratings: 500 },
   { id: 'hazeDuel', name: msg('Haze Duel'), drills: [said(CAMPAIGN.hazeDuelIntro, 'titan'), hazeDuel, said(CAMPAIGN.hazeDuelDone, 'titan')], pay: 3000, ratings: 400 },
   { id: 'circuitFinal', name: msg('Circuit Final'), drills: [circuitFinal, said(CAMPAIGN.circuitFinalDone, 'titan')], pay: 6000, ratings: 800, start: HEAT_START },
@@ -3225,7 +3236,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'theDrain', name: msg('The Drain'), drills: [said(HEDDA.ninth, 'hole'), theDrain, said(CAMPAIGN.drainFound, 'hole')], pay: 0, ratings: 500 },
   { id: 'scoutOne', name: msg('Scout One'), drills: [said(CAMPAIGN.helloMe, 'hole'), said(CAMPAIGN.stove, 'hole'), said(SPARE.company, 'hole'), said(PERIHELION.evening, 'hole')], pay: 0 },
   { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, towScout, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800 },
-  { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, said(CAMPAIGN.firstDeathDone, 'hole')], pay: 0, ratings: 1500 },
+  { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, announcing(said(CAMPAIGN.firstDeathDone, 'hole'), ANNOUNCER_UNDYING)], pay: 0, ratings: 1500 },
   { id: 'lastOrbit', name: msg('Orbit'), drills: [lastOrbit, said(CAMPAIGN.lastOrbitDone, 'hole')], pay: 0, ratings: 2000 },
   { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },
   // chapter 19, the Ballroom: the parade over the President's dome, the certification, the first round of the Games
@@ -3243,7 +3254,7 @@ export const MISSIONS: readonly Mission[] = [
     ],
     pay: 0,
   },
-  { id: 'firstRound', name: msg('Your First Round'), drills: [said(CAMPAIGN.firstRound, 'rings')], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
+  { id: 'firstRound', name: msg('Your First Round'), drills: [announcing(said(CAMPAIGN.firstRound, 'rings'), ANNOUNCER_ADMITTED)], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
   // the side trips, from Act II on: Mercury's sun miners and their race, and an echo there
   { id: 'terminatorRun', name: msg('Terminator Run'), drills: [said(HEDDA.mercury, 'mercury'), terminatorRun, said(CAMPAIGN.terminatorRunDone, 'mercury')], pay: 4000, ratings: 300, start: TERMINATOR_START, side: 'pilotEpisode' },
   { id: 'mercuryEcho', name: msg('Mercury Echo'), drills: [echoAt(CAMPAIGN.echoMercuryCall, 'mercury', ECHO_MERCURY), said(CAMPAIGN.echoMercury, 'mercury'), said(CAMPAIGN.echoMercuryHeard, 'mercury')], pay: 0, ratings: 40, side: 'terminatorRun' },

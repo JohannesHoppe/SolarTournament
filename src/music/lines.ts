@@ -191,6 +191,12 @@ export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} 
 export const ANNOUNCER_FLARE = 'here comes the flare. run from the sun, little clones';
 /** Lanes Watch's bounty goes out on the broadcast (the campaign's Hollow Jack). */
 export const ANNOUNCER_BOUNTY = 'lanes watch. tonight a nobody hunts a bandit. place your bets';
+/** The broadcast from Titan's Circuit (the campaign's Qualifying Heat). */
+export const ANNOUNCER_TITAN = 'tonight from titan. the air is thick. the clones are thin';
+/** Perihelion, the Undying, shot down at last (the campaign's First Death). */
+export const ANNOUNCER_UNDYING = 'the undying is dead. folks, i think the printer just fainted';
+/** The Host admitted to the Games (the campaign's first round). */
+export const ANNOUNCER_ADMITTED = 'a new host is admitted. the old one did not survive the paperwork';
 /** A comet crosses the arena, its shower after it (see game/comet.ts). */
 export const ANNOUNCER_COMET = ['a comet is coming. its shower is full of rock. hide, little clones', 'the heavens join the games. a comet, folks, courtesy of the president'];
 /** A comet's head runs a pilot down. */
@@ -985,7 +991,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ANNOUNCER_BOUNTY, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, ANNOUNCER_ADMITTED, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
     case 'rask':
