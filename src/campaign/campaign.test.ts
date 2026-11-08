@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE, ON_AIR, STYLE_PER_RANK, styleRatings } from './campaign';
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
@@ -108,6 +108,17 @@ describe('the campaign Lot 7731', () => {
     expect(medal(held, job, true)).toBe(bonus);
     // a job that pays nothing, or a trial, has none
     for (const mission of MISSIONS.filter((m) => m.pay === 0 || m.trial)) expect(medal(freshCampaign(), mission, true)).toBeNull();
+  });
+
+  it('pays the ratings a job’s moments earned from style with its own, the first time, double on the broadcast', () => {
+    const campaign = freshCampaign();
+    const job = MISSIONS.find((mission) => mission.id === 'pilotEpisode')!;
+    const other = MISSIONS.find((mission) => !mission.onAir)!;
+    expect(styleRatings(5, job)).toBe(5 * STYLE_PER_RANK * ON_AIR);
+    expect(styleRatings(5, other)).toBe(5 * STYLE_PER_RANK);
+    expect(complete(campaign, job, 0, 50).ratings).toBe(ratingsOf(job, campaign) + 50);
+    // flown again, nothing
+    expect(complete(campaign, job, 0, 50).ratings).toBe(0);
   });
 
   it('pays a time trial’s gold once, for its gold time, and only a job with a gold time has one', () => {

@@ -2158,6 +2158,7 @@ export const ES: Catalog = {
   "At {place}: rock broken and its ore flown in against the clock, whenever you like.": "En {place}: romper roca y traer su mineral contra el reloj, cuando quieras.",
   "A mining run, Host. Break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break.": "Una carrera minera, Host. Rompe roca y trae el mineral antes de que zarpe la barcaza del comprador. El reloj arranca con la primera rotura.",
   "The barge left without our ore. Again, Host.": "La barcaza zarpó sin nuestro mineral. Otra vez, Host.",
+  "+{ratings} ratings": "+{ratings} puntos de audiencia",
   "Courier Run": "Carrera de mensajería",
   "At {place}: six beacons in order against the clock, whenever you like.": "En {place}: seis balizas en orden contra el reloj, cuando quieras.",
   "At {place}.": "En {place}.",

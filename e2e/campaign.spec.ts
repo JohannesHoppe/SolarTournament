@@ -562,13 +562,18 @@ const chapterFive = (...done: string[]) => ({
   held: true,
 });
 
-test('Pilot Episode: over Valhalla on Callisto, Red Ledger shot down ends the bounty, and Nicole has her radar', async ({ page }) => {
+test('Pilot Episode: over Valhalla on Callisto, on air, a moment pays double its style, Red Ledger shot down ends the bounty, and Nicole has her radar', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, chapterFive());
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Red Ledger');
+  // on air, a double kill pays its style twice over: five steps of rank, five ratings each, doubled
+  const before: number = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).ratings);
+  await page.evaluate(() => window.game.moment('double'));
+  expect(await page.evaluate(() => window.game.missionStyle)).toBe(50);
   await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('pilotEpisode')), { timeout: 180_000 }).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).ratings) - before).toBe(300 + 50);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).modules)).toContain('radar');
   expect(errors).toEqual([]);
 });

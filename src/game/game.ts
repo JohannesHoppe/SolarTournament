@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -1248,6 +1248,8 @@ export class Game implements OnlineGame {
   private rigBeams = 0;
   /** What the running mission's pay is cut by, as its attempt stands (see SchoolContext.fine). */
   private missionFine = 0;
+  /** The ratings the running mission's moments earned from style so far (see campaign/campaign, styleRatings). */
+  private missionStyle = 0;
   /** The running mission is flown clean so far: from its first drill, not one clone lost (see campaign/campaign, medal). */
   private cleanRun = false;
   /** The running mission's time trial was flown within its gold time (see campaign/campaign, gold). */
@@ -1810,6 +1812,7 @@ export class Game implements OnlineGame {
     // clean only from its first drill
     this.cleanRun = this.missionStep() === 0;
     this.goldRun = false;
+    this.missionStyle = 0;
     this.trialOf = null;
     this.startRound('school');
   }
@@ -3154,8 +3157,16 @@ export class Game implements OnlineGame {
    * Not in the flight school, which is on no broadcast.
    */
   private moment(moment: Moment, bonus = 0) {
-    if (this.school || !this.me) return;
+    if (!this.me) return;
     const { banner, crowd, lines, rank } = MOMENTS[moment];
+    // in a job of the campaign a moment earns ratings from style (see campaign/campaign, styleRatings), once
+    if (this.school) {
+      if (!this.mission || this.flyingAgain) return;
+      const ratings = styleRatings(rank, this.mission);
+      this.missionStyle += ratings;
+      this.hud.banner(this.time, t(banner), rank, t('+{ratings} ratings', { ratings }));
+      return;
+    }
     this.hud.banner(this.time, t(banner), rank, bonus > 0 ? t('Streak bonus +{points}', { points: bonus }) : '');
     if (crowd >= 1) this.crowd.erupt();
     else {
@@ -5723,13 +5734,14 @@ export class Game implements OnlineGame {
       let bonus: number | null = null;
       let golden: number | null = null;
       this.keepCampaign((campaign) => {
-        paid = complete(campaign, mission, this.missionFine);
+        paid = complete(campaign, mission, this.missionFine, this.missionStyle);
         bonus = medal(campaign, mission, this.cleanRun);
         golden = gold(campaign, mission, this.goldRun);
       });
       this.missionFine = 0;
       this.cleanRun = true;
       this.goldRun = false;
+      this.missionStyle = 0;
       // the story runs on into its next mission without the menu, from the pad; the menu only
       // once all that is built is flown, and the job board after a side trip
       this.mission = mission.side ? null : nextMission(this.campaign);

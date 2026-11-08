@@ -184,6 +184,8 @@ export interface Mission {
    * from its start, and leaving the drill reached in the story's next mission as it was.
    */
   side?: MissionId;
+  /** On the broadcast (Lanes Watch's Pilot Episode): the moments of style pay ON_AIR times the ratings (see styleRatings). */
+  onAir?: boolean;
   /** A courier run (see campaign/missions, COURIER_PLACES): the place it is flown at, which the job board names. */
   courier?: ArenaId;
   /** An ambush (see campaign/missions, ambush): the place it is fought at, which the job board names. */
@@ -382,7 +384,18 @@ export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mis
 /** The ratings a mission earns the first time, for the choices the campaign holds. */
 export const ratingsOf = (mission: Mission, campaign: Campaign): number => (typeof mission.ratings === 'function' ? mission.ratings(campaign) : (mission.ratings ?? 0));
 
-export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number; ratings: number; rank: string | null } {
+/**
+ * Ratings from style (docs/campaign/STORY.md, "Ratings from style"): a big moment of the own pilot
+ * in a job (a streak, a revenge, a knockout, a torpedo kill: see game/moments) earns
+ * STYLE_PER_RANK ratings per step of its rank, ON_AIR times as many in a job on the broadcast
+ * (Mission.onAir); paid with the job's ratings, the first time it is done.
+ */
+export const STYLE_PER_RANK = 5;
+export const ON_AIR = 2;
+export const styleRatings = (rank: number, mission: Mission) => rank * STYLE_PER_RANK * (mission.onAir ? ON_AIR : 1);
+
+/** A job done (`style` the ratings its moments earned, see styleRatings): paid the first time, less the yard's cut while the debt is unpaid, and what it fits fitted. */
+export function complete(campaign: Campaign, mission: Mission, fine = 0, style = 0): { kept: number; cut: number; ratings: number; rank: string | null } {
   const first = !campaign.done.includes(mission.id);
   if (first) {
     campaign.done.push(mission.id);
@@ -395,7 +408,7 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept
   const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
   campaign.bond -= cut;
   campaign.coins += pay - cut;
-  const ratings = first ? ratingsOf(mission, campaign) : 0;
+  const ratings = first ? ratingsOf(mission, campaign) + style : 0;
   const before = rankOf(campaign.ratings);
   campaign.ratings += ratings;
   const rank = rankOf(campaign.ratings);
