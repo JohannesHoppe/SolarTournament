@@ -114,7 +114,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 0.1 | Cold Boot | story | Nicole boots, crashes and boots again; Rask explains the debt. Out of rack 7731, down the lane to the depot, brake below 10 m/s 400 m short of the hall's door, in and down onto bay 3's pad (within 15 m, slower than 2 m/s for a second). Pim welds the thrusters up to 70 %. Cannot fail. | — | School: turn, drive, brake, stopAt |
+| 0.1 | Cold Boot | story | Rask wakes the Host on credit; Nicole boots, crashes and boots again; at the bay Rask tells the deal: the debt, worked off job by job. Out of rack 7731, down the lane to the depot, brake below 10 m/s 400 m short of the hall's door, in and down onto bay 3's pad (within 15 m, slower than 2 m/s for a second). Pim welds the thrusters up to 70 %. Cannot fail. | — | School: turn, drive, brake, stopAt |
 | 1.1 | Lamplighter | menial | Relight six dead row beacons: hold within 40 m of each for 3 s before the shift ends (6 min). Fails when the shift ends. | ☉ 150 · 10 | School: stopAt, markers |
 | 1.2 | Live Target | menial | A sponsor's "Hunt a Hull" experience: paying tourists fire red shots at the Magpie. Survive 90 s inside a 1 km sphere by jinking; every hit takes ☉ 10 off the pay. A death ends it with what was earned. | up to ☉ 300 · 15 | School: the slide drill's gunner, three of them |
 | 1.3 | Canister Sweep | menial | Four salvage canisters drifting between the rows, each flown through to take it in tow (15 m behind and 4 m below the stern on a cable) and brought to the crusher's hopper behind the hall. | ☉ 200 · 10 | Probe pickup; new: one towed piece of cargo |
@@ -508,33 +508,45 @@ Lines for the voices are written the way `src/music/lines.ts` writes them: Nicol
 
 ### The opening: Lot 7731 (built, Cold Boot)
 
+Quick to the flying: four lines and one crash before the hull leaves its rack. What the Host has to learn besides (the deal, the link, the missing name, Nicole's restarts) comes at the bay and with the first jobs, and Rask names the debt in every brief of chapter 1, so it is plain what the jobs are flown for.
+
 *The link boots into the hull in rack 7731. Outside, under floodlights on lattice masts, racks of dead fighters run to the crater's wall, row after row.*
+
+**RASK** *(comm, warm, much too loud)*: Good morning, Host! Rise and shine! Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one. On credit, darling.
 
 **NICOLE** *(salvage)*: Hello. I am Nicole, your personal flight
 
 *NAVIGATION UNIT · MEMORY FAULT · REBOOTING: the picture torn, her voice cut off, a falling tone.*
 
-**NICOLE**: Hello. I am Nicole. I will help you. I am your personal assistant.
+**NICOLE**: Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.
 
-**NICOLE**: The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.
+**RASK**: Now get out of that rack and come up to the depot. Bay three, the one with the lights. We'll talk about your debt there.
+
+*Out of the rack, down the lane, the brake, into bay 3 and down onto its pad.*
+
+**NICOLE**: Down on the pad in bay three. Drive off.
+
+**RASK** *(hologram)*: There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.
+
+**RASK**: Oskar Rask, yardmaster. Here's what you signed: a Host license, a printer, a fighter. Twenty-five thousand coins. You work them off here, job by job, and I take forty percent of everything you earn till it's paid. Die all you like, darling. The printer's included.
+
+**NICOLE**: I do not like that man.
+
+*Then Pim (below). After Lamplighter:*
+
+**NICOLE**: About the link, Host. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.
+
+*After Live Target:*
 
 **NICOLE**: Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.
 
-*She crashes again, and boots again.*
+**RASK**: Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.
 
-**NICOLE**: Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.
+*After Canister Sweep:*
 
 **NICOLE**: I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.
 
-**RASK** *(comm, warm, much too loud)*: Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.
-
-**RASK**: Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.
-
-**RASK**: Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.
-
-**RASK**: Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.
-
-**NICOLE**: I do not like that man.
+Rask's briefs keep the debt in sight: "First job, and the first coins off your debt. …" (Lamplighter), "… The crusher eats them, I sell what comes out, and a bit comes off your debt. Bring me four." (Canister Sweep).
 
 ### Nicole in the first missions (salvage voice, built)
 

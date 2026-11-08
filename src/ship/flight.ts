@@ -202,31 +202,32 @@ export class FlightModel {
   }
 
   /**
-   * Commands for a head-over flip towards a world direction: the ship rolls until the
-   * direction lies straight above its canopy, then pulls the nose up and over. The last
-   * stretch is ordinary steering, where the roll angle would be meaningless. Writes into
-   * `target` (yaw, pitch and roll), so the flight computer needs no new object per frame.
+   * Commands for a flip towards a world direction: a flat turn, the nose swung round sideways,
+   * level, and only at the end up or down as far as the direction lies above or below (a goal
+   * steeply above or below is steered to straight away), with no roll of its own:
+   * the flight computer holds the ship upright meanwhile (keepUpright, in ship/computer), so it
+   * swings round about the arena's up and a ground beside it stays where it was; the shortest way
+   * round, a goal straight behind turned to one side. Writes into `target` (yaw, pitch and roll),
+   * so the flight computer needs no new object per frame.
    */
   flip<T extends { yaw: number; pitch: number; roll: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0, roll: 0 } as T): T {
+    this.steer(direction, gain, target);
+    // level until the nose has swung round to within FLIP_LEVEL of the goal's bearing; then (or
+    // for a goal steeply above or below, FLIP_STEEP) ordinary steering takes the rest
     this.toLocalDirection(direction, local).normalize();
-    const off = acos(THREE.MathUtils.clamp(-local.z, -1, 1));
-    if (off < FLIP_STEER_ANGLE) {
-      this.steer(direction, gain, target);
-      target.roll = 0;
-      return target;
-    }
-    // a goal behind and below is reached faster by pulling straight up and over than by
-    // rolling half around first; the steering at the end takes out what is left
-    const behind = Math.PI - off;
-    const rollError = local.y < 0 && behind < FLIP_PULL_THROUGH ? 0 : atan2(local.x, local.y);
-    const aligned = Math.max(0, 1 - Math.abs(rollError) / FLIP_ROLL_TOLERANCE);
-    target.yaw = 0;
-    target.pitch = THREE.MathUtils.clamp(off * gain, 0, 1) * aligned;
-    target.roll = THREE.MathUtils.clamp(rollError * gain, -1, 1);
+    const bearing = Math.abs(atan2(local.x, -local.z));
+    const steep = Math.abs(atan2(local.y, hypot(local.x, local.z))) > FLIP_STEEP;
+    if (bearing > FLIP_LEVEL && !steep) target.pitch = 0;
+    target.roll = 0;
     return target;
   }
 }
 
+
+/** A flip swings the nose round level until it is within this angle (rad, about 25°) of the goal's bearing. */
+const FLIP_LEVEL = 0.45;
+/** A goal more than this angle (rad, 45°) above or below the ship's level is steered to at once. */
+const FLIP_STEEP = Math.PI / 4;
 
 /** The flight counts as on the nose within this angle (rad, 15°). */
 export const ON_NOSE = (15 * Math.PI) / 180;
@@ -493,9 +494,3 @@ export function cornerSpeed(radius: number, health: Health = HEALTHY): number {
   return low;
 }
 
-/** Below this angle between nose and goal (rad) the flip ends in ordinary steering. */
-const FLIP_STEER_ANGLE = 0.35;
-/** The nose only pulls up once the roll is this close to the goal (rad). */
-const FLIP_ROLL_TOLERANCE = 0.6;
-/** A goal below and within this angle of straight behind (rad, 70°) is reached by pulling up without rolling. */
-const FLIP_PULL_THROUGH = 1.2;

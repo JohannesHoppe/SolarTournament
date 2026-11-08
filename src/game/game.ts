@@ -430,8 +430,6 @@ const ARENA_TITLE_DELAY = 4.5;
 const IMPACT_MARGIN = 2;
 /** Assumed duration of a flip for the impact warning (s): half a turn at full rate, plus spin-up and settling. */
 const FLIP_SECONDS = Math.PI / MAX_TURN_RATE + 0.35;
-/** Assumed extra time of the roll that starts a head-over flip (s). */
-const FLIP_ROLL_SECONDS = 0.7;
 /** Without a rock or ship in the way, the crosshair shows the nose at this distance (units, 2 km). */
 const AIM_DEPTH = 40000;
 /** Random places on the edge of the field a respawn chooses from. */
@@ -3086,8 +3084,8 @@ export class Game implements OnlineGame {
     this.school =
       mode !== 'school' ? null : this.mission ? new FlightSchool(null, this.missionStep(), this.mission) : new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0);
     if (this.school) this.scene.add(this.school.root);
-    // the flight school has no radio; the share button stays in its corner
-    $('now-playing').classList.toggle('silent', mode === 'school');
+    // the flight school has no radio (the campaign has, its music by situation, and its volume); the share button stays in its corner
+    $('now-playing').classList.toggle('silent', mode === 'school' && !this.mission);
     if (mode === 'solo') this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
     this.respawn(this.me);
 
@@ -6100,7 +6098,7 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The own ship's flight computer. The brake (see brakeManeuver) flips the ship head over and
+   * The own ship's flight computer. The brake (see brakeManeuver) turns the ship about flat and
    * burns against the flight with the full drive until the Host ends it or the ship is at rest;
    * the Host may steer meanwhile (to shoot, say), the drive burning only while the nose points
    * within BRAKE_AIM of against the flight, and let go of the stick the brake turns the nose back
@@ -6167,7 +6165,8 @@ export class Game implements OnlineGame {
     const aligned = flight.noseAngleTo(this.flipGoal) < BRAKE_BURN_ANGLE;
     if (aligned && !this.flipAligned) this.sound.beep(660, 0.08);
     this.flipAligned = aligned;
-    const out = flight.flip(this.flipGoal, 3, Object.assign(this.computed, controls));
+    // a flat turn, the ship held upright meanwhile (see FlightModel.flip)
+    const out = keepUpright(flight, flight.flip(this.flipGoal, 3, Object.assign(this.computed, controls)));
     // the drive only pushes once the nose points the right way, never sideways during the turn
     out.thrust = aligned ? controls.thrust : 0;
     return out;
@@ -8015,10 +8014,10 @@ export class Game implements OnlineGame {
       if (hit) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
-        // the head-over flip rolls first, and damaged thrusters turn the ship more slowly
+        // damaged thrusters turn the ship more slowly
         const turning = flight.noseAngleTo(retrograde.copy(heading).negate());
         const turnRate = 0.3 + 0.7 * (0.25 + 0.75 * me.thrusters);
-        const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
+        const flipTime = ((turning / Math.PI) * FLIP_SECONDS) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
           impact = timeToImpact;

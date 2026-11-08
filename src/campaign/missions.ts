@@ -3078,37 +3078,33 @@ const fitStripped = (campaign: Campaign) => {
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
-    // the first link into the hull in rack 7731: Nicole boots and crashes, the yardmaster calls,
-    // and the hull flies out of the rack, down the lane and into the depot's bay
+    // the first link into the hull in rack 7731, quick to the flying: the yardmaster wakes the
+    // Host on credit, Nicole boots, crashes and boots again, and the hull flies out of the rack,
+    // down the lane and into the depot's bay, where Rask tells the deal it is flown for; the rest
+    // of what the Host has to learn comes with the first jobs
     id: 'coldBoot',
     name: msg('Cold Boot'),
     drills: [
+      said(RASK.wake),
       said(CAMPAIGN.bootHello),
       crash,
-      said(CAMPAIGN.bootAgain),
-      said(CAMPAIGN.bootLink),
-      said(CAMPAIGN.bootName),
-      crash,
       said(CAMPAIGN.bootThird),
-      said(CAMPAIGN.bootSorry),
-      said(RASK.wake),
-      said(RASK.deal),
-      said(RASK.memory),
       said(RASK.come),
-      said(CAMPAIGN.dislike),
       approach,
       slowDown,
       dock,
       said(CAMPAIGN.docked),
       rask(RASK.docked),
+      rask(RASK.deal),
+      said(CAMPAIGN.dislike),
       rask(PIM.meet),
     ],
     pay: 0,
     fit: fitPatch,
   },
-  { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone)], pay: 150, ratings: 10, start: ON_PAD },
-  { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone)], pay: 300, ratings: 15, start: ON_PAD },
-  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, ratings: 10, start: ON_PAD },
+  { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone), said(CAMPAIGN.bootLink)], pay: 150, ratings: 10, start: ON_PAD },
+  { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone), said(CAMPAIGN.bootName), rask(RASK.memory)], pay: 300, ratings: 15, start: ON_PAD },
+  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone), said(CAMPAIGN.bootSorry)], pay: 200, ratings: 10, start: ON_PAD },
   { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, ratings: 20, start: ON_PAD },
   { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), felt(CAMPAIGN.handshake), rask(HEDDA.meet)], pay: 600, ratings: 40, start: ON_PAD },
