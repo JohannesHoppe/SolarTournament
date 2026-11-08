@@ -1081,7 +1081,7 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 ### New radio lines for the campaign
 
 - President: "nobody leaves. why would anyone leave the greatest system", "ninth planet. beautiful planet. beachfront property. act now", "the wall in space is going up. very fast. some say too fast", "the strays are not people. they are leftovers. very sad", "the memorial games. the most beautiful tragedy in history".
-- Announcer: "tonight from titan. the air is thick. the clones are thin", "lanes watch. tonight a nobody hunts a bandit. place your bets", "the undying is dead. folks, i think the printer just fainted", "a new host is admitted. the old one did not survive the paperwork". Built, all four: the bounty's as Hollow Jack's goes out, Titan's as the Qualifying Heat starts, the Undying's as Perihelion's first death is told, and the admission's as the Host's first round of the Games begins. The President's lines are still to come.
+- Announcer: "tonight from titan. the air is thick. the clones are thin", "lanes watch. tonight a nobody hunts a bandit. place your bets", "the undying is dead. folks, i think the printer just fainted", "a new host is admitted. the old one did not survive the paperwork". Built, all four: the bounty's as Hollow Jack's goes out, Titan's as the Qualifying Heat starts, the Undying's as Perihelion's first death is told, and the admission's as the Host's first round of the Games begins. The President's five are on Radio 2584 among the regime's lines.
 
 Every new line needs its German, Spanish and French, in the catalogs' voices (section 10).
 

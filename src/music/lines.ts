@@ -121,6 +121,11 @@ export const PHRASES_EN = [
   'tariff bank. mars pays. you win',
   'ministry of victory. peace through explosions',
   'presidential gravity. accept no fake gravity',
+  'nobody leaves. why would anyone leave the greatest system',
+  'ninth planet. beautiful planet. beachfront property. act now',
+  'the wall in space is going up. very fast. some say too fast',
+  'the strays are not people. they are leftovers. very sad',
+  'the memorial games. the most beautiful tragedy in history',
 ];
 
 /** German lines for the motorik flavor and now and then elsewhere: rolling R wherever possible. */
