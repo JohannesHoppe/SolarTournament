@@ -4314,8 +4314,9 @@ export class Game implements OnlineGame {
       // in the clamps of a round's opening the ship is held: no push, no pull, no shot
       if (clamped) ship.flight.velocity.set(0, 0, 0);
       const steered = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
-      // a raider who spares clones fires only into a drive: with the armor on his nose he holds his fire (see jumpers)
-      const controls = steered.fire && this.sparesClones(ship) && !this.onDrive(ship) ? { ...steered, fire: false } : steered;
+      // a raider who spares clones fires only into a drive (see jumpers); the Loose, harpooning tugs, never into the Magpie's
+      const holds = steered.fire && ((this.sparesClones(ship) && !this.onDrive(ship)) || (this.sparesDrives(ship) && this.onDrive(ship)));
+      const controls = holds ? { ...steered, fire: false } : steered;
       this.outside(ship.flight, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
@@ -7328,6 +7329,11 @@ export class Game implements OnlineGame {
   /** Whether a ship is a raider who spares clones (see jumpers, The Quiet Man). */
   private sparesClones(ship: Ship): boolean {
     return !!this.jumpers?.spares && this.jumpers.bots.some((bot) => bot.ship === ship);
+  }
+
+  /** Whether a ship is one of the Loose harpooning a convoy (see jumpers, hooks): they spare the Magpie's drive, the drive of one of their own. */
+  private sparesDrives(ship: Ship): boolean {
+    return !!this.jumpers?.hooks && this.jumpers.bots.some((bot) => bot.ship === ship);
   }
 
   /** Whether the first hull on a ship's nose within the laser's reach shows it its drive. */

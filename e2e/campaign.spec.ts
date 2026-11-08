@@ -578,12 +578,14 @@ test('Pilot Episode: over Valhalla on Callisto, on air, a moment pays double its
   expect(errors).toEqual([]);
 });
 
-test('Ice Run: the Loose harpoon the ice tugs, one each, and a tug whose raider is shot down is free again', async ({ page }) => {
+test('Ice Run: the Loose harpoon the ice tugs, one each, sparing the Magpie’s drive, and a tug whose raider is shot down is free again', async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, chapterFive('pilotEpisode'));
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   // the Loose come and harpoon a tug
   await page.waitForFunction(() => window.game.school.markers.hookedBy.some((ship: unknown) => ship), null, { timeout: 120_000 });
+  // and they spare the Magpie's drive: a raider holds his fire on it, never on its armor
+  expect(await page.evaluate(() => window.game.sparesDrives(window.game.jumpers.bots[0].ship))).toBe(true);
   const holders = await page.evaluate(() => window.game.school.markers.hookedBy.filter((ship: unknown) => ship).map((ship: { name: string }) => ship.name));
   expect(new Set(holders).size).toBe(holders.length);
   // the raider holding the first tug held shot down: its cable lets go (another of the Loose may harpoon the tug again)
