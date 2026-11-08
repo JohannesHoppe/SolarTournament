@@ -4320,7 +4320,7 @@ export class Game implements OnlineGame {
       this.outside(ship.flight, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
-      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE, false, shadeHit) !== null;
+      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       this.friction(ship, dt, now);
@@ -5614,7 +5614,7 @@ export class Game implements OnlineGame {
       return false;
     }
     const eye = this.camera.position;
-    const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
+    const shade = this.haze.shadeAt(eye, this.space.sunDirection.dot(up.subVectors(eye, air.center).normalize()));
     this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
     const depth = altitudeIn(air, eye);
     if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, exp(depth / BACKGROUND_DEPTH));
@@ -8557,7 +8557,7 @@ export class Game implements OnlineGame {
     references.length = 0;
     for (const reference of this.arenaReferences) references.push(reference);
     // the sun lies beyond everything: its mark points along its direction from wherever the camera is
-    this.sunReference.position.copy(SUN_DIRECTION).multiplyScalar(ARENA_LIMIT * 100).add(this.camera.position);
+    this.sunReference.position.copy(this.space.sunDirection).multiplyScalar(ARENA_LIMIT * 100).add(this.camera.position);
     references.push(this.sunReference);
     for (let team = 0; this.flags && team < this.baseReferences.length; team++) {
       this.baseReferences[team].position.copy(this.flags.bases[team]);
