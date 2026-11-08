@@ -5942,6 +5942,11 @@ export class Game implements OnlineGame {
           ship.flight.velocity.copy(velocity);
         });
       },
+      armLeader: () => {
+        const leader = game.jumpers?.bots[0]?.ship;
+        leader?.outfit(hullLooks(leader.type, BOT_GEAR));
+      },
+      announce: (line) => this.radio.announce(line, null),
       goldTime: () => {
         this.goldRun = true;
       },

@@ -1100,6 +1100,7 @@ export const FR: Catalog = {
   'and {name} is gone. for good. well, for this round': 'et {name} disparaît. pour de bon. enfin, pour cette manche',
   '{name} is the last clone standing': '{name} est le dernier clone debout',
   '{name} survives. the president is impressed': '{name} survit. le président est impressionné',
+  'lanes watch. tonight a nobody hunts a bandit. place your bets': 'lanes watch. ce soir, un moins que rien chasse un bandit. faites vos jeux',
   'here comes the flare. run from the sun, little clones': 'voici l’éruption. fuyez le soleil, petits clones',
   '{name} brings the core home': '{name} ramène le noyau à la base',
   'and {name} scores. the sponsor core is theirs': 'et {name} marque. le noyau du sponsor est à eux',

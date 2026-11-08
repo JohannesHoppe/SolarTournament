@@ -1132,6 +1132,7 @@ export const DE: Catalog = {
   'and {name} is gone. for good. well, for this round': 'Und {name} ist weg. Für immer. Na ja, für diese Runde',
   '{name} is the last clone standing': '{name} ist der letzte Klon',
   '{name} survives. the president is impressed': '{name} überlebt. Der Präsident ist beeindruckt',
+  'lanes watch. tonight a nobody hunts a bandit. place your bets': 'Lanes Watch. Heute Nacht jagt ein Niemand einen Banditen. Machen Sie Ihre Einsätze',
   'here comes the flare. run from the sun, little clones': 'Da kommt die Eruption. Flieht vor der Sonne, kleine Klone',
   'a comet is coming. its shower is full of rock. hide, little clones': 'Ein Komet kommt. Sein Schauer ist voller Fels. Versteckt euch, kleine Klone',
   'the heavens join the games. a comet, folks, courtesy of the president': 'Der Himmel spielt mit. Ein Komet, Leute, mit freundlicher Empfehlung des Präsidenten',

@@ -1113,6 +1113,7 @@ export const ES: Catalog = {
   'and {name} is gone. for good. well, for this round': 'y {name} desaparece. para siempre. bueno, por esta ronda',
   '{name} is the last clone standing': '{name} es el último clon en pie',
   '{name} survives. the president is impressed': '{name} sobrevive. el presidente está impresionado',
+  'lanes watch. tonight a nobody hunts a bandit. place your bets': 'lanes watch. esta noche un don nadie caza a un bandido. hagan sus apuestas',
   'here comes the flare. run from the sun, little clones': 'llega la erupción. huid del sol, clonitos',
   'a comet is coming. its shower is full of rock. hide, little clones': 'viene un cometa. su lluvia está llena de roca. escondeos, clonitos',
   'the heavens join the games. a comet, folks, courtesy of the president': 'el cielo se suma a los juegos. un cometa, amigos, por cortesía del presidente',

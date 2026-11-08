@@ -108,6 +108,10 @@ export interface SchoolContext {
   readonly spare: Skills;
   /** A flock of ships held at `positions` this frame, flying at `velocity`, named from `names` (the Parade's other new Hosts' clones); none for an empty list. */
   flock(positions: readonly THREE.Vector3[], names: readonly string[], velocity: THREE.Vector3): void;
+  /** The raider named first (a bounty's target) carries a bot's gear of the Games, the hook and the nanobots (see hangar, BOT_GEAR), and hooks and shoves as their bots do (Hollow Jack). */
+  armLeader(): void;
+  /** The announcer says `line` on the broadcast (Radio 2584's voice). */
+  announce(line: string): void;
   /** The running time trial was flown within its gold time (see Drill.gold): the job's gold is won once the mission is done. */
   goldTime(): void;
   /** A piece of a comet's shower strikes a hull at `at`, flying along `direction` (the own unless `ship` names another, a drill's Scout One): as hard as a piece of the Games' shower (see Game.cometStrike). */

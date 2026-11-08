@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
+import { ANNOUNCER_BOUNTY, CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
 import { MASS } from '../world/bodies';
@@ -2255,12 +2255,22 @@ const blackout: Drill = {
 /**
  * Hollow Jack (8.1): Lanes Watch's bounty on the chief of the Loose, among the blocks of ice of
  * Ganymede's tug yards: Jack (skill JACK_SKILL) and three of his raiders (LOOSE_SKILL), fighting
- * every ship they see; Jack shot down ends it. He is a stray: no Host, no printer, no next clone.
+ * every ship they see, Jack with a bot's gear of the Games (the hook and the nanobots) and the
+ * broadcast calling his bounty; Jack shot down ends it. He is a stray: no Host, no printer, no next clone.
  */
 const JACK_SKILL = 0.7;
 const JACK_FIELD = point(-10000, 0, -15000);
 
-const hollowJack = bounty(CAMPAIGN.hollowJack, 'ganymede', JACK_FIELD, ['Hollow Jack', ...LOOSE_NAMES.slice(0, 3)], [JACK_SKILL, LOOSE_SKILL]);
+const jackBounty = bounty(CAMPAIGN.hollowJack, 'ganymede', JACK_FIELD, ['Hollow Jack', ...LOOSE_NAMES.slice(0, 3)], [JACK_SKILL, LOOSE_SKILL]);
+/** Jack flies with a Games bot's gear, the hook and the nanobots, and the broadcast calls his bounty. */
+const hollowJack: Drill = {
+  ...jackBounty,
+  enter(ctx, a, markers) {
+    jackBounty.enter!(ctx, a, markers);
+    ctx.armLeader();
+    ctx.announce(ANNOUNCER_BOUNTY);
+  },
+};
 
 /**
  * The Harpoon (8.2): the piece of Jack's wreck that holds his harpoon drifts out of the yard,

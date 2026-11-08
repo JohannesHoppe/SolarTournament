@@ -707,11 +707,13 @@ test('Blackout: in the flux tube the link cuts, the picture white with LINK LOST
 /** Chapters 5 to 7 flown, all of them: the hull as far as Io fits it. */
 const CHAPTER_SEVEN = ['pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating', 'fluxTubeRace', 'tubeFitting', 'mainDrive', 'blackout'];
 
-test('chapter 8 opens over Ganymede: Hollow Jack and three of the Loose among the ice, Jack shot down ends the bounty; then his harpoon, flown through, is the hook', async ({ page }) => {
+test('chapter 8 opens over Ganymede: Hollow Jack, with the hook, and three of the Loose among the ice, Jack shot down ends the bounty; then his harpoon, flown through, is the hook', async ({ page }) => {
   test.setTimeout(400_000);
   const errors = await takeJobFrom(page, chapterFive(...CHAPTER_SEVEN));
   await page.waitForFunction(() => window.game.venue?.id === 'ganymede' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 4, null, { timeout: 240_000 });
   expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Hollow Jack');
+  // Jack carries a bot's gear of the Games, his raiders not
+  expect(await page.evaluate(() => window.game.jumpers.bots.map((bot: { ship: { perks: { hook: boolean } } }) => bot.ship.perks.hook))).toEqual([true, false, false, false]);
   await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('hollowJack')), { timeout: 240_000 }).toBe(true);
   // The Harpoon: the clone held where the piece drifts
