@@ -256,7 +256,17 @@ export interface Campaign {
   medals: MissionId[];
   /** The time trials flown within their gold time, each worth its bonus once (see gold). */
   golds: MissionId[];
+  /** What the next mission has come to so far, kept with `step` so it holds when the Host leaves it and comes back: the coins lost on it (see complete's fine), the ratings from style, a gold time flown. */
+  run: Run;
 }
+
+/** What a mission in hand has come to so far (see Campaign.run). */
+export interface Run {
+  fine: number;
+  style: number;
+  gold: boolean;
+}
+export const freshRun = (): Run => ({ fine: 0, style: 0, gold: false });
 
 /** A medal's bonus, and a gold time's: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
 export const MEDAL_SHARE = 0.25;
@@ -339,7 +349,7 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [], run: freshRun() });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -362,7 +372,8 @@ export function campaignFrom(text: string | null): Campaign {
     const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
     // a gold only for a job done with a gold time
     const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds };
+    const run = (typeof kept.run === 'object' && kept.run !== null ? kept.run : {}) as Partial<Run>;
+    return { run: { fine: number(run.fine, 0, 1_000_000), style: number(run.style, 0, 1_000_000), gold: run.gold === true }, done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds };
   } catch {
     return fresh;
   }
@@ -402,7 +413,10 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0, style =
     mission.fit?.(campaign);
   }
   // a side trip leaves the story's next mission where the Host left it
-  if (!mission.side) campaign.step = 0;
+  if (!mission.side) {
+    campaign.step = 0;
+    campaign.run = freshRun();
+  }
   const pay = first ? Math.max(0, mission.pay - fine) : 0;
   // the debt's holder takes its cut until the benefactor holds the debt
   const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));

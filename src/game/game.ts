@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -992,6 +992,8 @@ export class Game implements OnlineGame {
   private noClone = false;
   /** The mission flown is one done before, flown again for nothing: it keeps no drill reached and runs on into no other. */
   private flyingAgain = false;
+  /** The timer that ends a link lost in a drill (see the school context's linkLost), cleared when another starts. */
+  private linkLostTimer = 0;
   /** The campaign's job board is open (see showBoard). */
   private atBoard = false;
 
@@ -1731,7 +1733,8 @@ export class Game implements OnlineGame {
     const campaign = this.campaign;
     this.showcase?.show('magpie', hullOf(campaign), false);
     const next = nextMission(campaign);
-    const place = arenaById(next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
+    // where the next job goes on: the drill reached in it, as the Host comes back to it
+    const place = arenaById(next?.drills[Math.min(this.campaign.step, next.drills.length - 1)].arena ?? next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
     $('board-place').textContent = place ? t(place.name) : '';
     const wallet = { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) };
     $('board-wallet').textContent = campaign.held ? t('{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}', wallet) : t('{coins} ☉ in the wallet · you owe {bond} ☉ · {rank}', wallet);
@@ -1805,12 +1808,13 @@ export class Game implements OnlineGame {
     if (this.atBoard) this.showBoard(false);
     // the people who call in, fetched ahead of their first call
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
-    this.missionFine = 0;
     this.mission = mission;
-    // clean only from its first drill
+    // clean only from its first drill; what the job came to before the Host left it holds (see Campaign.run)
     this.cleanRun = this.missionStep() === 0;
-    this.goldRun = false;
-    this.missionStyle = 0;
+    const run = this.missionStep() > 0 ? this.campaign.run : freshRun();
+    this.missionFine = run.fine;
+    this.goldRun = run.gold;
+    this.missionStyle = run.style;
     this.trialOf = null;
     this.startRound('school');
   }
@@ -2970,8 +2974,10 @@ export class Game implements OnlineGame {
   }
 
   private showMenu() {
-    // a trial's round left for the menu is no longer flown (see endRound, judgeTrial)
-    if (this.trialOf) this.trialOf = this.mission = null;
+    // a mission or a trial's round left for the menu is no longer flown (see endRound, judgeTrial),
+    // so no round after it spawns at its start
+    this.trialOf = this.mission = null;
+    this.flyingAgain = false;
     this.showCaller(null);
     this.showQuality();
     this.leaveOnline();
@@ -5681,6 +5687,7 @@ export class Game implements OnlineGame {
     const hook = this.tethers.get(this.me!);
     context.hooked = !!hook?.anchor && hook.flying <= 0;
     context.hookedShip = context.hooked ? (hook!.anchor!.ship ?? null) : null;
+    context.hookedRock = context.hooked ? (hook!.anchor!.rock ?? null) : null;
     context.autopilot = this.autopilot;
     context.cockpit = this.cockpit;
     context.impactAhead = this.impactAhead;
@@ -5701,7 +5708,12 @@ export class Game implements OnlineGame {
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else if (!this.flyingAgain && !this.mission?.side) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+      else if (!this.flyingAgain && !this.mission?.side) {
+        this.keepCampaign((campaign) => {
+          campaign.step = school.stepIndex;
+          campaign.run = { fine: this.missionFine, style: this.missionStyle, gold: this.goldRun };
+        });
+      }
     }
     // a trial's drills done: its round is flown next (see Mission.trial, endRound)
     if (school.finished && this.mission?.trial && !this.trialOf) {
@@ -5812,6 +5824,7 @@ export class Game implements OnlineGame {
       braking: false,
       hooked: false,
       hookedShip: null,
+      hookedRock: null,
       impactAhead: false,
       orbit: null,
       autopilot: false,
@@ -5868,7 +5881,8 @@ export class Game implements OnlineGame {
         // the voice cut off where it was, the picture white, nothing rotting: the link is simply gone
         this.speaker.stop();
         this.showLinkLost(true);
-        window.setTimeout(() => this.showLinkLost(false), seconds * 1000);
+        window.clearTimeout(this.linkLostTimer);
+        this.linkLostTimer = window.setTimeout(() => this.showLinkLost(false), seconds * 1000);
       },
       linkStatic: (strength) => {
         if (strength > 0) this.glitch.trigger(Math.min(1, strength) * STATIC_GLITCH, STATIC_SECONDS);

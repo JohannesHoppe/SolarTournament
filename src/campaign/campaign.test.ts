@@ -78,7 +78,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [], run: { fine: 0, style: 0, gold: false } });
     // a medal only for a job done that has one
     const paying = MISSIONS.find((mission) => hasMedal(mission))!;
     const unpaid = MISSIONS.find((mission) => !hasMedal(mission))!;
@@ -86,6 +86,13 @@ describe('the campaign Lot 7731', () => {
     // the habits as kept, never more hits than shots nor more seconds up close than of fight
     expect(campaignFrom(JSON.stringify({ habits: { shots: 40, hits: 90, fight: 120.7, near: 500 } })).habits).toEqual({ shots: 40, hits: 40, fight: 120, near: 120 });
     expect(campaignFrom(JSON.stringify({ habits: 'all' })).habits).toEqual({ shots: 0, hits: 0, fight: 0, near: 0 });
+    // what the job in hand came to, as kept with its step; a mission done starts the next one afresh
+    expect(campaignFrom(JSON.stringify({ step: 2, run: { fine: 70, style: 25.4, gold: true } })).run).toEqual({ fine: 70, style: 25, gold: true });
+    expect(campaignFrom(JSON.stringify({ run: { fine: -5, gold: 'yes' } })).run).toEqual({ fine: 0, style: 0, gold: false });
+    const left = freshCampaign();
+    left.run = { fine: 70, style: 25, gold: true };
+    complete(left, MISSIONS[0]);
+    expect(left.run).toEqual({ fine: 0, style: 0, gold: false });
   });
 
   it('pays a job’s medal once, for a clean run, less the yard’s cut while the debt is unpaid', () => {

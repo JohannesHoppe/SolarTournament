@@ -9,7 +9,8 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierTimes, layCourier, MINING_PLACES } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierTimes, layCourier, MINING_PLACES, ON_PAD, TARGET_ZONE, YARD_MIDDLE } from './missions';
+import { PSYCHE_FALL } from '../world/yard';
 import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
@@ -217,6 +218,24 @@ describe('the races of the campaign', () => {
 
   it('the Stickney Grand on Phobos is flown by a middling bot: three laps through every ring, down into the crater and out, nothing missed, without a crash', () => {
     expectRaced('phobos', GRAND_COURSE, GRAND_LAPS, RING_RADIUS, GRAND_SECONDS, GRAND_START.at);
+  });
+});
+
+describe('Live Target in the Boneyard', () => {
+  it('starts on the pad inside its zone, with room to jink round it, the gunners inside too', () => {
+    const pad = new THREE.Vector3(...ON_PAD.at);
+    // 200 m and more inside the zone's edge
+    expect(pad.distanceTo(YARD_MIDDLE)).toBeLessThan(TARGET_ZONE - 4000);
+    expect(MISSIONS.find((mission) => mission.id === 'liveTarget')!.start).toBe(ON_PAD);
+  });
+
+  it('flies chapter 1’s jobs with the autopilot, which holds the ship against Psyche’s pull: no flying drill there drifts freely', () => {
+    expect(PSYCHE_FALL).toBeGreaterThan(0);
+    for (const id of ['lamplighter', 'liveTarget', 'canisterSweep', 'firstCut', 'dockingLane']) {
+      const flown = MISSIONS.find((mission) => mission.id === id)!.drills.filter((drill) => drill.done !== undefined && drill.autopilot !== undefined);
+      expect(flown.length, id).toBeGreaterThan(0);
+      for (const drill of flown) expect(drill.autopilot, id).toBe(true);
+    }
   });
 });
 
