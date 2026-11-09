@@ -346,7 +346,7 @@ test('the job board offers a side trip once Act II has begun, flies it at its pl
 
 test('a courier run on the job board: six beacons laid at its place from its start, the clock starting at the first', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  const run = page.locator('#board-side button', { hasText: 'Courier Run' }).filter({ hasText: 'Valhalla' });
+  const run = page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Courier Run' });
   await expect(run).toContainText('Gold time');
   await run.click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto', null, { timeout: 90_000 });
@@ -356,7 +356,7 @@ test('a courier run on the job board: six beacons laid at its place from its sta
 
 test('an ambush on the job board: three bandits round the client’s lane at its place, all of them down wins', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Ambush' }).filter({ hasText: 'Valhalla' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Ambush' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto' && window.game.jumpers?.bots.length === 3, null, { timeout: 90_000 });
   await page.evaluate(() => {
     for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
@@ -367,7 +367,7 @@ test('an ambush on the job board: three bandits round the client’s lane at its
 
 test('a mining run on the job board: rock broken sheds its ore, and the ore flown in wins it', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Mining Run' }).filter({ hasText: 'Rheasilvia' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Rheasilvia' }).locator('button', { hasText: 'Mining Run' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'rheasilvia', null, { timeout: 90_000 });
   // two rocks broken just ahead of the hull, and every glint of their ore flown through in turn
   await page.evaluate(async () => {

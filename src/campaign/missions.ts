@@ -2012,6 +2012,153 @@ const miningRuns: Mission[] = MINING_PLACES.map((arena) => ({ id: `mining:${aren
 /** The ambushes as jobs: one per place of the courier runs, offered as they are. */
 const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambush:${arena}`, name: msg('Ambush'), drills: [ambush(arena)], pay: AMBUSH_PAY, ratings: AMBUSH_RATINGS, side: after, ambush: arena }));
 
+/**
+ * The bounties under Rask's counter (docs/campaign/STORY.md, "Under the counter"): at each place
+ * of the courier runs, three wanted faces, one after the other, each offered once the one before
+ * is done, the second only once the place's people count the Host as Known, the third as Trusted
+ * (see campaign/standing). The target and its escorts (BOUNTY_TIERS) guard the courier course's
+ * third beacon, fighting every ship they see; the last tier's target flies with a bot's gear of
+ * the Games, the hook and the nanobots. The target shot down ends it.
+ */
+export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
+  { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
+  { target: 0.55, escorts: 2, skill: 0.45, pay: 2500, ratings: 150 },
+  { target: 0.65, escorts: 3, skill: 0.5, pay: 4000, ratings: 250 },
+];
+/** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
+const WANTED: readonly (readonly [string, string, string])[] = [
+  ['Gravel Mae', 'Scrapjaw', 'Saint Abrasive'],
+  ['Twitch Okono', 'The Dowager', 'Lucky Pell'],
+  ['Corporal Nobody', 'Red Tibor', 'Halfprint'],
+  ['Mother Static', 'Slick Ines', 'The Accountant'],
+  ['Blue Fenn', 'Coldsnap', 'Widow Ardent'],
+  ['Sulfur Pike', 'Ash Kowal', 'Brimstone Lu'],
+  ['Hookhand Vos', 'Tug Thief Dara', 'Old Leverage'],
+  ['Methane Joe', 'Pit Boss Sorrel', 'Throttle'],
+  ['Geyser Kim', 'Brightwork', 'Yacht Killer'],
+  ['Halfface Rue', 'Soot', 'The Ridge Saint'],
+  ['Admiral Nobody', 'Frostbite Cole', 'Plume'],
+  ['Heartbreak Wu', 'Charon’s Coin', 'Tombaugh'],
+  ['Spinner', 'Egg Thief Imre', 'Tumble'],
+  ['Last Rung', 'Dysnomia Jane', 'Hollow Ruth'],
+  ['Kiln Rat', 'Lantern Moll', 'Glow'],
+  ['Feeder Fang', 'Snowball', 'The Harvester'],
+  ['Gala Crasher', 'Champagne Vex', 'Mister Bow Tie'],
+];
+function wanted(arena: ArenaId, name: string, tier: number): Drill {
+  const { target, escorts, skill } = BOUNTY_TIERS[tier];
+  // the field they guard is laid where the place's field lies, as the attempt begins
+  const field = new THREE.Vector3();
+  const drill = bounty(CAMPAIGN.wanted, arena, field, [name, ...AMBUSH_NAMES, 'Wick', 'Burr'].slice(0, 1 + escorts), [target, skill]);
+  return {
+    ...drill,
+    enter(ctx, a, markers) {
+      field.copy(layCourier(ctx.field, arena).points[2]);
+      drill.enter!(ctx, a, markers);
+      if (tier === BOUNTY_TIERS.length - 1) ctx.armLeader();
+    },
+  };
+}
+
+/** The bounties as jobs: three at each place of the courier runs (see BOUNTY_TIERS). */
+const bounties: Mission[] = COURIER_PLACES.flatMap(([arena, after], p) =>
+  WANTED[p].map((name, tier): Mission => ({
+    id: `bounty:${arena}:${tier + 1}`,
+    name: msg('Bounty'),
+    drills: [wanted(arena, name, tier)],
+    pay: BOUNTY_TIERS[tier].pay,
+    ratings: BOUNTY_TIERS[tier].ratings,
+    side: tier ? `bounty:${arena}:${tier}` : after,
+    bounty: { place: arena, tier: tier + 1 },
+    standing: tier,
+  })),
+);
+/** The face wanted by a bounty (see WANTED), for the job board's poster. */
+export const wantedName = (mission: Mission) => (mission.bounty ? WANTED[COURIER_PLACES.findIndex(([place]) => place === mission.bounty!.place)][mission.bounty.tier - 1] : '');
+
+/**
+ * The smuggling runs under Rask's counter (docs/campaign/STORY.md, "Under the counter"): at each
+ * place of the courier runs, once its people count the Host as Known, cargo for the courier
+ * course's last beacon, the drop. Two of the Ministry's patrol cutters circle beside the straight
+ * lane to it (SMUGGLE_PATROLS, SMUGGLE_ASIDE off the lane, SMUGGLE_CIRCLE round), so that a ship
+ * coasting along the lane passes them farther than SILENT_RANGE (1 km) and nearer than
+ * SMUGGLE_SIGHT: silent, it slips by; hot (its drive burning, or fired within SILENT_AFTER), a
+ * patrol within SMUGGLE_SIGHT sees it and the attempt starts over. Held at the drop within
+ * SMUGGLE_REACH, slower than SMUGGLE_REST for SMUGGLE_HOLD seconds, the cargo is handed over;
+ * SMUGGLE_SECONDS for all of it.
+ */
+export const SMUGGLE_PATROLS = [0.55, 0.9] as const;
+export const SMUGGLE_ASIDE = 32000;
+export const SMUGGLE_CIRCLE = 8000;
+export const SMUGGLE_SIGHT = 40000;
+const SMUGGLE_ORBIT = 60;
+const SMUGGLE_REACH = 6000;
+const SMUGGLE_REST = 200;
+const SMUGGLE_HOLD = 3;
+const SMUGGLE_SECONDS = 240;
+const SMUGGLE_PAY = 1400;
+const SMUGGLE_RATINGS = 60;
+const PATROL_NAMES = ['Patrol Vigil', 'Patrol Census'];
+
+/** A smuggling run's lane at a place: its start, its drop, and the patrols' centers beside it (lifted clear of the field's pieces where `field` lies). */
+export function smuggleLane(field: AsteroidField | null, arena: ArenaId): { from: THREE.Vector3; drop: THREE.Vector3; patrols: THREE.Vector3[] } {
+  const start = arenaById(arena)!.start!;
+  const from = new THREE.Vector3(...start.at);
+  const drop = layCourier(field, arena).points[COURIER_BEACONS - 1];
+  const way = drop.clone().sub(from).setY(0).normalize();
+  const across = new THREE.Vector3(-way.z, 0, way.x);
+  const patrols = SMUGGLE_PATROLS.map((share, k) => {
+    const center = new THREE.Vector3().lerpVectors(from, drop, share).addScaledVector(across, k % 2 ? -SMUGGLE_ASIDE : SMUGGLE_ASIDE);
+    for (let lift = 0; field && lift < 40 && field.overlap(center, SMUGGLE_CIRCLE + RING_RADIUS); lift++) center.y += COURIER_LIFT;
+    return center;
+  });
+  return { from, drop, patrols };
+}
+
+/** Where each patrol cutter is `seconds` into the attempt: round its center, the two half a turn apart. */
+export function patrolsAt(patrols: readonly THREE.Vector3[], seconds: number, out: THREE.Vector3[]) {
+  patrols.forEach((center, k) => {
+    const angle = (seconds / SMUGGLE_ORBIT) * 2 * Math.PI + k * Math.PI;
+    out[k].set(center.x + cos(angle) * SMUGGLE_CIRCLE, center.y, center.z + sin(angle) * SMUGGLE_CIRCLE);
+  });
+}
+
+function smuggling(arena: ArenaId): Drill {
+  let lane: ReturnType<typeof smuggleLane> | null = null;
+  const cutters = SMUGGLE_PATROLS.map(() => new THREE.Vector3());
+  const patrolVelocity = new THREE.Vector3();
+  return {
+    line: CAMPAIGN.smuggle,
+    keys: ['drive', 'turn', 'slide'],
+    arena,
+    autopilot: false,
+    enter(ctx, a, markers) {
+      lane = smuggleLane(ctx.field, arena);
+      markers.zone(lane.drop, SMUGGLE_REACH);
+      patrolsAt(lane.patrols, 0, cutters);
+      ctx.flock(cutters, PATROL_NAMES, patrolVelocity);
+      // a.warned: a patrol saw the ship hot
+      a.warned = false;
+      a.held = 0;
+    },
+    done(ctx, a) {
+      patrolsAt(lane!.patrols, a.seconds, cutters);
+      ctx.flock(cutters, PATROL_NAMES, patrolVelocity);
+      const hot = !ctx.me.silent(ctx.now);
+      if (hot && cutters.some((cutter) => cutter.distanceTo(ctx.me.flight.position) < SMUGGLE_SIGHT)) a.warned = true;
+      a.held = ctx.me.flight.position.distanceTo(lane!.drop) <= SMUGGLE_REACH && ctx.me.flight.velocity.length() < SMUGGLE_REST ? a.held + ctx.dt : 0;
+      return a.held >= SMUGGLE_HOLD;
+    },
+    fail: (_, a) => (a.warned ? CAMPAIGN.smuggleSeen : a.seconds > SMUGGLE_SECONDS ? CAMPAIGN.smuggleSlow : null),
+    leave: (ctx) => ctx.flock([], PATROL_NAMES, patrolVelocity),
+    waypoint: () => lane?.drop ?? null,
+    mark: (ctx) => (ctx.me.silent(ctx.now) ? t('Drop · running silent') : t('Drop · running hot')),
+  };
+}
+
+/** The smuggling runs as jobs: one at each place of the courier runs, offered once its people count the Host as Known. */
+const smugglingRuns: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
+
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
 /** Radiators I (5.5): a tug yard's radiators of the first grade, a step up (see hullOf), at RADIATORS_PRICE. */
@@ -3331,4 +3478,7 @@ export const MISSIONS: readonly Mission[] = [
   ...ambushes,
   // and a mining run where loose rock or ice drifts
   ...miningRuns,
+  // and under Rask’s counter: three bounties and a smuggling run at each place of the courier runs
+  ...bounties,
+  ...smugglingRuns,
 ];

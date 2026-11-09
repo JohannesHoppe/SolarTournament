@@ -25,7 +25,7 @@ import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { CAMPAIGN, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
@@ -39,8 +39,12 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
-import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
+import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, master, medal, MEDAL_SHARE, PRINT_PRICE, printClone, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { scar, SCAR_EFFECTS, SCAR_KINDS, SCAR_NAMES, scarNumbers, scarOf, scarTier, stoneSeconds } from '../campaign/scars';
+import { salvageById, type Salvage } from '../campaign/salvage';
+import { PEOPLE_NAMES, PEOPLES, STANDING_NAMES, standingTier } from '../campaign/standing';
+import { wantedName } from '../campaign/missions';
+import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
@@ -426,8 +430,10 @@ const ENGINE_LIGHTS = TOURNAMENT_SIZE + 1;
  */
 const ANNOUNCER_OPEN_DELAY = 7;
 const ARENA_TITLE_DELAY = 4.5;
-/** The impact warning starts this many seconds before the last chance to flip and brake. */
+/** The impact warning starts this many seconds before the last chance to flip and brake (in the campaign earlier by the Host's Stone Memory, see campaign/scars). */
 const IMPACT_MARGIN = 2;
+/** A scar's tier as the screen numbers it. */
+const ROMAN = ['', 'I', 'II', 'III'];
 /** Assumed duration of a flip for the impact warning (s): half a turn at full rate, plus spin-up and settling. */
 const FLIP_SECONDS = Math.PI / MAX_TURN_RATE + 0.35;
 /** Without a rock or ship in the way, the crosshair shows the nose at this distance (units, 2 km). */
@@ -1252,6 +1258,13 @@ export class Game implements OnlineGame {
   private missionStyle = 0;
   /** The running mission is flown clean so far: from its first drill, not one clone lost (see campaign/campaign, medal). */
   private cleanRun = false;
+  /** The running mission is flown untouched so far: not one hit on the own hull (see campaign/campaign, master). */
+  private untouched = false;
+  /** The own ship flies the campaign's hull this round (a mission's drills or a trial's round): its clones lost count as scars and cost their print (see cloneLost). */
+  private campaignHull = false;
+  /** The next own clone comes from PrintMe's back room (see campaign/campaign, BLACK_GLITCH); its hands tremble until `tremorUntil` (game time). */
+  private blackPrinted = false;
+  private tremorUntil = -Infinity;
   /** The running mission's time trial was flown within its gold time (see campaign/campaign, gold). */
   private goldRun = false;
   /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
@@ -1552,6 +1565,11 @@ export class Game implements OnlineGame {
       this.keepCampaign((campaign) => (campaign.crackle = !campaign.crackle));
       this.showVoiceChoice();
     });
+    // PrintMe's counter or its back room for the next clones (see campaign/campaign, PRINT_PRICE)
+    $('board-print').addEventListener('click', () => {
+      this.keepCampaign((campaign) => (campaign.blackPrint = !campaign.blackPrint));
+      this.showPrintChoice();
+    });
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
     $('push-toggle').addEventListener('click', () => void this.togglePush());
@@ -1754,40 +1772,104 @@ export class Game implements OnlineGame {
     $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
     const trips = sideTrips(campaign);
     $('board-side-label').hidden = !trips.length;
-    // a courier run names its place, for every place has one
-    const placeOf = (mission: Mission) => t(arenaById((mission.courier ?? mission.ambush ?? mission.mining)!)!.name);
+    // a side job names its place, for every place has its own
+    const placeOf = (mission: Mission) => t(arenaById(sideJobAt(mission)!)!.name);
+    const tripNote = (mission: Mission) =>
+      mission.courier
+        ? `${t('Six beacons in order against the clock.')} ${pays(mission)}`
+        : mission.ambush
+          ? `${t('Three bandits on a client’s lane.')} ${pays(mission)}`
+          : mission.mining
+            ? `${t('Rock broken and its ore flown in against the clock.')} ${pays(mission)}`
+            : mission.bounty
+              ? `${t('Wanted: {name}, and friends.', { name: wantedName(mission) })} ${pays(mission)}`
+              : mission.smuggle
+                ? `${t('Cargo past two Ministry patrols, running silent.')} ${pays(mission)}`
+                : `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`;
+    // the side trips first, then the side jobs place by place, each place under its name
+    const places = [...new Set(trips.map((mission) => sideJobAt(mission)).filter((place) => place !== null))];
     $('board-side').replaceChildren(
-      ...trips.map((mission) =>
-        job(
-          mission,
-          mission.courier
-            ? `${t('At {place}: six beacons in order against the clock, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
-            : mission.ambush
-              ? `${t('At {place}: three bandits on a client’s lane, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
-              : mission.mining
-                ? `${t('At {place}: rock broken and its ore flown in against the clock, whenever you like.', { place: placeOf(mission) })} ${pays(mission)}`
-              : `${pays(mission)} ${t('A side trip: fly it whenever you like.')}`,
-        ),
-      ),
+      ...trips.filter((mission) => !sideJobAt(mission)).map((mission) => job(mission, tripNote(mission))),
+      ...places.map((place) => {
+        const group = Object.assign(document.createElement('div'), { className: 'board-group' });
+        group.append(Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('At {place}:', { place: t(arenaById(place)!.name) }) }), ...trips.filter((mission) => sideJobAt(mission) === place).map((mission) => job(mission, tripNote(mission))));
+        return group;
+      }),
     );
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     const again = (mission: Mission) => {
-      const note = !hasMedal(mission)
-        ? t('Flown again, it pays nothing.')
-        : campaign.medals.includes(mission.id)
-          ? t('Flown again, it pays nothing. ★ Medal: flown clean.')
-          : t('Flown again, it pays only its medal: {bonus} ☉ for a clean run, not one clone lost.', { bonus: coinText(Math.round(mission.pay * MEDAL_SHARE)) });
+      const bonus = coinText(Math.round(mission.pay * MEDAL_SHARE));
+      // a side job's client pays again; any other job only its medals
+      const note = sideJobAt(mission)
+        ? `${t('Flown again, the client pays {fee} ☉.', { fee: coinText(Math.round(mission.pay * AGAIN_SHARE)) })} ${campaign.medals.includes(mission.id) ? t('★ Medal: flown clean.') : t('Its medal: {bonus} ☉ for a clean run, not one clone lost.', { bonus })}`
+        : !hasMedal(mission)
+          ? t('Flown again, it pays nothing.')
+          : campaign.medals.includes(mission.id)
+            ? t('Flown again, it pays nothing. ★ Medal: flown clean.')
+            : t('Flown again, it pays only its medal: {bonus} ☉ for a clean run, not one clone lost.', { bonus });
+      const mastery = !hasMedal(mission) ? '' : campaign.masters.includes(mission.id) ? ` ${t('★ Master: clean, untouched and in time.')}` : ` ${t('Master: {bonus} ☉ for a run clean, untouched and in time.', { bonus })}`;
       const time = goldOf(mission);
-      if (time === null) return note;
-      return campaign.golds.includes(mission.id) ? `${note} ${t('★ Gold time: {seconds} s, flown.', { seconds: time })}` : `${note}${goldNote(mission)}`;
+      if (time === null) return note + mastery;
+      return (campaign.golds.includes(mission.id) ? `${note} ${t('★ Gold time: {seconds} s, flown.', { seconds: time })}` : `${note}${goldNote(mission)}`) + mastery;
     };
-    $('board-done').replaceChildren(...done.map((mission) => job(mission, mission.courier || mission.ambush || mission.mining ? `${t('At {place}.', { place: placeOf(mission) })} ${again(mission)}` : again(mission))));
+    $('board-done').replaceChildren(...done.map((mission) => job(mission, sideJobAt(mission) ? `${t('At {place}.', { place: placeOf(mission) })} ${again(mission)}` : again(mission))));
     const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
     const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
     $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;
+    this.showRecord();
+    this.showCounter();
+    this.showPrintChoice();
     this.showVoiceChoice();
     (next ? $('board-next').querySelector('button')! : $('board-back')).focus();
+  }
+
+  /** The job board's scars and standing: what the Host learned dying, and who counts the Host as theirs (see campaign/scars, campaign/standing). */
+  private showRecord() {
+    const campaign = this.campaign;
+    const scars = SCAR_KINDS.filter((kind) => scarTier(campaign.scars[kind])).map((kind) => this.scarText(kind, scarTier(campaign.scars[kind])));
+    const standing = PEOPLES.filter((people) => standingTier(campaign.standing[people])).map((people) => t('{people}: {tier}', { people: t(PEOPLE_NAMES[people]), tier: t(STANDING_NAMES[standingTier(campaign.standing[people])]) }));
+    $('board-record').hidden = !scars.length && !standing.length;
+    $('board-record').textContent = [...scars, standing.length ? t('Standing: {list}.', { list: standing.join(', ') }) : ''].filter(Boolean).join(' ');
+  }
+
+  /** Rask's counter on the job board: the racks' parts on offer and the peoples' own, each with what it changes and its price (see campaign/salvage). */
+  private showCounter() {
+    const campaign = this.campaign;
+    const offer = counterOf(campaign);
+    $('board-counter-label').hidden = !offer.length && !campaign.salvage.length;
+    const fitted = campaign.salvage.map((id) => salvageById(id)!);
+    const part = (salvage: Salvage) => {
+      const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode' });
+      button.innerHTML = `<span class="mode-name"><span class="mode-label"></span></span><span class="mode-note"></span>`;
+      button.querySelector('.mode-label')!.textContent = t(salvage.name);
+      const replaces = fitted.find((other) => other.slot === salvage.slot);
+      button.querySelector('.mode-note')!.textContent = [t(salvage.story), this.salvageChange(salvage), t('{price} ☉ from the wallet.', { price: coinText(salvage.price) }), replaces ? t('Replaces {part}.', { part: t(replaces.name) }) : ''].filter(Boolean).join(' ');
+      button.disabled = campaign.coins < salvage.price;
+      button.addEventListener('click', () => {
+        let bought = false;
+        this.keepCampaign((kept) => (bought = buySalvage(kept, salvage.id)));
+        if (bought) this.showBoard(true);
+      });
+      return button;
+    };
+    const holding = fitted.length ? Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('From the racks: {parts}.', { parts: fitted.map((salvage) => t(salvage.name)).join(', ') }) }) : null;
+    $('board-counter').replaceChildren(...offer.map(part), ...(holding ? [holding] : []));
+  }
+
+  /** What a part off Rask's counter changes, in words: each share as a percentage, plus for the better, minus for the worse. */
+  private salvageChange(salvage: Salvage): string {
+    const words = { laserReach: msg('laser reach'), laserHeat: msg('laser heat'), drive: msg('drive'), thrusters: msg('thrusters'), damage: msg('damage taken'), cooling: msg('cooling'), torpedoes: msg('torpedoes') } as const;
+    return (Object.entries(salvage.change) as [keyof typeof words, number][])
+      .map(([key, value]) => (key === 'torpedoes' ? t('{sign}{n} {what}', { sign: value > 0 ? '+' : '−', n: Math.abs(value), what: t(words[key]) }) : t('{sign}{n} % {what}', { sign: value > 0 ? '+' : '−', n: Math.round(Math.abs(value) * 100), what: t(words[key]) })))
+      .join(', ');
+  }
+
+  /** The job board's choice of where the next clones are printed (see Campaign.blackPrint). */
+  private showPrintChoice() {
+    $('board-print').textContent = this.campaign.blackPrint
+      ? t('Prints: PrintMe’s back room, {price} ☉ a clone, booted ragged', { price: BLACK_PRINT_PRICE })
+      : t('Prints: PrintMe’s counter, {price} ☉ a clone', { price: PRINT_PRICE });
   }
 
   /** The job board's choice of Nicole's voice, once her own is back (see Campaign.crackle). */
@@ -1811,6 +1893,7 @@ export class Game implements OnlineGame {
     this.mission = mission;
     // clean only from its first drill; what the job came to before the Host left it holds (see Campaign.run)
     this.cleanRun = this.missionStep() === 0;
+    this.untouched = this.cleanRun;
     const run = this.missionStep() > 0 ? this.campaign.run : freshRun();
     this.missionFine = run.fine;
     this.goldRun = run.gold;
@@ -1849,10 +1932,55 @@ export class Game implements OnlineGame {
       this.flyingAgain = false;
       return t('{mission} done.', { mission: t(mission.name) });
     }
-    let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null };
+    let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null, standing: null };
     this.keepCampaign((campaign) => (paid = complete(campaign, mission, 0)));
     const done = t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings });
     return paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done;
+  }
+
+  /** The Host's stick through a back-room clone's trembling hands (see campaign/campaign, BLACK_SHAKE). */
+  private tremble(read: Readonly<Controls>): Controls {
+    const shake = () => (Math.random() * 2 - 1) * BLACK_SHAKE;
+    return { ...read, yaw: Math.max(-1, Math.min(1, read.yaw + shake())), pitch: Math.max(-1, Math.min(1, read.pitch + shake())) };
+  }
+
+  /**
+   * The campaign's own clone lost (see campaign/scars, campaign/campaign printClone): the death
+   * counted towards its scar, the next clone's print paid, the hull outfitted with what the Host
+   * learned, and a back-room print booted ragged when it comes.
+   */
+  private cloneLost(cause: DeathCause, what: string | undefined) {
+    let scarred: ReturnType<typeof scar> = null;
+    let print = { paid: 0, owed: 0 };
+    this.keepCampaign((campaign) => {
+      scarred = scar(campaign.scars, scarOf(cause, what));
+      print = printClone(campaign);
+    });
+    this.blackPrinted = this.campaign.blackPrint;
+    this.me!.outfit(hullOf(this.campaign));
+    const printed = print.owed ? t('Next clone printed: {paid} ☉ paid, {owed} ☉ on the debt.', { paid: coinText(print.paid), owed: coinText(print.owed) }) : t('Next clone printed: {paid} ☉.', { paid: coinText(print.paid) });
+    if (!scarred) {
+      this.hud.flashMessage(this.time, printed, 3);
+      return;
+    }
+    const { kind, tier } = scarred as NonNullable<ReturnType<typeof scar>>;
+    this.speaker.say(CAMPAIGN.scar);
+    this.hud.flashMessage(this.time, `${this.scarText(kind, tier)} ${printed}`, 5);
+  }
+
+  /** A scar at its tier in words: its name, the tier and what it does (see campaign/scars). */
+  private scarText(kind: (typeof SCAR_KINDS)[number], tier: number): string {
+    return t('Scar: {scar} {tier}, {effect}.', { scar: t(SCAR_NAMES[kind]), tier: ROMAN[tier], effect: t(SCAR_EFFECTS[kind], scarNumbers(kind, tier)) });
+  }
+
+  /** What the screen says of a master's run (see campaign/campaign, master) and its bonus as kept. */
+  private masterText(bonus: number): string {
+    return t('Master: clean, untouched and in time. {bonus} ☉ bonus.', { bonus: coinText(bonus) });
+  }
+
+  /** What the screen says of a people's standing newly reached (see campaign/standing), or nothing. */
+  private standingText(reached: { people: (typeof PEOPLES)[number]; tier: number } | null): string {
+    return reached ? t('{people} count you as {tier}.', { people: t(PEOPLE_NAMES[reached.people]), tier: t(STANDING_NAMES[reached.tier]) }) : '';
   }
 
   /** What the screen says of a medal won (see campaign/campaign, medal): the clean run and its bonus as kept. */
@@ -3077,7 +3205,7 @@ export class Game implements OnlineGame {
     $('hud-room').textContent = '';
 
     // the campaign flies its own hull (Lot 7731), never one of the Games
-    const campaignHull = !!this.mission && (mode === 'school' || !!this.trialOf);
+    const campaignHull = (this.campaignHull = !!this.mission && (mode === 'school' || !!this.trialOf));
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, campaignHull ? 'magpie' : this.selectedShip, true);
     this.me.wish = this.tint;
     this.me.setTint(TINTS[this.tint].hex);
@@ -3587,6 +3715,12 @@ export class Game implements OnlineGame {
   /** Spawns a ship on the edge of the field, facing the center, away from asteroids; no cable comes along. */
   private respawn(ship: Ship) {
     this.dropCables(ship);
+    // a back-room print boots ragged: its link glitching, its hands trembling (see campaign/campaign, BLACK_GLITCH)
+    if (ship === this.me && this.blackPrinted) {
+      this.blackPrinted = false;
+      this.glitch.trigger(1, BLACK_GLITCH);
+      this.tremorUntil = this.time + BLACK_TREMOR;
+    }
     const position = new THREE.Vector3();
     const candidate = new THREE.Vector3();
     let best = -Infinity;
@@ -4214,7 +4348,7 @@ export class Game implements OnlineGame {
     const read = this.state === 'playing' ? this.input.read() : IDLE;
     // in a scene in person the Host's stick turns the clone's head, the ship waits in its clamps
     if (this.stage) this.stage.turnHead(read.yaw, read.pitch, dt);
-    const hand = this.stage ? IDLE : read;
+    const hand = this.stage ? IDLE : this.time < this.tremorUntil ? this.tremble(read) : read;
     if (recorder) this.record(hand, dt);
     const myControls = this.flightComputer(hand);
     if (recorder) this.recorded(myControls);
@@ -5720,37 +5854,45 @@ export class Game implements OnlineGame {
       this.startTrial(this.mission);
       return;
     }
-    // a mission flown again done: nothing paid but its medal, if flown clean, back to the job board
+    // a mission flown again done: nothing paid but its medals (a side job its fee), back to the job board
     if (school.finished && this.mission && this.flyingAgain) {
       const mission = this.mission;
       let bonus: number | null = null;
       let golden: number | null = null;
+      let mastered: number | null = null;
+      let fee: ReturnType<typeof flownAgain> = { kept: 0, cut: 0, standing: null };
       this.keepCampaign((campaign) => {
         bonus = medal(campaign, mission, this.cleanRun);
         golden = gold(campaign, mission, this.goldRun);
+        mastered = master(campaign, mission, this.cleanRun, this.untouched, this.goldRun);
+        fee = flownAgain(campaign, mission, this.missionFine);
       });
       this.flyingAgain = false;
       this.mission = null;
       this.schoolMark = this.schoolTrack = null;
       this.showMenu();
       this.showBoard(true);
-      const won = [bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : ''].filter(Boolean).join(' ');
+      const paid = fee.kept + fee.cut ? (this.campaign.held ? t('{mission} done again: {kept} ☉ for you.', { mission: t(mission.name), kept: coinText(fee.kept) }) : t('{mission} done again: {kept} ☉ for you, {cut} ☉ for the yard.', { mission: t(mission.name), kept: coinText(fee.kept), cut: coinText(fee.cut) })) : '';
+      const won = [paid, bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : '', mastered !== null ? this.masterText(mastered) : '', this.standingText(fee.standing)].filter(Boolean).join(' ');
       if (won) this.notice(won);
       return;
     }
     // a mission of the campaign done: paid (its medal too, if flown clean), and back to the menu
     if (school.finished && this.mission) {
       const mission = this.mission;
-      let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null };
+      let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null, standing: null };
       let bonus: number | null = null;
       let golden: number | null = null;
+      let mastered: number | null = null;
       this.keepCampaign((campaign) => {
         paid = complete(campaign, mission, this.missionFine, this.missionStyle);
         bonus = medal(campaign, mission, this.cleanRun);
         golden = gold(campaign, mission, this.goldRun);
+        mastered = master(campaign, mission, this.cleanRun, this.untouched, this.goldRun);
       });
       this.missionFine = 0;
       this.cleanRun = true;
+      this.untouched = true;
       this.goldRun = false;
       this.missionStyle = 0;
       // the story runs on into its next mission without the menu, from the pad; the menu only
@@ -5767,7 +5909,7 @@ export class Game implements OnlineGame {
             ? t('{mission} done: {kept} ☉ for you, {ratings} ratings.', { mission: t(mission.name), kept: coinText(paid.kept), ratings: paid.ratings })
             : t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. You still owe {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) });
       const ranked = paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done;
-      this.notice([ranked, bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : ''].filter(Boolean).join(' '));
+      this.notice([ranked, bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : '', mastered !== null ? this.masterText(mastered) : '', this.standingText(paid.standing)].filter(Boolean).join(' '));
       this.schoolMark = this.schoolTrack = null;
       return;
     }
@@ -5782,6 +5924,8 @@ export class Game implements OnlineGame {
       return;
     }
     const me = this.me!;
+    // a hit on the own hull, and the run is no master's (see campaign/campaign, master)
+    if (me.alive && me.hull < MAX_HULL) this.untouched = false;
     // in person the people stand in the room: no hologram calls in
     this.showCaller(me.alive && !this.stage ? school.caller : null);
     this.schoolMark = waypoint;
@@ -7602,6 +7746,7 @@ export class Game implements OnlineGame {
       what ??= cause ?? undefined;
       cause = 'knockout';
     }
+    if (victim === this.me && this.campaignHull) this.cloneLost(cause, what);
     devlog?.death({
       t: Math.round(this.time * 10) / 10,
       ship: victim.name,
@@ -8033,7 +8178,7 @@ export class Game implements OnlineGame {
         const turnRate = 0.3 + 0.7 * (0.25 + 0.75 * me.thrusters);
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
-        if (timeToImpact < brakeTime + IMPACT_MARGIN) {
+        if (timeToImpact < brakeTime + IMPACT_MARGIN + (this.campaignHull ? stoneSeconds(this.campaign.scars) : 0)) {
           impact = timeToImpact;
           alarms.raise({ id: 'impact', level: timeToImpact < IMPACT_CRITICAL ? 'critical' : 'warning', text: t('IMPACT'), direction: heading, seconds: timeToImpact, tone: 'impact' });
         }
