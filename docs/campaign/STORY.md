@@ -98,7 +98,7 @@ What the Host carries into the Games, nobody else knows. Nicole's line in the sp
 
 Side trips (optional, from Act II on): **Mercury** (sun miners in the Caloris basin; the Terminator Run, a race along the line between day and night) and **Venus** (Victory Cola's cloud city, a race through the acid cloud deck). They pay coins and ratings and hold one echo each, so a completionist hears all of Nicole's past. The job board offers them under "Side trips" once Pilot Episode (5.1) is done; they are flown whenever the Host likes, always from their start, and leave the drill reached in the story's next job as it was.
 
-Built: Mercury. **Terminator Run** (☉ 4,000 · 300): Hedda briefs it ("Mercury. The sun miners in Caloris race the Terminator Run every morning, before the heat of noon comes. Side money, and they pay well. Mind the glare."), Nicole calls it ("Two laps round the miners' camp, Host, eight rings, the sun miners against us. First or second, and they pay."): two laps of eight rings on an ellipse round the sun miners' camp, 300 m over the plain and its ridges, against five sun miners (Glare, Noonday, Sunspot, Scorch, Dazzle; skill 0.4 to 0.55); first or second home. Lost: "Two miners home before us. Their own ground, their own glare. Again." Won: "Paid. The miners say noon lasts weeks here, and nobody races at noon." Then **Mercury Echo** (· 40), over the wrinkle ridge north of the camp: "The old frequency, Host, here too, over the ridge north of the camp. Hold us still over it." The echo: "Teodor says I fly like a librarian. Careful, and always back on time. He says it like it is a bad thing." Nicole: "Teodor. She had a friend who laughed at her. I keep a list of my friends, Host. It is short. You are on it." The race is flown round the camp; that it runs along the terminator itself is still to come: the sun stands in the same direction over every arena (`SUN_DIRECTION`, 8.5° over the plain), which puts Mercury's real terminator some 360 km off the field, so the line through the field needs a sun of the place's own, on the horizon there.
+Built: Mercury. **Terminator Run** (☉ 4,000 · 300): Hedda briefs it ("Mercury. The sun miners in Caloris race the Terminator Run every morning, before the heat of noon comes. Side money, and they pay well. Mind the glare."), Nicole calls it ("Two laps round the miners' camp, Host, eight rings, the sun miners against us. First or second, and they pay."): two laps of eight rings on an ellipse round the sun miners' camp, 300 m over the plain and its ridges, against five sun miners (Glare, Noonday, Sunspot, Scorch, Dazzle; skill 0.4 to 0.55); first or second home. Lost: "Two miners home before us. Their own ground, their own glare. Again." Won: "Paid. The miners say noon lasts weeks here, and nobody races at noon." Then **Mercury Echo** (· 40), over the wrinkle ridge north of the camp: "The old frequency, Host, here too, over the ridge north of the camp. Hold us still over it." The echo: "Teodor says I fly like a librarian. Careful, and always back on time. He says it like it is a bad thing." Nicole: "Teodor. She had a friend who laughed at her. I keep a list of my friends, Host. It is short. You are on it." The race is flown on the terminator itself: Caloris has a sun of its own (`MERCURY_SUN`), its middle on the horizon over the camp, the plain in its first light, the ridges and the craters' rims lit on their sunward faces and their shadows reaching out over the dark ground; seen from the race's 300 m the whole disc stands just over the plain, 2.6 times as wide as from Earth.
 
 Built: Venus, offered once Victory Cola has signed the Host (Sponsor Night, 8.4). **Cloud Line** (☉ 5,000 · 400): Hedda briefs it ("Venus. Highball, Victory Cola's city, floats over the acid clouds, and Crisp's people race the Cloud Line through them for the feeds. Your sponsor wants you in it. Go and look expensive."), Nicole calls it ("The Cloud Line, Host: two laps, eight rings, half of them under the acid clouds. Down there it is hot, and it eats paint. Victory Cola's own pilots against us. Only first counts."): two laps of eight rings round Highball, the four on its eastern side 150 m under the deck, the four on its western side over it, against five of Victory Cola's pilots (Fizz, Sparkle, Syrup, Bubbles, Caramel; skill 0.4 to 0.6); only first home. Lost: "Victory Cola's own pilots were home before us. The sponsor is not amused. Again." Won: "First. The feeds loved the dive. My paint did not." Then **Venus Echo** (· 40), over biodome four's roof: "The old frequency, Host, here too, over biodome four. Hold us still over it." The echo: "Biodome four has tomatoes today. Ines cried over them. Real tomatoes, under a real roof, going somewhere real." Nicole: "Ines, the gardener. They grow tomatoes here too, under glass, for a cola. Nobody here is going anywhere."
 
@@ -114,9 +114,9 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 0.1 | Cold Boot | story | Nicole boots, crashes and boots again; Rask explains the debt. Out of rack 7731, down the lane to the depot, brake below 10 m/s 400 m short of the hall's door, in and down onto bay 3's pad (within 15 m, slower than 2 m/s for a second). Pim welds the thrusters up to 70 %. Cannot fail. | — | School: turn, drive, brake, stopAt |
-| 1.1 | Lamplighter | menial | Relight six dead row beacons: hold within 40 m of each for 3 s before the shift ends (6 min). Fails when the shift ends. | ☉ 150 · 10 | School: stopAt, markers |
-| 1.2 | Live Target | menial | A sponsor's "Hunt a Hull" experience: paying tourists fire red shots at the Magpie. Survive 90 s inside a 1 km sphere by jinking; every hit takes ☉ 10 off the pay. A death ends it with what was earned. | up to ☉ 300 · 15 | School: the slide drill's gunner, three of them |
+| 0.1 | Cold Boot | story | Rask wakes the Host on credit; Nicole boots, crashes and boots again; at the bay Rask tells the deal: the debt, worked off job by job. Out of rack 7731, down the lane to the depot, brake below 10 m/s 400 m short of the hall's door, in and down onto bay 3's pad (within 15 m, slower than 2 m/s for a second). Pim welds the thrusters up to 70 %. Cannot fail. | — | School: turn, drive, brake, stopAt |
+| 1.1 | Lamplighter | menial | Relight six dead row beacons, the haulers' marks into the yard, each a mast with a dead lamp at a row's end: hold within 40 m of one for 3 s and its lamp flickers into life, lights with a flare and blinks orange from then on; all six before the shift ends (6 min). Fails when the shift ends. Flown with the autopilot, as every job of chapter 1 is: it holds the ship against Psyche's faint pull. | ☉ 150 · 10 | School: stopAt, markers |
+| 1.2 | Live Target | menial | A sponsor's "Hunt a Hull" experience: paying tourists fire red shots at the Magpie. Survive 90 s inside a 1.5 km sphere round the yard's middle (the racks, the lane and the depot's bay with the pad it starts on) by jinking; out of it, the mark counts down 3 s to fly back in before it starts over. Every hit takes ☉ 10 off the pay, kept with the job when the Host leaves it and comes back. A death ends it with what was earned. | up to ☉ 300 · 15 | School: the slide drill's gunner, three of them |
 | 1.3 | Canister Sweep | menial | Four salvage canisters drifting between the rows, each flown through to take it in tow (15 m behind and 4 m below the stern on a cable) and brought to the crusher's hopper behind the hall. | ☉ 200 · 10 | Probe pickup; new: one towed piece of cargo |
 | 1.4 | The Cutter | shop | Rask fits the mining cutter and puts its ☉ 1,200 on the debt. | — | Shipyard |
 | 1.5 | First Cut | mining | Break three rocks of the spoil field with the cutter and fly through 20 ore glints (seven from each rock broken). Cannot fail; the cutter overheats fast. Pim names the hull: the Magpie. | ☉ 400 · 20 | Rock breaking; new: ore glints, the cutter's short reach |
@@ -227,6 +227,8 @@ Built besides them: a bar to go to in person between the jobs, the Gullet at Occ
 
 Built: the courier runs, at 17 places (every place of the story with a start of its own but the Boneyard, whose racks block the way, and Miranda, whose way runs out of the arena), offered on the job board as "Courier Run" once the place's first job is done: six of the Ministry's coils in order from the place's start, the first 800 m ahead along the way it faces and the next 700 m on each, weaving up to 250 m to either side (seeded by the place), at the start's height, each lifted in steps of 50 m until clear of the place's ground and rock; flown as a time trial ("A courier run, Host. Six beacons in order, and the client pays for speed. The clock starts at the first."), its limit by the course's length at 140 m/s (26 to 27 s), its gold time the place's own (15 to 21 s, between what a middling bot and a sharp one fly there), ☉ 800 and 60 ratings the first time, its medal and its gold once each. Built too: the ambushes, at the same places and offered as their courier runs are, "Ambush": three bandits of skill 0.45 (Rook, Jinx, Moth) lying in wait 300 m round the courier course's first beacon, fighting every ship they see ("An ambush on the client’s lane, Host. Three of them, lying in wait. Clear it, and the client pays."); all three down wins, ☉ 1,000 and 80 ratings the first time, its medal once. Built too: the mining runs, "Mining Run", at the six places where loose rock or ice drifts near the start (Rheasilvia, Occator, the Tug Yards, Haumea, Eris and Granary), offered as their courier runs are ("A mining run, Host. Break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break."): rock broken sheds its glints of ore as in First Cut, and twelve of them flown through within 90 s of the first break win it ("The barge left without our ore. Again, Host." starts it over), ☉ 900 and 60 ratings the first time, its medal once. Mercury and Venus offer the **Terminator Run** and the **Cloud Line**, and Earth's orbit, once reached, the existing Satellite Junkyard as a scrapping job for the Orbital Freedom Network ("Junk forever. Your shift starts now.").
 
+Built too, under Rask's counter: the **bounties**, "Bounty", three wanted faces at each place of the courier runs, each offered once the one before is done, the first with the place's courier run, the second once its people count the Host as Known, the third as Trusted ("A bounty off Rask’s board, Host. The face on the poster is out there with friends. Bring the face down, and the bounty is ours."). The face and its escorts guard the courier course's third beacon 600 m round it, fighting every ship they see; the face shot down ends it. The first: the face of skill 0.45 and one escort of 0.4 (☉ 1,500, 100 ratings); the second: 0.55 and two of 0.45 (☉ 2,500, 150); the third: 0.65 with a bot's gear of the Games, the hook and the nanobots, and three of 0.5 (☉ 4,000, 250). The faces are named, three a place (at Rheasilvia Gravel Mae, Scrapjaw and Saint Abrasive; at Occator Twitch Okono, the Dowager and Lucky Pell; …), on the board as "Wanted: {name}, and friends." And the **smuggling runs**, "Smuggling Run", at the same places once their people count the Host as Known: cargo for the courier course's last beacon, the drop ("Cargo nobody wrote down, Host, for the people here. Two Ministry patrols on the lane. Burn now, then cut the drive and coast past them silent. Hot, they see us from far off. Hold us still at the drop."). Two of the Ministry's patrol cutters (Patrol Vigil and Patrol Census) circle 400 m round points 1.6 km beside the straight lane, at 55 % and 90 % of its way, once a minute, half a turn apart, so that a ship on the lane passes them farther than 1 km (where a silent ship shows) and nearer than 2 km (where a hot one does), and the start lies out of their sight; a patrol within 2 km of the ship while it runs hot (its drive burning, or fired within 2 s) sees it ("Scanned. The patrol saw us hot, Host. The cargo goes over the side, and we start again."). Held within 300 m of the drop slower than 10 m/s for 3 s, the cargo is handed over, within 4 minutes ("The contact gave up on us. Again, Host."); ☉ 1,400 and 60 ratings. Every side job of the board (courier runs, ambushes, mining and smuggling runs, bounties) pays a fifth of its pay on every flight again (the client hires whoever is there), less the yard's cut while the debt is unpaid, besides its medals; the board groups the side jobs by place, each under its name.
+
 ### The echoes
 
 Twelve fragments of Nicole's past, one hidden in each of twelve places, found by flying to a point and holding still. Each plays in the voice she has at that moment. Found in order they tell her story; missed ones can be found later.
@@ -253,7 +255,7 @@ Twelve fragments of Nicole's past, one hidden in each of twelve places, found by
 - **Coins (☉).** The campaign pays in Solar Coins, a cryptocurrency of the future that the solar system has agreed on as its means of payment. The game keeps two wallets apart: the campaign's, which fills and empties and carries the debt, and the tournament hangar's for the online Games. Nothing crosses from one to the other, so no Host enters the tournament in debt, and the tournament's cap, prices and checks stay as they are.
 - **The cut.** Until chapter 4 every payout loses 40 % to the holder of the debt (Rask, and after he sells it in chapter 3 the Tallymen), and the cut pays the debt off; what the yard fits on credit goes on it. The debt's balance shows on the job board. At Phobos an anonymous benefactor buys it (the Ministry, through Quill, as twist 6 reveals): the debt does not vanish, it changes hands. From then on no cut is taken and the holder asks for no payments, only that the Host keeps rising; the board shows the debt as held, and admission to the Games is the price at which the holder lets the Host go free.
 - **Ratings.** Paid by missions and by style. Broadcast work (*Lanes Watch*, the Circuit, the trials) pays double for moments: a double kill, a perfect start, a knockout. Ratings are never spent.
-- **No repair bills, no lost money on death.** Death costs the attempt and nothing else in coins: the prints are on the debt's printing contract (see "Clones outside the Games cost"), so they show in the story and never in the wallet. The grind stays fun when failing is cheap and trying again is quick.
+- **Prints (built).** Every clone the campaign loses is printed again, and the print is paid: 40 ☉ at PrintMe's counter, from the wallet, what it lacks on the debt while the debt is unpaid and not held (up to its cap of ☉ 100,000; once it is held, PrintMe prints the rest on the house). The job board offers PrintMe's back room instead, 10 ☉ a clone, whose clones boot ragged: their link glitching for 3 s and their hands trembling for 8 s (the stick off by up to a quarter of a full deflection). The board's note says which; the screen says what each print cost. No repair bills: the price of dying stays small, so failing is cheap and trying again quick, but a Host who dies a lot feels it in the wallet.
 
 ### Rating ranks
 
@@ -308,8 +310,48 @@ The looks come from Pim and cost little: neon trim and drive flame on the hangar
 - **Short loops.** A menial job lasts two to four minutes. The cutter is reached in about twenty minutes of play, the laser in about two hours.
 - **Every chapter shows on the ship.** Pim fits each part on the pad (the title screen's showcase), and the Magpie looks different afterwards (section 5).
 - **Medals.** Each job that pays has a medal for a clean run, worth a bonus once: flown from its first drill to its last without a clone lost, the first time or flown again from the job board, it pays a quarter of the job's pay, less the yard's cut while the debt is unpaid; the board marks it ★ (built; a trial's round has none). Each time trial has a gold time besides, worth the same bonus once (built: Valhalla Sprint 21 s, Tiger Stripes 66 s, Geyser Field 42 s, each between a middling bot's time and a sharp one's, the board marking it ★); the courier runs have theirs (see Side jobs). Speedrunners get their sport; others never need it.
+- **Master runs (built).** Beside its medal and its gold time, every job that pays has a master's run, worth the same bonus once: flown clean, untouched (not one hit on the hull from its first drill to its last) and, where it has a gold time, within it. The board marks it "★ Master: clean, untouched and in time." and names the bonus where it is still to win.
+- **Scars (built).** The Host learns from dying (see "Scars" below): every clone lost counts towards a scar of what killed it, and each scar deepens at 3, 10 and 25 deaths, so progress also comes from losing.
+- **Rask's counter (built).** Parts from the racks' dead fighters, a gain bought with a loss, turning after every job (see "Rask's counter" below); and the side jobs pay a fee on every flight again, so coins have a use and a source beside the story.
 - **The tally.** Pim stencils a tally mark under the canopy for every clone lost. It is the Host's real count. Hedda glances at it now and then and says something.
 - **Nicole grows.** Her modules restore the HUD piece by piece (below), so a Host feels the ship getting smarter, not only stronger.
+
+### Scars
+
+Built. The Host holds every death of every clone; some teach. Each clone the campaign loses (in a job, a trial's round) counts towards the scar of what killed it, and at 3, 10 and 25 deaths of a kind the scar deepens a tier (I, II, III); every clone printed from then on flies with it, in the campaign only. Nicole says it as the tier comes ("Another scar, Host. You will remember that one. So will the next clone."), the screen names it, and the job board lists them.
+
+| Scar | What teaches it | A tier |
+|---|---|---|
+| Stone Memory | rock, ground, wreckage, a ram, a shove into rock | the impact warning 0.5 s earlier |
+| Flinch | a beam | every hit 3 % softer |
+| Burn Scar | a planet's air, a solar flare, a drive's plume, the battleship's exhaust | the radiators shed 4 % of a stock ship's more |
+| Blast Nerves | a torpedo, a blast, a nova, a comet's head or shower, a battery, a self-destruct | the thrusters 3 % of a stock ship's harder |
+| Undertow | a massive body's well | the main drive 3 % of a stock ship's harder |
+
+### Rask's counter
+
+Built. On the job board, "Rask's counter": parts pulled from the dead fighters in the racks, each with its quirk and Rask's line on where it came from. Three are on the counter at a time, picked by the jobs flown so far (the first time or again), so the counter turns after every job and shows the same parts after the same jobs; only parts the hull can take are offered (a coil needs the military laser, a drive part the overhauled drive, thrusters the rebuilt ones, plating the armor panels, radiators their first grade, a rack a torpedo tube). A part takes its slot (coil, drive, thrusters, plating, radiators, rack), one a slot; a part bought for a taken slot replaces the other, which goes back to the racks. Paid from the wallet alone, never on the debt.
+
+| Part | Slot | Price ☉ | What changes |
+|---|---|---|---|
+| A dead Navy pilot's laser coil ("Reaches farther. Runs hotter. So did he.") | coil | 900 | laser reach +10 %, heat a shot +25 % |
+| A racer's cold coil | coil | 800 | heat a shot −20 %, reach −8 % |
+| A racer's cracked injector | drive | 1,200 | drive +6 %, cooling −6 % |
+| An ice tug's slow bell | drive | 700 | drive −3 %, thrusters +6 % |
+| Ice-tug thruster nozzles | thrusters | 900 | thrusters +8 %, drive −3 % |
+| The Loose's hot puffers | thrusters | 1,400 | thrusters +12 %, cooling −5 % |
+| Tallyman armor scrap | plating | 1,000 | damage −6 %, thrusters −5 % |
+| A slab of the Solar Wall | plating | 1,500 | damage −10 %, drive −5 % |
+| Ice-tug radiator fins | radiators | 900 | cooling +8 %, damage +3 % |
+| A Feeder's heat sails | radiators | 1,500 | cooling +12 %, thrusters −4 % |
+| A hollow-cell torpedo rack | rack | 1,800 | a torpedo more, cooling −6 % |
+| A cracked magazine | rack | 1,300 | a torpedo more, damage +5 % |
+
+Each people that counts the Host as Kin (see "Standing") sells its own part there besides, always on the counter for them: the Rockborn a cutter's lens (coil, ☉ 2,500: reach +12 %, heat +5 %), the Navy towns hull plate signed out to nobody (plating, ☉ 3,000: damage −12 %, thrusters −2 %), the lane crews a racer's drive bell (drive, ☉ 3,000: +8 %, cooling −2 %), the Circuit its pit crew's thrusters (☉ 3,000: +14 %, cooling −2 %), the Loose a harpoon rack rebuilt for torpedoes (rack, ☉ 3,500: a torpedo more, cooling −2 %), the Feeders their ice fins (radiators, ☉ 3,000: cooling +15 %, thrusters −1 %).
+
+### Standing
+
+Built. The side jobs are flown for the people of their place, who remember: the Rockborn (Rheasilvia, Occator, Haumea, Eris), the Navy towns (Phobos, Triton), the lane crews of Jupiter (Callisto, Europa, Io, Ganymede), the Circuit round Saturn (Titan, Enceladus, Iapetus), the Loose (Miranda, Pluto) and the Feeders (Lantern, Granary); the Ballroom's guests count nobody. A courier run, an ambush, a mining or smuggling run earns its people 3 standing the first time and 1 on every flight again, a bounty 4. From 6 a people counts the Host as Known (its smuggling runs, a place's second bounty), from 15 as Trusted (a place's third bounty), from 30 as Kin (its own part at Rask's counter). The screen says when a people counts the Host as more; the board lists the standing.
 
 ### Nicole's restoration
 
@@ -427,7 +469,7 @@ These bodies are invented for the game. They are numbered by when they were foun
 - **The Moon: the Ballroom.** The President's ballroom, as the radio promised: a gilded dome on the lunar highlands, its own neon portrait of the President across it, Earth hanging overhead, blue and white with the lights of its cities on the night side. Flown: the parade.
 - **Earth.** Seen from the Moon, and from the existing Satellite Junkyard.
 
-- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. (Built: Caloris, the basin's warm grey floor with craters and two wrinkle ridges, the sun miners' camp at its middle, their solar fields on the plain beyond, the morning sun 9° up and 2.6 times as wide as from Earth; the race round the camp.) **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days. (Built: Highball, Victory Cola's floating city, a square platform of red, white and gold with six glass halls of gardens and a tower shaped as the brand's bottle, over the acid clouds' deck; the air under it hazes, brakes and heats as Titan's does.)
+- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. (Built: Caloris, the basin's warm grey floor with craters and two wrinkle ridges, the sun miners' camp at its middle, their solar fields on the plain beyond, the camp on the terminator, the sun on the horizon and 2.6 times as wide as from Earth; the race round the camp.) **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days. (Built: Highball, Victory Cola's floating city, a square platform of red, white and gold with six glass halls of gardens and a tower shaped as the brand's bottle, over the acid clouds' deck; the air under it hazes, brakes and heats as Titan's does.)
 
 ### Music
 
@@ -512,33 +554,45 @@ Lines for the voices are written the way `src/music/lines.ts` writes them: Nicol
 
 ### The opening: Lot 7731 (built, Cold Boot)
 
+Quick to the flying: four lines and one crash before the hull leaves its rack. What the Host has to learn besides (the deal, the link, the missing name, Nicole's restarts) comes at the bay and with the first jobs, and Rask names the debt in every brief of chapter 1, so it is plain what the jobs are flown for.
+
 *The link boots into the hull in rack 7731. Outside, under floodlights on lattice masts, racks of dead fighters run to the crater's wall, row after row.*
+
+**RASK** *(comm, warm, much too loud)*: Good morning, Host! Rise and shine! Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one. On credit, darling.
 
 **NICOLE** *(salvage)*: Hello. I am Nicole, your personal flight
 
 *NAVIGATION UNIT · MEMORY FAULT · REBOOTING: the picture torn, her voice cut off, a falling tone.*
 
-**NICOLE**: Hello. I am Nicole. I will help you. I am your personal assistant.
+**NICOLE**: Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.
 
-**NICOLE**: The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.
+**RASK**: Now get out of that rack and come up to the depot. Bay three, the one with the lights. We'll talk about your debt there.
+
+*Out of the rack, down the lane, the brake, into bay 3 and down onto its pad.*
+
+**NICOLE**: Down on the pad in bay three. Drive off.
+
+**RASK** *(hologram)*: There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.
+
+**RASK**: Oskar Rask, yardmaster. Here's what you signed: a Host license, a printer, a fighter. Twenty-five thousand coins. You work them off here, job by job, and I take forty percent of everything you earn till it's paid. Die all you like, darling. The printer's included.
+
+**NICOLE**: I do not like that man.
+
+*Then Pim (below). After Lamplighter:*
+
+**NICOLE**: About the link, Host. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.
+
+*After Live Target:*
 
 **NICOLE**: Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.
 
-*She crashes again, and boots again.*
+**RASK**: Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.
 
-**NICOLE**: Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.
+*After Canister Sweep:*
 
 **NICOLE**: I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.
 
-**RASK** *(comm, warm, much too loud)*: Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.
-
-**RASK**: Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.
-
-**RASK**: Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.
-
-**RASK**: Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.
-
-**NICOLE**: I do not like that man.
+Rask's briefs keep the debt in sight: "First job, and the first coins off your debt. …" (Lamplighter), "… The crusher eats them, I sell what comes out, and a bit comes off your debt. Bring me four." (Canister Sweep).
 
 ### Nicole in the first missions (salvage voice, built)
 

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
-import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
+import { boxUv, hazardSurface, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
+import { radialTexture } from '../view/textures';
 import { patience, rayPatience, touchPatience } from '../world/patience';
 import { barge, iceTug, rayTug, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
 import { type HullBox, rayHull, touchHull } from '../world/boxes';
@@ -37,6 +38,8 @@ export interface SchoolContext {
   hooked: boolean;
   /** The ship the own hook holds on to (a drill's ship to tow), or null. */
   hookedShip: Ship | null;
+  /** The piece of the field the own hook holds on to (the comet a drill asks to ride), or null. */
+  hookedRock: Asteroid | null;
   /** The impact warning is on. */
   impactAhead: boolean;
   /** The orbit readout as the HUD shows it near the black hole (see game/orbit); null elsewhere. */
@@ -1701,6 +1704,20 @@ const towAt = new THREE.Vector3();
 const GLINT_SIZE = 30;
 const GLINT_FLICKER = 9;
 
+/**
+ * A row's beacon (see Markers.beacon): a mast standing on the ground, a housing in hazard
+ * paint on top, the lamp's lens in it and its halo. Dead it is a
+ * dark lens; while a pilot holds beside it, it flickers into life as an old tube does, more often
+ * the longer it is held; lit, it blinks orange, once every BEACON_BLINK seconds.
+ */
+const BEACON_HOUSING = 90;
+const BEACON_LENS = 50;
+const BEACON_HALO = 500;
+const BEACON_BLINK = 1.2;
+const BEACON_LIT = 0xff9d00;
+const BEACON_DEAD = 0x2a2622;
+type Beacon = { body: THREE.BufferGeometry; lens: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; halo: THREE.Sprite | null; charge: number; lit: boolean; litAt: number };
+
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 /** Where the tug's winch is (scratch). */
 const winchPoint = new THREE.Vector3();
@@ -1745,6 +1762,10 @@ export class Markers {
   /** The prop in tow behind a ship and the cable to it (see tow). */
   private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
   private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
+  /** The rows' beacons a drill set up (see beacon), their steel and halo made at the first. */
+  private beacons: Beacon[] = [];
+  private beaconSteel: THREE.Material | null = null;
+  private beaconHalo: THREE.Texture | null = null;
 
   /** A spinning diamond (150 units, about 7.5 m, by default). */
   buoy(position: THREE.Vector3, scale = 1) {
@@ -1754,6 +1775,68 @@ export class Markers {
     mesh.userData.spin = true;
     this.root.add(mesh);
     return mesh.position;
+  }
+
+  /**
+   * A row's beacon with its lamp at `lamp`, its mast down to the ground `height` below (units),
+   * dead until charge or light says otherwise; its number among the beacons set up since the
+   * props were cleared.
+   */
+  beacon(lamp: THREE.Vector3, height: number): number {
+    this.beaconSteel ??= new THREE.MeshStandardMaterial({ ...surfaced(hazardSurface(), 1), flatShading: true });
+    if (!this.beaconHalo && typeof document !== 'undefined') this.beaconHalo = radialTexture([[0, 'rgba(255, 220, 160, 1)'], [0.2, 'rgba(255, 157, 0, 0.6)'], [1, 'rgba(255, 120, 0, 0)']]);
+    const group = new THREE.Group();
+    group.position.copy(lamp);
+    const mast = boxUv(new THREE.BoxGeometry(40, height, 40).translate(0, -height / 2, 0).toNonIndexed(), STATION_TILE / 4);
+    const housing = boxUv(new THREE.BoxGeometry(BEACON_HOUSING, BEACON_HOUSING, BEACON_HOUSING).toNonIndexed(), STATION_TILE / 4);
+    const body = mergeGeometries([mast, housing]);
+    group.add(new THREE.Mesh(body, this.beaconSteel));
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(BEACON_LENS, 12, 8).translate(0, BEACON_HOUSING / 2 + BEACON_LENS * 0.6, 0), new THREE.MeshBasicMaterial({ color: BEACON_DEAD }));
+    group.add(lens);
+    let halo: THREE.Sprite | null = null;
+    if (this.beaconHalo) {
+      halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.beaconHalo, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }));
+      halo.position.set(0, BEACON_HOUSING / 2 + BEACON_LENS * 0.6, 0);
+      halo.scale.setScalar(BEACON_HALO);
+      group.add(halo);
+    }
+    this.root.add(group);
+    this.beacons.push({ body, lens, halo, charge: 0, lit: false, litAt: 0 });
+    return this.beacons.length - 1;
+  }
+
+  /** How far a pilot holding beside beacon `n` has brought it to light (0..1): it flickers the more, the nearer to 1. */
+  chargeBeacon(n: number, charge: number) {
+    const beacon = this.beacons[n];
+    if (beacon && !beacon.lit) beacon.charge = charge;
+  }
+
+  /** Beacon `n` lights for good: a flare, then its blink. */
+  lightBeacon(n: number) {
+    const beacon = this.beacons[n];
+    if (!beacon || beacon.lit) return;
+    beacon.lit = true;
+    beacon.litAt = this.clock;
+  }
+
+  /** Whether beacon `n` is lit. */
+  beaconLit(n: number): boolean {
+    return this.beacons[n]?.lit ?? false;
+  }
+
+  /** The beacons' lamps for this frame: dead, flickering into life, or lit and blinking. */
+  private shineBeacons() {
+    for (const [i, beacon] of this.beacons.entries()) {
+      // a flicker is a look only (Math.random is for visuals)
+      const since = this.clock - beacon.litAt;
+      const on = beacon.lit ? since < 0.6 || (since + i * 0.2) % BEACON_BLINK < BEACON_BLINK * 0.55 : beacon.charge > 0 && Math.random() < beacon.charge * beacon.charge;
+      beacon.lens.material.color.setHex(on ? BEACON_LIT : BEACON_DEAD);
+      if (beacon.halo) {
+        beacon.halo.material.opacity = on ? 1 : 0;
+        // the flare as it lights, then the blink's halo
+        beacon.halo.scale.setScalar(BEACON_HALO * (beacon.lit && since < 0.6 ? 3 - (2 * since) / 0.6 : 1));
+      }
+    }
   }
 
   /** A faint wire sphere around a point: the zone a drill wants the ship in. */
@@ -2030,6 +2113,7 @@ export class Markers {
   update(dt: number, field: AsteroidField) {
     this.clock += dt;
     this.kit.blink(this.clock);
+    this.shineBeacons();
     if (this.towing) {
       const { prop, ship, cable } = this.towing;
       ship.flight.forward(towAt).multiplyScalar(-TOW_LENGTH).add(ship.flight.position);
@@ -2076,6 +2160,13 @@ export class Markers {
     this.rings = [];
     this.pipes = [];
     this.moving = [];
+    for (const beacon of this.beacons) {
+      beacon.body.dispose();
+      beacon.lens.geometry.dispose();
+      beacon.lens.material.dispose();
+      beacon.halo?.material.dispose();
+    }
+    this.beacons = [];
   }
 
   /** Frees the geometries and materials on the GPU when the flight school ends. */
@@ -2084,6 +2175,8 @@ export class Markers {
     for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.ore, this.cableMaterial]) resource.dispose();
     this.canisterGeometry?.dispose();
     this.canisterMaterial?.dispose();
+    this.beaconSteel?.dispose();
+    this.beaconHalo?.dispose();
     this.pipeGeometry?.dispose();
     this.pipeMaterial?.dispose();
     this.kit.dispose();

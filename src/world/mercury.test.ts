@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { CAMP_AT, GROUND_HALF, groundPlacement, groundRelief, LAND, ridgeNorth, surfaceHeight } from './mercury';
+import { CAMP_AT, GROUND_HALF, groundPlacement, groundRelief, LAND, MERCURY_SUN, ridgeNorth, surfaceHeight } from './mercury';
+import { SUN_DIRECTION } from './space';
 import { MERCURY_TYPE } from './yard';
 import { POST_HALF } from './callisto';
 import { groundField, reliefOutside, testField } from '../test/field';
@@ -28,5 +29,13 @@ describe('Caloris on Mercury', () => {
     const roof = new THREE.Vector3(0, CAMP_AT.y + 200, 0);
     expect(field.overlap(roof, 100)).not.toBeNull();
     expect(field.overlap(roof.clone().setY(CAMP_AT.y + 2 * POST_HALF.y + 2000), 100)).toBeNull();
+  });
+
+  it('lies on the terminator: its sun on the horizon over the camp, in the bearing the sun has over every arena', () => {
+    expect(arenaById('mercury')!.sun.direction).toBe(MERCURY_SUN);
+    expect(MERCURY_SUN.y).toBe(0);
+    expect(MERCURY_SUN.length()).toBeCloseTo(1, 12);
+    expect(MERCURY_SUN.x * SUN_DIRECTION.z - MERCURY_SUN.z * SUN_DIRECTION.x).toBeCloseTo(0, 12);
+    expect(MERCURY_SUN.x * SUN_DIRECTION.x + MERCURY_SUN.z * SUN_DIRECTION.z).toBeGreaterThan(0);
   });
 });

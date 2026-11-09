@@ -67,7 +67,7 @@ export function keepUpright(flight: FlightModel, out: Controls): Controls {
 }
 
 /**
- * The brake (held): the flight computer flips the ship head over and burns against the flight
+ * The brake (held): the flight computer turns the ship about flat and burns against the flight
  * until it is at rest, the thrusters taking out the drift across the nose; slow, the thrusters
  * stop it alone. At rest it holds still until gravity has pulled the ship clearly out of rest.
  */
@@ -103,7 +103,8 @@ export class Brake {
     const aligned = flight.noseAngleTo(retrograde) < BRAKE_BURN_ANGLE;
     this.flipping = speed > BRAKE_FINE || (this.flipping && speed > BRAKE_SETTLE);
     if (this.flipping) {
-      flight.flip(retrograde, 3, Object.assign(out, controls));
+      // a flat turn, the ship held upright meanwhile, so it swings round about the arena's up
+      keepUpright(flight, flight.flip(retrograde, 3, Object.assign(out, controls)));
       // the burn eases off at the end, so the ship comes to rest instead of reversing
       out.thrust = aligned ? Math.min(1, Math.max(0, drift.z) / (MAIN_THRUST * Math.max(drive, 0.05) * BRAKE_EASE)) : 0;
     } else {

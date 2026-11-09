@@ -4,11 +4,13 @@ import { Noise } from './noise';
 import { craterField, reliefPiece, reliefTop } from './horizon';
 import { setFromAxisAngle } from '../detthree';
 import type { Placement } from './asteroids';
+import { SUN_DIRECTION } from './space';
 
 /**
  * Caloris on Mercury (a side trip of the campaign, see docs/campaign/): the floor of Mercury's
- * greatest basin, where the sun miners work, the morning sun low over the plain and two to three
- * times as wide as from Earth. Where things are, for the field and its scenery (world/caloris).
+ * greatest basin, where the sun miners work, on the terminator: the morning sun on the horizon
+ * and two to three times as wide as from Earth. Where things are, for the field and its scenery
+ * (world/caloris).
  *
  * The place's y is the true vertical. The plain lies LAND below the field's middle, pocked with
  * craters and crossed by two wrinkle ridges, the plain's crust pushed up where it shrank as the
@@ -22,6 +24,15 @@ const KM = 20000;
 export const MERCURY_FALL = 74;
 /** Mercury's radius (units, 2,440 km). */
 const MERCURY_RADIUS = 2440 * KM;
+
+/**
+ * Towards Caloris's sun: on the horizon over the camp, in the bearing the sun has over every
+ * arena (SUN_DIRECTION's). The terminator, the line between day and night, runs through the camp
+ * square to that bearing: the sun's middle on the horizon there, its upper half over it; the
+ * planet's curve lifts it 0.05° for every 2 km towards it and sinks it as much away from it, so
+ * from the race's 300 m, where the horizon dips 0.9°, the whole disc stands just over the plain.
+ */
+export const MERCURY_SUN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize();
 
 /** The plain under the field's middle (units, 800 m below it). */
 export const LAND = -16000;

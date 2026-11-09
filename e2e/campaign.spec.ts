@@ -228,7 +228,7 @@ test('Lamplighter counts the beacons held by, one after the other', async ({ pag
 
 test('Cold Boot docks the hull on bay 3’s pad once it rests above it', async ({ page }) => {
   // at the docking drill, the flight into the bay done
-  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 15, coins: 0, bond: 25000 })));
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 7, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
   await takeNextJob(page);
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
@@ -236,24 +236,24 @@ test('Cold Boot docks the hull on bay 3’s pad once it rests above it', async (
   await page.evaluate(async () => {
     const game = window.game;
     const start = game.time;
-    while (game.school.stepIndex === 15 && game.time - start < 20) {
+    while (game.school.stepIndex === 7 && game.time - start < 20) {
       // the pad: the hall's middle (see PAD in src/world/yard.ts), on the crater floor 60 m below the field's center
       game.me.flight.position.set(24800, -1200 + game.me.radius + 100, 0);
       game.me.flight.velocity.set(0, 0, 0);
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   });
-  expect(await page.evaluate(() => window.game.school.stepIndex)).toBe(16);
+  expect(await page.evaluate(() => window.game.school.stepIndex)).toBe(8);
   expect(errors).toEqual([]);
 });
 
 test('on the address with ?campaign its first mission flies on the flight school’s machinery, and done it is kept', async ({ page }) => {
   // the mission at its last drill (Pim's words once docked), so it ends by itself and runs on into the next
-  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 18, coins: 0, bond: 25000 })));
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 12, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
   await takeNextJob(page);
-  await expect(page.locator('#school-step')).toContainText('Cold Boot 19/19', { timeout: 90_000 });
-  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3', { timeout: 60_000 });
+  await expect(page.locator('#school-step')).toContainText('Cold Boot 13/13', { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/4', { timeout: 60_000 });
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(kept.done).toEqual(['coldBoot']);
   expect(kept.step).toBe(0);
@@ -302,7 +302,7 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   // Lamplighter flown again: from its first drill, the story's drill reached kept as it was
   await page.locator('#board-done button', { hasText: 'Lamplighter' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
-  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3');
+  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/4');
   await page.waitForFunction(() => window.game.school.stepIndex === 1, null, { timeout: 60_000 });
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(kept.step).toBe(1);
@@ -346,7 +346,7 @@ test('the job board offers a side trip once Act II has begun, flies it at its pl
 
 test('a courier run on the job board: six beacons laid at its place from its start, the clock starting at the first', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  const run = page.locator('#board-side button', { hasText: 'Courier Run' }).filter({ hasText: 'Valhalla' });
+  const run = page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Courier Run' });
   await expect(run).toContainText('Gold time');
   await run.click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto', null, { timeout: 90_000 });
@@ -356,7 +356,7 @@ test('a courier run on the job board: six beacons laid at its place from its sta
 
 test('an ambush on the job board: three bandits round the client’s lane at its place, all of them down wins', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Ambush' }).filter({ hasText: 'Valhalla' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Ambush' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto' && window.game.jumpers?.bots.length === 3, null, { timeout: 90_000 });
   await page.evaluate(() => {
     for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
@@ -367,7 +367,7 @@ test('an ambush on the job board: three bandits round the client’s lane at its
 
 test('a mining run on the job board: rock broken sheds its ore, and the ore flown in wins it', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Mining Run' }).filter({ hasText: 'Rheasilvia' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Rheasilvia' }).locator('button', { hasText: 'Mining Run' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'rheasilvia', null, { timeout: 90_000 });
   // two rocks broken just ahead of the hull, and every glint of their ore flown through in turn
   await page.evaluate(async () => {

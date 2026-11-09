@@ -8,6 +8,9 @@ import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
 import { evenSkills, type Skills } from '../ship/bots';
 import { MISSIONS } from './missions';
+import { freshScars, scarHull, scarsFrom, type Scars } from './scars';
+import { fitSalvage, kinOffer, salvageById, salvageFrom, salvageHull, salvageOffer, type Salvage, type SalvageId } from './salvage';
+import { BOUNTY_STANDING, earnStanding, freshStanding, STANDING_AGAIN, STANDING_FIRST, standingFrom, tierAt, type People, type Standing } from './standing';
 
 /**
  * Lot 7731, the solo campaign (see docs/campaign/): the Host's state on the road to the Games,
@@ -151,10 +154,13 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('thrustersThree')) hull.thrusters = STOCK.thrusters + 3 * THRUSTER_STEP;
   // the Loose's reactor dump
   if (campaign.parts.includes('overdrive')) hull.overdrive = true;
+  // what the Host learned dying, and the racks' parts off Rask's counter
+  scarHull(hull, campaign.scars);
+  salvageHull(hull, campaign.salvage.filter((id) => campaign.parts.includes(salvageById(id)!.needs)));
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | 'gullet' | `courier:${ArenaId}` | `ambush:${ArenaId}` | `mining:${ArenaId}`;
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | 'gullet' | `mining:${ArenaId}` | `bounty:${ArenaId}:${number}` | `smuggle:${ArenaId}`;
 
 export interface Mission {
   id: MissionId;
@@ -199,7 +205,16 @@ export interface Mission {
    * counted as done and leaves the story's next mission as it was.
    */
   bar?: string;
+  /** A smuggling run (see campaign/missions, smuggling): the place it is flown at. */
+  smuggle?: ArenaId;
+  /** A bounty (see campaign/missions, bounties): the place its target is hunted at, and which of the place's three it is (1 to 3). */
+  bounty?: { place: ArenaId; tier: number };
+  /** The standing its place's people must hold the Host at before the job board offers it (see campaign/standing, standingTier). */
+  standing?: number;
 }
+
+/** The place a side job of the job board is flown at (a courier run, an ambush, a mining or smuggling run, a bounty), or null for any other mission. */
+export const sideJobAt = (mission: Mission): ArenaId | null => mission.courier ?? mission.ambush ?? mission.mining ?? mission.smuggle ?? mission.bounty?.place ?? null;
 
 /** Whether the Host passed a trial (see Mission.trial): placed `place` (from 1) in a race or deathmatch, their side leading in Capture the Flag, the battleship down in the President's Fleet. */
 export function trialPassed(trial: NonNullable<Mission['trial']>, outcome: { place: number; sideLeads: boolean; battleshipDown: boolean }): boolean {
@@ -263,9 +278,31 @@ export interface Campaign {
   medals: MissionId[];
   /** The time trials flown within their gold time, each worth its bonus once (see gold). */
   golds: MissionId[];
+  /** What the next mission has come to so far, kept with `step` so it holds when the Host leaves it and comes back: the coins lost on it (see complete's fine), the ratings from style, a gold time flown. */
+  run: Run;
+  /** The jobs flown clean, untouched and within their gold time, each worth its bonus once (see master). */
+  masters: MissionId[];
+  /** The clones lost by what killed them (see campaign/scars). */
+  scars: Scars;
+  /** The parts off Rask's counter in their slots (see campaign/salvage). */
+  salvage: SalvageId[];
+  /** Jobs flown, the first time or again, each once it is done: what turns Rask's counter (see salvageOffer). */
+  flown: number;
+  /** Standing with the system's peoples (see campaign/standing). */
+  standing: Standing;
+  /** The next clones printed in PrintMe's back room, cheap and ragged (see PRINT_PRICE). */
+  blackPrint: boolean;
   /** The Host has been to the Gullet, Kesh's bar in Occator's market (see Mission.bar): she greets a regular otherwise than a stranger. */
   gullet: boolean;
 }
+
+/** What a mission in hand has come to so far (see Campaign.run). */
+export interface Run {
+  fine: number;
+  style: number;
+  gold: boolean;
+}
+export const freshRun = (): Run => ({ fine: 0, style: 0, gold: false });
 
 /** A medal's bonus, and a gold time's: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
 export const MEDAL_SHARE = 0.25;
@@ -348,7 +385,29 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [], gullet: false });
+export const freshCampaign = (): Campaign => ({
+  done: [],
+  step: 0,
+  coins: 0,
+  bond: BOND,
+  ratings: 0,
+  parts: [],
+  modules: [],
+  held: false,
+  choices: [],
+  crackle: false,
+  habits: freshHabits(),
+  medals: [],
+  golds: [],
+  run: freshRun(),
+  masters: [],
+  scars: freshScars(),
+  salvage: [],
+  flown: 0,
+  standing: freshStanding(),
+  blackPrint: false,
+  gullet: false,
+});
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -371,7 +430,32 @@ export function campaignFrom(text: string | null): Campaign {
     const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
     // a gold only for a job done with a gold time
     const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds, gullet: kept.gullet === true };
+    const run = (typeof kept.run === 'object' && kept.run !== null ? kept.run : {}) as Partial<Run>;
+    const standing = standingFrom(kept.standing);
+    return {
+      run: { fine: number(run.fine, 0, 1_000_000), style: number(run.style, 0, 1_000_000), gold: run.gold === true },
+      done,
+      step: number(kept.step, 0, 1000),
+      coins: number(kept.coins, 0, 10_000_000),
+      bond: number(kept.bond, BOND, BOND_MAX),
+      ratings: number(kept.ratings, 0, 1_000_000),
+      parts,
+      modules,
+      held: kept.held === true,
+      choices,
+      crackle: kept.crackle === true,
+      habits,
+      medals,
+      golds,
+      // a master only for a job done that has a medal
+      masters: Array.isArray(kept.masters) ? done.filter((id) => kept.masters!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [],
+      scars: scarsFrom(kept.scars),
+      salvage: salvageFrom(kept.salvage),
+      flown: number(kept.flown, 0, 1_000_000),
+      standing,
+      blackPrint: kept.blackPrint === true,
+      gullet: kept.gullet === true,
+    };
   } catch {
     return fresh;
   }
@@ -381,7 +465,7 @@ export function campaignFrom(text: string | null): Campaign {
 export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !mission.side && !campaign.done.includes(mission.id)) ?? null;
 
 /** The side trips on offer: those whose mission to start from is done and that are not done themselves (see Mission.side); a bar is none. */
-export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && !mission.bar && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id));
+export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && !mission.bar && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id) && (!mission.standing || tierAt(campaign.standing, sideJobAt(mission)!) >= mission.standing));
 
 /** The bars open to the Host: those whose mission to start from is done, every time (see Mission.bar). */
 export const bars = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.bar && mission.side && campaign.done.includes(mission.side));
@@ -407,14 +491,17 @@ export const ON_AIR = 2;
 export const styleRatings = (rank: number, mission: Mission) => rank * STYLE_PER_RANK * (mission.onAir ? ON_AIR : 1);
 
 /** A job done (`style` the ratings its moments earned, see styleRatings): paid the first time, less the yard's cut while the debt is unpaid, and what it fits fitted. */
-export function complete(campaign: Campaign, mission: Mission, fine = 0, style = 0): { kept: number; cut: number; ratings: number; rank: string | null } {
+export function complete(campaign: Campaign, mission: Mission, fine = 0, style = 0): { kept: number; cut: number; ratings: number; rank: string | null; standing: { people: People; tier: number } | null } {
   const first = !campaign.done.includes(mission.id);
   if (first) {
     campaign.done.push(mission.id);
     mission.fit?.(campaign);
   }
   // a side trip leaves the story's next mission where the Host left it
-  if (!mission.side) campaign.step = 0;
+  if (!mission.side) {
+    campaign.step = 0;
+    campaign.run = freshRun();
+  }
   const pay = first ? Math.max(0, mission.pay - fine) : 0;
   // the debt's holder takes its cut until the benefactor holds the debt
   const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
@@ -424,5 +511,76 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0, style =
   const before = rankOf(campaign.ratings);
   campaign.ratings += ratings;
   const rank = rankOf(campaign.ratings);
-  return { kept: pay - cut, cut, ratings, rank: rank !== before ? rank : null };
+  campaign.flown++;
+  const place = sideJobAt(mission);
+  const standing = place && first ? earnStanding(campaign.standing, place, mission.bounty ? BOUNTY_STANDING : STANDING_FIRST) : null;
+  return { kept: pay - cut, cut, ratings, rank: rank !== before ? rank : null, standing };
+}
+
+/**
+ * A side job of the job board pays AGAIN_SHARE of its pay on every flight again (the client hires
+ * whoever is there), less `fine` and the yard's cut while the debt is unpaid; every other job flown
+ * again pays nothing but its medals.
+ */
+export const AGAIN_SHARE = 0.2;
+
+/** A job flown again done: a side job's fee and its people's standing (see AGAIN_SHARE, campaign/standing), the counter turned. */
+export function flownAgain(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number; standing: { people: People; tier: number } | null } {
+  campaign.flown++;
+  const place = sideJobAt(mission);
+  if (!place) return { kept: 0, cut: 0, standing: null };
+  const pay = Math.max(0, Math.round(mission.pay * AGAIN_SHARE) - fine);
+  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
+  campaign.bond -= cut;
+  campaign.coins += pay - cut;
+  return { kept: pay - cut, cut, standing: earnStanding(campaign.standing, place, STANDING_AGAIN) };
+}
+
+/**
+ * A job flown as a master flies it: clean (not one clone lost), untouched (not one hit taken) and,
+ * where it has a gold time, within it, the first time or on any flight again: its bonus paid once,
+ * as a medal's (see hasMedal). The bonus kept, or null for none won now.
+ */
+export function master(campaign: Campaign, mission: Mission, clean: boolean, untouched: boolean, golden: boolean): number | null {
+  if (!clean || !untouched || !hasMedal(mission) || (goldOf(mission) !== null && !golden) || campaign.masters.includes(mission.id)) return null;
+  campaign.masters.push(mission.id);
+  return bonusOf(campaign, mission);
+}
+
+/**
+ * Every clone the campaign loses is printed again, and the print is paid (docs/campaign/STORY.md,
+ * "Prints"): PRINT_PRICE at PrintMe's counter, or BLACK_PRINT_PRICE in its back room, whose clones
+ * boot ragged (see BLACK_GLITCH, BLACK_TREMOR). What the wallet lacks goes on the debt while it is
+ * unpaid and not held, up to BOND_MAX; once it is held, PrintMe prints the rest on the house.
+ */
+export const PRINT_PRICE = 40;
+export const BLACK_PRINT_PRICE = 10;
+/** A back-room clone's first seconds: its link glitching, and its hands trembling (the stick off by up to BLACK_SHAKE of a full deflection). */
+export const BLACK_GLITCH = 3;
+export const BLACK_TREMOR = 8;
+export const BLACK_SHAKE = 0.25;
+
+/** A clone printed: its price taken (see PRINT_PRICE), what the wallet paid and what went on the debt returned. */
+export function printClone(campaign: Campaign): { paid: number; owed: number } {
+  const price = campaign.blackPrint ? BLACK_PRINT_PRICE : PRINT_PRICE;
+  const paid = Math.min(campaign.coins, price);
+  campaign.coins -= paid;
+  const owed = campaign.held ? 0 : Math.min(price - paid, BOND_MAX - campaign.bond);
+  campaign.bond += owed;
+  return { paid, owed };
+}
+
+/** Whether the campaign's hull takes a part off Rask's counter: it has what the part is fitted to (see Salvage.needs). */
+export const takesSalvage = (campaign: Campaign) => (part: Salvage) => campaign.parts.includes(part.needs);
+
+/** The parts on Rask's counter now: the racks' turning parts after the jobs flown, and the peoples' own for their Kin (see campaign/salvage). */
+export const counterOf = (campaign: Campaign): Salvage[] => [...salvageOffer(campaign.flown, takesSalvage(campaign), campaign.salvage), ...kinOffer(campaign.standing, takesSalvage(campaign), campaign.salvage)];
+
+/** A part bought off Rask's counter, if it is on it and the wallet holds its price: paid, and fitted into its slot (see fitSalvage). */
+export function buySalvage(campaign: Campaign, id: SalvageId): boolean {
+  const part = counterOf(campaign).find((offered) => offered.id === id);
+  if (!part || campaign.coins < part.price) return false;
+  campaign.coins -= part.price;
+  campaign.salvage = fitSalvage(campaign.salvage, id);
+  return true;
 }

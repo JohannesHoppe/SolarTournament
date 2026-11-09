@@ -125,7 +125,11 @@ const STREAK_START = 400;
 const STREAK_FULL = 4000;
 /** Size of the area the sun's shadow map covers, centered on the field. */
 const SHADOW_REACH = 140000;
-/** Direction towards the sun; it sits in front of the ships at spawn. */
+/**
+ * Direction towards the sun; it sits in front of the ships at spawn. Every arena's but where a
+ * place's own sun stands elsewhere (ArenaProfile's `sun.direction`, Caloris's on its horizon):
+ * then Space.sunDirection.
+ */
 export const SUN_DIRECTION = new THREE.Vector3(0.25, 0.15, -1).normalize();
 
 /** The dust's streaks are this much brighter than the dust's motes, in the dust's tint. */
@@ -181,6 +185,8 @@ export class Space {
   private sunBright = 1;
   /** The arena's sun as setSun set it, which a solar flare heats up (see flare). */
   private readonly sunBase = { size: 30000, intensity: 3.2, color: new THREE.Color(0xfff0dd) };
+  /** Towards the arena's sun as setSun set it: SUN_DIRECTION, or a place's own. */
+  readonly sunDirection = SUN_DIRECTION.clone();
 
   constructor() {
     const positions = new Float32Array(STAR_COUNT * 3);
@@ -289,7 +295,7 @@ export class Space {
    */
   setStarmap(sky: SkyFiles) {
     this.files = sky;
-    this.starmap = new Starmap(sky.stars, sky.glow, skyTurn(SUN_DIRECTION), SKY_RADIUS);
+    this.starmap = new Starmap(sky.stars, sky.glow, skyTurn(this.sunDirection), SKY_RADIUS);
     this.sky.add(this.starmap.group);
     this.setDetail(this.detail);
   }
@@ -332,8 +338,17 @@ export class Space {
     this.starmap.setGlow((this.detail >= 0.5 && this.sharpGlow) || this.files.glow);
   }
 
-  /** The sun of an arena: its size in the sky, and how bright and in which color it lights the field. */
-  setSun(sun: { size: number; intensity: number; color: number }) {
+  /** The sun of an arena: where it stands (SUN_DIRECTION but for a place's own), its size in the sky, and how bright and in which color it lights the field. */
+  setSun(sun: { size: number; intensity: number; color: number; direction?: THREE.Vector3 }) {
+    const toward = sun.direction ?? SUN_DIRECTION;
+    if (!toward.equals(this.sunDirection)) {
+      this.sunDirection.copy(toward);
+      this.sun.position.copy(toward).multiplyScalar(SKY_RADIUS * 0.8);
+      this.sunLight.position.copy(toward).multiplyScalar(SHADOW_REACH);
+      IMPOSTOR_SUN.direction.value.copy(toward);
+      // the real sky turns with it, the sun on the ecliptic (see skyTurn)
+      this.starmap?.turn(skyTurn(toward));
+    }
     this.sunBase.size = sun.size;
     this.sunBase.intensity = sun.intensity;
     this.sunBase.color.set(sun.color);
@@ -350,7 +365,7 @@ export class Space {
     this.skyColor.set(mood.sky);
     this.groundColor.set(mood.ground);
     this.skyIntensity = mood.ambient;
-    this.skyLight.position.copy(mood.sunward ? SUN_DIRECTION : THREE.Object3D.DEFAULT_UP);
+    this.skyLight.position.copy(mood.sunward ? this.sunDirection : THREE.Object3D.DEFAULT_UP);
     this.realSky = mood.starmap;
     this.starShare = mood.stars;
     this.showSky();
