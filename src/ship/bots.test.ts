@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
 import { pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
@@ -693,5 +693,29 @@ describe('friendly fire: the own side is hit as any other, and bots hold their f
     expect(novaWorth(me, [me], radius, NOVA_SHED)).toBe(true);
     // one of its own side inside the blast: never, whatever it would take
     for (const held of [0, NOVA_PATIENCE, NOVA_SHED * 10]) expect(novaWorth(me, [me, rival, ally], radius, held, NOVA_SIEGE * 10)).toBe(false);
+  });
+});
+
+describe('several against one', () => {
+  it('only the two nearest raiders press the Host with their own skills, the rest held back, and one shot down lets the next press', () => {
+    const host = ship('Host', new THREE.Vector3(), new THREE.Vector3(0, 0, 1));
+    const raiders = [3000, 1000, 2000, 4000].map((z, i) => new Bot(ship(`r${i}`, new THREE.Vector3(0, 0, z), new THREE.Vector3(0, 0, -1)), evenSkills(0.5)));
+    pressOn(raiders, host);
+    expect(raiders.map((b) => b.pressing)).toEqual([false, true, true, false]);
+    expect(raiders.filter((b) => b.skills === b.own)).toHaveLength(PRESSING);
+    expect(raiders[0].skills.aim).toBeLessThan(raiders[0].own.aim);
+    // the pressers are kept while they live, though another comes nearer
+    raiders[3].ship.flight.position.set(0, 0, 10);
+    pressOn(raiders, host);
+    expect(raiders.map((b) => b.pressing)).toEqual([false, true, true, false]);
+    // one down: the nearest of the rest takes its place
+    raiders[1].ship.alive = false;
+    pressOn(raiders, host);
+    expect(raiders.map((b) => b.pressing)).toEqual([false, false, true, true]);
+    expect(raiders[3].skills).toBe(raiders[3].own);
+    // two left: both press in full
+    raiders[2].ship.alive = false;
+    pressOn(raiders, host);
+    expect(raiders.filter((b) => b.ship.alive).every((b) => b.skills === b.own)).toBe(true);
   });
 });

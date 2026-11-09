@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { IDLE, type Controls, type Device } from '../input/input';
-import { Bot, evenSkills, raceSpeedOf, skillsFrom, type Skill, type Skills } from '../ship/bots';
+import { Bot, evenSkills, pressOn, raceSpeedOf, skillsFrom, type Skill, type Skills } from '../ship/bots';
 import { flyByNose, MAIN_THRUST, MAX_SPEED } from '../ship/flight';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
 import { cos, sin } from '../detmath';
@@ -251,6 +251,7 @@ export class JobWorld implements SchoolContext {
     const mine = this.flightComputer(hands);
     if (hands.hook && this.me.alive) this.pressHook();
     if (hands.torpedo && this.me.alive) this.fireTorpedo(this.me);
+    if (this.jumpers) pressOn(this.jumpers.bots, this.me);
     for (const ship of [...this.ships]) {
       if (!ship.alive) {
         this.reprint(ship);
@@ -669,6 +670,8 @@ export class JobWorld implements SchoolContext {
     const sawing = !!raid && !raid.guard && raid.bots.includes(bot);
     bot.prey = null;
     bot.siege = sawing ? this.sawPoint(bot, raid) : null;
+    // a raider keeps to the place it raids (see Game.updateRound)
+    bot.homeAt = raid?.bots.includes(bot) ? raid.rig : null;
     bot.raceSpeed = raceSpeedOf(bot.skills);
     if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
     const ships = sawing ? this.ships.filter((other) => other === ship || other.flight.position.distanceTo(ship.flight.position) < JUMPER_NOTICE) : this.ships;

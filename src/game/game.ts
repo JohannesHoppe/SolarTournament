@@ -9,7 +9,7 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, raceSpeedOf, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, type Ring, type Skill, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, type Ring, type Skill, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { GradedOutputPass } from '../view/grade';
@@ -4538,6 +4538,8 @@ export class Game implements OnlineGame {
     this.playComet(dt, me);
     this.hullPatter(me, dt);
     this.watchHabits(me, dt);
+    // a mission's raiders: two press the fight, the rest held back (see bots, pressOn)
+    if (this.jumpers) pressOn(this.jumpers.bots, me);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -4589,6 +4591,8 @@ export class Game implements OnlineGame {
         // to a solar flare's safe pocket
         bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
+        // a mission's raiders keep to the place they raid (it has no edge, see keepInArena)
+        if (this.jumpers?.bots.includes(bot)) bot.homeAt = this.jumpers.rig;
         bot.prey = null;
         bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.sawPoint(bot, this.jumpers) : null;
         // a mission's rival races its rings
@@ -8148,7 +8152,7 @@ export class Game implements OnlineGame {
   /** The skill of a bot (see meanSkill), null for a Host's ship. */
   private skillOf(ship: Ship): number | null {
     const bot = this.bots.find((b) => b.ship === ship);
-    return bot ? meanSkill(bot.skills) : null;
+    return bot ? meanSkill(bot.own) : null;
   }
 
   /** In vacuum an explosion is only heard when its debris rattles against the own hull. */

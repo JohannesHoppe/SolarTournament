@@ -184,8 +184,9 @@ export class Pilot {
         return { ...hands, controls: { ...thought, fire: this.trigger(world, thought.fire) } };
       }
     }
-    // to the point, or holding where it is; the nose on what it looks at, if anything
-    wanted = this.flyTo(world, intent.goto ?? this.held(), intent);
+    // to the point, or holding where it is; the nose on what it looks at, if anything; in a fight
+    // with nothing in sight and no marker, to the nearest hostile the HUD's arrows show
+    wanted = this.flyTo(world, intent.goto ?? (intent.fight ? nearestOf(world.hostiles, this.me) : null) ?? this.held(), intent);
     if (intent.strafe) {
       wanted.strafeX = THREE.MathUtils.clamp(wanted.strafeX + intent.strafe.x, -1, 1);
       wanted.strafeY = THREE.MathUtils.clamp(wanted.strafeY + intent.strafe.y, -1, 1);
@@ -425,3 +426,10 @@ export const standard: Behavior = (world) => {
   // nothing to fly to: hold still where the clone is
   return world.me.flight.velocity.length() > REST ? { brake: true } : { goto: null };
 };
+
+/** The position of the nearest of `ships` to `me`, or null for none. */
+function nearestOf(ships: readonly Ship[], me: Ship): THREE.Vector3 | null {
+  let best: Ship | null = null;
+  for (const ship of ships) if (!best || ship.flight.position.distanceToSquared(me.flight.position) < best.flight.position.distanceToSquared(me.flight.position)) best = ship;
+  return best?.flight.position ?? null;
+}

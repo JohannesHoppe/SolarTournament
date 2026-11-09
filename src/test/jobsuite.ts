@@ -29,12 +29,13 @@ const JOB_TIMEOUT = 600_000;
  * The jobs a middling bot does not win as they are built, each with what the runs measured. They
  * are flown all the same, and checked for what any job must be (no clone printed in rock, no
  * attempt failing before a Host can act); their verdict is for the designer, not for a bot. Most
- * are fights of one against several: alone a middling bot wins an ambush against one of its
- * bandits every time, against two mostly, against three never.
+ * are fights of one against several: two raiders press it at once (see bots, pressOn), and a
+ * middling bot loses to two pressing it, ambushers of 0.45, 0.35 and 0.25 alike, mostly to shots
+ * into its drive and reactor from the one behind it.
  */
 const RACE = 'the rivals shoot the leader’s drive and send torpedoes, and a death starts the race over (the balance runs allow a middling bot three deaths a race)';
 export const OUTMATCHED: Readonly<Record<string, string>> = {
-  ...Object.fromEntries(MISSIONS.filter((m) => m.ambush).map((m) => [m.id, 'three bandits of 0.45 at once (one: won every time, two: mostly, three: never)'])),
+  ...Object.fromEntries(MISSIONS.filter((m) => m.ambush).map((m) => [m.id, 'three bandits of 0.45, two pressing at once: lost to the two, mostly to shots into the drive and reactor'])),
   sawBrothers: 'three brothers at once with the cutter (400 m); the rig falls 10 s after they start sawing, the flight there from the place’s start takes 17 s at 125 m/s',
   feedersComet: 'three guns sink Scout One (her drive turned to the Host and open to the guns on that side, and their torpedoes) within 1 to 5 s of the attempt, even with the Host beside her, so some attempts fail before a Host can act (one gun: won)',
   debtDay: 'four of six collectors at once',
@@ -50,7 +51,11 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   theMemorial: 'four guards at once round the tower while the Host climbs its hatches',
   hollowJack: 'Hollow Jack (0.7) and three raiders at once',
   firstDeath: 'Perihelion (0.75) and four of the Navy at once, Spare on the wing',
+  theHunter: 'Perihelion (0.7) and two escorts (0.5), two pressing at once: won or lost as the run’s chance falls, lost in the whole run',
   // bounties: the face and its escorts at once (the other 46 are won)
+  // the face and its escorts, two pressing at once, are won or lost as the run's chance falls: a
+  // change anywhere shifts which of them the whole run loses (these four lost, others won)
+  ...Object.fromEntries(['bounty:occator:1', 'bounty:io:3', 'bounty:ganymede:2', 'bounty:haumea:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
   'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
   'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',

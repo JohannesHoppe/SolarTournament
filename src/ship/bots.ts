@@ -282,6 +282,41 @@ export function allyInLine(shooter: Ship, ships: readonly Ship[], field: Asteroi
 /** A bot sets off a nova core (see novaWorth) among at least this many rivals. */
 const NOVA_CROWD = 2;
 /**
+ * A fight of several against one Host (a mission's raiders): only PRESSING of them press it with
+ * their own skills, the nearest to the Host when a place falls free, kept while they live; the
+ * others fight on at HELD_BACK of their skills (a wider aim, a slower trigger, less daring). Each
+ * one shot down lets the next press, so the fight stays one a Host can win and is hardest at its
+ * end.
+ */
+export const PRESSING = 2;
+export const HELD_BACK = 0.5;
+
+/** Chooses who of `bots` presses the fight on `prey` this step (see PRESSING). */
+export function pressOn(bots: readonly Bot[], prey: Ship) {
+  let pressing = 0;
+  for (const bot of bots) {
+    if (bot.pressing && !bot.ship.alive) bot.press(false);
+    if (bot.pressing) pressing++;
+  }
+  while (pressing < PRESSING) {
+    let next: Bot | null = null;
+    let nearest = Infinity;
+    for (const bot of bots) {
+      if (bot.pressing || !bot.ship.alive) continue;
+      const distance = bot.ship.flight.position.distanceToSquared(prey.flight.position);
+      if (distance < nearest) {
+        nearest = distance;
+        next = bot;
+      }
+    }
+    if (!next) break;
+    next.press(true);
+    pressing++;
+  }
+  for (const bot of bots) if (!bot.pressing && bot.skills === bot.own) bot.press(false);
+}
+
+/**
  * A nova core is worth setting off at the President's battleship once it takes this many hits
  * of its parts (three torpedoes' worth): a battery within about 700 m, the distance a bot
  * attacking one holds (see SIEGE_DISTANCE) and some more.
@@ -422,11 +457,26 @@ export class Bot {
     this.struckUntil = now + STRUCK_MEMORY;
   }
 
+  /** The skills it flies with: its own, or HELD_BACK of them while others press the fight (see pressOn). */
+  skills: Skills;
+  /** Its own skills held back (see pressOn). */
+  private readonly held: Skills;
+  /** Whether it is one of those who press a fight of several against one (see pressOn). */
+  pressing = false;
+
   constructor(
     readonly ship: Ship,
-    readonly skills: Skills,
+    readonly own: Skills,
   ) {
-    this.raceSpeed = raceSpeedOf(skills);
+    this.skills = own;
+    this.held = { aim: own.aim * HELD_BACK, reflexes: own.reflexes * HELD_BACK, daring: own.daring * HELD_BACK };
+    this.raceSpeed = raceSpeedOf(own);
+  }
+
+  /** Flies with its own skills while it presses the fight, else held back (see pressOn). */
+  press(on: boolean) {
+    this.pressing = on;
+    this.skills = on ? this.own : this.held;
   }
 
   think(now: number, ships: Ship[], field: AsteroidField): Controls {
@@ -632,8 +682,9 @@ export class Bot {
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       // a racer flies first: single shots only, even at an open drive, and only now and then
-      // (in its sniping spells), unless it looks back; the pack is a race, not a shooting gallery
-      const flying = racing && !lookingBack;
+      // (in its sniping spells), unless it looks back; the pack is a race, not a shooting gallery;
+      // so does a raider held back while two others press the fight (see pressOn)
+      const flying = (racing && !lookingBack) || this.skills === this.held;
       const heatLimit = open && !flying ? this.hotHeat : ARMOR_FIRE_HEAT;
       controls.fire = inSight && ((open && !flying) || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
