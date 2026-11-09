@@ -525,7 +525,10 @@ const cutAndHaul: Drill = {
   autopilot: false,
   enter(ctx, a) {
     // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
-    hauled = haulClaim(ctx)?.id ?? '';
+    const claim = haulClaim(ctx);
+    hauled = claim?.id ?? '';
+    // where the claim's rock stood as the attempt began, for the marker
+    a.site.copy(claim?.object.position ?? ctx.me.flight.position);
     a.count = ctx.rocksBroken;
     a.jinks = 0;
     a.next = 0;
@@ -1374,6 +1377,9 @@ function shower(ctx: SchoolContext, comet: THREE.Vector3, markers: Markers, also
   }
 }
 
+/** The comet Ride the Comet's attempt rides (see its enter). */
+let ridden: Asteroid | null = null;
+
 const rideComet: Drill = {
   line: CAMPAIGN.rideComet,
   keys: ['hook', 'turn', 'drive'],
@@ -1381,7 +1387,9 @@ const rideComet: Drill = {
   autopilot: false,
   keepsDrift: () => true,
   enter(ctx, a) {
-    a.points = [cometOf(ctx)];
+    // the comet as the attempt begins: the piece the hook must hold, whatever drifts nearer later
+    ridden = cometPiece(ctx);
+    a.points = [ridden?.object.position ?? COMET_AT];
     a.held = 0;
     shed.length = 0;
     shedding = new Randomizer(1704);
@@ -1391,7 +1399,7 @@ const rideComet: Drill = {
   done(ctx, a, markers) {
     const comet = a.points[0];
     // only the comet counts, never a block of ice the hook bit instead
-    const riding = ctx.hookedRock !== null && ctx.hookedRock === cometPiece(ctx);
+    const riding = ctx.hookedRock !== null && ctx.hookedRock === ridden;
     if (riding && a.seconds - a.lastShot >= SHED_EVERY) {
       a.lastShot = a.seconds;
       shedPiece(ctx, comet, markers);
@@ -1403,7 +1411,7 @@ const rideComet: Drill = {
     shed.length = 0;
   },
   waypoint: (_, a) => a.points[0] ?? null,
-  mark: (ctx, a) => (ctx.hookedRock !== null && ctx.hookedRock === cometPiece(ctx) ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
+  mark: (ctx, a) => (ctx.hookedRock !== null && ctx.hookedRock === ridden ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
 };
 
 /** Torpedo tubes II and III (17.5), from the Feeders: the tubes' second and third steps, at TUBES_TWO_PRICE and TUBES_THREE_PRICE. */

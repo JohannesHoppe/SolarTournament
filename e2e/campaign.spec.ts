@@ -1245,7 +1245,9 @@ test('Ride the Comet: the comet hooked sheds its shower at the hull on the cable
     const game = window.game;
     const comet = game.school.attempt.points[0];
     const flight = game.me.flight;
-    const toward = comet.clone().sub(flight.position).normalize();
+    // over the comet, nothing else between: the hull 250 m above its face, looking down at it
+    const toward = comet.clone().set(0, -1, 0);
+    flight.position.copy(comet).addScaledVector(toward, -60000);
     const face = game.field.raycast(flight.position, toward, 1e9);
     flight.position.addScaledVector(toward, face.distance - 5000);
     flight.velocity.set(0, 0, 0);
