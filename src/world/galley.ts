@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { macroUv, patchedPlating, PLATING_TILE } from './boneyard';
 import { boxUv, industrialSurface, signTexture, surfaced } from '../view/surfaces';
+import { shelf } from './shelf';
 
 /**
  * The galley of Patience (docs/campaign/STORY.md, section 7): a cramped room in her ring habitat
@@ -96,6 +97,8 @@ export function galley(): THREE.Group {
   sign.applyMatrix4(FACING_IN);
   sign.position.set(-20, hy * 2 - 10, hz - 1);
   root.add(sign);
+  // the shelf of mementos and the rail of tags beside the porthole (see world/shelf)
+  root.add(shelf());
 
   root.position.copy(GALLEY);
   root.updateMatrixWorld(true);

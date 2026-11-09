@@ -8,6 +8,7 @@ import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
 import { evenSkills, type Skills } from '../ship/bots';
 import { MISSIONS } from './missions';
+import { FAMILIES_PAY, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from './finds';
 import { freshScars, scarHull, scarsFrom, type Scars } from './scars';
 import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from './gullet';
 import { fitSalvage, kinOffer, salvageById, salvageFrom, salvageHull, salvageOffer, type Salvage, type SalvageId } from './salvage';
@@ -161,7 +162,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | 'gullet' | `mining:${ArenaId}` | `bounty:${ArenaId}:${number}` | `smuggle:${ArenaId}` | 'pit';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | 'gullet' | `mining:${ArenaId}` | `bounty:${ArenaId}:${number}` | `smuggle:${ArenaId}` | 'pit' | `free:${HuntPlace}` | 'galleyVisit';
 
 export interface Mission {
   id: MissionId;
@@ -214,6 +215,11 @@ export interface Mission {
   pit?: boolean;
   /** The standing its place's people must hold the Host at before the job board offers it (see campaign/standing, standingTier). */
   standing?: number;
+  /**
+   * A flight with no end of its own (a free flight at a place, a visit to Patience's galley, see
+   * campaign/missions): never done, paying nothing, left through the pause menu for the job board.
+   */
+  open?: boolean;
 }
 
 /** The place a side job of the job board is flown at (a courier run, an ambush, a mining or smuggling run, a bounty), or null for any other mission. */
@@ -303,6 +309,38 @@ export interface Campaign {
   rumors: number;
   /** The Pit's record: the most waves cleared in a night. */
   pit: number;
+  /** The black boxes of the dead found, by id (see campaign/finds, TAG_IDS), in the order found. */
+  tags: string[];
+  /** The places whose data chip is found (see campaign/finds, CHIPS), in the order found. */
+  chips: HuntPlace[];
+}
+
+/** Pays `amount` into the wallet less the yard's cut while the debt is unpaid (the cut pays the debt off): what the Host kept and what the yard took. */
+function payOut(campaign: Campaign, amount: number): { kept: number; cut: number } {
+  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(amount * YARD_CUT));
+  campaign.bond -= cut;
+  campaign.coins += amount - cut;
+  return { kept: amount - cut, cut };
+}
+
+/**
+ * A black box taken (see campaign/finds): kept, and once its place's are all found, the families'
+ * reward paid, FAMILIES_PAY less the yard's cut while the debt is unpaid. Null for one already
+ * found or unknown; else whether the place's set is complete and what it paid.
+ */
+export function takeTag(campaign: Campaign, id: string): { complete: boolean; kept: number; cut: number } | null {
+  const found = tagOf(id);
+  if (!found || campaign.tags.includes(id)) return null;
+  campaign.tags.push(id);
+  const complete = Array.from({ length: TAGS_PER_PLACE }, (_, index) => tagId(found.place, index)).every((tag) => campaign.tags.includes(tag));
+  return { complete, ...(complete ? payOut(campaign, FAMILIES_PAY) : { kept: 0, cut: 0 }) };
+}
+
+/** A place's data chip taken: kept; false for one already found. */
+export function takeChip(campaign: Campaign, place: HuntPlace): boolean {
+  if (campaign.chips.includes(place)) return false;
+  campaign.chips.push(place);
+  return true;
 }
 
 /** What a mission in hand has come to so far (see Campaign.run). */
@@ -321,11 +359,7 @@ export const goldOf = (mission: Mission): number | null => mission.drills.find((
 
 /** The bonus a medal or a gold pays, less the yard's cut while the debt is unpaid: paid into the wallet, the bonus kept returned. */
 function bonusOf(campaign: Campaign, mission: Mission): number {
-  const bonus = Math.round(mission.pay * MEDAL_SHARE);
-  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(bonus * YARD_CUT));
-  campaign.bond -= cut;
-  campaign.coins += bonus - cut;
-  return bonus - cut;
+  return payOut(campaign, Math.round(mission.pay * MEDAL_SHARE)).kept;
 }
 
 /**
@@ -419,6 +453,8 @@ export const freshCampaign = (): Campaign => ({
   bet: null,
   rumors: 0,
   pit: 0,
+  tags: [],
+  chips: [],
 });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
@@ -442,6 +478,9 @@ export function campaignFrom(text: string | null): Campaign {
     const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
     // a gold only for a job done with a gold time
     const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
+    // black boxes and chips only of places that hide them, each once, in the order found
+    const tags = Array.isArray(kept.tags) ? [...new Set(kept.tags.filter((id): id is string => typeof id === 'string' && TAG_IDS.includes(id)))] : [];
+    const chips = Array.isArray(kept.chips) ? [...new Set(kept.chips.filter((place): place is HuntPlace => typeof place === 'string' && isHuntPlace(place)))] : [];
     const run = (typeof kept.run === 'object' && kept.run !== null ? kept.run : {}) as Partial<Run>;
     const standing = standingFrom(kept.standing);
     return {
@@ -471,6 +510,8 @@ export function campaignFrom(text: string | null): Campaign {
       bet: kept.bet && typeof kept.bet === 'object' && done.includes(kept.bet.mission) && goldOf(MISSIONS.find((mission) => mission.id === kept.bet!.mission)!) !== null && BET_STAKES.includes(kept.bet.stake) ? { mission: kept.bet.mission, stake: kept.bet.stake } : null,
       rumors: number(kept.rumors, 0, RUMORS.length),
       pit: number(kept.pit, 0, 10_000),
+      tags,
+      chips,
     };
   } catch {
     return fresh;
@@ -520,9 +561,7 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0, style =
   }
   const pay = first ? Math.max(0, mission.pay - fine) : 0;
   // the debt's holder takes its cut until the benefactor holds the debt
-  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
-  campaign.bond -= cut;
-  campaign.coins += pay - cut;
+  const { kept, cut } = payOut(campaign, pay);
   const ratings = first ? ratingsOf(mission, campaign) + style : 0;
   const before = rankOf(campaign.ratings);
   campaign.ratings += ratings;
@@ -530,7 +569,7 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0, style =
   campaign.flown++;
   const place = sideJobAt(mission);
   const standing = place && first ? earnStanding(campaign.standing, place, mission.bounty ? BOUNTY_STANDING : STANDING_FIRST) : null;
-  return { kept: pay - cut, cut, ratings, rank: rank !== before ? rank : null, standing };
+  return { kept, cut, ratings, rank: rank !== before ? rank : null, standing };
 }
 
 /**
@@ -546,10 +585,7 @@ export function flownAgain(campaign: Campaign, mission: Mission, fine = 0): { ke
   const place = sideJobAt(mission);
   if (!place) return { kept: 0, cut: 0, standing: null };
   const pay = Math.max(0, Math.round(mission.pay * AGAIN_SHARE) - fine);
-  const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
-  campaign.bond -= cut;
-  campaign.coins += pay - cut;
-  return { kept: pay - cut, cut, standing: earnStanding(campaign.standing, place, STANDING_AGAIN) };
+  return { ...payOut(campaign, pay), standing: earnStanding(campaign.standing, place, STANDING_AGAIN) };
 }
 
 /**

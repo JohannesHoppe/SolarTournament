@@ -27,16 +27,25 @@ export function showTransmission(spoken: Spoken, delay: number, title: string | 
           .split(/(?<=[.?!])\s+/)
           .map((sentence) => sentence.charAt(0).toUpperCase() + sentence.slice(1))
           .join(' ');
-  window.setTimeout(() => {
-    const box = document.getElementById('transmission')!;
-    const text = document.getElementById('transmission-text')!;
-    box.className = spoken.language === 'mod' ? 'announcer' : 'regime';
-    document.getElementById('transmission-speaker')!.textContent = speaker;
-    text.textContent = /[.?!]$/.test(words) ? words : words + '.';
-    // a line is hyphenated and read out in its language: the announcer's is the Host's
-    text.lang = spoken.language === 'mod' ? currentLocale() : spoken.language === 'de' ? 'de' : 'en';
-    box.hidden = false;
-    clearTimeout(timer);
-    timer = window.setTimeout(() => (box.hidden = true), spoken.duration * 1000 + HOLD_MS);
-  }, Math.max(0, delay));
+  // a line is hyphenated and read out in its language: the announcer's is the Host's
+  const lang = spoken.language === 'mod' ? currentLocale() : spoken.language === 'de' ? 'de' : 'en';
+  window.setTimeout(() => put(spoken.language === 'mod' ? 'announcer' : 'regime', speaker, /[.?!]$/.test(words) ? words : words + '.', lang, spoken.duration * 1000 + HOLD_MS), Math.max(0, delay));
+}
+
+/** What a find of the campaign holds, shown for `seconds` and never spoken: a black box's last words under its pilot's name, a chip's track (see campaign/hunt). */
+export function showRecorded(speaker: string, words: string, seconds: number) {
+  put('recorded', speaker, words, currentLocale(), seconds * 1000);
+}
+
+/** Puts a line in the transmission box for `ms`. */
+function put(kind: string, speaker: string, words: string, lang: string, ms: number) {
+  const box = document.getElementById('transmission')!;
+  const text = document.getElementById('transmission-text')!;
+  box.className = kind;
+  document.getElementById('transmission-speaker')!.textContent = speaker;
+  text.textContent = words;
+  text.lang = lang;
+  box.hidden = false;
+  clearTimeout(timer);
+  timer = window.setTimeout(() => (box.hidden = true), ms);
 }

@@ -310,6 +310,43 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(errors).toEqual([]);
 });
 
+test('a free flight at a place reached: a black box flown onto is taken and kept, its last words on screen, and the pause menu goes back to the board, which counts it', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: ['patch'] })));
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  // only the Boneyard is reached, and Patience's galley not yet
+  await expect(page.locator('#board-free button')).toHaveCount(1);
+  await expect(page.locator('#board-free button')).toContainText('Free flight: The Boneyard');
+  await expect(page.locator('#board-free button')).toContainText('Tags 0/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Dog tags 0/75 · data chips 0/25');
+  await page.click('#board-free button');
+  await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live && window.game.hunt.here.length === 4, null, { timeout: 90_000 });
+  // the clone set onto the first black box: taken
+  await page.evaluate(async () => {
+    const game = window.game;
+    const start = game.time;
+    while (!JSON.parse(localStorage.getItem('solartournament.campaign')!).tags?.length && game.time - start < 10) {
+      game.me.flight.position.copy(game.hunt.here[0].position);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(kept.tags).toEqual(['boneyard:0']);
+  // a free flight keeps the story where it stands
+  expect(kept.step).toBe(0);
+  await expect(page.locator('#transmission')).toContainText('Vela Okonkwo-Brandt');
+  await expect(page.locator('#transmission')).toContainText('the last one too');
+  await expect.poll(() => page.evaluate(() => window.game.hunt.group.children[0].visible)).toBe(false);
+  // nothing ends it by itself: the pause menu leaves it for the board
+  await page.keyboard.press('Escape');
+  await page.click('#quit');
+  await expect(page.locator('#board')).toBeVisible();
+  await expect(page.locator('#board-free button')).toContainText('Tags 1/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Dog tags 1/75');
+  expect(errors).toEqual([]);
+});
+
 /** The game opened with `?campaign`, the story done up to Pilot Episode with the drill reached in the next job at `step`, the job board open; the page's errors. */
 async function boardAfterPilotEpisode(page: Page, step: number): Promise<string[]> {
   const errors = await openGame(page, '/?campaign');

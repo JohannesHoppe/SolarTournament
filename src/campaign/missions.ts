@@ -38,6 +38,7 @@ import type { Ship } from '../ship/ship';
 import { Randomizer, textSeed } from '../random';
 import { pitWave } from './gullet';
 import type { SceneName } from './scenes';
+import type { HuntPlace } from './finds';
 
 /**
  * The missions of Lot 7731 (see docs/campaign/STORY.md, section 3), each a run of drills on the
@@ -3554,3 +3555,30 @@ export const MISSIONS: readonly Mission[] = [
   // the Pit under the Gullet
   pit,
 ];
+
+/** The story's first job flown at a place (in the order of MISSIONS, side trips included, the side jobs that follow a place's first job left out): done, the place is reached. */
+export function firstJobAt(place: ArenaId): Mission | null {
+  return MISSIONS.find((mission) => !mission.courier && !mission.ambush && !mission.mining && mission.drills.some((drill) => drill.arena === place)) ?? null;
+}
+
+/**
+ * A free flight at a place (docs/campaign/STORY.md, "Something to collect"): one drill that never
+ * ends by itself, no clock and nothing to fail; the Host flies where they like and finds what the
+ * place hides (see campaign/hunt), and leaves through the pause menu for the job board.
+ */
+export function freeFlight(place: HuntPlace): Mission {
+  const drill: Drill = { line: CAMPAIGN.freeFlight, keys: ['turn', 'drive', 'brake'], arena: place, done: () => false };
+  return { id: `free:${place}`, name: msg('Free Flight'), drills: [drill], pay: 0, open: true };
+}
+
+/** A visit to Patience's galley, whenever the Host likes once it has been there (the job `rheasilvia`): the clone climbs up and looks round at the shelf, until the pause menu takes it back to the job board. */
+export const GALLEY_VISIT: Mission = {
+  id: 'galleyVisit',
+  name: msg('Patience’s Galley'),
+  drills: [
+    climbOut('galley', msg('Patience holds over Vesta. Your clone climbs up to the galley, where the crew keeps what the road has left.'), 'rheasilvia'),
+    { ...inRoom(PIM.shelf, 'rheasilvia'), done: () => false },
+  ],
+  pay: 0,
+  open: true,
+};
