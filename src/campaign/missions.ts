@@ -3278,7 +3278,8 @@ const gulletAgain: Drill = { ...inRoom(KESH.again, 'occator'), skip: (ctx) => !c
 const gulletGreet: Drill = { ...inRoom(KESH.greet, 'occator'), skip: (ctx) => ctx.gulletRegular, enter: (ctx) => ctx.visitGullet() };
 const atTheBar: Drill = {
   line: msg('The Gullet. Stay as long as you like.'),
-  keys: ['turn'],
+  // the mouse is a pointer for the plate here: no keys to show
+  keys: [],
   arena: 'occator',
   silent: true,
   enter: (ctx) => ctx.gulletPlate(true),
