@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { PIT_PURSE } from '../src/campaign/gullet';
 import { openGame } from './game';
 
 /** Opens the campaign's job board from the menu and takes the next job on it. */
@@ -541,18 +542,19 @@ test('Kesh’s offers: a rumor opens Occator’s smuggling run, a bet goes into 
   });
   await page.waitForFunction(() => window.game.jumpers?.bots.length === 2 && window.game.jumpers.bots.every((bot: { ship: { alive: boolean } }) => bot.ship.alive), null, { timeout: 30_000 });
   await page.evaluate(() => {
-    // as the game kills a clone: its hull gone, and its death counted (the scar, the print, the wait for the next)
+    // as the game kills a clone: its hull gone, and its death counted (the scar; the Pit's one clone a night costs no print)
     const game = window.game;
     game.me.protectedUntil = 0;
     game.me.structural(Infinity, game.time);
     game.shipDestroyed(game.me, null, 'rock', 'rock');
   });
-  // the night over: the board again, a wave paid in cash, the record kept; the bet taken on another job lost
+  // the night over: the board again, a wave paid in cash and no print, the record kept; the Pit is no job, so the bet stays in the book
   await page.waitForFunction(() => !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
   await expect(page.locator('#board-side .board-group', { hasText: 'Occator' }).locator('button', { hasText: 'Smuggling Run' })).toHaveCount(1);
   campaign = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(campaign.pit).toBe(1);
-  expect(campaign.bet).toBeNull();
+  expect(campaign.coins).toBe(2000 - 60 - 250 + PIT_PURSE);
+  expect(campaign.bet).toEqual({ mission: 'courier:occator', stake: 250 });
   expect(errors).toEqual([]);
 });
 
