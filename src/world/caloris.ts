@@ -5,16 +5,15 @@ import { Noise } from './noise';
 import { Randomizer } from '../random';
 import { listeningPost } from './valhalla';
 import { shine, solarWing, WING_CELLS_ACROSS, WING_CELLS_ALONG, WING_FRONT } from '../view/surfaces';
-import { SUN_DIRECTION } from './space';
 import { cos, sin } from '../detmath';
-import { GROUND_HALF, groundRelief, surfaceHeight } from './mercury';
+import { GROUND_HALF, groundRelief, MERCURY_SUN, surfaceHeight } from './mercury';
 
 /**
  * How Caloris on Mercury looks (where things are in world/mercury): the ground of the field as the
  * piece it collides as (its relief, see Relief), the crater floor's photograph tinted to the
  * basin's warm grey; the sun miners' camp, the listening post's build in the miners' sun-bleached
  * paint; the plain beyond, drawn behind everything, and on it the miners' fields of solar panels,
- * row on row, turned to the low sun.
+ * row on row, standing on end to face the sun on the horizon.
  */
 
 /** Caloris's plains: a warm grey, darker than the Moon's, lit faintly by the glare off the plain. */
@@ -52,10 +51,10 @@ function solarFields(): THREE.InstancedMesh {
   const cells = solarWing();
   const material = behindAll(new THREE.MeshStandardMaterial({ map: cells.map, roughnessMap: cells.orm, metalnessMap: cells.orm, roughness: 1, metalness: 1, envMap: shine(), envMapIntensity: 0.6, side: THREE.DoubleSide }));
   const mesh = new THREE.InstancedMesh(panel, material, FIELDS * ROWS * PANELS);
-  const facing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), SUN_DIRECTION);
+  const facing = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), MERCURY_SUN);
   // a row runs square to the sun's bearing over the plain
-  const along = new THREE.Vector3(-SUN_DIRECTION.z, 0, SUN_DIRECTION.x).normalize();
-  const back = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize();
+  const along = new THREE.Vector3(-MERCURY_SUN.z, 0, MERCURY_SUN.x).normalize();
+  const back = new THREE.Vector3(MERCURY_SUN.x, 0, MERCURY_SUN.z).normalize();
   const r = new Randomizer(20102);
   const matrix = new THREE.Matrix4();
   const at = new THREE.Vector3();

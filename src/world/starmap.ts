@@ -136,13 +136,12 @@ export class Starmap {
       }),
     );
     this.points.onBeforeRender = (renderer) => (this.points.material.uniforms.pixelRatio.value = renderer.getPixelRatio());
-    this.points.quaternion.setFromRotationMatrix(turn);
     this.points.frustumCulled = false;
 
     this.sphere = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 0.97, 48, 24),
       new THREE.ShaderMaterial({
-        uniforms: { glow: { value: glow }, brightness: { value: GLOW_GAIN }, toCelestial: { value: new THREE.Matrix3().setFromMatrix4(turn).transpose() } },
+        uniforms: { glow: { value: glow }, brightness: { value: GLOW_GAIN }, toCelestial: { value: new THREE.Matrix3() } },
         vertexShader: glowVertex,
         fragmentShader: glowFragment,
         blending: THREE.AdditiveBlending,
@@ -160,6 +159,13 @@ export class Starmap {
     this.points.renderOrder = -1;
     this.group.renderOrder = -1;
     this.group.add(this.sphere, this.points);
+    this.turn(turn);
+  }
+
+  /** Turns the sky by `turn` from the celestial frame into the world (an arena's own sun, see skyTurn). */
+  turn(turn: THREE.Matrix4) {
+    this.points.quaternion.setFromRotationMatrix(turn);
+    this.sphere.material.uniforms.toCelestial.value.setFromMatrix4(turn).transpose();
   }
 
   /** How bright the sky shows (1 in the dark; a near sun's glare drowns it), the stars and the glow alike. */

@@ -57,64 +57,80 @@ const CRUSHER = HOPPER;
 const rowEnd = (side: -1 | 1, row: number) => point(side * (YARD_END + 800), GROUND + RACK_HEIGHT + 100, row * ROW_SPACING);
 
 /**
- * Lamplighter (1.1): six dead beacons at the ends of the rows, relit one after the other by
- * holding within LAMP_REACH (units, 40 m) of each for LAMP_HOLD seconds, before the shift ends
- * (LAMP_SHIFT seconds).
+ * Lamplighter (1.1): six dead beacons on masts at the ends of the rows, the haulers' marks into
+ * the yard, relit one after the other: holding within LAMP_REACH (units, 40 m) of a beacon's lamp
+ * for LAMP_HOLD seconds brings it to life, flickering more and more, until it lights for good and
+ * blinks on; all six before the shift ends (LAMP_SHIFT seconds).
  */
 const LAMP_REACH = 800;
 const LAMP_HOLD = 3;
 const LAMP_SHIFT = 360;
 const LAMPS = [rowEnd(-1, -1), rowEnd(-1, -2), rowEnd(-1, -3), rowEnd(1, -3), rowEnd(1, -2), rowEnd(1, -1)];
 
-/** The beacons not lit yet, each in its sphere; lit ones are gone. */
-function lampMarkers(a: Attempt, markers: Markers) {
-  markers.clear();
-  for (const lamp of a.points.slice(a.next)) {
-    markers.buoy(lamp);
-    markers.zone(lamp, LAMP_REACH);
-  }
+/** The next beacon's marks: its buoy over the lamp and the sphere to hold in (see lamplighter). */
+let lampMarks: THREE.Object3D[] = [];
+function markLamp(a: Attempt, markers: Markers) {
+  for (const mark of lampMarks) mark.removeFromParent();
+  lampMarks = [];
+  const lamp = a.points[a.next];
+  if (!lamp) return;
+  markers.buoy(lamp.clone().setY(lamp.y + 600));
+  lampMarks = [markers.root.children[markers.root.children.length - 1], markers.zone(lamp, LAMP_REACH)];
 }
 
 const lamplighter: Drill = {
   line: CAMPAIGN.lamplighter,
   keys: ['turn', 'drive', 'brake'],
   arena: 'boneyard',
-  autopilot: false,
+  autopilot: true,
   enter(_, a, markers) {
+    markers.clear();
     a.points = LAMPS.map((lamp) => lamp.clone());
-    lampMarkers(a, markers);
+    for (const lamp of a.points) markers.beacon(lamp, lamp.y - GROUND);
+    markLamp(a, markers);
   },
   done(ctx, a, markers) {
-    if (!holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[a.next]) < LAMP_REACH, LAMP_HOLD)) return false;
+    const lit = holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[a.next]) < LAMP_REACH, LAMP_HOLD);
+    markers.chargeBeacon(a.next, Math.min(1, a.held / LAMP_HOLD));
+    if (!lit) return false;
+    markers.lightBeacon(a.next);
     a.held = 0;
     a.next++;
-    lampMarkers(a, markers);
+    markLamp(a, markers);
     return a.next >= a.points.length;
   },
   fail: (_, a) => (a.seconds > LAMP_SHIFT ? CAMPAIGN.lamplighterLate : null),
   waypoint: (_, a) => a.points[a.next] ?? null,
-  mark: (_, a) => t('Beacon {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(LAMP_SHIFT - a.seconds)) }),
+  mark: (_, a) =>
+    a.held > 0
+      ? t('Lighting beacon {n}/{total}: hold still', { n: a.next + 1, total: a.points.length })
+      : t('Beacon {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(LAMP_SHIFT - a.seconds)) }),
 };
 
 /**
  * Live Target (1.2): tourists pay to shoot at the hull. Three gunners on a ring around the yard
  * fire, each every TARGET_INTERVAL seconds, at where the ship was TARGET_LAG ago (as the slide
- * drill's gunner does); the ship lives TARGET_SECONDS inside TARGET_ZONE of the office (units,
- * 1 km) by jinking. Leaving the zone starts it over. Every hit takes TARGET_FINE coins off the
- * pay (see complete), as the attempt stands.
+ * drill's gunner does); the ship lives TARGET_SECONDS inside TARGET_ZONE of the yard's middle
+ * (units, 1.5 km: the racks, the lane and the depot's bay with its pad, where the job starts) by
+ * jinking, with the autopilot, as every job of chapter 1 is flown. Out of the zone the mark
+ * counts down TARGET_GRACE seconds to fly back in; longer starts it over. Every hit takes
+ * TARGET_FINE coins off the pay (see complete), as the attempt stands.
  */
 const TARGET_SECONDS = 90;
-const TARGET_ZONE = 20000;
+export const TARGET_ZONE = 30000;
+const TARGET_GRACE = 3;
 const TARGET_INTERVAL = 1.2;
 const TARGET_LAG = 0.4;
 const TARGET_FINE = 10;
 const GUNNERS = [point(0, 6000, -24000), point(20000, 3000, 12000), point(-20000, 4000, 12000)];
+/** The yard's middle, the zone's center (see TARGET_ZONE). */
+export const YARD_MIDDLE = OFFICE;
 
 const liveTarget: Drill = {
   line: CAMPAIGN.liveTarget,
   keys: ['slide', 'turn', 'drive'],
   arena: 'boneyard',
-  autopilot: false,
+  autopilot: true,
   enter(ctx, a, markers) {
     stop(ctx);
     a.points = [ctx.me.flight.position.clone()];
@@ -125,6 +141,8 @@ const liveTarget: Drill = {
     ctx.fine(0);
   },
   done(ctx, a) {
+    // a.held: the seconds out of the zone without a break
+    a.held = ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE ? a.held + ctx.dt : 0;
     a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / TARGET_LAG));
     if (a.seconds - a.lastShot > TARGET_INTERVAL / GUNNERS.length) {
       a.lastShot = a.seconds;
@@ -133,8 +151,11 @@ const liveTarget: Drill = {
     }
     return a.seconds >= TARGET_SECONDS;
   },
-  fail: (ctx) => (ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE ? CAMPAIGN.liveTargetOut : null),
-  mark: (_, a) => t('Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
+  fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : null),
+  mark: (_, a) =>
+    a.held > 0
+      ? t('Out of the yard: back inside in {seconds} s', { seconds: Math.max(0, Math.ceil(TARGET_GRACE - a.held)) })
+      : t('Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
   waypoint: () => null,
 };
 
@@ -168,7 +189,7 @@ const canisterSweep: Drill = {
   line: CAMPAIGN.canisterSweep,
   keys: ['turn', 'drive', 'brake'],
   arena: 'boneyard',
-  autopilot: false,
+  autopilot: true,
   enter(ctx, a, markers) {
     // canister, crusher, canister, crusher…
     a.points = CANISTERS.flatMap((canister) => [canister.clone(), CRUSHER.clone()]);
@@ -233,7 +254,7 @@ const firstCut: Drill = {
   line: CAMPAIGN.firstCut,
   keys: ['turn', 'drive', 'fire'],
   arena: 'boneyard',
-  autopilot: false,
+  autopilot: true,
   enter(ctx, a) {
     // a.count: rocks broken before the attempt, a.jinks: rocks whose glints are out, a.next: glints taken
     a.count = ctx.rocksBroken;
@@ -275,7 +296,7 @@ const dockingLane: Drill = {
   line: CAMPAIGN.dockingLane,
   keys: ['turn', 'drive', 'fire'],
   arena: 'boneyard',
-  autopilot: false,
+  autopilot: true,
   enter(ctx, a, markers) {
     stop(ctx);
     markers.hauler(BERTH);
@@ -419,7 +440,7 @@ const fitPatch = (campaign: Campaign) => {
 };
 
 /** Where every mission after the first begins: docked on bay 3's pad, the nose out of the bay. */
-const ON_PAD = { at: [PAD.x, PAD.y + 400, PAD.z] as const, toward: [BAY_MOUTH - 20000, PAD.y + 400, PAD.z] as const };
+export const ON_PAD = { at: [PAD.x, PAD.y + 400, PAD.z] as const, toward: [BAY_MOUTH - 20000, PAD.y + 400, PAD.z] as const };
 
 /** A line said on Vesta's flank, the ship held still for it (Hedda's from Patience, Pim's, Nicole's). */
 const onVesta = (line: string): Drill => ({ ...said(line, 'rheasilvia'), enter: (ctx) => stop(ctx) });
@@ -994,7 +1015,9 @@ const veronaDrop: Drill = {
   keys: ['turn', 'drive', 'brake'],
   arena: 'miranda',
   autopilot: false,
-  enter(_, a, markers) {
+  enter(ctx, a, markers) {
+    // held still, so a restart for flying too fast never fails again on its first frame
+    stop(ctx);
     a.points = DROP_COURSE.map((buoy) => buoy.clone());
     surveyMarkers(a, markers);
   },
@@ -1242,13 +1265,18 @@ const kiln: Drill = {
 
 /** The comet bound for the Ninth at Granary: the field's piece nearest COMET_AT (see world/granary). */
 function cometOf(ctx: SchoolContext): THREE.Vector3 {
-  let best: THREE.Vector3 = COMET_AT;
+  return cometPiece(ctx)?.object.position ?? COMET_AT;
+}
+
+/** The comet itself as a piece of the field: the one nearest COMET_AT, or null in a field without pieces. */
+function cometPiece(ctx: SchoolContext): Asteroid | null {
+  let best: Asteroid | null = null;
   let nearest = Infinity;
   for (const piece of ctx.field.asteroids.values()) {
     const far = piece.object.position.distanceTo(COMET_AT);
     if (far < nearest) {
       nearest = far;
-      best = piece.object.position;
+      best = piece;
     }
   }
   return best;
@@ -1360,18 +1388,20 @@ const rideComet: Drill = {
   },
   done(ctx, a, markers) {
     const comet = a.points[0];
-    if (ctx.hooked && a.seconds - a.lastShot >= SHED_EVERY) {
+    // only the comet counts, never a block of ice the hook bit instead
+    const riding = ctx.hookedRock !== null && ctx.hookedRock === cometPiece(ctx);
+    if (riding && a.seconds - a.lastShot >= SHED_EVERY) {
       a.lastShot = a.seconds;
       shedPiece(ctx, comet, markers);
     }
     shower(ctx, comet, markers);
-    return holdFor(ctx, a, ctx.hooked, RIDE_SECONDS);
+    return holdFor(ctx, a, riding, RIDE_SECONDS);
   },
   leave: () => {
     shed.length = 0;
   },
   waypoint: (_, a) => a.points[0] ?? null,
-  mark: (ctx, a) => (ctx.hooked ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
+  mark: (ctx, a) => (ctx.hookedRock !== null && ctx.hookedRock === cometPiece(ctx) ? t('Holding on · {seconds} s', { seconds: Math.max(0, Math.ceil(RIDE_SECONDS - a.held)) }) : t('Hook the comet')),
 };
 
 /** Torpedo tubes II and III (17.5), from the Feeders: the tubes' second and third steps, at TUBES_TWO_PRICE and TUBES_THREE_PRICE. */
@@ -1398,7 +1428,8 @@ const scoutStill = new THREE.Vector3();
 
 /** Scout One where she lies, held still among the ice (the hole's pull on her answered by the Feeders' moorings). */
 function parkScout(ctx: SchoolContext) {
-  if (!ctx.drone || ctx.drone.name !== SCOUT_NAME) ctx.spawnDrone(SCOUT_AT, scoutStill, SCOUT_NAME);
+  // a Scout One lost (to the guns, the shower) is printed again, so a restart never begins with her dead
+  if (!ctx.drone || ctx.drone.name !== SCOUT_NAME || !ctx.drone.alive) ctx.spawnDrone(SCOUT_AT, scoutStill, SCOUT_NAME);
   ctx.drone!.flight.position.copy(SCOUT_AT);
   ctx.drone!.flight.velocity.set(0, 0, 0);
 }
@@ -1981,6 +2012,153 @@ const couriers: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `couri
 const miningRuns: Mission[] = MINING_PLACES.map((arena) => ({ id: `mining:${arena}`, name: msg('Mining Run'), drills: [miningRun(arena)], pay: MINE_PAY, ratings: MINE_RATINGS, side: COURIER_PLACES.find(([place]) => place === arena)![1], mining: arena }));
 /** The ambushes as jobs: one per place of the courier runs, offered as they are. */
 const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambush:${arena}`, name: msg('Ambush'), drills: [ambush(arena)], pay: AMBUSH_PAY, ratings: AMBUSH_RATINGS, side: after, ambush: arena }));
+
+/**
+ * The bounties under Rask's counter (docs/campaign/STORY.md, "Under the counter"): at each place
+ * of the courier runs, three wanted faces, one after the other, each offered once the one before
+ * is done, the second only once the place's people count the Host as Known, the third as Trusted
+ * (see campaign/standing). The target and its escorts (BOUNTY_TIERS) guard the courier course's
+ * third beacon, fighting every ship they see; the last tier's target flies with a bot's gear of
+ * the Games, the hook and the nanobots. The target shot down ends it.
+ */
+export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
+  { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
+  { target: 0.55, escorts: 2, skill: 0.45, pay: 2500, ratings: 150 },
+  { target: 0.65, escorts: 3, skill: 0.5, pay: 4000, ratings: 250 },
+];
+/** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
+const WANTED: readonly (readonly [string, string, string])[] = [
+  ['Gravel Mae', 'Scrapjaw', 'Saint Abrasive'],
+  ['Twitch Okono', 'The Dowager', 'Lucky Pell'],
+  ['Corporal Nobody', 'Red Tibor', 'Halfprint'],
+  ['Mother Static', 'Slick Ines', 'The Accountant'],
+  ['Blue Fenn', 'Coldsnap', 'Widow Ardent'],
+  ['Sulfur Pike', 'Ash Kowal', 'Brimstone Lu'],
+  ['Hookhand Vos', 'Tug Thief Dara', 'Old Leverage'],
+  ['Methane Joe', 'Pit Boss Sorrel', 'Throttle'],
+  ['Geyser Kim', 'Brightwork', 'Yacht Killer'],
+  ['Halfface Rue', 'Soot', 'The Ridge Saint'],
+  ['Admiral Nobody', 'Frostbite Cole', 'Plume'],
+  ['Heartbreak Wu', 'Charon’s Coin', 'Tombaugh'],
+  ['Spinner', 'Egg Thief Imre', 'Tumble'],
+  ['Last Rung', 'Dysnomia Jane', 'Hollow Ruth'],
+  ['Kiln Rat', 'Lantern Moll', 'Glow'],
+  ['Feeder Fang', 'Snowball', 'The Harvester'],
+  ['Gala Crasher', 'Champagne Vex', 'Mister Bow Tie'],
+];
+function wanted(arena: ArenaId, name: string, tier: number): Drill {
+  const { target, escorts, skill } = BOUNTY_TIERS[tier];
+  // the field they guard is laid where the place's field lies, as the attempt begins
+  const field = new THREE.Vector3();
+  const drill = bounty(CAMPAIGN.wanted, arena, field, [name, ...AMBUSH_NAMES, 'Wick', 'Burr'].slice(0, 1 + escorts), [target, skill]);
+  return {
+    ...drill,
+    enter(ctx, a, markers) {
+      field.copy(layCourier(ctx.field, arena).points[2]);
+      drill.enter!(ctx, a, markers);
+      if (tier === BOUNTY_TIERS.length - 1) ctx.armLeader();
+    },
+  };
+}
+
+/** The bounties as jobs: three at each place of the courier runs (see BOUNTY_TIERS). */
+const bounties: Mission[] = COURIER_PLACES.flatMap(([arena, after], p) =>
+  WANTED[p].map((name, tier): Mission => ({
+    id: `bounty:${arena}:${tier + 1}`,
+    name: msg('Bounty'),
+    drills: [wanted(arena, name, tier)],
+    pay: BOUNTY_TIERS[tier].pay,
+    ratings: BOUNTY_TIERS[tier].ratings,
+    side: tier ? `bounty:${arena}:${tier}` : after,
+    bounty: { place: arena, tier: tier + 1 },
+    standing: tier,
+  })),
+);
+/** The face wanted by a bounty (see WANTED), for the job board's poster. */
+export const wantedName = (mission: Mission) => (mission.bounty ? WANTED[COURIER_PLACES.findIndex(([place]) => place === mission.bounty!.place)][mission.bounty.tier - 1] : '');
+
+/**
+ * The smuggling runs under Rask's counter (docs/campaign/STORY.md, "Under the counter"): at each
+ * place of the courier runs, once its people count the Host as Known, cargo for the courier
+ * course's last beacon, the drop. Two of the Ministry's patrol cutters circle beside the straight
+ * lane to it (SMUGGLE_PATROLS, SMUGGLE_ASIDE off the lane, SMUGGLE_CIRCLE round), so that a ship
+ * coasting along the lane passes them farther than SILENT_RANGE (1 km) and nearer than
+ * SMUGGLE_SIGHT: silent, it slips by; hot (its drive burning, or fired within SILENT_AFTER), a
+ * patrol within SMUGGLE_SIGHT sees it and the attempt starts over. Held at the drop within
+ * SMUGGLE_REACH, slower than SMUGGLE_REST for SMUGGLE_HOLD seconds, the cargo is handed over;
+ * SMUGGLE_SECONDS for all of it.
+ */
+export const SMUGGLE_PATROLS = [0.55, 0.9] as const;
+export const SMUGGLE_ASIDE = 32000;
+export const SMUGGLE_CIRCLE = 8000;
+export const SMUGGLE_SIGHT = 40000;
+const SMUGGLE_ORBIT = 60;
+const SMUGGLE_REACH = 6000;
+const SMUGGLE_REST = 200;
+const SMUGGLE_HOLD = 3;
+const SMUGGLE_SECONDS = 240;
+const SMUGGLE_PAY = 1400;
+const SMUGGLE_RATINGS = 60;
+const PATROL_NAMES = ['Patrol Vigil', 'Patrol Census'];
+
+/** A smuggling run's lane at a place: its start, its drop, and the patrols' centers beside it (lifted clear of the field's pieces where `field` lies). */
+export function smuggleLane(field: AsteroidField | null, arena: ArenaId): { from: THREE.Vector3; drop: THREE.Vector3; patrols: THREE.Vector3[] } {
+  const start = arenaById(arena)!.start!;
+  const from = new THREE.Vector3(...start.at);
+  const drop = layCourier(field, arena).points[COURIER_BEACONS - 1];
+  const way = drop.clone().sub(from).setY(0).normalize();
+  const across = new THREE.Vector3(-way.z, 0, way.x);
+  const patrols = SMUGGLE_PATROLS.map((share, k) => {
+    const center = new THREE.Vector3().lerpVectors(from, drop, share).addScaledVector(across, k % 2 ? -SMUGGLE_ASIDE : SMUGGLE_ASIDE);
+    for (let lift = 0; field && lift < 40 && field.overlap(center, SMUGGLE_CIRCLE + RING_RADIUS); lift++) center.y += COURIER_LIFT;
+    return center;
+  });
+  return { from, drop, patrols };
+}
+
+/** Where each patrol cutter is `seconds` into the attempt: round its center, the two half a turn apart. */
+export function patrolsAt(patrols: readonly THREE.Vector3[], seconds: number, out: THREE.Vector3[]) {
+  patrols.forEach((center, k) => {
+    const angle = (seconds / SMUGGLE_ORBIT) * 2 * Math.PI + k * Math.PI;
+    out[k].set(center.x + cos(angle) * SMUGGLE_CIRCLE, center.y, center.z + sin(angle) * SMUGGLE_CIRCLE);
+  });
+}
+
+function smuggling(arena: ArenaId): Drill {
+  let lane: ReturnType<typeof smuggleLane> | null = null;
+  const cutters = SMUGGLE_PATROLS.map(() => new THREE.Vector3());
+  const patrolVelocity = new THREE.Vector3();
+  return {
+    line: CAMPAIGN.smuggle,
+    keys: ['drive', 'turn', 'slide'],
+    arena,
+    autopilot: false,
+    enter(ctx, a, markers) {
+      lane = smuggleLane(ctx.field, arena);
+      markers.zone(lane.drop, SMUGGLE_REACH);
+      patrolsAt(lane.patrols, 0, cutters);
+      ctx.flock(cutters, PATROL_NAMES, patrolVelocity);
+      // a.warned: a patrol saw the ship hot
+      a.warned = false;
+      a.held = 0;
+    },
+    done(ctx, a) {
+      patrolsAt(lane!.patrols, a.seconds, cutters);
+      ctx.flock(cutters, PATROL_NAMES, patrolVelocity);
+      const hot = !ctx.me.silent(ctx.now);
+      if (hot && cutters.some((cutter) => cutter.distanceTo(ctx.me.flight.position) < SMUGGLE_SIGHT)) a.warned = true;
+      a.held = ctx.me.flight.position.distanceTo(lane!.drop) <= SMUGGLE_REACH && ctx.me.flight.velocity.length() < SMUGGLE_REST ? a.held + ctx.dt : 0;
+      return a.held >= SMUGGLE_HOLD;
+    },
+    fail: (_, a) => (a.warned ? CAMPAIGN.smuggleSeen : a.seconds > SMUGGLE_SECONDS ? CAMPAIGN.smuggleSlow : null),
+    leave: (ctx) => ctx.flock([], PATROL_NAMES, patrolVelocity),
+    waypoint: () => lane?.drop ?? null,
+    mark: (ctx) => (ctx.me.silent(ctx.now) ? t('Drop · running silent') : t('Drop · running hot')),
+  };
+}
+
+/** The smuggling runs as jobs: one at each place of the courier runs, offered once its people count the Host as Known. */
+const smugglingRuns: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
 
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
@@ -2589,6 +2767,8 @@ const TALLY_HOLD = 8000;
 const WINCH_HITS = 12;
 const TALLY_DOWN = 3;
 const TUG_CATCH = 2000;
+/** A restart puts a hull reeled in this close (units, 750 m) of the tug back out at this distance, held still, so it never begins caught. */
+const TUG_CLEAR = 15000;
 /** The Tallymen's names, the firm's own (never translated). */
 const TALLY_NAMES = ['Docket', 'Lien', 'Arrears', 'Escrow'];
 const winchNow = new THREE.Vector3();
@@ -2601,6 +2781,13 @@ const repoMen: Drill = {
   autopilot: false,
   music: 'fight',
   enter(ctx, a, markers) {
+    const flight = ctx.me.flight;
+    if (flight.position.distanceTo(TUG_AT) < TUG_CLEAR) {
+      reeled.subVectors(flight.position, TUG_AT);
+      if (reeled.lengthSq() < 1) reeled.set(1, 0, 0);
+      flight.position.copy(TUG_AT).addScaledVector(reeled.normalize(), TUG_CLEAR);
+      stop(ctx);
+    }
     markers.clear();
     markers.tugAt(TUG_AT, TUG_TURN);
     ctx.spawnJumpers(null, TUG_AT, TALLYMEN, TALLY_SKILL, TALLY_NAMES, TALLY_HOLD, true);
@@ -2667,6 +2854,10 @@ const wallRun: Drill = {
   arena: 'wall',
   autopilot: true,
   enter(ctx, a, markers) {
+    // every attempt from the place's start, FOLLOW ahead of the barge, so it never cuts a straight
+    // line from its start to wherever an attempt before ended (through the Wall, through the lights)
+    ctx.me.flight.position.copy(RUN_FROM).addScaledVector(BOW, -FOLLOW);
+    stop(ctx);
     markers.clear();
     runBarge.copy(RUN_FROM);
     runWay.set(1, 0, 0);
@@ -3079,37 +3270,33 @@ const fitStripped = (campaign: Campaign) => {
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
-    // the first link into the hull in rack 7731: Nicole boots and crashes, the yardmaster calls,
-    // and the hull flies out of the rack, down the lane and into the depot's bay
+    // the first link into the hull in rack 7731, quick to the flying: the yardmaster wakes the
+    // Host on credit, Nicole boots, crashes and boots again, and the hull flies out of the rack,
+    // down the lane and into the depot's bay, where Rask tells the deal it is flown for; the rest
+    // of what the Host has to learn comes with the first jobs
     id: 'coldBoot',
     name: msg('Cold Boot'),
     drills: [
+      said(RASK.wake),
       said(CAMPAIGN.bootHello),
       crash,
-      said(CAMPAIGN.bootAgain),
-      said(CAMPAIGN.bootLink),
-      said(CAMPAIGN.bootName),
-      crash,
       said(CAMPAIGN.bootThird),
-      said(CAMPAIGN.bootSorry),
-      said(RASK.wake),
-      said(RASK.deal),
-      said(RASK.memory),
       said(RASK.come),
-      said(CAMPAIGN.dislike),
       approach,
       slowDown,
       dock,
       said(CAMPAIGN.docked),
       rask(RASK.docked),
+      rask(RASK.deal),
+      said(CAMPAIGN.dislike),
       rask(PIM.meet),
     ],
     pay: 0,
     fit: fitPatch,
   },
-  { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone)], pay: 150, ratings: 10, start: ON_PAD },
-  { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone)], pay: 300, ratings: 15, start: ON_PAD },
-  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, ratings: 10, start: ON_PAD },
+  { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone), said(CAMPAIGN.bootLink)], pay: 150, ratings: 10, start: ON_PAD },
+  { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone), said(CAMPAIGN.bootName), rask(RASK.memory)], pay: 300, ratings: 15, start: ON_PAD },
+  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone), said(CAMPAIGN.bootSorry)], pay: 200, ratings: 10, start: ON_PAD },
   { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, ratings: 20, start: ON_PAD },
   { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), felt(CAMPAIGN.handshake), rask(HEDDA.meet)], pay: 600, ratings: 40, start: ON_PAD },
@@ -3292,6 +3479,9 @@ export const MISSIONS: readonly Mission[] = [
   ...ambushes,
   // and a mining run where loose rock or ice drifts
   ...miningRuns,
+  // and under Rask’s counter: three bounties and a smuggling run at each place of the courier runs
+  ...bounties,
+  ...smugglingRuns,
 ];
 
 /** The story's first job flown at a place (in the order of MISSIONS, side trips included, the side jobs that follow a place's first job left out): done, the place is reached. */

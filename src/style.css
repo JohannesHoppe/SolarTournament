@@ -3042,7 +3042,7 @@ body.glitching #now-playing {
   display: none;
 }
 
-/* the flight school has no radio: only the share button stays in the box */
+/* the flight school has no radio (the campaign's missions have): only the share button stays in the box */
 #now-playing.silent > :not(#share) {
   display: none;
 }

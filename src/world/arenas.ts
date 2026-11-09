@@ -10,7 +10,7 @@ import { setFromAxisAngle, setFromEuler } from '../detthree';
 import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
-import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL } from './mercury';
+import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
 import { SATURN_AT as TITAN_SATURN, seaPlacement as titanSea, TITAN_AIR, TITAN_FALL } from './titan';
 import { TITAN_DECK_LIGHT, TITAN_DEEP_LIGHT } from './kraken';
@@ -74,8 +74,8 @@ export interface ArenaProfile {
   cooling: number;
   /** Solar storms blind the sensors now and then (see Game.storm). */
   storms: boolean;
-  /** The sun: how large it shows, how bright it shines, and its color. */
-  sun: { size: number; intensity: number; color: number };
+  /** The sun: how large it shows, how bright it shines, its color, and where it stands if not in SUN_DIRECTION (a place's own, Caloris's on its horizon). */
+  sun: { size: number; intensity: number; color: number; direction?: THREE.Vector3 };
   /** Its light and color mood: space, the sky's light, nebulae, stars, dust and the picture's grade (see MOODS). */
   mood: Mood;
   /** Where the camera of its preview picture stands and what it looks at (units); without, PREVIEW_FROM onto the center. */
@@ -996,8 +996,8 @@ export const PLACES: readonly ArenaProfile[] = [
     // the sun's glare: the laser's radiators shed heat slower
     cooling: 0.7,
     storms: true,
-    // 0.39 AU from the sun: 2.6 times as wide as at Earth, seven times as bright
-    sun: { size: 78000, intensity: 4.4, color: 0xfff8ee },
+    // 0.39 AU from the sun: 2.6 times as wide as at Earth, seven times as bright; on the horizon, the camp on the terminator
+    sun: { size: 78000, intensity: 4.4, color: 0xfff8ee, direction: MERCURY_SUN },
     mood: MOODS.mercury,
     preview: { from: [30000, 6000, 30000], at: [0, -12000, 0] },
     references: [{ glyph: 'planet', label: msg('Sun miners’ camp'), position: CAMP_AT, distance: true }],
