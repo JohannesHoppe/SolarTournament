@@ -4,6 +4,8 @@ import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
 import { COURIER_PLACES, CUTTER_PRICE, MINING_PLACES } from './missions';
+import { takeChip, takeTag } from './campaign';
+import { FAMILIES_PAY, tagId, TAGS_PER_PLACE } from './finds';
 
 describe('the campaign Lot 7731', () => {
   it('starts with the debt owed and the first mission next', () => {
@@ -86,6 +88,9 @@ describe('the campaign Lot 7731', () => {
     // the habits as kept, never more hits than shots nor more seconds up close than of fight
     expect(campaignFrom(JSON.stringify({ habits: { shots: 40, hits: 90, fight: 120.7, near: 500 } })).habits).toEqual({ shots: 40, hits: 40, fight: 120, near: 120 });
     expect(campaignFrom(JSON.stringify({ habits: 'all' })).habits).toEqual({ shots: 0, hits: 0, fight: 0, near: 0 });
+    // black boxes and chips only of the places that hide them, each once, in the order found
+    expect(campaignFrom(JSON.stringify({ tags: ['occator:1', 'boneyard:0', 'boneyard:3', 'atlantis:0', 7, 'occator:1'], chips: ['io', 'belt', 'io', null, 'boneyard'] }))).toMatchObject({ tags: ['occator:1', 'boneyard:0'], chips: ['io', 'boneyard'] });
+    expect(campaignFrom(JSON.stringify({ tags: 'all', chips: {} }))).toMatchObject({ tags: [], chips: [] });
     // what the job in hand came to, as kept with its step; a mission done starts the next one afresh
     expect(campaignFrom(JSON.stringify({ step: 2, run: { fine: 70, style: 25.4, gold: true } })).run).toEqual({ fine: 70, style: 25, gold: true });
     expect(campaignFrom(JSON.stringify({ run: { fine: -5, gold: 'yes' } })).run).toEqual({ fine: 0, style: 0, gold: false });
@@ -113,6 +118,29 @@ describe('the campaign Lot 7731', () => {
     expect(sideTrips(campaign)).not.toContain(gullet);
     expect(gullet.pay).toBe(0);
     expect(gullet.ratings).toBeUndefined();
+  });
+
+  it('keeps the black boxes found and pays the families once a place’s are all found, less the yard’s cut while the debt is unpaid', () => {
+    const campaign = freshCampaign();
+    expect(takeTag(campaign, tagId('boneyard', 0))).toEqual({ complete: false, kept: 0, cut: 0 });
+    // found once, it is found
+    expect(takeTag(campaign, tagId('boneyard', 0))).toBeNull();
+    expect(takeTag(campaign, 'boneyard:9')).toBeNull();
+    // another place's does not complete this one's
+    expect(takeTag(campaign, tagId('rheasilvia', 1))?.complete).toBe(false);
+    expect(takeTag(campaign, tagId('boneyard', 2))?.complete).toBe(false);
+    expect(takeTag(campaign, tagId('boneyard', 1))).toEqual({ complete: true, kept: FAMILIES_PAY * (1 - YARD_CUT), cut: FAMILIES_PAY * YARD_CUT });
+    expect(campaign.coins).toBe(FAMILIES_PAY * (1 - YARD_CUT));
+    expect(campaign.bond).toBe(BOND - FAMILIES_PAY * YARD_CUT);
+    expect(campaign.tags).toHaveLength(4);
+    // with the debt held, nobody takes a cut
+    const held = { ...freshCampaign(), held: true };
+    for (let k = 0; k < TAGS_PER_PLACE - 1; k++) takeTag(held, tagId('io', k));
+    expect(takeTag(held, tagId('io', TAGS_PER_PLACE - 1))).toEqual({ complete: true, kept: FAMILIES_PAY, cut: 0 });
+    // a chip is found once
+    expect(takeChip(campaign, 'io')).toBe(true);
+    expect(takeChip(campaign, 'io')).toBe(false);
+    expect(campaignFrom(JSON.stringify(campaign))).toEqual(campaign);
   });
 
   it('pays a job’s medal once, for a clean run, less the yard’s cut while the debt is unpaid', () => {
@@ -420,7 +448,7 @@ describe('the campaign Lot 7731', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
       // a trial at least its briefing; a courier run's one drill briefs itself
-      expect(mission.drills.length).toBeGreaterThan(mission.trial || sideJobAt(mission) ? 0 : 1);
+      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.pit || sideJobAt(mission) ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });

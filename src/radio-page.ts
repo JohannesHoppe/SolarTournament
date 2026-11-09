@@ -8,6 +8,8 @@ import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
 import { shareCorner } from './share';
 import { playbackContext } from './sound/audio';
+import { CAMPAIGN_KEY, chipsFound } from './campaign/finds';
+import { storageGet } from './storage';
 
 /**
  * Radio 2584's own page: enter a title, and the track it grows plays again or downloads as a
@@ -224,6 +226,23 @@ function showRecipes() {
 }
 window.addEventListener('hashchange', showRecipes);
 showRecipes();
+
+/** The tracks found on data chips in the campaign (its entry in this browser, see campaign/finds), each a button that tunes it in. */
+function showChips() {
+  const titles = chipsFound(storageGet(CAMPAIGN_KEY));
+  $('chips').hidden = !titles.length;
+  $('chip-list').replaceChildren(
+    ...titles.map((title) => {
+      const button = Object.assign(document.createElement('button'), { type: 'button', textContent: title });
+      button.addEventListener('click', () => {
+        tune(title);
+        $('track').scrollIntoView({ behavior: 'smooth' });
+      });
+      return button;
+    }),
+  );
+}
+showChips();
 
 tune(new URLSearchParams(location.search).get('title') ?? randomTitle());
 // the pressing kept from an earlier visit, unless a new one is done first

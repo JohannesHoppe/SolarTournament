@@ -95,7 +95,7 @@ export interface ArenaProfile {
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
-export type Glyph = 'center' | 'hole' | 'sun' | 'planet' | 'giant' | 'hull' | 'base' | 'battleship';
+export type Glyph = 'center' | 'hole' | 'sun' | 'planet' | 'giant' | 'hull' | 'base' | 'battleship' | 'find';
 
 /**
  * A fixed reference the HUD marks, on screen where it lies and at the screen's edge when it does

@@ -593,6 +593,11 @@ export const CAMPAIGN = {
   valhallaSprintSlow: 'Too slow for the show. Back to the start, and once more.',
   courier: 'A courier run, Host. Six beacons in order, and the client pays for speed. The clock starts at the first.',
   courierMissed: 'We missed a beacon, Host. From the start.',
+  freeFlight: 'No job and no clock, Host. Fly where you like. Black boxes and data chips drift out here, and I will ping when we are close. The pause menu takes us back to the board.',
+  blackBoxPing: 'A black box, Host. Someone’s last words.',
+  blackBoxTaken: 'I have it. Their last words, Host. I will put them up for you.',
+  chipPing: 'A data chip, Host, close by. Someone lost their music out here.',
+  chipTaken: 'A data chip. Radio twenty five eighty four, an old pressing. I will put it on.',
   courierSlow: 'Too slow. The client wants it again.',
   mining: 'A mining run, Host. Break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break.',
   miningSlow: 'The barge left without our ore. Again, Host.',
@@ -601,6 +606,7 @@ export const CAMPAIGN = {
   smuggle: 'Cargo nobody wrote down, Host, for the people here. Two Ministry patrols on the lane. Burn now, then cut the drive and coast past them silent. Hot, they see us from far off. Hold us still at the drop.',
   smuggleSeen: 'Scanned. The patrol saw us hot, Host. The cargo goes over the side, and we start again.',
   smuggleSlow: 'The contact gave up on us. Again, Host.',
+  pitNight: 'The Pit, Host. No licence, no Ministry, and one clone tonight. They come in waves. Stay up as long as you can.',
   scar: 'Another scar, Host. You will remember that one. So will the next clone.',
   valhallaSprintMissed: 'We missed a coil. Back to the start, and once more.',
   valhallaSprintDone: 'Six coils, and the clock beaten. The ridges went by like waves, Host.',
@@ -798,6 +804,7 @@ export const RASK = {
   dockingLane: 'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.',
   dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. Your debt goes with you, and so does my forty percent.',
   soldDebt: "Rask here, darling. Just so you hear it from me: I've sold your paper. The Tallymen bought it, debt, cut and clone. Lovely people. Don't ever miss a payment.",
+  families: "Rask here, darling. Those black boxes of yours? I sold them on to the families. The families pay well. Sometimes. Your share's in the wallet.",
 } as const;
 
 /**
@@ -833,6 +840,7 @@ export const PIM = {
   radiators: "Tug yard out here strips radiators off wrecks. Got you a set, first grade, a thousand. Your laser cools quicker. Still a fin short, mind. Can't weld on what isn't there.",
   overhaul: "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.",
   surplus: "A real laser! Navy surplus, hardly fired. Six thousand. You haven't got six thousand. The dealer takes the rest on your paper. Hold still, I'm fitting it.",
+  shelf: "That's the shelf. Everything you dragged home is on it. And the tags on the rail, one for every black box. Somebody's got to remember them.",
 } as const;
 
 /** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */

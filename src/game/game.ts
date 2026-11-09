@@ -25,25 +25,29 @@ import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { CAMPAIGN, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
 import type { Stage } from '../view/stage';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
-import { showTransmission } from '../music/transmission';
+import { showRecorded, showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from './decoys';
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, master, medal, MEDAL_SHARE, PRINT_PRICE, printClone, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars } from '../campaign/campaign';
+import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, master, medal, MEDAL_SHARE, PRINT_PRICE, pitNight, placeBet, printClone, buyRumor, settleBet, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars, takeChip, takeTag } from '../campaign/campaign';
 import { scar, SCAR_EFFECTS, SCAR_KINDS, SCAR_NAMES, scarNumbers, scarOf, scarTier, stoneSeconds } from '../campaign/scars';
 import { salvageById, type Salvage } from '../campaign/salvage';
 import { PEOPLE_NAMES, PEOPLES, STANDING_NAMES, standingTier } from '../campaign/standing';
-import { wantedName } from '../campaign/missions';
+import { firstJobAt, freeFlight, GALLEY_VISIT, pitWaves, wantedName } from '../campaign/missions';
+import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaign/gullet';
+import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
+import { chipId, Hunt, type Find } from '../campaign/hunt';
+import { showShelf } from '../world/shelf';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -569,8 +573,6 @@ function keepSchoolSteps(steps: Partial<Record<SchoolCourse, number>>) {
 }
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
-/** The campaign Lot 7731 as the browser keeps it (see campaign/campaign). */
-const CAMPAIGN_KEY = 'solartournament.campaign';
 /** The best lap of each arena's course: its time and splits (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
@@ -1007,6 +1009,11 @@ export class Game implements OnlineGame {
   /** The Gullet's plate is shown over the scene in person (see showGullet), and the Host left by it since it was shown. */
   private gulletOpen = false;
   private gulletLeft = false;
+  /** The black boxes and data chips of the place flown at in the campaign (see campaign/hunt), and those Nicole has named on this visit to it. */
+  private readonly hunt = new Hunt();
+  private readonly pinged = new Set<string>();
+  /** A data chip's track the campaign plays from `since` (wall clock, s) in place of the mood's (see musicCue); null for none. */
+  private chipTrack: { title: string; since: number } | null = null;
 
   /** The Host's habits are counted (see campaign/campaign, Habits): in a mission's fight against raiders who fire in earnest, until Blackout is done. */
   private get learning(): boolean {
@@ -1455,7 +1462,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.decoys = new Decoys(assets.textures.glow);
-    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root);
+    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.hunt.group);
     this.hudScene.add(this.plane.group, this.orbitPath.line);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
@@ -1803,10 +1810,31 @@ export class Game implements OnlineGame {
       ...trips.filter((mission) => !sideJobAt(mission)).map((mission) => job(mission, tripNote(mission))),
       ...places.map((place) => {
         const group = Object.assign(document.createElement('div'), { className: 'board-group' });
-        group.append(Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('At {place}:', { place: t(arenaById(place)!.name) }) }), ...trips.filter((mission) => sideJobAt(mission) === place).map((mission) => job(mission, tripNote(mission))));
+        group.append(Object.assign(document.createElement('p'), { className: 'plate-label', textContent: t('At {place}:', { place: t(arenaById(place)!.name) }) }), ...trips.filter((mission) => sideJobAt(mission) === place).map((mission) => job(mission, tripNote(mission))));
         return group;
       }),
     );
+    // a free flight at every place the story has reached, with what it still hides; and Patience's galley once she has taken the Host aboard
+    const reached = HUNT_PLACES.filter((place) => {
+      const first = firstJobAt(place);
+      return !!first && campaign.done.includes(first.id);
+    });
+    const hidden = (place: HuntPlace) => {
+      const tags = { n: this.tagsAt(place), total: TAGS_PER_PLACE };
+      return campaign.chips.includes(place) ? t('Tags {n}/{total} · chip found', tags) : t('Tags {n}/{total} · chip not found', tags);
+    };
+    const visits = campaign.done.includes('rheasilvia') ? [job(GALLEY_VISIT, t('Climb up and look round: the shelf keeps what the road has left, the rail a tag for every black box found.'))] : [];
+    $('board-free-label').hidden = !reached.length;
+    $('board-free').replaceChildren(
+      ...reached.map((place) => {
+        const button = job(freeFlight(place), `${hidden(place)}. ${t('No clock, nothing to fail; the pause menu brings you back.')}`);
+        button.querySelector('.mode-label')!.textContent = t('Free flight: {place}', { place: t(arenaById(place)!.name) });
+        return button;
+      }),
+      ...visits,
+    );
+    $('board-finds').hidden = !reached.length;
+    $('board-finds').textContent = t('Dog tags {n}/{total} · data chips {chips}/{places}', { n: campaign.tags.length, total: TAG_IDS.length, chips: campaign.chips.length, places: HUNT_PLACES.length });
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     const again = (mission: Mission) => {
@@ -1902,6 +1930,8 @@ export class Game implements OnlineGame {
     // the people who call in, fetched ahead of their first call
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.mission = mission;
+    // a bet in Kesh's book on another job is lost the moment a job is taken (see campaign/gullet)
+    if (this.campaign.bet && this.campaign.bet.mission !== mission.id) this.keepCampaign((campaign) => settleBet(campaign, mission, false));
     // clean only from its first drill; what the job came to before the Host left it holds (see Campaign.run)
     this.cleanRun = this.missionStep() === 0;
     this.untouched = this.cleanRun;
@@ -1981,7 +2011,20 @@ export class Game implements OnlineGame {
 
   /** A scar at its tier in words: its name, the tier and what it does (see campaign/scars). */
   private scarText(kind: (typeof SCAR_KINDS)[number], tier: number): string {
-    return t('Scar: {scar} {tier}, {effect}.', { scar: t(SCAR_NAMES[kind]), tier: ROMAN[tier], effect: t(SCAR_EFFECTS[kind], scarNumbers(kind, tier)) });
+    return t('Scar: {scar} {tier}, {effect}.', { scar: t(SCAR_NAMES[kind]), tier: ROMAN[tier], effect: t(SCAR_EFFECTS[kind], { ...scarNumbers(kind, tier), seconds: coinText(scarNumbers(kind, tier).seconds) }) });
+  }
+
+  /** A night in the Pit over (see campaign/gullet, pitNight): paid, its record kept, and the board again. */
+  private endPit() {
+    let night = { purse: 0, record: false };
+    const waves = pitWaves();
+    this.keepCampaign((campaign) => (night = pitNight(campaign, waves)));
+    if (night.record) this.speaker.say(KESH.pitRecord);
+    this.mission = null;
+    this.schoolMark = this.schoolTrack = null;
+    this.showMenu();
+    this.showBoard(true);
+    this.notice(night.record ? t('The Pit: {waves} waves, a new record. {purse} ☉ from Kesh’s purse.', { waves, purse: coinText(night.purse) }) : t('The Pit: {waves} waves. {purse} ☉ from Kesh’s purse.', { waves, purse: coinText(night.purse) }));
   }
 
   /** What the screen says of a master's run (see campaign/campaign, master) and its bonus as kept. */
@@ -2006,7 +2049,7 @@ export class Game implements OnlineGame {
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
   private missionStep(): number {
-    return this.flyingAgain || this.mission?.side ? 0 : this.campaign.step;
+    return this.flyingAgain || this.mission?.side || this.mission?.pit || this.mission?.open ? 0 : this.campaign.step;
   }
 
   /**
@@ -2642,6 +2685,9 @@ export class Game implements OnlineGame {
     if (this.school) {
       const mood = this.campaignMood();
       if (!mood || !this.mission) return null;
+      // a data chip's track, once found, from its start to its end, unless a scene has music of its own
+      const chip = this.chipTrack;
+      if (chip && !this.stageName && wallClock() - chip.since < ROUND_SECONDS) return { title: chip.title, energy: 'round', elapsed: wallClock() - chip.since, roundLength: ROUND_SECONDS, voiceless: true };
       const title = this.stageName ? `${this.mission.name} · ${this.stageName}` : this.mission.name;
       const key = `${title}:${mood}`;
       if (key !== this.mood.key) this.mood = { key, since: wallClock() };
@@ -3080,6 +3126,8 @@ export class Game implements OnlineGame {
     this.speaker.inPerson = !!name;
     this.stageName = name;
     if (name) {
+      // Patience's galley keeps on its shelf what the jobs done have left, and a tag for every black box found
+      showShelf(this.campaign.done, this.campaign.tags.length);
       this.stage = stageOf(name);
       this.scene.add(this.stage.root);
     }
@@ -3098,7 +3146,87 @@ export class Game implements OnlineGame {
     this.gulletOpen = open;
     $('gullet').hidden = !open;
     this.input.steerWithMouse(this.state === 'playing' && !open);
-    if (open) $('gullet-leave').focus();
+    if (open) {
+      this.showGulletOffers();
+      $('gullet-leave').focus();
+    }
+  }
+
+  /**
+   * What Kesh offers on the Gullet's plate (see campaign/gullet): a bet in her book on a job done
+   * with a gold time (the job, then the stake; with one placed, the job to fly now), a rumor for a
+   * drink, and the Pit downstairs with its record.
+   */
+  private showGulletOffers(word = '') {
+    const campaign = this.campaign;
+    const button = (label: string, note: string, act: () => void, disabled = false) => {
+      const element = Object.assign(document.createElement('button'), { type: 'button', className: 'mode', disabled });
+      element.innerHTML = `<span class="mode-name"><span class="mode-label"></span></span><span class="mode-note"></span>`;
+      element.querySelector('.mode-label')!.textContent = label;
+      element.querySelector('.mode-note')!.textContent = note;
+      element.addEventListener('click', act);
+      return element;
+    };
+    const fly = (mission: Mission) => {
+      this.showGullet(false);
+      this.startMission(mission);
+    };
+    const offers: HTMLElement[] = [];
+    const bet = campaign.bet;
+    const betOn = bet ? MISSIONS.find((mission) => mission.id === bet.mission)! : null;
+    if (bet && betOn) {
+      offers.push(button(t('Fly your bet: {mission}', { mission: t(betOn.name) }), t('{stake} ☉ in Kesh’s book. Inside the gold time of {seconds} s she pays {coins} ☉.', { stake: coinText(bet.stake), seconds: goldOf(betOn)!, coins: coinText(bet.stake * BET_ODDS) }), () => fly(betOn)));
+    } else {
+      const timed = MISSIONS.filter((mission) => campaign.done.includes(mission.id) && goldOf(mission) !== null);
+      if (timed.length) {
+        const select = Object.assign(document.createElement('select'), { id: 'gullet-bet-job' });
+        select.setAttribute('aria-label', t('The job to bet on'));
+        for (const mission of timed) select.append(Object.assign(document.createElement('option'), { value: mission.id, textContent: [t(mission.name), sideJobAt(mission) ? t(arenaById(sideJobAt(mission)!)!.name) : '', t('gold {seconds} s', { seconds: goldOf(mission)! })].filter(Boolean).join(' · ') }));
+        const stakes = Object.assign(document.createElement('div'), { className: 'gullet-stakes' });
+        for (const stake of BET_STAKES) {
+          const chip = Object.assign(document.createElement('button'), { type: 'button', textContent: `${coinText(stake)} ☉`, disabled: campaign.coins < stake });
+          chip.addEventListener('click', () => {
+            const mission = MISSIONS.find((m) => m.id === select.value)!;
+            let placed = false;
+            this.keepCampaign((kept) => (placed = placeBet(kept, mission, stake)));
+            if (!placed) return;
+            this.speaker.say(KESH.betTaken, 'lesson');
+            this.showGulletOffers();
+          });
+          stakes.append(chip);
+        }
+        const label = Object.assign(document.createElement('p'), { className: 'plate-label', textContent: t('A bet in Kesh’s book: inside the gold time she pays double') });
+        offers.push(label, select, stakes);
+      }
+    }
+    const rumorsLeft = campaign.rumors < RUMORS.length;
+    offers.push(
+      button(
+        t('A rumor for a drink'),
+        rumorsLeft ? t('{price} ☉. Kesh hears what the jobs under the counter are before the people trust you with them.', { price: RUMOR_PRICE }) : t('Kesh has told you all she knows.'),
+        () => {
+          let told: string | null = null;
+          this.keepCampaign((kept) => (told = buyRumor(kept)));
+          if (!told) return;
+          this.speaker.say(KESH.rumor, 'lesson');
+          this.showGulletOffers(told);
+        },
+        !rumorsLeft || campaign.coins < RUMOR_PRICE,
+      ),
+    );
+    if (word) offers.push(Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t(word) }));
+    const pit = MISSIONS.find((mission) => mission.pit)!;
+    offers.push(
+      button(
+        t('Down to the Pit'),
+        `${t('Wave after wave, one clone, {purse} ☉ cash a wave.', { purse: PIT_PURSE })} ${campaign.pit ? t('Record: {waves} waves.', { waves: campaign.pit }) : ''}`.trim(),
+        () => {
+          this.speaker.say(KESH.pit, 'lesson');
+          fly(pit);
+        },
+      ),
+    );
+    $('gullet-offers').replaceChildren(...offers);
   }
 
   /** The Host leaves the Gullet by its plate: the mission's drill waiting in the bar is done (see SchoolContext.gulletLeft). */
@@ -3142,6 +3270,10 @@ export class Game implements OnlineGame {
     // so no round after it spawns at its start
     this.trialOf = this.mission = null;
     this.flyingAgain = false;
+    // the finds of a place stay out there, and a chip's track ends with the job
+    this.hunt.leave();
+    this.huntPlace = null;
+    this.chipTrack = null;
     this.showCaller(null);
     this.showQuality();
     this.leaveOnline();
@@ -3908,6 +4040,14 @@ export class Game implements OnlineGame {
     }
     // the lessons of a flight school that is left end with it
     if (this.school) this.speaker.stop();
+    // a flight with no end of its own (a free flight, the galley) is left for the job board
+    if (this.school && this.mission?.open) {
+      this.mission = null;
+      this.schoolMark = this.schoolTrack = null;
+      this.showMenu();
+      this.showBoard(true);
+      return;
+    }
     // a round flown to its end is cheered; one left from the pause menu is not
     if (this.time >= this.roundEndsAt) this.crowd.finale();
     this.renderScoreboard();
@@ -5879,13 +6019,18 @@ export class Game implements OnlineGame {
       this.enterArena(arena);
       if (this.me!.alive) this.respawn(this.me!);
     }
+    // a night in the Pit ends with its clone: Kesh's purse for the waves cleared, the record kept, back to the board
+    if (this.mission?.pit && !this.me!.alive) {
+      this.endPit();
+      return;
+    }
     const step = school.stepIndex;
     const waypoint = school.update(context);
     const course = school.course;
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else if (!this.flyingAgain && !this.mission?.side) {
+      else if (!this.flyingAgain && !this.mission?.side && !this.mission?.pit && !this.mission?.open) {
         this.keepCampaign((campaign) => {
           campaign.step = school.stepIndex;
           campaign.run = { fine: this.missionFine, style: this.missionStyle, gold: this.goldRun };
@@ -5912,11 +6057,13 @@ export class Game implements OnlineGame {
       let golden: number | null = null;
       let mastered: number | null = null;
       let fee: ReturnType<typeof flownAgain> = { kept: 0, cut: 0, standing: null };
+      let bet: number | null = null;
       this.keepCampaign((campaign) => {
         bonus = medal(campaign, mission, this.cleanRun);
         golden = gold(campaign, mission, this.goldRun);
         mastered = master(campaign, mission, this.cleanRun, this.untouched, this.goldRun);
         fee = flownAgain(campaign, mission, this.missionFine);
+        bet = settleBet(campaign, mission, this.goldRun);
       });
       this.flyingAgain = false;
       this.mission = null;
@@ -5924,8 +6071,9 @@ export class Game implements OnlineGame {
       this.showMenu();
       this.showBoard(true);
       const paid = fee.kept + fee.cut ? (this.campaign.held ? t('{mission} done again: {kept} ☉ for you.', { mission: t(mission.name), kept: coinText(fee.kept) }) : t('{mission} done again: {kept} ☉ for you, {cut} ☉ for the yard.', { mission: t(mission.name), kept: coinText(fee.kept), cut: coinText(fee.cut) })) : '';
-      const won = [paid, bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : '', mastered !== null ? this.masterText(mastered) : '', this.standingText(fee.standing)].filter(Boolean).join(' ');
+      const won = [paid, bonus !== null ? this.medalText(bonus) : '', golden !== null ? this.goldText(golden) : '', mastered !== null ? this.masterText(mastered) : '', this.standingText(fee.standing), bet === null ? '' : bet ? t('Kesh pays your bet: {coins} ☉.', { coins: coinText(bet) }) : t('No gold: the book keeps your stake.')].filter(Boolean).join(' ');
       if (won) this.notice(won);
+      if (bet !== null) this.speaker.say(bet ? KESH.betWon : KESH.betLost);
       return;
     }
     // a mission of the campaign done: paid (its medal too, if flown clean), and back to the menu
@@ -5975,6 +6123,7 @@ export class Game implements OnlineGame {
       return;
     }
     const me = this.me!;
+    this.seekFinds(me);
     // a hit on the own hull, and the run is no master's (see campaign/campaign, master)
     if (me.alive && me.hull < MAX_HULL) this.untouched = false;
     // in person the people stand in the room: no hologram calls in
@@ -5984,6 +6133,56 @@ export class Game implements OnlineGame {
     // where the pilot was in the step the marker came up
     if (!waypoint) this.schoolLine = null;
     this.schoolTrack = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
+  }
+
+  /**
+   * The black boxes and data chips of the place a job of the campaign is flown at (see
+   * campaign/hunt), in the cockpit only: Nicole names the nearest within its ping once a visit, and
+   * the hull takes what it flies within reach of. A black box's last words go up on screen, its
+   * place's last one brings the families' reward over Rask's comm; a chip's track plays next.
+   */
+  private seekFinds(me: Ship) {
+    const place = this.mission && !this.stage && isHuntPlace(this.venue.id) ? this.venue.id : null;
+    if (place !== this.huntPlace) this.pinged.clear();
+    this.huntPlace = place;
+    const found = (id: string) => this.campaign.tags.includes(id) || this.campaign.chips.some((chip) => chipId(chip) === id);
+    const { near, take } = this.hunt.update(place, this.field, found, me.alive ? me.flight.position : null, this.time);
+    if (near && !this.pinged.has(near.id) && this.speaker.say(near.kind === 'tag' ? CAMPAIGN.blackBoxPing : CAMPAIGN.chipPing, 'chatter')) this.pinged.add(near.id);
+    if (take && place) this.takeFind(take, place);
+  }
+
+  /** The place whose finds the hunt shows now (see seekFinds). */
+  private huntPlace: HuntPlace | null = null;
+
+  /** A find taken: kept with the campaign, and what it holds shown, played or paid. */
+  private takeFind(find: Find, place: HuntPlace) {
+    this.pinged.add(find.id);
+    this.sound.beep(1320, 0.12, 0.15);
+    if (find.kind === 'chip') {
+      this.keepCampaign((campaign) => takeChip(campaign, place));
+      this.speaker.say(CAMPAIGN.chipTaken, 'urgent');
+      showRecorded('Radio 2584', t('Found on a data chip: {title}', { title: CHIPS[place] }), 8);
+      this.chipTrack = { title: CHIPS[place], since: wallClock() };
+      return;
+    }
+    let paid: ReturnType<typeof takeTag> = null;
+    this.keepCampaign((campaign) => (paid = takeTag(campaign, find.id)));
+    const { tag } = tagOf(find.id)!;
+    this.speaker.say(CAMPAIGN.blackBoxTaken, 'urgent');
+    showRecorded(`${tag.name} · ${t(tag.role)}`, t(tag.words), 10);
+    const reward = paid as ReturnType<typeof takeTag>;
+    if (!reward?.complete) {
+      this.hud.flashMessage(this.time, t('Black box {n} of {total} here', { n: this.tagsAt(place), total: TAGS_PER_PLACE }), 3);
+      return;
+    }
+    // the families' reward, over Rask's comm once Nicole has said her line
+    this.speaker.say(RASK.families, 'lesson');
+    this.hud.flashMessage(this.time, this.campaign.held ? t('The families pay {kept} ☉.', { kept: coinText(reward.kept) }) : t('The families pay {kept} ☉ for you, {cut} ☉ for the yard.', { kept: coinText(reward.kept), cut: coinText(reward.cut) }), 5);
+  }
+
+  /** How many of a place's black boxes the campaign has found. */
+  private tagsAt(place: HuntPlace): number {
+    return Array.from({ length: TAGS_PER_PLACE }, (_, index) => tagId(place, index)).filter((id) => this.campaign.tags.includes(id)).length;
   }
 
   /** The flight school in the HUD, as the frame's last step left it (see teach): its plate, marker, rings and racing line; returns the marker for the crosshair. */
@@ -8782,6 +8981,8 @@ export class Game implements OnlineGame {
       this.fleetReference.position.copy(this.fleet.position);
       references.push(this.fleetReference);
     }
+    // the campaign's finds within their ping (see seekFinds)
+    if (this.school) for (const reference of this.hunt.references) references.push(reference);
     this.hud.setReferences(this.camera, subject, references);
   }
 

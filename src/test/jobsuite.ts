@@ -127,7 +127,9 @@ export function flyJobs(from: number, to: number) {
       // STRICT=1 holds every job to winning, the outmatched too (to see which of them a change has made winnable)
       const outmatched = process.env.STRICT ? undefined : OUTMATCHED[mission.id];
       // a trial's round is a whole round of the Games after its drills, flown by the balance runs
-      const name = `${mission.id}${mission.trial ? ' (its drills)' : ''}${outmatched ? ` (flown; not won by a middling bot: ${outmatched})` : ''}`;
+      // a night in the Pit is never done: it ends when the clone does (see Game.cloneLost)
+      const endless = !!mission.pit;
+      const name = `${mission.id}${mission.trial ? ' (its drills)' : ''}${endless ? ' (flown; never done: the night ends with the clone)' : outmatched ? ` (flown; not won by a middling bot: ${outmatched})` : ''}`;
       it(name, () => {
         random = new Randomizer(textSeed(mission.id));
         const run = flyJob(mission, campaignFor(mission), host(BEHAVIORS[mission.id]), DRILL_LIMIT, ATTEMPTS, trace > 0 ? tracer(trace) : undefined);
@@ -137,7 +139,7 @@ export function flyJobs(from: number, to: number) {
         expect(run.buried, text).toBe(0);
         // (but where the drill is known to fail at once, see OUTMATCHED: The Feeders' Comet)
         if (!QUICK_KNOWN.includes(mission.id)) for (const drill of run.drills) expect(drill.quick, text).toBe(0);
-        if (outmatched) return;
+        if (outmatched || endless) return;
         expect(run.done, text).toBe(true);
         for (const drill of run.drills) expect(drill.attempts, text).toBeLessThanOrEqual(ATTEMPTS);
         const crashes = PLACE_DEATHS.reduce((sum, cause) => sum + (run.deaths.causes[cause] ?? 0), 0);

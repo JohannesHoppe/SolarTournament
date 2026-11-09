@@ -310,6 +310,43 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(errors).toEqual([]);
 });
 
+test('a free flight at a place reached: a black box flown onto is taken and kept, its last words on screen, and the pause menu goes back to the board, which counts it', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: ['patch'] })));
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  // only the Boneyard is reached, and Patience's galley not yet
+  await expect(page.locator('#board-free button')).toHaveCount(1);
+  await expect(page.locator('#board-free button')).toContainText('Free flight: The Boneyard');
+  await expect(page.locator('#board-free button')).toContainText('Tags 0/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Dog tags 0/75 · data chips 0/25');
+  await page.click('#board-free button');
+  await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live && window.game.hunt.here.length === 4, null, { timeout: 90_000 });
+  // the clone set onto the first black box: taken
+  await page.evaluate(async () => {
+    const game = window.game;
+    const start = game.time;
+    while (!JSON.parse(localStorage.getItem('solartournament.campaign')!).tags?.length && game.time - start < 10) {
+      game.me.flight.position.copy(game.hunt.here[0].position);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(kept.tags).toEqual(['boneyard:0']);
+  // a free flight keeps the story where it stands
+  expect(kept.step).toBe(0);
+  await expect(page.locator('#transmission')).toContainText('Vela Okonkwo-Brandt');
+  await expect(page.locator('#transmission')).toContainText('the last one too');
+  await expect.poll(() => page.evaluate(() => window.game.hunt.group.children[0].visible)).toBe(false);
+  // nothing ends it by itself: the pause menu leaves it for the board
+  await page.keyboard.press('Escape');
+  await page.click('#quit');
+  await expect(page.locator('#board')).toBeVisible();
+  await expect(page.locator('#board-free button')).toContainText('Tags 1/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Dog tags 1/75');
+  expect(errors).toEqual([]);
+});
+
 /** The game opened with `?campaign`, the story done up to Pilot Episode with the drill reached in the next job at `step`, the job board open; the page's errors. */
 async function boardAfterPilotEpisode(page: Page, step: number): Promise<string[]> {
   const errors = await openGame(page, '/?campaign');
@@ -473,6 +510,46 @@ test('the Gullet: on the job board once Occator is reached, Kesh behind her coun
   await page.waitForFunction(() => !window.game.stage && !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
   await expect(page.locator('#board-bar button')).toHaveCount(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('gullet'))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('Kesh’s offers: a rumor opens Occator’s smuggling run, a bet goes into her book, and a night in the Pit pays its waves when the clone goes down', async ({ page }) => {
+  test.setTimeout(400_000);
+  // Occator reached, its courier run done (a gold time to bet on), coins in the wallet, a regular
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'courier:occator'], coins: 2000, gullet: true };
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await page.click('#board-bar button');
+  await page.waitForFunction(() => window.game.stage && !document.getElementById('gullet')!.hidden, null, { timeout: 180_000 });
+  // a rumor for a drink: her word on the plate, Occator's smuggling run open before the Rockborn know the Host
+  await page.locator('#gullet-offers button', { hasText: 'A rumor for a drink' }).click();
+  await expect(page.locator('#gullet-offers')).toContainText('cargo nobody counts');
+  // a bet of 250 on the courier run
+  await expect(page.locator('#gullet-bet-job option')).toHaveCount(1);
+  await page.locator('.gullet-stakes button', { hasText: '250' }).click();
+  await expect(page.locator('#gullet-offers button', { hasText: 'Fly your bet' })).toHaveCount(1);
+  let campaign = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(campaign.bet).toEqual({ mission: 'courier:occator', stake: 250 });
+  expect(campaign.coins).toBe(2000 - 60 - 250);
+  expect(campaign.rumors).toBe(1);
+  // down to the Pit: the first wave's fighter put down, the second wave comes, then the clone
+  await page.locator('#gullet-offers button', { hasText: 'Down to the Pit' }).click();
+  await page.waitForFunction(() => window.game.mission?.pit && window.game.school?.attempt?.live && window.game.jumpers?.bots.length === 1 && window.game.me?.alive, null, { timeout: 120_000 });
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await page.waitForFunction(() => window.game.jumpers?.bots.length === 2 && window.game.jumpers.bots.every((bot: { ship: { alive: boolean } }) => bot.ship.alive), null, { timeout: 30_000 });
+  await page.evaluate(() => {
+    window.game.me.protectedUntil = 0;
+    window.game.me.structural(Infinity, window.game.time);
+  });
+  // the night over: the board again, a wave paid in cash, the record kept; the bet taken on another job lost
+  await page.waitForFunction(() => !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
+  await expect(page.locator('#board-side .board-group', { hasText: 'Occator' }).locator('button', { hasText: 'Smuggling Run' })).toHaveCount(1);
+  campaign = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(campaign.pit).toBe(1);
+  expect(campaign.bet).toBeNull();
   expect(errors).toEqual([]);
 });
 
