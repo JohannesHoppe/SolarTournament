@@ -25,21 +25,25 @@ import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, CAMPAIGN, type Cast, CAST_COLORS, CAST_NAMES, RASK, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
 import type { Stage } from '../view/stage';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
-import { showTransmission } from '../music/transmission';
+import { showRecorded, showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from './decoys';
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, takeChip, takeTag } from '../campaign/campaign';
+import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
+import { chipId, Hunt, type Find } from '../campaign/hunt';
+import { firstJobAt, freeFlight, GALLEY_VISIT } from '../campaign/missions';
+import { showShelf } from '../world/shelf';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -563,8 +567,6 @@ function keepSchoolSteps(steps: Partial<Record<SchoolCourse, number>>) {
 }
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
-/** The campaign Lot 7731 as the browser keeps it (see campaign/campaign). */
-const CAMPAIGN_KEY = 'solartournament.campaign';
 /** The best lap of each arena's course: its time and splits (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
@@ -996,6 +998,11 @@ export class Game implements OnlineGame {
   private flyingAgain = false;
   /** The campaign's job board is open (see showBoard). */
   private atBoard = false;
+  /** The black boxes and data chips of the place flown at in the campaign (see campaign/hunt), and those Nicole has named on this visit to it. */
+  private readonly hunt = new Hunt();
+  private readonly pinged = new Set<string>();
+  /** A data chip's track the campaign plays from `since` (wall clock, s) in place of the mood's (see musicCue); null for none. */
+  private chipTrack: { title: string; since: number } | null = null;
 
   /** The Host's habits are counted (see campaign/campaign, Habits): in a mission's fight against raiders who fire in earnest, until Blackout is done. */
   private get learning(): boolean {
@@ -1436,7 +1443,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.decoys = new Decoys(assets.textures.glow);
-    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root);
+    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.hunt.group);
     this.hudScene.add(this.plane.group, this.orbitPath.line);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
@@ -1769,6 +1776,27 @@ export class Game implements OnlineGame {
         ),
       ),
     );
+    // a free flight at every place the story has reached, with what it still hides; and Patience's galley once she has taken the Host aboard
+    const reached = HUNT_PLACES.filter((place) => {
+      const first = firstJobAt(place);
+      return !!first && campaign.done.includes(first.id);
+    });
+    const hidden = (place: HuntPlace) => {
+      const tags = { n: this.tagsAt(place), total: TAGS_PER_PLACE };
+      return campaign.chips.includes(place) ? t('Tags {n}/{total} · chip found', tags) : t('Tags {n}/{total} · chip not found', tags);
+    };
+    const visits = campaign.done.includes('rheasilvia') ? [job(GALLEY_VISIT, t('Climb up and look round: the shelf keeps what the road has left, the rail a tag for every black box found.'))] : [];
+    $('board-free-label').hidden = !reached.length;
+    $('board-free').replaceChildren(
+      ...reached.map((place) => {
+        const button = job(freeFlight(place), `${hidden(place)}. ${t('No clock, nothing to fail; the pause menu brings you back.')}`);
+        button.querySelector('.mode-label')!.textContent = t('Free flight: {place}', { place: t(arenaById(place)!.name) });
+        return button;
+      }),
+      ...visits,
+    );
+    $('board-finds').hidden = !reached.length;
+    $('board-finds').textContent = t('Dog tags {n}/{total} · data chips {chips}/{places}', { n: campaign.tags.length, total: TAG_IDS.length, chips: campaign.chips.length, places: HUNT_PLACES.length });
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     const again = (mission: Mission) => {
@@ -1865,7 +1893,7 @@ export class Game implements OnlineGame {
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
   private missionStep(): number {
-    return this.flyingAgain || this.mission?.side ? 0 : this.campaign.step;
+    return this.flyingAgain || this.mission?.side || this.mission?.open ? 0 : this.campaign.step;
   }
 
   /**
@@ -2501,6 +2529,9 @@ export class Game implements OnlineGame {
     if (this.school) {
       const mood = this.campaignMood();
       if (!mood || !this.mission) return null;
+      // a data chip's track, once found, from its start to its end, unless a scene has music of its own
+      const chip = this.chipTrack;
+      if (chip && !this.stageName && wallClock() - chip.since < ROUND_SECONDS) return { title: chip.title, energy: 'round', elapsed: wallClock() - chip.since, roundLength: ROUND_SECONDS, voiceless: true };
       const title = this.stageName ? `${this.mission.name} · ${this.stageName}` : this.mission.name;
       const key = `${title}:${mood}`;
       if (key !== this.mood.key) this.mood = { key, since: wallClock() };
@@ -2934,6 +2965,8 @@ export class Game implements OnlineGame {
     this.speaker.inPerson = !!name;
     this.stageName = name;
     if (name) {
+      // Patience's galley keeps on its shelf what the jobs done have left, and a tag for every black box found
+      showShelf(this.campaign.done, this.campaign.tags.length);
       this.stage = stageOf(name);
       this.scene.add(this.stage.root);
     }
@@ -2974,6 +3007,10 @@ export class Game implements OnlineGame {
   private showMenu() {
     // a trial's round left for the menu is no longer flown (see endRound, judgeTrial)
     if (this.trialOf) this.trialOf = this.mission = null;
+    // the finds of a place stay out there, and a chip's track ends with the job
+    this.hunt.leave();
+    this.huntPlace = null;
+    this.chipTrack = null;
     this.showCaller(null);
     this.showQuality();
     this.leaveOnline();
@@ -3733,6 +3770,14 @@ export class Game implements OnlineGame {
     }
     // the lessons of a flight school that is left end with it
     if (this.school) this.speaker.stop();
+    // a flight with no end of its own (a free flight, the galley) is left for the job board
+    if (this.school && this.mission?.open) {
+      this.mission = null;
+      this.schoolMark = this.schoolTrack = null;
+      this.showMenu();
+      this.showBoard(true);
+      return;
+    }
     // a round flown to its end is cheered; one left from the pause menu is not
     if (this.time >= this.roundEndsAt) this.crowd.finale();
     this.renderScoreboard();
@@ -5703,7 +5748,7 @@ export class Game implements OnlineGame {
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else if (!this.flyingAgain && !this.mission?.side) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+      else if (!this.flyingAgain && !this.mission?.side && !this.mission?.open) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
     }
     // a trial's drills done: its round is flown next (see Mission.trial, endRound)
     if (school.finished && this.mission?.trial && !this.trialOf) {
@@ -5772,6 +5817,7 @@ export class Game implements OnlineGame {
       return;
     }
     const me = this.me!;
+    this.seekFinds(me);
     // in person the people stand in the room: no hologram calls in
     this.showCaller(me.alive && !this.stage ? school.caller : null);
     this.schoolMark = waypoint;
@@ -5779,6 +5825,56 @@ export class Game implements OnlineGame {
     // where the pilot was in the step the marker came up
     if (!waypoint) this.schoolLine = null;
     this.schoolTrack = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
+  }
+
+  /**
+   * The black boxes and data chips of the place a job of the campaign is flown at (see
+   * campaign/hunt), in the cockpit only: Nicole names the nearest within its ping once a visit, and
+   * the hull takes what it flies within reach of. A black box's last words go up on screen, its
+   * place's last one brings the families' reward over Rask's comm; a chip's track plays next.
+   */
+  private seekFinds(me: Ship) {
+    const place = this.mission && !this.stage && isHuntPlace(this.venue.id) ? this.venue.id : null;
+    if (place !== this.huntPlace) this.pinged.clear();
+    this.huntPlace = place;
+    const found = (id: string) => this.campaign.tags.includes(id) || this.campaign.chips.some((chip) => chipId(chip) === id);
+    const { near, take } = this.hunt.update(place, this.field, found, me.alive ? me.flight.position : null, this.time);
+    if (near && !this.pinged.has(near.id) && this.speaker.say(near.kind === 'tag' ? CAMPAIGN.blackBoxPing : CAMPAIGN.chipPing, 'chatter')) this.pinged.add(near.id);
+    if (take && place) this.takeFind(take, place);
+  }
+
+  /** The place whose finds the hunt shows now (see seekFinds). */
+  private huntPlace: HuntPlace | null = null;
+
+  /** A find taken: kept with the campaign, and what it holds shown, played or paid. */
+  private takeFind(find: Find, place: HuntPlace) {
+    this.pinged.add(find.id);
+    this.sound.beep(1320, 0.12, 0.15);
+    if (find.kind === 'chip') {
+      this.keepCampaign((campaign) => takeChip(campaign, place));
+      this.speaker.say(CAMPAIGN.chipTaken, 'urgent');
+      showRecorded('Radio 2584', t('Found on a data chip: {title}', { title: CHIPS[place] }), 8);
+      this.chipTrack = { title: CHIPS[place], since: wallClock() };
+      return;
+    }
+    let paid: ReturnType<typeof takeTag> = null;
+    this.keepCampaign((campaign) => (paid = takeTag(campaign, find.id)));
+    const { tag } = tagOf(find.id)!;
+    this.speaker.say(CAMPAIGN.blackBoxTaken, 'urgent');
+    showRecorded(`${tag.name} · ${t(tag.role)}`, t(tag.words), 10);
+    const reward = paid as ReturnType<typeof takeTag>;
+    if (!reward?.complete) {
+      this.hud.flashMessage(this.time, t('Black box {n} of {total} here', { n: this.tagsAt(place), total: TAGS_PER_PLACE }), 3);
+      return;
+    }
+    // the families' reward, over Rask's comm once Nicole has said her line
+    this.speaker.say(RASK.families, 'lesson');
+    this.hud.flashMessage(this.time, this.campaign.held ? t('The families pay {kept} ☉.', { kept: coinText(reward.kept) }) : t('The families pay {kept} ☉ for you, {cut} ☉ for the yard.', { kept: coinText(reward.kept), cut: coinText(reward.cut) }), 5);
+  }
+
+  /** How many of a place's black boxes the campaign has found. */
+  private tagsAt(place: HuntPlace): number {
+    return Array.from({ length: TAGS_PER_PLACE }, (_, index) => tagId(place, index)).filter((id) => this.campaign.tags.includes(id)).length;
   }
 
   /** The flight school in the HUD, as the frame's last step left it (see teach): its plate, marker, rings and racing line; returns the marker for the crosshair. */
@@ -8567,6 +8663,8 @@ export class Game implements OnlineGame {
       this.fleetReference.position.copy(this.fleet.position);
       references.push(this.fleetReference);
     }
+    // the campaign's finds within their ping (see seekFinds)
+    if (this.school) for (const reference of this.hunt.references) references.push(reference);
     this.hud.setReferences(this.camera, subject, references);
   }
 

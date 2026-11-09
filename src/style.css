@@ -2541,6 +2541,19 @@ body.touch #school-panel {
   border: 1.5px solid var(--hud-dim);
 }
 
+/* a find of the campaign (a black box, a data chip): a small diamond with a dot, faint as a ping */
+.reference[data-glyph='find']::before {
+  inset: 4px;
+  border: 1.5px dashed var(--hud-dim);
+  rotate: 45deg;
+}
+
+.reference[data-glyph='find']::after {
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--hud-bright);
+}
+
 .reference[data-glyph='base']::after {
   inset: 6px;
   background: var(--hud-dim);
@@ -3195,6 +3208,13 @@ body.touch #now-playing {
   text-shadow: var(--neon-blue-soft);
 }
 
+/* what a find holds (a black box's last words, a chip's track): read out on the HUD, in its azure */
+#transmission.recorded #transmission-text {
+  font-style: italic;
+  color: var(--hud-bright);
+  text-shadow: var(--hud-text-glow);
+}
+
 /* between the thumbs at the bottom, below the alarms */
 body.touch #transmission {
   bottom: 24px;
@@ -3697,14 +3717,23 @@ body.page {
 }
 
 /* the recipes (the footer's link): one card per flavor, its facts in two columns */
-.recipes {
+.recipes,
+.chips {
   margin-top: 48px;
 }
 
-.recipes p {
+.recipes p,
+.chips p {
   text-align: justify;
   hyphens: auto;
   text-wrap: pretty;
+}
+
+/* the tracks found on data chips in the campaign, a button each */
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 
 .recipe {
