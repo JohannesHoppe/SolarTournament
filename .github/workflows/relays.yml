@@ -16,15 +16,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # runs Trystero's code and reads what the relays answer, so it may only read: the list goes on
+  # as the job's output, never through the working tree to a job that holds a token
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # the one permission it needs: pushing the list
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      list: ${{ steps.list.outputs.list }}
     steps:
-      # actions pinned to their commits; the token stays out of the checkout and out of the
-      # install, only the step that pushes gets it
+      # actions pinned to their commits
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
@@ -36,13 +38,34 @@ jobs:
       # the check only needs Trystero, which runs no install scripts
       - run: npm ci --ignore-scripts
       - run: npm run relays
+      - id: list
+        run: echo "list=$(base64 -w0 src/net/relays.json)" >> "$GITHUB_OUTPUT"
+
+  # runs nothing but the shell, git and gh, in a fresh checkout: commits a changed list, and starts
+  # the workflow CI for it (a push with this token starts no workflow by itself)
+  commit:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+          persist-credentials: false
       - name: Commit a changed list
         env:
           GH_TOKEN: ${{ github.token }}
+          LIST: ${{ needs.check.outputs.list }}
         run: |
+          printf '%s' "$LIST" | base64 -d > src/net/relays.json
+          jq -e '(.relays | type == "array") and all(.relays[]; type == "string" and startswith("wss://"))' src/net/relays.json > /dev/null
           if git diff --quiet -- src/net/relays.json; then echo "The list is unchanged."; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/net/relays.json
           git commit -m "Relays: the weekly check's healthy Nostr relays for the online tournament"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
+          gh workflow run ci.yml --ref main --repo "$GITHUB_REPOSITORY"
