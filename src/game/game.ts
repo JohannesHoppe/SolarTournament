@@ -2825,13 +2825,14 @@ export class Game implements OnlineGame {
         // a watching Host has no cockpit of its own
         if (action === 'camera' && !this.watching()) this.cockpit = !this.cockpit;
         if (action === 'cinema') this.toggleCinema();
-        if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
+        if (action === 'autopilot' && this.me?.alive && !this.stage) this.toggleAutopilot();
         // Enter skips a round's intro
         if (action === 'confirm' && this.introOpen) this.skipIntro();
-        // the clamps of the opening hold the overdrive and the torpedoes too
-        if (action === 'overdrive' && !this.clamped) this.overdrive();
-        if (action === 'torpedo' && !this.spectating && this.me && !this.clamped) this.fireTorpedo(this.me);
-        if (action === 'decoy' && !this.spectating && this.me && !this.clamped) this.dropDecoy(this.me);
+        // the clamps of the opening hold the overdrive and the torpedoes too, and so does a scene
+        // in person: the clone is out of the cockpit (see stage)
+        if (action === 'overdrive' && !this.clamped && !this.stage) this.overdrive();
+        if (action === 'torpedo' && !this.spectating && this.me && !this.clamped && !this.stage) this.fireTorpedo(this.me);
+        if (action === 'decoy' && !this.spectating && this.me && !this.clamped && !this.stage) this.dropDecoy(this.me);
         if (action === 'watch' && this.watching()) this.watchNext();
         break;
       case 'paused':
@@ -2981,7 +2982,7 @@ export class Game implements OnlineGame {
 
   /** This browser's Host decides what is played: online the Host of the lead browser, alone the Host itself; the flight school has its own course. */
   private get gameMaster() {
-    return !this.school && (!this.online || this.online.isLead);
+    return !this.school && !this.trialOf && (!this.online || this.online.isLead);
   }
 
   /** The plate of a new round: the arenas and the modes to choose from. */
@@ -3352,6 +3353,8 @@ export class Game implements OnlineGame {
     this.showLinkLost(false);
     $('no-clone').hidden = true;
     this.noClone = false;
+    // a back-room print's trembling ends with its round
+    this.tremorUntil = -Infinity;
     // cleaned as every peer cleans it, so no callsign leaves nothing visible
     const callsign = cleanName($<HTMLInputElement>('callsign').value) || 'Host';
     $<HTMLInputElement>('callsign').value = callsign;
@@ -4540,7 +4543,7 @@ export class Game implements OnlineGame {
     if (recorder) this.recorded(myControls);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
-    if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
+    if (dodge && this.state === 'playing' && !this.spectating && !this.stage) this.dodge(dodge);
     const clamped = (this.clamped = this.startCountdown(myControls));
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
@@ -4559,8 +4562,8 @@ export class Game implements OnlineGame {
         continue;
       }
       if (!ship.alive) {
-        // a mission's claim-jumper shot down stays down
-        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || ship === this.wingman?.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
+        // a mission's claim-jumper (or race rival) shot down stays down
+        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || ship === this.wingman?.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.racers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
         // the last clone, no printer: black first, then the attempt again (see Drill.lastClone)
         if (ship === me && this.school?.lastClone && !this.noClone) {
           this.noClone = true;
@@ -6518,7 +6521,7 @@ export class Game implements OnlineGame {
   private brakeManeuver(controls: Readonly<Controls>): 'off' | 'brake' | 'return' {
     const me = this.me!;
     const live = this.state === 'playing' && me.alive;
-    const held = live && this.input.braking;
+    const held = live && !this.stage && this.input.braking;
     const pressed = held && !this.brakeHeld;
     this.brakeHeld = held;
     if (!live) return (this.brakePhase = 'off');
@@ -6575,7 +6578,7 @@ export class Game implements OnlineGame {
       }
       return out;
     }
-    const flipping = this.state === 'playing' && this.input.flipping && me.alive;
+    const flipping = this.state === 'playing' && this.input.flipping && me.alive && !this.stage;
     if (!flipping) {
       this.flipping = false;
       // flung off the hook: the flight computer turns the nose onto the new course, unless the
@@ -6685,7 +6688,7 @@ export class Game implements OnlineGame {
    */
   private hookOwn(now: number) {
     const me = this.me!;
-    const held = this.state === 'playing' && me.alive && !this.spectating && !this.clamped && this.input.hooking;
+    const held = this.state === 'playing' && me.alive && !this.spectating && !this.clamped && !this.stage && this.input.hooking;
     const pressed = held && !this.hookHeld;
     this.hookHeld = held;
     if (!pressed) return;
@@ -6711,7 +6714,7 @@ export class Game implements OnlineGame {
     const decoy = $('touch-decoy');
     const decoys = me.alive && me.decoys > 0;
     if (decoy.hidden === decoys) decoy.hidden = !decoys;
-    if (!allowed || this.state !== 'playing' || !me.alive || this.spectating || this.clamped || !this.input.selfDestructing) {
+    if (!allowed || this.state !== 'playing' || !me.alive || this.spectating || this.clamped || this.stage || !this.input.selfDestructing) {
       this.selfDestructSince = null;
       return;
     }

@@ -1853,6 +1853,9 @@ export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, towa
  * (`missed`) or the clock run out (`slow`) starts it over; within `gold` the job's gold is won.
  */
 function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string; lay?: (field: AsteroidField) => { points: THREE.Vector3[]; normals: THREE.Vector3[] } }): Drill {
+  // the last coil flown within the gold time this attempt: the gold is the job's only once the
+  // drill counts (its clone lives on, see school's SURVIVE), never from an attempt lost after it
+  let golden = false;
   return {
     line: spec.line,
     gold: spec.gold,
@@ -1861,6 +1864,7 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
     music: 'fight',
     autopilot: true,
     enter(ctx, a, markers) {
+      golden = false;
       // a course laid where the field lies (a courier run's), or the trial's fixed one
       const laid = spec.lay?.(ctx.field);
       a.points = laid?.points ?? spec.points.map((coil) => coil.clone());
@@ -1884,8 +1888,11 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
       if (a.next === 1) a.clockFrom = a.seconds;
       if (a.next < a.points.length) return false;
       // the last coil within the gold time: the job's gold (see campaign/campaign, gold)
-      if (a.seconds - a.clockFrom <= spec.gold) ctx.goldTime();
+      golden = a.seconds - a.clockFrom <= spec.gold;
       return true;
+    },
+    leave: (ctx) => {
+      if (golden) ctx.goldTime();
     },
     fail: (_, a) => (a.warned ? spec.missed : a.seconds - a.clockFrom > spec.time ? spec.slow : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
@@ -2662,6 +2669,9 @@ const PRINT_DEBT = 2000;
 /** How long the dead clone's link stays dark before the next one wakes (s). */
 const REPRINT_SECONDS = 3;
 
+/** The switch chosen at the launch ring this attempt: its print goes on the debt once the drill counts (see leave), never twice for an attempt flown again. */
+let switched = false;
+
 const launchRing: Drill = {
   line: CAMPAIGN.gelChoice,
   keys: ['selfDestruct'],
@@ -2672,6 +2682,7 @@ const launchRing: Drill = {
     stop(ctx);
     a.doneAt = NaN;
     a.warned = false;
+    switched = false;
   },
   done(ctx, a) {
     if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
@@ -2680,12 +2691,15 @@ const launchRing: Drill = {
       a.warned = true;
       a.doneAt = a.seconds + REPRINT_SECONDS;
       ctx.crash();
-      ctx.owe(PRINT_DEBT);
+      switched = true;
     } else if (a.seconds > GEL_WAIT) {
       a.doneAt = a.seconds + GEL_PAIN;
       ctx.agony(GEL_PAIN);
     }
     return false;
+  },
+  leave: (ctx) => {
+    if (switched) ctx.owe(PRINT_DEBT);
   },
   mark: (_, a) => (Number.isNaN(a.doneAt) ? t('Launch ring in {seconds} s', { seconds: Math.max(0, Math.ceil(GEL_WAIT - a.seconds)) }) : a.warned ? t('Clone lost · printing the next') : t('Gel · boost')),
 };
@@ -3270,6 +3284,9 @@ const QUIET_AFTER = 4;
 const QUIET_RATINGS = 250;
 const QUIET_SPARED_RATINGS = 100;
 
+/** The Quiet Man let go this attempt: the story keeps it once the drill counts (see leave), never from an attempt flown again in which he is shot. */
+let spared = false;
+
 const quietMan: Drill = {
   line: CAMPAIGN.quietMan,
   keys: ['turn', 'drive', 'fire'],
@@ -3283,6 +3300,7 @@ const quietMan: Drill = {
     ctx.me.overheated = false;
     // a.count: 0 fighting, 1 turned away; a.doneAt: when the drill ends, its outcome said
     a.count = 0;
+    spared = false;
   },
   done(ctx, a) {
     if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
@@ -3294,14 +3312,17 @@ const quietMan: Drill = {
       ctx.standDown(QUIET_GONE);
       ctx.say([CAMPAIGN.quietManTurns]);
     } else if (a.count === 1 && ctx.jumperNear(QUIET_GONE, QUIET_REACH)) {
-      ctx.choose('quietManSpared');
+      spared = true;
       ctx.removeJumpers();
       ctx.say([CAMPAIGN.quietManGone]);
       a.doneAt = a.seconds + QUIET_AFTER;
     }
     return false;
   },
-  leave: (ctx) => ctx.removeJumpers(),
+  leave: (ctx) => {
+    ctx.removeJumpers();
+    if (spared) ctx.choose('quietManSpared');
+  },
   waypoint: () => null,
   mark: (_, a) => (a.count === 0 ? t('The Quiet Man') : t('The Quiet Man · turned away')),
 };
