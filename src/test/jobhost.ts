@@ -121,6 +121,8 @@ export interface Intent {
   strafe?: THREE.Vector3;
   /** Hands off. */
   idle?: boolean;
+  /** Silent: the thrusters alone, the drive cold (a patrol in sight sees a burning drive). */
+  quiet?: boolean;
   /** Race through a course of rings or pipes (see Pilot.race). */
   race?: { points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; next: number; radius: number; closed: boolean };
 }
@@ -249,7 +251,7 @@ export class Pilot {
       // a hull short of a fin (the Magpie) holds its course in the clouds only slowly (see world/air, finSpin)
       if (this.me.perks.fins < 2 && deeper < AIR_DECK) cruise = Math.min(cruise, AIR_FINLESS);
     }
-    const stopping = MAIN_THRUST * Math.max(0.1, flight.driveFactor) * STOP_SHARE;
+    const stopping = intent.quiet ? RCS_THRUST * Math.max(0.25, flight.thrusterFactor) * STOP_SHARE : MAIN_THRUST * Math.max(0.1, flight.driveFactor) * STOP_SHARE;
     // the stop reckons with the turn round before the burn: TURN_ROUND seconds at the speed flown
     const speed = intent.through ? cruise : Math.min(cruise, Math.sqrt(2 * stopping * Math.max(0, Math.min(distance, room) - STOP_PAD - local.subVectors(flight.velocity, this.goalVelocity).length() * TURN_ROUND)));
     // the way round the rock, as the game's guide lays it, unless the point is near
@@ -276,6 +278,7 @@ export class Pilot {
       // the nose along the way (or on the point when it is near), the thrusters trimming
       flight.steer(distance > STOP_PAD * 2 ? want.lengthSq() > 1 ? want : toGoal : flight.forward(local), 2.5, out);
     }
+    if (intent.quiet) out.thrust = 0;
     // what the drive does not give, the thrusters do
     if (out.thrust > 0) accel.addScaledVector(flight.forward(local), -out.thrust * MAIN_THRUST * flight.driveFactor);
     flight.toLocalDirection(accel, local).divideScalar(RCS_THRUST * Math.max(0.25, flight.thrusterFactor));

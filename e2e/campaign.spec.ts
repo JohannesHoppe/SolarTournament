@@ -346,7 +346,7 @@ test('the job board offers a side trip once Act II has begun, flies it at its pl
 
 test('a courier run on the job board: six beacons laid at its place from its start, the clock starting at the first', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  const run = page.locator('#board-side button', { hasText: 'Courier Run' }).filter({ hasText: 'Valhalla' });
+  const run = page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Courier Run' });
   await expect(run).toContainText('Gold time');
   await run.click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto', null, { timeout: 90_000 });
@@ -356,7 +356,7 @@ test('a courier run on the job board: six beacons laid at its place from its sta
 
 test('an ambush on the job board: three bandits round the client’s lane at its place, all of them down wins', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Ambush' }).filter({ hasText: 'Valhalla' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Ambush' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto' && window.game.jumpers?.bots.length === 3, null, { timeout: 90_000 });
   await page.evaluate(() => {
     for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
@@ -367,7 +367,7 @@ test('an ambush on the job board: three bandits round the client’s lane at its
 
 test('a mining run on the job board: rock broken sheds its ore, and the ore flown in wins it', async ({ page }) => {
   const errors = await boardAfterPilotEpisode(page, 0);
-  await page.locator('#board-side button', { hasText: 'Mining Run' }).filter({ hasText: 'Rheasilvia' }).click();
+  await page.locator('#board-side .board-group', { hasText: 'Rheasilvia' }).locator('button', { hasText: 'Mining Run' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'rheasilvia', null, { timeout: 90_000 });
   // two rocks broken just ahead of the hull, and every glint of their ore flown through in turn
   await page.evaluate(async () => {
@@ -451,6 +451,28 @@ test('chapter 3 opens at Occator: the clone held before the market’s mouth is 
   expect(kept.parts).toContain('laser');
   expect(kept.modules).toContain('targeting');
   expect([kept.coins, kept.bond]).toEqual([0, 28000]);
+  expect(errors).toEqual([]);
+});
+
+test('the Gullet: on the job board once Occator is reached, Kesh behind her counter in person, the bar’s plate, and Leave back to the board', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator'] };
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await expect(page.locator('#board-bar button')).toHaveCount(1);
+  await page.click('#board-bar button');
+  // the clone in the bar, its plate up once Kesh has greeted it
+  await page.waitForFunction(() => window.game.stage && !document.getElementById('gullet')!.hidden, null, { timeout: 180_000 });
+  // the set and Kesh
+  await page.waitForFunction(() => window.game.stage.root.children.length === 2, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('occator');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).gullet)).toBe(true);
+  await page.click('#gullet-leave');
+  // Kesh sees the clone off, and the job board is back, the Gullet on it still, never done
+  await page.waitForFunction(() => !window.game.stage && !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
+  await expect(page.locator('#board-bar button')).toHaveCount(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('gullet'))).toBe(false);
   expect(errors).toEqual([]);
 });
 

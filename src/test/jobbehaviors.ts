@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { hypot } from '../detmath';
-import { MINING_PLACES } from '../campaign/missions';
+import { COURIER_PLACES, MINING_PLACES } from '../campaign/missions';
 import { MAX_HEAT } from '../ship/ship';
 import { LASER_RANGE } from '../ship/ship';
 import { HOOK_FLING } from '../game/school';
@@ -217,6 +217,13 @@ const climb: Behavior = (world, pilot) => {
   return { goto: hatch.clone().setY(hatch.y + 900), cruise: 300 };
 };
 
+/** A smuggling run: to the drop, the drive cold while a patrol is near enough to see it burn (with room for the patrol's circle). */
+const PATROL_SIGHT = 48000;
+const smuggle: Behavior = (world) => {
+  const near = world.formation.some((patrol) => patrol.flight.position.distanceTo(world.me.flight.position) < PATROL_SIGHT);
+  return { goto: world.waypoint, quiet: near };
+};
+
 export const BEHAVIORS: Record<string, Record<number, Behavior>> = {
   firstCut: { 1: mine },
   dockingLane: { 1: shootDrones },
@@ -230,5 +237,6 @@ export const BEHAVIORS: Record<string, Record<number, Behavior>> = {
   feedersComet: { 1: tow },
   lastOrbit: { 0: towInOrbit },
   theMemorial: { 1: climb },
+  ...Object.fromEntries(COURIER_PLACES.map(([place]) => [`smuggle:${place}`, { 0: smuggle }])),
   ...Object.fromEntries(MINING_PLACES.map((place) => [`mining:${place}`, { 0: mine }])),
 };

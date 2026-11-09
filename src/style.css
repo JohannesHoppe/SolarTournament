@@ -524,10 +524,22 @@ body:has(#hangar-plate:not([hidden])) #hangar {
    the job board's jobs the same way */
 #school-courses,
 #board-next,
-#board-done {
+#board-bar,
+#board-done,
+#gullet-offers {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* the Gullet's plate stands aside, in a corner, so Kesh and her bar stay in view over it */
+#gullet {
+  top: auto;
+  left: auto;
+  right: 16px;
+  bottom: 16px;
+  transform: none;
+  width: min(340px, calc(100vw - 32px));
 }
 
 .field {

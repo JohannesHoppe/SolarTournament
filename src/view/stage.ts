@@ -52,6 +52,8 @@ export class Stage {
     people: readonly Placement[],
     private readonly eye: THREE.Vector3,
     private readonly look: number,
+    /** The set is shut in rock: the world's sun and sky light none of it (see ScenePlan.indoors). */
+    readonly indoors = false,
   ) {
     this.root.add(set);
     for (const { who, at, facing } of people) {

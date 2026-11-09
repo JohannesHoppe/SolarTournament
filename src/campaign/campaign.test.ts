@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE, ON_AIR, STYLE_PER_RANK, styleRatings } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE, ON_AIR, STYLE_PER_RANK, styleRatings, sideJobAt, bars } from './campaign';
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
@@ -32,7 +32,7 @@ describe('the campaign Lot 7731', () => {
     const campaign = freshCampaign();
     const story = MISSIONS.filter((mission) => !mission.side);
     // the side trips to Mercury and Venus; the courier runs come once each place's first job is done
-    const trips = (c: typeof campaign) => sideTrips(c).filter((mission) => !mission.courier && !mission.ambush && !mission.mining).map((mission) => mission.id);
+    const trips = (c: typeof campaign) => sideTrips(c).filter((mission) => !sideJobAt(mission)).map((mission) => mission.id);
     const upTo = story.findIndex((mission) => mission.id === 'pilotEpisode');
     campaign.done = story.slice(0, upTo).map((mission) => mission.id);
     expect(trips(campaign)).toEqual([]);
@@ -78,7 +78,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [], run: { fine: 0, style: 0, gold: false } });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ ...freshCampaign(), done: [MISSIONS[0].id], bond: BOND_MAX, parts: ['cutter'], modules: ['radar'], choices: ['quietManSpared'] });
     // a medal only for a job done that has one
     const paying = MISSIONS.find((mission) => hasMedal(mission))!;
     const unpaid = MISSIONS.find((mission) => !hasMedal(mission))!;
@@ -93,6 +93,26 @@ describe('the campaign Lot 7731', () => {
     left.run = { fine: 70, style: 25, gold: true };
     complete(left, MISSIONS[0]);
     expect(left.run).toEqual({ fine: 0, style: 0, gold: false });
+  });
+
+  it('keeps whether the Host has been to the Gullet, and opens it on the job board once Occator is reached, every time, never as a job', () => {
+    const campaign = freshCampaign();
+    expect(campaign.gullet).toBe(false);
+    campaign.gullet = true;
+    expect(campaignFrom(JSON.stringify(campaign)).gullet).toBe(true);
+    // only a plain yes counts
+    expect(campaignFrom(JSON.stringify({ gullet: 'yes' })).gullet).toBe(false);
+    const story = MISSIONS.filter((mission) => !mission.side);
+    campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'occator')).map((mission) => mission.id);
+    expect(bars(campaign)).toEqual([]);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'occator')!);
+    expect(bars(campaign).map((mission) => mission.id)).toEqual(['gullet']);
+    const gullet = bars(campaign)[0];
+    // never the story's next mission, never a side trip, nothing to pay
+    expect(nextMission(campaign)?.id).not.toBe('gullet');
+    expect(sideTrips(campaign)).not.toContain(gullet);
+    expect(gullet.pay).toBe(0);
+    expect(gullet.ratings).toBeUndefined();
   });
 
   it('pays a job’s medal once, for a clean run, less the yard’s cut while the debt is unpaid', () => {
@@ -400,7 +420,7 @@ describe('the campaign Lot 7731', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
       // a trial at least its briefing; a courier run's one drill briefs itself
-      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.courier || mission.ambush || mission.mining ? 0 : 1);
+      expect(mission.drills.length).toBeGreaterThan(mission.trial || sideJobAt(mission) ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });

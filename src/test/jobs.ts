@@ -65,6 +65,8 @@ const SHOVE_SPEED = 100;
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
 const EASE_FADE = 90;
+/** The simulated Host stays at the Gullet's plate this long (s) before it leaves by it. */
+const GULLET_STAY = 3;
 /** Bots send a torpedo at a locked target this often a second (see Game, BOT_TORPEDO_RATE), within this cone and reach. */
 const BOT_TORPEDO_RATE = 0.08;
 const LOCK_ANGLE = 0.3;
@@ -770,6 +772,25 @@ export class JobWorld implements SchoolContext {
 
   feel() {}
 
+  /** The Gullet's plate: the simulated Host looks at it for GULLET_STAY seconds and leaves by it. */
+  gulletPlate(open: boolean) {
+    this.plateAt = open ? this.now : null;
+  }
+
+  get gulletLeft() {
+    return this.plateAt !== null && this.now - this.plateAt > GULLET_STAY;
+  }
+
+  get gulletRegular() {
+    return this.campaign.gullet;
+  }
+
+  visitGullet() {
+    this.campaign.gullet = true;
+  }
+
+  private plateAt: number | null = null;
+
   boost(through: THREE.Vector3) {
     coilPush(this.me.flight.velocity, through, MAX_SPEED);
   }
@@ -992,6 +1013,11 @@ export class JobWorld implements SchoolContext {
   agony() {}
 
   // ---- what the simulated Host reads ----
+
+  /** The ships a drill holds in formation (the Parade's clones, a smuggling run's patrols), as the Host sees them. */
+  get formation(): readonly Ship[] {
+    return this.flockShips;
+  }
 
   /** The nearest torpedo homing on the own ship, if any (the lock warning shows where it comes from). */
   get homing(): THREE.Vector3 | null {

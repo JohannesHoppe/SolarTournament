@@ -50,6 +50,12 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   theMemorial: 'four guards at once round the tower while the Host climbs its hatches',
   hollowJack: 'Hollow Jack (0.7) and three raiders at once',
   firstDeath: 'Perihelion (0.75) and four of the Navy at once, Spare on the wing',
+  // bounties: the face and its escorts at once (the other 46 are won)
+  'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
+  'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
+  'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',
+  'bounty:titan:3': 'the face (0.65) and three escorts in Titan’s haze',
+  'bounty:triton:3': 'the face (0.65) and three escorts',
   // a race against armed rivals: they shoot the drive of whoever leads and send torpedoes, and a death starts the race over
   ...Object.fromEntries(['peakRun', 'stickneyGrand', 'fluxTubeRace', 'heartRun', 'haumeaRing', 'terminatorRun'].map((id) => [id, RACE])),
   qualifyingHeat: `${RACE}; half of each lap in Titan’s haze, where a hull short of a fin barely holds its course`,
@@ -114,7 +120,10 @@ export function flyJobs(from: number, to: number) {
 
     const only = process.env.JOB;
     const trace = Number(process.env.TRACE ?? 0);
-    for (const mission of MISSIONS.slice(from, to).filter((m) => !only || m.id === only)) {
+    const jobs = MISSIONS.slice(from, to).filter((m) => !only || m.id === only);
+    // a share with none of the job asked for (JOB) has nothing to fly
+    if (!jobs.length) it.skip('none of these jobs is asked for', () => undefined);
+    for (const mission of jobs) {
       // STRICT=1 holds every job to winning, the outmatched too (to see which of them a change has made winnable)
       const outmatched = process.env.STRICT ? undefined : OUTMATCHED[mission.id];
       // a trial's round is a whole round of the Games after its drills, flown by the balance runs
