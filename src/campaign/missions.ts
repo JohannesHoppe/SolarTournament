@@ -139,11 +139,16 @@ const liveTarget: Drill = {
     a.lastShot = 0;
     // a.jinks: the hits taken in this attempt
     a.jinks = 0;
+    a.next = 0;
     ctx.fine(0);
   },
   done(ctx, a) {
-    // a.held: the seconds out of the zone without a break
-    a.held = ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE ? a.held + ctx.dt : 0;
+    // a.held: the seconds out of the zone without a break, counted once the clone has been in it
+    // this attempt (a.next 1): an attempt begun again out where the last one failed fails no sooner
+    // than the Host is back inside
+    const out = ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE;
+    if (!out) a.next = 1;
+    a.held = out && a.next ? a.held + ctx.dt : 0;
     a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / TARGET_LAG));
     if (a.seconds - a.lastShot > TARGET_INTERVAL / GUNNERS.length) {
       a.lastShot = a.seconds;
@@ -154,7 +159,9 @@ const liveTarget: Drill = {
   },
   fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : null),
   mark: (_, a) =>
-    a.held > 0
+    !a.next
+      ? t('Back into the yard')
+      : a.held > 0
       ? t('Out of the yard: back inside in {seconds} s', { seconds: Math.max(0, Math.ceil(TARGET_GRACE - a.held)) })
       : t('Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
   waypoint: () => null,
@@ -525,9 +532,15 @@ const cutAndHaul: Drill = {
   autopilot: false,
   enter(ctx, a) {
     // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
-    const claim = haulClaim(ctx);
-    hauled = claim?.id ?? '';
-    // where the claim's rock stood as the attempt began, for the marker
+    // the claim cut before is kept while its rock or a piece of it is out there: a new attempt
+    // hauls on from it, never from a claim the Host has not touched
+    let claim: Asteroid | null = null;
+    if (hauled) for (const piece of ctx.field.asteroids.values()) if (ofClaim(piece.id)) claim ??= piece;
+    if (!claim) {
+      claim = haulClaim(ctx);
+      hauled = claim?.id ?? '';
+    }
+    // where the claim's rock (or its first piece) stood as the attempt began, for the marker
     a.site.copy(claim?.object.position ?? ctx.me.flight.position);
     a.count = ctx.rocksBroken;
     a.jinks = 0;
@@ -1388,7 +1401,8 @@ const rideComet: Drill = {
   keepsDrift: () => true,
   enter(ctx, a) {
     // the comet as the attempt begins: the piece the hook must hold, whatever drifts nearer later
-    ridden = cometPiece(ctx);
+    // the comet ridden before is kept while it is out there: a block of ice drifted nearer its place is never taken for it
+    if (!ridden || ctx.field.asteroids.get(ridden.id) !== ridden) ridden = cometPiece(ctx);
     a.points = [ridden?.object.position ?? COMET_AT];
     a.held = 0;
     shed.length = 0;

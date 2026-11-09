@@ -103,7 +103,7 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
-  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` (or each its own of `skill`) named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
+  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` (or each its own of `skill`, those past its end its last) named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
   spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
   /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
   moveJumpers(to: THREE.Vector3): void;

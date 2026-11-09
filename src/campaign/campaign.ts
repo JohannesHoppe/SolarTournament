@@ -612,12 +612,13 @@ export const BLACK_GLITCH = 3;
 export const BLACK_TREMOR = 8;
 export const BLACK_SHAKE = 0.25;
 
-/** A clone printed: its price taken (see PRINT_PRICE), what the wallet paid and what went on the debt returned. */
+/** A clone printed: its price taken (see PRINT_PRICE), what the wallet paid and what went on the debt returned (a debt paid off takes nothing more on: what the wallet lacks is forgiven). */
 export function printClone(campaign: Campaign): { paid: number; owed: number } {
   const price = campaign.blackPrint ? BLACK_PRINT_PRICE : PRINT_PRICE;
   const paid = Math.min(campaign.coins, price);
   campaign.coins -= paid;
-  const owed = campaign.held ? 0 : Math.min(price - paid, BOND_MAX - campaign.bond);
+  // the shortfall goes on the debt only while there is one, unpaid and not held
+  const owed = campaign.held || campaign.bond <= 0 ? 0 : Math.min(price - paid, BOND_MAX - campaign.bond);
   campaign.bond += owed;
   return { paid, owed };
 }
@@ -656,6 +657,12 @@ export function placeBet(campaign: Campaign, mission: Mission, stake: number): b
   campaign.bet = { mission: mission.id, stake };
   return true;
 }
+
+/** Whether a mission is a job: never a visit to a bar, a night in the Pit or a flight with no end of its own (see Mission.bar, pit, open). */
+export const isJob = (mission: Mission) => !mission.bar && !mission.pit && !mission.open;
+
+/** Whether a mission keeps where the Host left it (see Campaign.step): a job of the story, never a side job. */
+export const keepsStep = (mission: Mission) => isJob(mission) && !mission.side;
 
 /** The bet settled once its job is flown again (golden: within its gold time) or another job is taken: what it paid back (BET_ODDS times the stake on gold), or 0 lost; null with no bet on `mission`. */
 export function settleBet(campaign: Campaign, mission: Mission, golden: boolean): number | null {

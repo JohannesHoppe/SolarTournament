@@ -823,7 +823,7 @@ export class JobWorld implements SchoolContext {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
-      const bot = this.addBot(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[0]) : (skill as Skill)));
+      const bot = this.addBot(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[skill.length - 1]) : (skill as Skill)));
       bot.ship.team = JUMPER_TEAM;
       const angle = (i / count) * Math.PI * 2;
       const at = new THREE.Vector3(cos(angle) * hold, hold * 0.5, sin(angle) * hold).add(rig);

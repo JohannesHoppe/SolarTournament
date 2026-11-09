@@ -94,7 +94,6 @@ for who, spec in PEOPLE.items():
     settings = HumanService.get_default_deserialization_settings()
     settings['subdiv_levels'] = 0
     base = HumanService.deserialize_from_dict(info, settings)
-    print('PARTS', who, [o.name for o in bpy.data.objects if o.type == 'MESH'])
     if 'shave' in spec:
         shave(next(o for o in bpy.data.objects if o.type == 'MESH' and spec['hair'] in o.name), spec['shave'])
     if spec.get('apron'):

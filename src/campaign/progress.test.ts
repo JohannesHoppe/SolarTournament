@@ -56,6 +56,10 @@ describe('prints', () => {
     campaign.held = false;
     campaign.bond = BOND_MAX;
     expect(printClone(campaign).owed).toBe(0);
+    // a debt paid off takes nothing more on, so the yard never takes its cut again
+    campaign.bond = 0;
+    expect(printClone(campaign)).toEqual({ paid: 0, owed: 0 });
+    expect(campaign.bond).toBe(0);
   });
 });
 

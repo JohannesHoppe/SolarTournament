@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, master, medal, MEDAL_SHARE, PRINT_PRICE, pitNight, placeBet, printClone, buyRumor, settleBet, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars, takeChip, takeTag } from '../campaign/campaign';
+import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, isJob, keepsStep, master, medal, MEDAL_SHARE, PRINT_PRICE, pitNight, placeBet, printClone, buyRumor, settleBet, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars, takeChip, takeTag } from '../campaign/campaign';
 import { scar, SCAR_EFFECTS, SCAR_KINDS, SCAR_NAMES, scarNumbers, scarOf, scarTier, stoneSeconds } from '../campaign/scars';
 import { salvageById, type Salvage } from '../campaign/salvage';
 import { PEOPLE_NAMES, PEOPLES, STANDING_NAMES, standingTier } from '../campaign/standing';
@@ -1766,7 +1766,7 @@ export class Game implements OnlineGame {
     this.showcase?.show('magpie', hullOf(campaign), false);
     const next = nextMission(campaign);
     // where the next job goes on: the drill reached in it, as the Host comes back to it
-    const place = arenaById(next?.drills[Math.min(this.campaign.step, next.drills.length - 1)].arena ?? next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
+    const place = arenaById(next?.drills[Math.min(this.campaign.step, next.drills.length - 1)].arena ?? next?.drills[0].arena ?? [...MISSIONS].reverse().find(keepsStep)?.drills[0].arena ?? '');
     $('board-place').textContent = place ? t(place.name) : '';
     const wallet = { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) };
     $('board-wallet').textContent = campaign.held ? t('{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}', wallet) : t('{coins} ☉ in the wallet · you owe {bond} ☉ · {rank}', wallet);
@@ -1821,7 +1821,7 @@ export class Game implements OnlineGame {
     });
     const hidden = (place: HuntPlace) => {
       const tags = { n: this.tagsAt(place), total: TAGS_PER_PLACE };
-      return campaign.chips.includes(place) ? t('Tags {n}/{total} · chip found', tags) : t('Tags {n}/{total} · chip not found', tags);
+      return campaign.chips.includes(place) ? t('Black boxes {n}/{total} · chip found', tags) : t('Black boxes {n}/{total} · chip not found', tags);
     };
     const visits = campaign.done.includes('rheasilvia') ? [job(GALLEY_VISIT, t('Climb up and look round: the shelf keeps what the road has left, the rail a tag for every black box found.'))] : [];
     $('board-free-label').hidden = !reached.length;
@@ -1834,7 +1834,7 @@ export class Game implements OnlineGame {
       ...visits,
     );
     $('board-finds').hidden = !reached.length;
-    $('board-finds').textContent = t('Dog tags {n}/{total} · data chips {chips}/{places}', { n: campaign.tags.length, total: TAG_IDS.length, chips: campaign.chips.length, places: HUNT_PLACES.length });
+    $('board-finds').textContent = t('Black boxes {n}/{total} · data chips {chips}/{places}', { n: campaign.tags.length, total: TAG_IDS.length, chips: campaign.chips.length, places: HUNT_PLACES.length });
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
     const again = (mission: Mission) => {
@@ -1931,7 +1931,7 @@ export class Game implements OnlineGame {
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.mission = mission;
     // a bet in Kesh's book on another job is lost the moment a job is taken (see campaign/gullet)
-    if (this.campaign.bet && this.campaign.bet.mission !== mission.id) this.keepCampaign((campaign) => settleBet(campaign, mission, false));
+    if (isJob(mission) && this.campaign.bet && this.campaign.bet.mission !== mission.id) this.keepCampaign((campaign) => settleBet(campaign, mission, false));
     // clean only from its first drill; what the job came to before the Host left it holds (see Campaign.run)
     this.cleanRun = this.missionStep() === 0;
     this.untouched = this.cleanRun;
@@ -1948,6 +1948,8 @@ export class Game implements OnlineGame {
    * default rivals, in the campaign's hull; the Host's own choice of a solo round is left as it was.
    */
   private startTrial(mission: Mission) {
+    // a round of the Games hides no finds: the last place's are taken out of the scene
+    this.hunt.leave();
     const trial = mission.trial!;
     const chosen = this.solo;
     this.trialOf = mission;
@@ -1993,20 +1995,22 @@ export class Game implements OnlineGame {
   private cloneLost(cause: DeathCause, what: string | undefined) {
     let scarred: ReturnType<typeof scar> = null;
     let print = { paid: 0, owed: 0 };
+    // the Pit's clone is the night's one: none printed after it (see endPit)
+    const printing = !this.mission?.pit;
     this.keepCampaign((campaign) => {
       scarred = scar(campaign.scars, scarOf(cause, what));
-      print = printClone(campaign);
+      if (printing) print = printClone(campaign);
     });
-    this.blackPrinted = this.campaign.blackPrint;
+    this.blackPrinted = printing && this.campaign.blackPrint;
     this.me!.outfit(hullOf(this.campaign));
-    const printed = print.owed ? t('Next clone printed: {paid} ☉ paid, {owed} ☉ on the debt.', { paid: coinText(print.paid), owed: coinText(print.owed) }) : t('Next clone printed: {paid} ☉.', { paid: coinText(print.paid) });
+    const printed = !printing ? '' : print.owed ? t('Next clone printed: {paid} ☉ paid, {owed} ☉ on the debt.', { paid: coinText(print.paid), owed: coinText(print.owed) }) : t('Next clone printed: {paid} ☉.', { paid: coinText(print.paid) });
     if (!scarred) {
-      this.hud.flashMessage(this.time, printed, 3);
+      if (printed) this.hud.flashMessage(this.time, printed, 3);
       return;
     }
     const { kind, tier } = scarred as NonNullable<ReturnType<typeof scar>>;
     this.speaker.say(CAMPAIGN.scar);
-    this.hud.flashMessage(this.time, `${this.scarText(kind, tier)} ${printed}`, 5);
+    this.hud.flashMessage(this.time, `${this.scarText(kind, tier)} ${printed}`.trim(), 5);
   }
 
   /** A scar at its tier in words: its name, the tier and what it does (see campaign/scars). */
@@ -2049,7 +2053,7 @@ export class Game implements OnlineGame {
 
   /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
   private missionStep(): number {
-    return this.flyingAgain || this.mission?.side || this.mission?.pit || this.mission?.open ? 0 : this.campaign.step;
+    return this.flyingAgain || (this.mission && !keepsStep(this.mission)) ? 0 : this.campaign.step;
   }
 
   /**
@@ -3266,13 +3270,13 @@ export class Game implements OnlineGame {
   }
 
   private showMenu() {
-    // a mission or a trial's round left for the menu is no longer flown (see endRound, judgeTrial),
+    // a mission or a trial's round left for the menu ends there (see endRound, judgeTrial),
     // so no round after it spawns at its start
     this.trialOf = this.mission = null;
     this.flyingAgain = false;
     // the finds of a place stay out there, and a chip's track ends with the job
     this.hunt.leave();
-    this.huntPlace = null;
+    this.pingedAt = null;
     this.chipTrack = null;
     this.showCaller(null);
     this.showQuality();
@@ -3885,7 +3889,7 @@ export class Game implements OnlineGame {
   private respawn(ship: Ship) {
     this.dropCables(ship);
     // a back-room print boots ragged: its link glitching, its hands trembling (see campaign/campaign, BLACK_GLITCH)
-    if (ship === this.me && this.blackPrinted) {
+    if (ship === this.me && this.blackPrinted && this.campaignHull) {
       this.blackPrinted = false;
       this.glitch.trigger(1, BLACK_GLITCH);
       this.tremorUntil = this.time + BLACK_TREMOR;
@@ -4041,6 +4045,11 @@ export class Game implements OnlineGame {
     // the lessons of a flight school that is left end with it
     if (this.school) this.speaker.stop();
     // a flight with no end of its own (a free flight, the galley) is left for the job board
+    // a night in the Pit left: Kesh pays the waves cleared, as when its clone falls
+    if (this.school && this.mission?.pit) {
+      this.endPit();
+      return;
+    }
     if (this.school && this.mission?.open) {
       this.mission = null;
       this.schoolMark = this.schoolTrack = null;
@@ -5357,7 +5366,7 @@ export class Game implements OnlineGame {
       const ship = this.addShip(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
       // brothers: one side, never at each other
       ship.team = JUMPER_TEAM;
-      const bot = new Bot(ship, skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[0]) : (skill as Skill)));
+      const bot = new Bot(ship, skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[skill.length - 1]) : (skill as Skill)));
       this.bots.push(bot);
       bots.push(bot);
       const angle = (i / count) * Math.PI * 2;
@@ -6034,7 +6043,7 @@ export class Game implements OnlineGame {
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else if (!this.flyingAgain && !this.mission?.side && !this.mission?.pit && !this.mission?.open) {
+      else if (!this.flyingAgain && (!this.mission || keepsStep(this.mission))) {
         this.keepCampaign((campaign) => {
           campaign.step = school.stepIndex;
           campaign.run = { fine: this.missionFine, style: this.missionStyle, gold: this.goldRun };
@@ -6147,16 +6156,19 @@ export class Game implements OnlineGame {
    */
   private seekFinds(me: Ship) {
     const place = this.mission && !this.stage && isHuntPlace(this.venue.id) ? this.venue.id : null;
-    if (place !== this.huntPlace) this.pinged.clear();
-    this.huntPlace = place;
+    // each find named once a visit: a scene in person on the way (no place) keeps what was named
+    if (place && place !== this.pingedAt) {
+      this.pinged.clear();
+      this.pingedAt = place;
+    }
     const found = (id: string) => this.campaign.tags.includes(id) || this.campaign.chips.some((chip) => chipId(chip) === id);
     const { near, take } = this.hunt.update(place, this.field, found, me.alive ? me.flight.position : null, this.time);
     if (near && !this.pinged.has(near.id) && this.speaker.say(near.kind === 'tag' ? CAMPAIGN.blackBoxPing : CAMPAIGN.chipPing, 'chatter')) this.pinged.add(near.id);
     if (take && place) this.takeFind(take, place);
   }
 
-  /** The place whose finds the hunt shows now (see seekFinds). */
-  private huntPlace: HuntPlace | null = null;
+  /** The place of the visit whose finds Nicole has named (see seekFinds). */
+  private pingedAt: HuntPlace | null = null;
 
   /** A find taken: kept with the campaign, and what it holds shown, played or paid. */
   private takeFind(find: Find, place: HuntPlace) {
