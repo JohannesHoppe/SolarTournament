@@ -541,8 +541,11 @@ test('Kesh’s offers: a rumor opens Occator’s smuggling run, a bet goes into 
   });
   await page.waitForFunction(() => window.game.jumpers?.bots.length === 2 && window.game.jumpers.bots.every((bot: { ship: { alive: boolean } }) => bot.ship.alive), null, { timeout: 30_000 });
   await page.evaluate(() => {
-    window.game.me.protectedUntil = 0;
-    window.game.me.structural(Infinity, window.game.time);
+    // as the game kills a clone: its hull gone, and its death counted (the scar, the print, the wait for the next)
+    const game = window.game;
+    game.me.protectedUntil = 0;
+    game.me.structural(Infinity, game.time);
+    game.shipDestroyed(game.me, null, 'rock', 'rock');
   });
   // the night over: the board again, a wave paid in cash, the record kept; the bet taken on another job lost
   await page.waitForFunction(() => !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
