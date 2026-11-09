@@ -802,12 +802,15 @@ function startWorker(): Worker | null {
     started.onmessage = (event: MessageEvent<{ key: string; data: PieceData }>) => {
       if (!cutPieces.has(event.data.key)) cutPieces.set(event.data.key, event.data.data);
     };
-    // the job that was running is lost (its pieces are cut here when its rock breaks); the
-    // queue behind it goes to a fresh worker
+    // the job that was running is lost (its pieces are cut here when its rock breaks, or asked
+    // for again: its key is forgotten, so the next prefetch or ready sends it anew); the queue
+    // behind it goes to a fresh worker
     started.onerror = () => {
       started.terminate();
       worker = restarts++ < MAX_RESTARTS ? undefined : null;
-      sent = sent.filter((job) => !jobDone(job)).slice(1);
+      const pending = sent.filter((job) => !jobDone(job));
+      if (pending[0]) asked.delete(pieceKey(pending[0].shape, pending[0].path, pending[0].details));
+      sent = pending.slice(1);
       if (worker === undefined && sent.length > 0) {
         const fresh = startWorker();
         for (const job of sent) fresh?.postMessage(job);

@@ -667,10 +667,14 @@ export class Hud {
     this.vignette.style.setProperty('--tunnel', `${Math.round(75 - Number(shown) * 20)}%`);
   }
 
+  private flareShown = '';
   /** A solar flare's heat on the screen, 0..1: its edges glow orange, then the whole picture. */
   setFlareHeat(heat: number) {
+    // compared with the string written last: the browser reads "0.50" back as "0.5"
     const shown = heat < 0.01 ? '0' : heat.toFixed(2);
-    if (this.flareHeat.style.opacity !== shown) this.flareHeat.style.opacity = shown;
+    if (this.flareShown === shown) return;
+    this.flareShown = shown;
+    this.flareHeat.style.opacity = shown;
   }
 
   /** A split or lap time against the best lap, for a few seconds: ahead in green, behind in red, without a best in white. */

@@ -56,7 +56,8 @@ function tune(title: string) {
   stop();
   song = createSong(clean, 'round', ROUND_SECONDS);
   input.value = clean;
-  history.replaceState(null, '', `?title=${encodeURIComponent(clean)}`);
+  // the hash stays (#recipes opens the recipes again on a reload or a shared link)
+  history.replaceState(null, '', `?title=${encodeURIComponent(clean)}${location.hash}`);
   $('track').hidden = false;
   $('track-title').textContent = song.title;
   $('track-facts').textContent = `${song.flavor} · ${t(STRATEGY_NAMES[song.strategy])} · ${song.bpm} bpm`;

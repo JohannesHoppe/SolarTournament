@@ -261,13 +261,13 @@ export function hangarFrom(text: string | null): KeptHangar {
       const pieces = shared ? gear : gear[interceptor];
       if (pieces === undefined) continue;
       if (!isRecord(pieces)) {
-        unreadable.push(`gear.`);
+        unreadable.push(shared ? 'gear' : `gear.${interceptor}`);
         continue;
       }
       for (const { id } of GEAR) {
         if (pieces[id] === undefined) continue;
         if (typeof pieces[id] === 'boolean') hangar.gear[interceptor][id] = pieces[id];
-        else unreadable.push(shared ? `gear.` : `gear..`);
+        else unreadable.push(shared ? `gear.${id}` : `gear.${interceptor}.${id}`);
       }
     }
   } else if (gear !== undefined) unreadable.push('gear');

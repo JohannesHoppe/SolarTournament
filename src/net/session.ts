@@ -298,7 +298,8 @@ export class Session {
     });
     transport.on('x', (d, from) => {
       const victim = id(d?.v);
-      const killer = d?.k === null ? null : id(d?.k);
+      // no killer (null), or a killer's id; anything else is refused
+      const killer = d?.k === null ? null : (id(d?.k) ?? undefined);
       const deaths = num(d?.de, 0, MAX_COUNT);
       const position = vec(d?.p, 3, MAX_COORDINATE);
       const velocity = vec(d?.u, 3, MAX_SPEED);
