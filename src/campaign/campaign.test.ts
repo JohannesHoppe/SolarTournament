@@ -420,7 +420,7 @@ describe('the campaign Lot 7731', () => {
     for (const mission of MISSIONS) {
       expect(mission.name).not.toBe('');
       // a trial at least its briefing; a courier run's one drill briefs itself
-      expect(mission.drills.length).toBeGreaterThan(mission.trial || sideJobAt(mission) ? 0 : 1);
+      expect(mission.drills.length).toBeGreaterThan(mission.trial || mission.pit || sideJobAt(mission) ? 0 : 1);
       for (const drill of mission.drills) expect(drill.line).not.toBe('');
     }
   });

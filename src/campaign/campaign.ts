@@ -9,6 +9,7 @@ import { msg } from '../i18n/i18n';
 import { evenSkills, type Skills } from '../ship/bots';
 import { MISSIONS } from './missions';
 import { freshScars, scarHull, scarsFrom, type Scars } from './scars';
+import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from './gullet';
 import { fitSalvage, kinOffer, salvageById, salvageFrom, salvageHull, salvageOffer, type Salvage, type SalvageId } from './salvage';
 import { BOUNTY_STANDING, earnStanding, freshStanding, STANDING_AGAIN, STANDING_FIRST, standingFrom, tierAt, type People, type Standing } from './standing';
 
@@ -160,7 +161,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | 'gullet' | `mining:${ArenaId}` | `bounty:${ArenaId}:${number}` | `smuggle:${ArenaId}`;
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | 'gullet' | `mining:${ArenaId}` | `bounty:${ArenaId}:${number}` | `smuggle:${ArenaId}` | 'pit';
 
 export interface Mission {
   id: MissionId;
@@ -209,6 +210,8 @@ export interface Mission {
   smuggle?: ArenaId;
   /** A bounty (see campaign/missions, bounties): the place its target is hunted at, and which of the place's three it is (1 to 3). */
   bounty?: { place: ArenaId; tier: number };
+  /** A night in the Pit under the Gullet (see campaign/gullet): offered by Kesh, never on the board's lists, never done; it ends when the clone does. */
+  pit?: boolean;
   /** The standing its place's people must hold the Host at before the job board offers it (see campaign/standing, standingTier). */
   standing?: number;
 }
@@ -294,6 +297,12 @@ export interface Campaign {
   blackPrint: boolean;
   /** The Host has been to the Gullet, Kesh's bar in Occator's market (see Mission.bar): she greets a regular otherwise than a stranger. */
   gullet: boolean;
+  /** The bet in Kesh's book (see campaign/gullet): the job and the stake, or null. */
+  bet: { mission: MissionId; stake: number } | null;
+  /** The rumors Kesh has told, in the order of RUMORS. */
+  rumors: number;
+  /** The Pit's record: the most waves cleared in a night. */
+  pit: number;
 }
 
 /** What a mission in hand has come to so far (see Campaign.run). */
@@ -407,6 +416,9 @@ export const freshCampaign = (): Campaign => ({
   standing: freshStanding(),
   blackPrint: false,
   gullet: false,
+  bet: null,
+  rumors: 0,
+  pit: 0,
 });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
@@ -455,6 +467,10 @@ export function campaignFrom(text: string | null): Campaign {
       standing,
       blackPrint: kept.blackPrint === true,
       gullet: kept.gullet === true,
+      // a bet only on a job done with a gold time, at a stake of the book's
+      bet: kept.bet && typeof kept.bet === 'object' && done.includes(kept.bet.mission) && goldOf(MISSIONS.find((mission) => mission.id === kept.bet!.mission)!) !== null && BET_STAKES.includes(kept.bet.stake) ? { mission: kept.bet.mission, stake: kept.bet.stake } : null,
+      rumors: number(kept.rumors, 0, RUMORS.length),
+      pit: number(kept.pit, 0, 10_000),
     };
   } catch {
     return fresh;
@@ -462,10 +478,10 @@ export function campaignFrom(text: string | null): Campaign {
 }
 
 /** The next mission of the story, or null once every mission built is done; side trips are never it (see Mission.side). */
-export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !mission.side && !campaign.done.includes(mission.id)) ?? null;
+export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !mission.side && !mission.pit && !campaign.done.includes(mission.id)) ?? null;
 
 /** The side trips on offer: those whose mission to start from is done and that are not done themselves (see Mission.side); a bar is none. */
-export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && !mission.bar && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id) && (!mission.standing || tierAt(campaign.standing, sideJobAt(mission)!) >= mission.standing));
+export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && !mission.bar && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id) && (!mission.standing || tierAt(campaign.standing, sideJobAt(mission)!) >= mission.standing || rumored(campaign, mission)));
 
 /** The bars open to the Host: those whose mission to start from is done, every time (see Mission.bar). */
 export const bars = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.bar && mission.side && campaign.done.includes(mission.side));
@@ -583,4 +599,42 @@ export function buySalvage(campaign: Campaign, id: SalvageId): boolean {
   campaign.coins -= part.price;
   campaign.salvage = fitSalvage(campaign.salvage, id);
   return true;
+}
+
+/** Whether a rumor Kesh told opens a side job before its people would trust the Host with it (see campaign/gullet, RUMORS). */
+export function rumored(campaign: Campaign, mission: Mission): boolean {
+  return RUMORS.slice(0, campaign.rumors).some((rumor) => (rumor.job === 'smuggle' ? mission.smuggle === rumor.place : mission.bounty?.place === rumor.place && mission.bounty.tier === (rumor.job === 'bounty2' ? 2 : 3)));
+}
+
+/** A rumor bought for a drink, if Kesh has one left and the wallet the price: her word on it, or null. */
+export function buyRumor(campaign: Campaign): string | null {
+  if (campaign.rumors >= RUMORS.length || campaign.coins < RUMOR_PRICE) return null;
+  campaign.coins -= RUMOR_PRICE;
+  return RUMORS[campaign.rumors++].word;
+}
+
+/** A bet placed in Kesh's book on a job done with a gold time: the stake taken from the wallet; false if it cannot be. */
+export function placeBet(campaign: Campaign, mission: Mission, stake: number): boolean {
+  if (!campaign.done.includes(mission.id) || goldOf(mission) === null || !BET_STAKES.includes(stake) || campaign.coins < stake || campaign.bet) return false;
+  campaign.coins -= stake;
+  campaign.bet = { mission: mission.id, stake };
+  return true;
+}
+
+/** The bet settled once its job is flown again (golden: within its gold time) or another job is taken: what it paid back (BET_ODDS times the stake on gold), or 0 lost; null with no bet on `mission`. */
+export function settleBet(campaign: Campaign, mission: Mission, golden: boolean): number | null {
+  if (!campaign.bet) return null;
+  const won = campaign.bet.mission === mission.id && golden ? campaign.bet.stake * BET_ODDS : 0;
+  campaign.coins += won;
+  campaign.bet = null;
+  return won;
+}
+
+/** A night in the Pit ended with `waves` cleared: Kesh's purse paid in cash (PIT_PURSE a wave, no cut), the record kept; whether it is a new one. */
+export function pitNight(campaign: Campaign, waves: number): { purse: number; record: boolean } {
+  const purse = waves * PIT_PURSE;
+  campaign.coins += purse;
+  const record = waves > campaign.pit;
+  if (record) campaign.pit = waves;
+  return { purse, record };
 }

@@ -601,6 +601,7 @@ export const CAMPAIGN = {
   smuggle: 'Cargo nobody wrote down, Host, for the people here. Two Ministry patrols on the lane. Burn now, then cut the drive and coast past them silent. Hot, they see us from far off. Hold us still at the drop.',
   smuggleSeen: 'Scanned. The patrol saw us hot, Host. The cargo goes over the side, and we start again.',
   smuggleSlow: 'The contact gave up on us. Again, Host.',
+  pitNight: 'The Pit, Host. No licence, no Ministry, and one clone tonight. They come in waves. Stay up as long as you can.',
   scar: 'Another scar, Host. You will remember that one. So will the next clone.',
   valhallaSprintMissed: 'We missed a coil. Back to the start, and once more.',
   valhallaSprintDone: 'Six coils, and the clock beaten. The ridges went by like waves, Host.',

@@ -532,6 +532,20 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   gap: 8px;
 }
 
+/* the stakes of a bet in a row; the job picked above them */
+.gullet-stakes {
+  display: flex;
+  gap: 6px;
+}
+
+.gullet-stakes button {
+  flex: 1;
+}
+
+#gullet-bet-job {
+  width: 100%;
+}
+
 /* the Gullet's plate stands aside, in a corner, so Kesh and her bar stay in view over it */
 #gullet {
   top: auto;
@@ -540,6 +554,8 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   bottom: 16px;
   transform: none;
   width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
 
 .field {

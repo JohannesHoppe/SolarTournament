@@ -36,6 +36,7 @@ import { cos, exp, hypot, sin } from '../detmath';
 import { type Campaign, type MissionId, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, HOOK_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, TUBES_ONE_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer, textSeed } from '../random';
+import { pitWave } from './gullet';
 import type { SceneName } from './scenes';
 
 /**
@@ -2156,6 +2157,45 @@ function smuggling(arena: ArenaId): Drill {
   };
 }
 
+/**
+ * The Pit under the Gullet (docs/campaign/STORY.md, "The Pit"): waves of the Pit's fighters (see
+ * campaign/gullet, pitWave) over the crater floor before Occator's terrace, round the courier
+ * course's fourth beacon, every one against the Host, each wave spawned once the last is down;
+ * the night ends when the clone does (see Game.cloneLost), its waves cleared counted by pitCleared.
+ */
+const PIT_FIGHTERS = ['Gristle', 'Molar', 'Nine Lives', 'Cinder', 'Ratchet'];
+let pitCleared = 0;
+/** The waves cleared in the Pit tonight. */
+export const pitWaves = () => pitCleared;
+const pitAt = new THREE.Vector3();
+const pitNight: Drill = {
+  line: CAMPAIGN.pitNight,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'occator',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx) {
+    pitCleared = 0;
+    pitAt.copy(layCourier(ctx.field, 'occator').points[3]);
+    const { count, skill } = pitWave(1);
+    ctx.spawnJumpers(null, pitAt, count, skill, PIT_FIGHTERS, 12000, true);
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx) {
+    if (ctx.jumpersDown < pitWave(pitCleared + 1).count) return false;
+    pitCleared++;
+    const { count, skill } = pitWave(pitCleared + 1);
+    ctx.spawnJumpers(null, pitAt, count, skill, PIT_FIGHTERS, 12000, true);
+    return false;
+  },
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => pitAt,
+  mark: (ctx) => t('Wave {n} · {left} left', { n: pitCleared + 1, left: pitWave(pitCleared + 1).count - ctx.jumpersDown }),
+};
+/** A night in the Pit, from the Gullet: never done, never the story's (see Mission.pit). */
+const pit: Mission = { id: 'pit', name: msg('The Pit'), drills: [pitNight], pay: 0, pit: true };
+
 /** The smuggling runs as jobs: one at each place of the courier runs, offered once its people count the Host as Known. */
 const smugglingRuns: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
 
@@ -3292,7 +3332,7 @@ const gullet: Mission = {
   drills: [climbOut('gullet', msg('Patience lies at Occator’s market. Your clone climbs out and goes down the gallery to the Gullet, Kesh’s bar.'), 'occator'), gulletAgain, gulletGreet, atTheBar, inRoom(KESH.leave, 'occator')],
   pay: 0,
   side: 'occator',
-  bar: msg('Kesh’s bar in Occator’s market.'),
+  bar: msg('Kesh’s bar in Occator’s market: bets on your time trials, rumors for a drink, and the Pit downstairs.'),
 };
 
 export const MISSIONS: readonly Mission[] = [
@@ -3511,4 +3551,6 @@ export const MISSIONS: readonly Mission[] = [
   // and under Rask’s counter: three bounties and a smuggling run at each place of the courier runs
   ...bounties,
   ...smugglingRuns,
+  // the Pit under the Gullet
+  pit,
 ];

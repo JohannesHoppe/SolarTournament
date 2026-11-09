@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { AGAIN_SHARE, BLACK_PRINT_PRICE, BOND, BOND_MAX, buySalvage, campaignFrom, complete, counterOf, flownAgain, freshCampaign, hullOf, master, MEDAL_SHARE, MISSIONS, PRINT_PRICE, printClone, sideTrips, YARD_CUT } from './campaign';
+import { AGAIN_SHARE, BLACK_PRINT_PRICE, BOND, BOND_MAX, buySalvage, campaignFrom, complete, counterOf, flownAgain, freshCampaign, hullOf, master, MEDAL_SHARE, MISSIONS, PRINT_PRICE, printClone, sideTrips, YARD_CUT, placeBet, settleBet, buyRumor, pitNight, nextMission } from './campaign';
+import { BET_ODDS, PIT_PURSE, pitWave, RUMOR_PRICE, RUMORS } from './gullet';
 import { FLINCH, BURN, scar, SCAR_TIERS, scarOf, scarTier, stoneSeconds, STONE_SECONDS } from './scars';
 import { fitSalvage, SALVAGE, salvageOffer, SALVAGE_OFFER } from './salvage';
 import { KIN, PLACE_PEOPLE, STANDING_FIRST, STANDING_TIERS, standingTier } from './standing';
@@ -176,5 +177,58 @@ describe('a master’s run', () => {
     expect(master(campaign, timed, true, true, false)).toBeNull();
     expect(master(campaign, timed, true, true, true)).not.toBeNull();
     expect(campaignFrom(JSON.stringify(campaign)).masters).toEqual([job.id]);
+  });
+});
+
+describe('the Gullet', () => {
+  it('takes a bet on a job done with a gold time, pays it double on gold, and keeps it otherwise', () => {
+    const campaign = freshCampaign();
+    const timed = MISSIONS.find((m) => m.pay > 0 && m.drills.some((drill) => drill.gold !== undefined))!;
+    campaign.coins = 1000;
+    expect(placeBet(campaign, timed, 500)).toBe(false);
+    campaign.done = [timed.id];
+    expect(placeBet(campaign, timed, 300)).toBe(false);
+    expect(placeBet(campaign, timed, 500)).toBe(true);
+    expect(campaign.coins).toBe(500);
+    expect(placeBet(campaign, timed, 100)).toBe(false);
+    expect(campaignFrom(JSON.stringify(campaign)).bet).toEqual({ mission: timed.id, stake: 500 });
+    expect(settleBet(campaign, timed, true)).toBe(500 * BET_ODDS);
+    expect(campaign.coins).toBe(500 + 500 * BET_ODDS);
+    expect(campaign.bet).toBeNull();
+    placeBet(campaign, timed, 100);
+    expect(settleBet(campaign, MISSIONS[0], true)).toBe(0);
+    expect(settleBet(campaign, timed, true)).toBeNull();
+    // a job without a gold time takes no bet
+    expect(placeBet(campaign, MISSIONS[0], 100)).toBe(false);
+  });
+
+  it('sells rumors for a drink, each opening a side job before its people trust the Host', () => {
+    const campaign = freshCampaign();
+    const story = MISSIONS.filter((m) => !m.side);
+    campaign.done = story.slice(0, story.findIndex((m) => m.id === 'occator') + 1).map((m) => m.id);
+    expect(sideTrips(campaign).some((m) => m.id === 'smuggle:occator')).toBe(false);
+    campaign.coins = RUMOR_PRICE;
+    expect(buyRumor(campaign)).toBe(RUMORS[0].word);
+    expect(campaign.coins).toBe(0);
+    expect(sideTrips(campaign).some((m) => m.id === 'smuggle:occator')).toBe(true);
+    expect(buyRumor(campaign)).toBeNull();
+    expect(campaignFrom(JSON.stringify({ rumors: 99 })).rumors).toBe(RUMORS.length);
+  });
+
+  it('pays the Pit’s waves in cash and keeps its record; harder waves the longer the night', () => {
+    const campaign = freshCampaign();
+    expect(pitNight(campaign, 3)).toEqual({ purse: 3 * PIT_PURSE, record: true });
+    expect(pitNight(campaign, 2)).toEqual({ purse: 2 * PIT_PURSE, record: false });
+    expect(campaign.pit).toBe(3);
+    expect(campaign.bond).toBe(BOND);
+    expect(pitWave(1).count).toBe(1);
+    expect(pitWave(20).count).toBe(5);
+    expect(pitWave(20).skill).toBeLessThanOrEqual(0.85);
+    expect(pitWave(3).skill).toBeGreaterThan(pitWave(2).skill);
+    // the Pit is never the story's next job, nor on the board's lists
+    const all = freshCampaign();
+    all.done = MISSIONS.filter((m) => !m.side && !m.pit).map((m) => m.id);
+    expect(nextMission(all)).toBeNull();
+    expect(sideTrips(all).some((m) => m.pit)).toBe(false);
   });
 });
