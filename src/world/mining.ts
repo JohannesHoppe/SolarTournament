@@ -989,6 +989,24 @@ export interface Claim {
   buoy: THREE.Vector3;
 }
 
+/**
+ * The claims of a `plan` in its `field`, in the order they were filed (their slots): each its
+ * rock, the rig working on it, and where its first buoy stands (its can, in the world).
+ */
+export function claimsOf(plan: Plan, field: AsteroidField): Claim[] {
+  const list: Claim[] = [];
+  for (const { slot, at } of plan.buoys) {
+    if (list.length > slot) continue;
+    const rock = field.asteroids.get(plan.ids[slot]);
+    if (!rock) continue;
+    rock.object.updateWorldMatrix(true, false);
+    const rig = plan.rigs[slot];
+    const tunnel = plan.tunnels[slot];
+    list.push({ rock: rock.id, rig: rig ? rig.clone().applyMatrix4(rock.object.matrixWorld) : null, tunnel: tunnel ? tunnel.clone().applyMatrix4(rock.object.matrixWorld) : null, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
+  }
+  return list;
+}
+
 /** The rigs and buoys of a plan stand solid on their rocks in `field` (see AsteroidField.attach); the plan made for its layout when none is given. */
 export function standClaims(field: AsteroidField, plan: Plan = planMining(field)) {
   plan.ids.forEach((id, slot) => field.attach(id, plan.solids[slot] ?? []));
@@ -1202,19 +1220,7 @@ export class Mining {
    * a field not dressed.
    */
   claims(field: AsteroidField): Claim[] {
-    const plan = this.plan;
-    if (!plan || field.layout?.key !== this.layoutKey) return [];
-    const list: Claim[] = [];
-    for (const { slot, at } of plan.buoys) {
-      if (list.length > slot) continue;
-      const rock = field.asteroids.get(plan.ids[slot]);
-      if (!rock) continue;
-      rock.object.updateWorldMatrix(true, false);
-      const rig = plan.rigs[slot];
-      const tunnel = plan.tunnels[slot];
-      list.push({ rock: rock.id, rig: rig ? rig.clone().applyMatrix4(rock.object.matrixWorld) : null, tunnel: tunnel ? tunnel.clone().applyMatrix4(rock.object.matrixWorld) : null, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
-    }
-    return list;
+    return this.plan && field.layout?.key === this.layoutKey ? claimsOf(this.plan, field) : [];
   }
 
   /** Builds the dressing of `field` (once per layout), or hides it for an arena without one. */

@@ -485,14 +485,17 @@ function surveyMarkers(a: Attempt, markers: Markers) {
 /**
  * Cut and Haul (2.2): the claim beside a working rig (the claim without a rig nearest to one
  * with a rig, see world/mining) cut apart with the cutter, and HAUL_ORE glints of its ore flown
- * through (its pieces shed them as First Cut's rocks do, see glintsOf). Every beam that strikes
- * a rig or a buoy takes RIG_FINE coins off the pay; it cannot fail. HAUL_FAMILY: how far from
- * where the claim stood (in its radii) a piece broken counts as its own.
+ * through (its pieces shed them as First Cut's rocks do, see glintsOf), wherever its pieces
+ * drift once it breaks. Every beam that strikes a rig or a buoy takes RIG_FINE coins off the pay;
+ * it cannot fail.
  */
 const HAUL_ORE = 40;
 const ORE_PAY = 35;
 const RIG_FINE = 50;
-const HAUL_FAMILY = 2.5;
+/** The claim's rock the haul cuts in the running attempt: it and its pieces (see ofClaim). */
+let hauled = '';
+/** Whether a piece is the claim's rock or one of the pieces it broke into (see world/fracture: a piece's id is its parent's and a dot more). */
+const ofClaim = (id: string) => id === hauled || id.startsWith(`${hauled}.`);
 
 /** The claim the haul cuts: the one without a rig nearest to a claim with one. */
 function haulClaim(ctx: SchoolContext): Asteroid | null {
@@ -521,10 +524,8 @@ const cutAndHaul: Drill = {
   arena: 'rheasilvia',
   autopilot: false,
   enter(ctx, a) {
-    // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken, a.reach: how far the claim's pieces lie
-    const claim = haulClaim(ctx);
-    a.site.copy(claim?.object.position ?? ctx.me.flight.position);
-    a.reach = (claim?.radius ?? 2000) * HAUL_FAMILY;
+    // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
+    hauled = haulClaim(ctx)?.id ?? '';
     a.count = ctx.rocksBroken;
     a.jinks = 0;
     a.next = 0;
@@ -537,7 +538,7 @@ const cutAndHaul: Drill = {
     // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
     while (a.jinks < ctx.rocksBroken - a.count) {
       a.jinks++;
-      if (ctx.brokenAt.distanceTo(a.site) < a.reach) glintsOf(a, markers, ctx.brokenAt, a.jinks);
+      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks);
     }
     takeGlint(ctx, a, markers);
     ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
@@ -545,7 +546,7 @@ const cutAndHaul: Drill = {
   },
   waypoint(ctx, a) {
     // the nearest glint, else the nearest piece of the claim
-    const pieces = [...ctx.field.asteroids.values()].filter((rock) => !rock.solid && rock.kind === 'rock' && rock.object.position.distanceTo(a.site) < a.reach).map((rock) => rock.object.position);
+    const pieces = [...ctx.field.asteroids.values()].filter((rock) => !rock.solid && ofClaim(rock.id)).map((rock) => rock.object.position);
     return nearestOf(ctx, a.points.length ? a.points : pieces);
   },
   mark: (ctx, a) => t('Ore {ore}/{needed} · rig hits {hits}', { ore: a.next, needed: HAUL_ORE, hits: ctx.rigBeams - a.rigBeams }),
@@ -1460,6 +1461,14 @@ const theDrain: Drill = {
 const GUNS = 3;
 const GUN_SKILL = 0.5;
 const GUN_NAMES = ['Lt. Ravel', 'Ens. Quint', 'Ens. Mott'];
+/**
+ * Where the Feeders' Comet begins (and a clone is printed): 600 m off Scout One, facing her, clear
+ * of the ice, so the Host is with her when the guns open up on her (they would sink her long before
+ * a clone from the field's edge got there).
+ */
+const FEEDERS_FROM = SCOUT_AT.clone().add(point(8000, 2000, 8000));
+export const FEEDERS_START = { at: [FEEDERS_FROM.x, FEEDERS_FROM.y, FEEDERS_FROM.z] as const, toward: [SCOUT_AT.x, SCOUT_AT.y, SCOUT_AT.z] as const };
+
 const feedersComet: Drill = {
   line: CAMPAIGN.feedersComet,
   keys: ['turn', 'drive', 'fire'],
@@ -2085,7 +2094,7 @@ export const wantedName = (mission: Mission) => (mission.bounty ? WANTED[COURIER
  * lane to it (SMUGGLE_PATROLS, SMUGGLE_ASIDE off the lane, SMUGGLE_CIRCLE round), so that a ship
  * coasting along the lane passes them farther than SILENT_RANGE (1 km) and nearer than
  * SMUGGLE_SIGHT: silent, it slips by; hot (its drive burning, or fired within SILENT_AFTER), a
- * patrol within SMUGGLE_SIGHT sees it and the attempt starts over. Held at the drop within
+ * patrol within SMUGGLE_SIGHT sees it and the attempt starts over, from the lane's start. Held at the drop within
  * SMUGGLE_REACH, slower than SMUGGLE_REST for SMUGGLE_HOLD seconds, the cargo is handed over;
  * SMUGGLE_SECONDS for all of it.
  */
@@ -2136,6 +2145,9 @@ function smuggling(arena: ArenaId): Drill {
     autopilot: false,
     enter(ctx, a, markers) {
       lane = smuggleLane(ctx.field, arena);
+      // every attempt from the lane's start, at rest: one begun again where the last was seen would be seen again at once
+      ctx.me.flight.position.copy(lane.from);
+      stop(ctx);
       markers.zone(lane.drop, SMUGGLE_REACH);
       patrolsAt(lane.patrols, 0, cutters);
       ctx.flock(cutters, PATROL_NAMES, patrolVelocity);
@@ -3515,7 +3527,7 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 18, the Ninth: the hole, Scout One among the Feeders' ice, Perihelion's first death, the deal
   { id: 'theDrain', name: msg('The Drain'), drills: [said(HEDDA.ninth, 'hole'), theDrain, said(CAMPAIGN.drainFound, 'hole')], pay: 0, ratings: 500 },
   { id: 'scoutOne', name: msg('Scout One'), drills: [said(CAMPAIGN.helloMe, 'hole'), said(CAMPAIGN.stove, 'hole'), said(SPARE.company, 'hole'), said(PERIHELION.evening, 'hole')], pay: 0 },
-  { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, towScout, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800 },
+  { id: 'feedersComet', name: msg('The Feeders’ Comet'), drills: [feedersComet, towScout, said(CAMPAIGN.feedersCometDone, 'hole')], pay: 0, ratings: 800, start: FEEDERS_START },
   { id: 'firstDeath', name: msg('First Death'), drills: [firstDeath, announcing(said(CAMPAIGN.firstDeathDone, 'hole'), ANNOUNCER_UNDYING)], pay: 0, ratings: 1500 },
   { id: 'lastOrbit', name: msg('Orbit'), drills: [lastOrbit, said(CAMPAIGN.lastOrbitDone, 'hole')], pay: 0, ratings: 2000 },
   { id: 'theDeal', name: msg('The Deal'), drills: [said(QUILL.final, 'hole'), said(QUILL.conditions, 'hole'), said(QUILL.benefactor, 'hole')], pay: 0 },

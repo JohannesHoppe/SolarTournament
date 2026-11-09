@@ -59,7 +59,7 @@ import { MAX_FROM, snoozeUntil } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { airAround, airBurn, altitudeIn, clogging, density, finSpin, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -1279,8 +1279,9 @@ export class Game implements OnlineGame {
   private tremorUntil = -Infinity;
   /** The running mission's time trial was flown within its gold time (see campaign/campaign, gold). */
   private goldRun = false;
-  /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
+  /** Where the own clone last broke a rock (the campaign's ore glints spring from it), and which piece it was. */
   private readonly brokenAt = new THREE.Vector3();
+  private brokenId = '';
   /** The scene in person the clone stands in (see campaign/scenes), or null in the cockpit. */
   private stage: Stage | null = null;
   /** The scene in person the clone stands in, if any (its music, see SCENE_MUSIC). */
@@ -6418,6 +6419,9 @@ export class Game implements OnlineGame {
       get brokenAt() {
         return game.brokenAt;
       },
+      get brokenId() {
+        return game.brokenId;
+      },
       get torpedoesDown() {
         return game.torpedoesDown;
       },
@@ -7653,13 +7657,7 @@ export class Game implements OnlineGame {
       ship.finSpin.set(0, 0, 0);
       return;
     }
-    const altitude = altitudeIn(air, ship.flight.position);
-    // a hull short of a fin cannot hold its course in air
-    finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
-    ship.clog = clogging(ship.clog, altitude, dt);
-    const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
-    if (heat < 1e-4) return;
-    const burn = airBurn(ship, heat, dt, MAX_HEAT);
+    const burn = airStep(ship, air, dt, MAX_HEAT);
     if (burn > 0 && ship.structural(burn, now) === 'destroyed') this.shipDestroyed(ship, null, 'air');
   }
 
@@ -7883,6 +7881,7 @@ export class Game implements OnlineGame {
         if (shooter === this.me) {
           this.rocksBroken++;
           this.brokenAt.copy(destroyed.object.position);
+          this.brokenId = destroyed.id;
         }
         shooter.score += points;
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)

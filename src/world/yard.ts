@@ -237,7 +237,8 @@ export function boneyardRacks(): Placement[] {
       });
     }
   }
-  DEPOT_PARTS.forEach((part, k) => racks.push({ kind: 'rack', type: DEPOT_TYPE + k, scale: 1, position: DEPOT_LAYOUT[part].center.clone(), orientation: level, solid: true }));
+  // the crater floor is a world's ground: flown over, never round (see Placement.ground)
+  DEPOT_PARTS.forEach((part, k) => racks.push({ kind: 'rack', type: DEPOT_TYPE + k, scale: 1, position: DEPOT_LAYOUT[part].center.clone(), orientation: level, solid: true, ground: part === 'ground' }));
   return racks;
 }
 

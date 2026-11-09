@@ -1,11 +1,11 @@
 /**
  * Runs every quality gate of the repository one after another and sums them up: types,
  * duplicates, the unit tests (the translations' completeness among them), and with `--full`
- * the browser tests and the balance runs. Every gate runs even when one before it failed, so
+ * the campaign's jobs flown by a simulated Host, the browser tests and the balance runs. Every gate runs even when one before it failed, so
  * one run shows everything that is broken; the exit code is not zero when any gate failed.
  *
- * Run with `npm run check` (a few minutes at most) or `npm run check:full` (the browser
- * tests and about forty minutes of balance runs on top). DEV_PORT moves the dev server the
+ * Run with `npm run check` (a few minutes at most) or `npm run check:full` (the campaign's
+ * jobs, the browser tests and about forty minutes of balance runs on top). DEV_PORT moves the dev server the
  * browser tests start, as for `npm run e2e`.
  */
 import { spawnSync } from 'node:child_process';
@@ -21,6 +21,7 @@ const GATES: Gate[] = [
   { name: 'Types', script: 'typecheck' },
   { name: 'Duplicates', script: 'dupes' },
   { name: 'Unit tests', script: 'test' },
+  { name: 'Campaign jobs', script: 'jobs', full: true },
   // the dev server the browser tests start renders the voices first; after changed lines that
   // takes longer than it waits, so they are rendered here beforehand
   { name: 'Voices', script: 'voice', full: true },
@@ -39,5 +40,5 @@ for (const gate of GATES.filter((gate) => full || !gate.full)) {
 
 console.log('\n=== Quality gates');
 for (const { name, ok, seconds } of results) console.log(`${ok ? 'pass' : 'FAIL'}  ${name.padEnd(14)} ${seconds.toFixed(0).padStart(5)} s`);
-if (!full) console.log('(browser tests and balance runs: npm run check:full)');
+if (!full) console.log('(campaign jobs, browser tests and balance runs: npm run check:full)');
 process.exit(results.every((result) => result.ok) ? 0 : 1);
