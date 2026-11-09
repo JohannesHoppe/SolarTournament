@@ -349,7 +349,22 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [], run: freshRun() });
+export const freshCampaign = (): Campaign => ({
+  done: [],
+  step: 0,
+  coins: 0,
+  bond: BOND,
+  ratings: 0,
+  parts: [],
+  modules: [],
+  held: false,
+  choices: [],
+  crackle: false,
+  habits: freshHabits(),
+  medals: [],
+  golds: [],
+  run: freshRun(),
+});
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -373,7 +388,22 @@ export function campaignFrom(text: string | null): Campaign {
     // a gold only for a job done with a gold time
     const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
     const run = (typeof kept.run === 'object' && kept.run !== null ? kept.run : {}) as Partial<Run>;
-    return { run: { fine: number(run.fine, 0, 1_000_000), style: number(run.style, 0, 1_000_000), gold: run.gold === true }, done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds };
+    return {
+      run: { fine: number(run.fine, 0, 1_000_000), style: number(run.style, 0, 1_000_000), gold: run.gold === true },
+      done,
+      step: number(kept.step, 0, 1000),
+      coins: number(kept.coins, 0, 10_000_000),
+      bond: number(kept.bond, BOND, BOND_MAX),
+      ratings: number(kept.ratings, 0, 1_000_000),
+      parts,
+      modules,
+      held: kept.held === true,
+      choices,
+      crackle: kept.crackle === true,
+      habits,
+      medals,
+      golds,
+    };
   } catch {
     return fresh;
   }
