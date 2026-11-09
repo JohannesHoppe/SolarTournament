@@ -43,12 +43,16 @@ function memoryStore() {
   return { store, days, rooms, subs };
 }
 
-const subscription = (n: number) => ({ endpoint: `https://push.example.net/send/${n}`, keys: { p256dh: toBase64Url(new Uint8Array(65).fill(4)), auth: toBase64Url(new Uint8Array(16).fill(n % 256)) } });
+const subscription = (n: number) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${n}`, keys: { p256dh: toBase64Url(new Uint8Array(65).fill(4)), auth: toBase64Url(new Uint8Array(16).fill(n % 256)) } });
 
 describe('the notification when a public tournament opens', () => {
   it('takes only a well-formed subscription over https', () => {
     expect(checkSubscription(subscription(1))).toEqual(subscription(1));
-    expect(checkSubscription({ ...subscription(1), endpoint: 'http://push.example.net/x' })).toBeNull();
+    expect(checkSubscription({ ...subscription(1), endpoint: 'http://fcm.googleapis.com/x' })).toBeNull();
+    // only the browsers' push services: the function never posts to an address someone else names
+    expect(checkSubscription({ ...subscription(1), endpoint: 'https://push.example.net/x' })).toBeNull();
+    expect(checkSubscription({ ...subscription(1), endpoint: 'https://fcm.googleapis.com.example.net/x' })).toBeNull();
+    for (const endpoint of ['https://updates.push.services.mozilla.com/wpush/v2/x', 'https://web.push.apple.com/x', 'https://wns2-par02p.notify.windows.com/w/?token=x']) expect(checkSubscription({ ...subscription(1), endpoint })?.endpoint).toBe(endpoint);
     expect(checkSubscription({ ...subscription(1), keys: { p256dh: 'abc', auth: 'abc' } })).toBeNull();
     expect(checkSubscription('nonsense')).toBeNull();
   });

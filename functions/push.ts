@@ -30,6 +30,7 @@
 import { pushRequest, fromBase64Url, toBase64Url, type Subscription, type Vapid } from '../src/net/webpush';
 import { MAX_FROM, pushText } from '../src/net/pushtext';
 import { LOCALES, type Locale } from '../src/i18n/i18n';
+import { HOSTS } from './turn';
 
 /** The few calls of D1 this function makes (see Cloudflare's D1 client API). */
 export interface D1Like {
@@ -91,11 +92,29 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const isText = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
 
+/**
+ * The push services the browsers subscribe with (Chrome, Edge, Firefox, Safari and those built on
+ * them): a subscription is taken only with an endpoint on one of them, so the function never posts
+ * to an address someone else names.
+ */
+const PUSH_SERVICES = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', '.push.apple.com', '.notify.windows.com'];
+
+/** Whether an endpoint lies on one of the PUSH_SERVICES. */
+function onPushService(endpoint: string): boolean {
+  let host: string;
+  try {
+    host = new URL(endpoint).hostname;
+  } catch {
+    return false;
+  }
+  return PUSH_SERVICES.some((service) => (service.startsWith('.') ? host.endsWith(service) : host === service));
+}
+
 /** A subscription as a browser sends it, checked; null when anything is off. */
 export function checkSubscription(value: unknown): Subscription | null {
   if (typeof value !== 'object' || value === null) return null;
   const { endpoint, keys } = value as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
-  if (!isText(endpoint, MAX_ENDPOINT) || !endpoint.startsWith('https://')) return null;
+  if (!isText(endpoint, MAX_ENDPOINT) || !endpoint.startsWith('https://') || !onPushService(endpoint)) return null;
   if (!keys || !isText(keys.p256dh, 100) || !isText(keys.auth, 40)) return null;
   // a P-256 point uncompressed, an auth secret of 16 bytes
   try {
@@ -358,7 +377,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
   // only the game's own pages: a current browser says where a request comes from
   const site = request.headers.get('sec-fetch-site');
-  if (site !== null && site !== 'same-origin') return json({ error: 'foreign site' }, 403);
+  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return json({ error: 'foreign site' }, 403);
   const vapid = await vapidOf(env);
   if (!env.PUSH_DB || !vapid) return json({ error: 'not set up' }, 503);
   let body: unknown;

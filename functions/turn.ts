@@ -35,10 +35,10 @@ export const MONTHLY_BUDGET_GB = 500;
 const USAGE_MEMORY_MS = 5 * 60 * 1000;
 
 /**
- * Only the game's own domains hand out credentials: their zone's rate limit guards them,
+ * Only the game's own domains answer (here and at /push): their zone's rate limit guards them,
  * the raw Pages addresses have none (and the game sends their visitors on anyway).
  */
-const HOSTS = new Set(['solartournament.games', 'test.solartournament.games']);
+export const HOSTS = new Set(['solartournament.games', 'test.solartournament.games']);
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
