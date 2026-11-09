@@ -79,6 +79,13 @@ export interface SchoolContext {
   stage(name: SceneName | null): void;
   /** What the clone feels in a scene in person reaches the Host over the link: a jolt of it, the picture flickering. */
   feel(): void;
+  /** The Gullet's plate (see campaign/missions, the Gullet): shown while the clone stands in Kesh's bar, its offers and the way out on it, or put away. */
+  gulletPlate(open: boolean): void;
+  /** The Host has left the Gullet by its plate (Leave, Esc) since the plate was last shown. */
+  readonly gulletLeft: boolean;
+  /** The Host has been to the Gullet before (see Campaign.gullet); `visitGullet` keeps that it has. */
+  readonly gulletRegular: boolean;
+  visitGullet(): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
   /** Hands the pilot's clone two torpedoes, or a nova core. */

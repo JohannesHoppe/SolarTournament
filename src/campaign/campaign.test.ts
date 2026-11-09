@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE, ON_AIR, STYLE_PER_RANK, styleRatings } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, trialPassed, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, TUBE_PRICE, DRIVE_ONE_PRICE, SECOND_TUBE_PRICE, THRUSTERS_ONE_PRICE, PLATING_TWO_PRICE, DRIVE_TWO_PRICE, OVERDRIVE_PRICE, THRUSTERS_TWO_PRICE, THRUSTERS_THREE_PRICE, PLATING_THREE_PRICE, DRIVE_THREE_PRICE, TUBES_TWO_PRICE, TUBES_THREE_PRICE, nextMission, sideTrips, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, SPARE_SKILL, spareSkills, YARD_CUT, gold, goldOf, hasMedal, medal, MEDAL_SHARE, ON_AIR, STYLE_PER_RANK, styleRatings, bars } from './campaign';
 import { evenSkills } from '../ship/bots';
 import { TORPEDOES } from '../game/torpedoes';
 import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '../game/hangar';
@@ -78,7 +78,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'], crackle: false, habits: { shots: 0, hits: 0, fight: 0, near: 0 }, medals: [], golds: [], gullet: false });
     // a medal only for a job done that has one
     const paying = MISSIONS.find((mission) => hasMedal(mission))!;
     const unpaid = MISSIONS.find((mission) => !hasMedal(mission))!;
@@ -86,6 +86,26 @@ describe('the campaign Lot 7731', () => {
     // the habits as kept, never more hits than shots nor more seconds up close than of fight
     expect(campaignFrom(JSON.stringify({ habits: { shots: 40, hits: 90, fight: 120.7, near: 500 } })).habits).toEqual({ shots: 40, hits: 40, fight: 120, near: 120 });
     expect(campaignFrom(JSON.stringify({ habits: 'all' })).habits).toEqual({ shots: 0, hits: 0, fight: 0, near: 0 });
+  });
+
+  it('keeps whether the Host has been to the Gullet, and opens it on the job board once Occator is reached, every time, never as a job', () => {
+    const campaign = freshCampaign();
+    expect(campaign.gullet).toBe(false);
+    campaign.gullet = true;
+    expect(campaignFrom(JSON.stringify(campaign)).gullet).toBe(true);
+    // only a plain yes counts
+    expect(campaignFrom(JSON.stringify({ gullet: 'yes' })).gullet).toBe(false);
+    const story = MISSIONS.filter((mission) => !mission.side);
+    campaign.done = story.slice(0, story.findIndex((mission) => mission.id === 'occator')).map((mission) => mission.id);
+    expect(bars(campaign)).toEqual([]);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'occator')!);
+    expect(bars(campaign).map((mission) => mission.id)).toEqual(['gullet']);
+    const gullet = bars(campaign)[0];
+    // never the story's next mission, never a side trip, nothing to pay
+    expect(nextMission(campaign)?.id).not.toBe('gullet');
+    expect(sideTrips(campaign)).not.toContain(gullet);
+    expect(gullet.pay).toBe(0);
+    expect(gullet.ratings).toBeUndefined();
   });
 
   it('pays a job’s medal once, for a clean run, less the yard’s cut while the debt is unpaid', () => {

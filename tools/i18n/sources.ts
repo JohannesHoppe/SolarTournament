@@ -48,6 +48,7 @@ export function sources(root: string): Map<string, string[]> {
   for (const line of allLines('vey')) add(line, 'src/music/lines.ts (Admiral Vey of the Navy)');
   for (const line of allLines('quill')) add(line, 'src/music/lines.ts (Commissioner Quill of the Ministry)');
   for (const line of allLines('spare')) add(line, 'src/music/lines.ts (Spare, the Host\'s lost clone)');
+  for (const line of allLines('kesh')) add(line, 'src/music/lines.ts (Kesh, keeper of a Rockborn dive, dry and earthy)');
   for (const line of allLines('president')) add(line, 'src/music/lines.ts (the Orange President in person, bombastic)');
   add(CAST_NAMES.president, 'src/music/lines.ts (the President\'s title beside his lines)');
   return found;

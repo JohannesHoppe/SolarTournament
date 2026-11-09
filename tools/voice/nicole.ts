@@ -134,6 +134,12 @@ export const SPEAKERS = {
     reference: { text: 'Evening, scrap. Nothing personal. They promised me the Games. I have never died. Not once. Not for anyone.', speed: 1 },
     language: 'perihelion',
   },
+  kesh: {
+    voice: 'bf_isabella',
+    speed: 0.95,
+    reference: { text: "Welcome to the Gullet, Host. Sit. The first drink's on the house. Nothing after it is. Rumors cost a drink. Lean in. Mind the steps. The last Host who fell down them got reprinted.", speed: 1 },
+    language: 'kesh',
+  },
   president: {
     voice: 'am_adam',
     speed: 1,

@@ -1878,8 +1878,11 @@ export function marbleSurface(): Surface {
   return marble;
 }
 
-/** A lit sign: a sponsor's name in neon letters on a dark plate, framed. */
-export function signTexture(text: string, tint: string): THREE.Texture {
+/**
+ * A lit sign: a sponsor's name in neon letters on a dark plate, framed. The letters at `dead`
+ * (their indices in `text`) are tubes gone dark: grey glass, no glow.
+ */
+export function signTexture(text: string, tint: string, dead: readonly number[] = []): THREE.Texture {
   if (!drawable) return new THREE.Texture();
   const [element, g] = canvas(512, 128);
   g.fillStyle = '#06070c';
@@ -1888,12 +1891,65 @@ export function signTexture(text: string, tint: string): THREE.Texture {
   g.lineWidth = 6;
   g.strokeRect(8, 8, 496, 112);
   g.font = 'bold 64px sans-serif';
-  g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.shadowColor = tint;
   g.shadowBlur = 18;
   g.fillStyle = '#fff6ec';
-  g.fillText(text, 256, 68, 470);
+  if (!dead.length) {
+    g.textAlign = 'center';
+    g.fillText(text, 256, 68, 470);
+    return toTexture(element);
+  }
+  // letter by letter, squeezed as fillText squeezes a text too wide, the dead ones unlit
+  const scale = Math.min(1, 470 / g.measureText(text).width);
+  g.setTransform(scale, 0, 0, 1, 256 * (1 - scale), 0);
+  let x = 256 - g.measureText(text).width / 2;
+  [...text].forEach((letter, i) => {
+    const off = dead.includes(i);
+    g.shadowBlur = off ? 0 : 18;
+    g.fillStyle = off ? '#2c2a2e' : '#fff6ec';
+    g.fillText(letter, x, 68);
+    x += g.measureText(letter).width;
+  });
+  return toTexture(element);
+}
+
+/**
+ * An old screen showing the Ministry's propaganda: the President's slogan big in orange on a
+ * night-blue picture, a ticker along its foot, scanlines over it and a band of the picture torn
+ * sideways; drawn once, shown as light.
+ */
+export function propagandaTexture(slogan: string, ticker: string): THREE.Texture {
+  if (!drawable) return new THREE.Texture();
+  const [element, g] = canvas(512, 288);
+  const sky = g.createLinearGradient(0, 0, 0, 288);
+  sky.addColorStop(0, '#0b1a3c');
+  sky.addColorStop(1, '#03060f');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 512, 288);
+  // a sun rising behind the slogan, the regime's own
+  const sun = g.createRadialGradient(256, 210, 10, 256, 210, 150);
+  sun.addColorStop(0, 'rgba(255, 157, 0, 0.9)');
+  sun.addColorStop(1, 'rgba(255, 157, 0, 0)');
+  g.fillStyle = sun;
+  g.fillRect(0, 0, 512, 288);
+  g.font = 'bold 54px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.shadowColor = '#ff9d00';
+  g.shadowBlur = 14;
+  g.fillStyle = '#fff2dc';
+  g.fillText(slogan, 256, 110, 480);
+  g.shadowBlur = 0;
+  g.fillStyle = '#ff9d00';
+  g.fillRect(0, 248, 512, 40);
+  g.font = 'bold 24px sans-serif';
+  g.fillStyle = '#06070c';
+  g.fillText(ticker, 256, 269, 500);
+  // scanlines, and one band torn sideways
+  g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+  for (let y = 0; y < 288; y += 4) g.fillRect(0, y, 512, 2);
+  g.drawImage(element, 0, 150, 512, 14, 23, 150, 512, 14);
   return toTexture(element);
 }
 

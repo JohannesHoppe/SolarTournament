@@ -454,6 +454,28 @@ test('chapter 3 opens at Occator: the clone held before the market’s mouth is 
   expect(errors).toEqual([]);
 });
 
+test('the Gullet: on the job board once Occator is reached, Kesh behind her counter in person, the bar’s plate, and Leave back to the board', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator'] };
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await expect(page.locator('#board-bar button')).toHaveCount(1);
+  await page.click('#board-bar button');
+  // the clone in the bar, its plate up once Kesh has greeted it
+  await page.waitForFunction(() => window.game.stage && !document.getElementById('gullet')!.hidden, null, { timeout: 180_000 });
+  // the set and Kesh
+  await page.waitForFunction(() => window.game.stage.root.children.length === 2, null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.game.venue?.id)).toBe('occator');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).gullet)).toBe(true);
+  await page.click('#gullet-leave');
+  // Kesh sees the clone off, and the job board is back, the Gullet on it still, never done
+  await page.waitForFunction(() => !window.game.stage && !document.getElementById('board')!.hidden, null, { timeout: 60_000 });
+  await expect(page.locator('#board-bar button')).toHaveCount(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('gullet'))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
 test('Ore Barge sets the barge out on its lane, sends the scrappers at its hull, and the second wave once the first is down', async ({ page }) => {
   const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus'], coins: 0, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
   const errors = await takeJobFrom(page, kept);

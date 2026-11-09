@@ -13,14 +13,15 @@ WHO, OUT, BUDGET = args[0], args[1], int(args[2])
 TEXTURE = 1024
 # how each person stands: the upper arms turned down from the rig's A-pose about the axis from
 # front to back (deg; Pim's and Hedda's hang at their sides), or turned in about their own
-# axis (Rask's hands folded on his belly)
-POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35), 'quill': ('down', 35), 'spare': ('down', 35), 'president': ('down', 30), 'crisp': ('down', 30)}
+# axis (Rask's hands folded on his belly, Kesh's arms folded)
+POSES = {'rask': ('in', -50), 'pim': ('down', 35), 'hedda': ('down', 35), 'quill': ('down', 35), 'spare': ('down', 35), 'president': ('down', 30), 'crisp': ('down', 30), 'kesh': ('in', -50)}
 # a person's own colors laid over a texture, by the part's object name (an exact name, else a
 # part of it): 'times' multiplies each channel, 'dye' gives the texture that color on average,
 # keeping its light and dark (each pixel the color times its brightness over the mean); clamped
 # to white. The President's sprayed-on tan and his hair dyed gold, where MakeHuman's skins and
-# hair have no such color; Bellamy Crisp's suit in his cola's red
-TINTS = {'president': {'Human': ('times', (1.25, 0.8, 0.5)), 'short02': ('dye', (0.85, 0.66, 0.3))}, 'crisp': {'elegantsuit': ('dye', (0.62, 0.05, 0.06))}}
+# hair have no such color; Bellamy Crisp's suit in his cola's red; Kesh's apron (see people.py) in
+# worn leather
+TINTS = {'president': {'Human': ('times', (1.25, 0.8, 0.5)), 'short02': ('dye', (0.85, 0.66, 0.3))}, 'crisp': {'elegantsuit': ('dye', (0.62, 0.05, 0.06))}, 'kesh': {'apron': ('dye', (0.3, 0.19, 0.11))}}
 # each texture's largest side by the part it colors, the first match of its object's name (px):
 # the skin TEXTURE, seen most closely, the clothes half of it, the small parts a quarter; what is
 # cut out by its alpha (hair, eyebrows) stays PNG

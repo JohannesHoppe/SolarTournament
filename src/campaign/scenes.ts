@@ -3,6 +3,7 @@ import { atan2 } from '../detmath';
 import { DOOR, EYE, inOffice, office, SPOTS } from '../world/office';
 import { galley, GALLEY_DOOR, GALLEY_EYE, GALLEY_SPOTS, inGalley } from '../world/galley';
 import { hall, HALL_EYE, HALL_EYE_AT, HALL_SPOTS, inHall } from '../world/hall';
+import { gullet, GULLET_EYE, GULLET_EYE_AT, GULLET_SPOTS, inGullet } from '../world/gullet';
 import { type Placement, Stage } from '../view/stage';
 import type { Mood } from '../music/radio';
 
@@ -13,16 +14,18 @@ import type { Mood } from '../music/radio';
  * into one (see campaign/missions, `climbOut`) and its lines are then said in the room, not over
  * the comm.
  */
-export type SceneName = 'office' | 'galley' | 'visit' | 'sponsor' | 'file' | 'ballroom';
+export type SceneName = 'office' | 'galley' | 'visit' | 'sponsor' | 'file' | 'ballroom' | 'gullet';
 
-/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour, and Crisp brings his own; Quill's visit to it and Spare's are quiet; the Ballroom has its ball. */
-export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, sponsor: 'bright', file: null, ballroom: 'bright' };
+/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour, and Crisp brings his own; Quill's visit to it and Spare's are quiet; the Ballroom has its ball; the Gullet's box plays the place's night (Occator's calm, the chords of a city at night). */
+export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright', visit: null, sponsor: 'bright', file: null, ballroom: 'bright', gullet: 'calm' };
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {
   people: Placement[];
   eye: THREE.Vector3;
   look: number;
+  /** The set is a room shut in rock: neither the sun's light nor the sky's reaches in, only its own lamps'. */
+  indoors?: boolean;
 }
 
 /** The turn about y (rad) that turns a figure (facing +z) from `from` towards `to`. */
@@ -95,14 +98,26 @@ function ballroomPlan(): ScenePlan {
   };
 }
 
-const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, sponsor: sponsorPlan, file: filePlan, ballroom: ballroomPlan };
-const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, sponsor: galley, file: galley, ballroom: hall };
+/** The Gullet, Kesh's bar in Occator's market: Kesh behind her counter, the clone on the guests' side a step behind the stools, looking at her across it; shut in the rock. */
+function gulletPlan(): ScenePlan {
+  const eye = inGullet(GULLET_EYE_AT).setY(inGullet(GULLET_EYE_AT).y + GULLET_EYE);
+  const keeper = inGullet(GULLET_SPOTS.keeper);
+  return {
+    people: [{ who: 'kesh', at: keeper, facing: towards(keeper, eye) }],
+    eye,
+    look: atan2(-(keeper.x - eye.x), -(keeper.z - eye.z)),
+    indoors: true,
+  };
+}
+
+const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan, visit: visitPlan, sponsor: sponsorPlan, file: filePlan, ballroom: ballroomPlan, gullet: gulletPlan };
+const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley, visit: galley, sponsor: galley, file: galley, ballroom: hall, gullet };
 
 /** A scene's plan. */
 export const planOf = (name: SceneName) => PLANS[name]();
 
 /** A scene's stage, built anew around its set (the set and the figures are kept between scenes). */
 export function stageOf(name: SceneName): Stage {
-  const { people, eye, look } = planOf(name);
-  return new Stage(SETS[name](), people, eye, look);
+  const { people, eye, look, indoors } = planOf(name);
+  return new Stage(SETS[name](), people, eye, look, indoors);
 }

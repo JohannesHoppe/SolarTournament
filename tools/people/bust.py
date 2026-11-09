@@ -5,7 +5,7 @@ import bpy, bmesh, struct, sys
 args = sys.argv[sys.argv.index('--') + 1:]
 OUT, BUDGET = args[0], int(args[1])
 # what each part of the figure is, by the name's end: its glow and its share of white (see products.ts, part)
-TONES = [('eyebrow', 1.15, 0.1), ('low-poly', 1.2, 0.2), ('eyelashes', None, None), ('suit', 0.85, 0.0), ('short', 1.1, 0.1), ('bob', 1.1, 0.1), ('Human', 1.0, 0.0)]
+TONES = [('eyebrow', 1.15, 0.1), ('low-poly', 1.2, 0.2), ('eyelashes', None, None), ('suit', 0.85, 0.0), ('apron', 0.85, 0.0), ('short', 1.1, 0.1), ('bob', 1.1, 0.1), ('Human', 1.0, 0.0)]
 depsgraph = bpy.context.evaluated_depsgraph_get()
 body = bpy.data.objects['Human']
 top = max((body.matrix_world @ v.co).z for v in body.evaluated_get(depsgraph).data.vertices)

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { ANNOUNCER_ADMITTED, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, CAMPAIGN, CRISP, HEDDA, JACK, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
+import { ANNOUNCER_ADMITTED, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, CAMPAIGN, CRISP, HEDDA, JACK, KESH, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Skill } from '../ship/bots';
 import { MASS } from '../world/bodies';
@@ -3076,6 +3076,33 @@ const fitStripped = (campaign: Campaign) => {
 };
 
 /** The missions in the order the story runs them. */
+/**
+ * The Gullet (docs/campaign/STORY.md, "The Gullet"): Kesh's bar in Occator's market, on the job
+ * board once Occator is reached and as often as the Host likes (see Mission.bar). The clone climbs
+ * out and goes down to it; Kesh greets a stranger once (and keeps that the Host has been there,
+ * see Campaign.gullet) and a regular from then on; the clone stays in the bar with its plate shown
+ * (`#gullet`, its offers in `#gullet-offers`) until the Host leaves by it, and Kesh sees it off.
+ */
+const gulletAgain: Drill = { ...inRoom(KESH.again, 'occator'), skip: (ctx) => !ctx.gulletRegular };
+const gulletGreet: Drill = { ...inRoom(KESH.greet, 'occator'), skip: (ctx) => ctx.gulletRegular, enter: (ctx) => ctx.visitGullet() };
+const atTheBar: Drill = {
+  line: msg('The Gullet. Stay as long as you like.'),
+  keys: ['turn'],
+  arena: 'occator',
+  silent: true,
+  enter: (ctx) => ctx.gulletPlate(true),
+  done: (ctx) => ctx.gulletLeft,
+  leave: (ctx) => ctx.gulletPlate(false),
+};
+const gullet: Mission = {
+  id: 'gullet',
+  name: msg('The Gullet'),
+  drills: [climbOut('gullet', msg('Patience lies at Occator’s market. Your clone climbs out and goes down the gallery to the Gullet, Kesh’s bar.'), 'occator'), gulletAgain, gulletGreet, atTheBar, inRoom(KESH.leave, 'occator')],
+  pay: 0,
+  side: 'occator',
+  bar: msg('Kesh’s bar in Occator’s market.'),
+};
+
 export const MISSIONS: readonly Mission[] = [
   {
     // the first link into the hull in rack 7731: Nicole boots and crashes, the yardmaster calls,
@@ -3279,6 +3306,8 @@ export const MISSIONS: readonly Mission[] = [
     pay: 0,
   },
   { id: 'firstRound', name: msg('Your First Round'), drills: [announcing(said(CAMPAIGN.firstRound, 'rings'), ANNOUNCER_ADMITTED)], pay: 0, trial: { mode: 'deathmatch', arena: 'rings', podium: 8 } },
+  // Kesh's bar in Occator's market, open once Occator is reached
+  gullet,
   // the side trips, from Act II on: Mercury's sun miners and their race, and an echo there
   { id: 'terminatorRun', name: msg('Terminator Run'), drills: [said(HEDDA.mercury, 'mercury'), terminatorRun, said(CAMPAIGN.terminatorRunDone, 'mercury')], pay: 4000, ratings: 300, start: TERMINATOR_START, side: 'pilotEpisode' },
   { id: 'mercuryEcho', name: msg('Mercury Echo'), drills: [echoAt(CAMPAIGN.echoMercuryCall, 'mercury', ECHO_MERCURY), said(CAMPAIGN.echoMercury, 'mercury'), said(CAMPAIGN.echoMercuryHeard, 'mercury')], pay: 0, ratings: 40, side: 'terminatorRun' },

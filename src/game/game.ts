@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, medal, MEDAL_SHARE, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -361,6 +361,8 @@ const NOVA_KILL_CREDIT = 2;
 /** A touch the clone feels in a scene in person (see SchoolContext.feel): how hard the link jolts (glitch strength) and for how long (s). */
 const FEEL_GLITCH = 0.3;
 const FEEL_SECONDS = 0.5;
+/** The share of the sky's light left in a scene in person shut in rock (see ScenePlan.indoors): a trace, so a corner no lamp reaches is dark, never black. The sun's is none. */
+const INDOORS_SKY = 0.12;
 /** How hard pain the clone lives through breaks the link's picture up (see SchoolContext.agony): far harder than a touch (FEEL_GLITCH). */
 const AGONY_GLITCH = 0.85;
 const DEATH_EASE = 0.35;
@@ -996,6 +998,9 @@ export class Game implements OnlineGame {
   private flyingAgain = false;
   /** The campaign's job board is open (see showBoard). */
   private atBoard = false;
+  /** The Gullet's plate is shown over the scene in person (see showGullet), and the Host left by it since it was shown. */
+  private gulletOpen = false;
+  private gulletLeft = false;
 
   /** The Host's habits are counted (see campaign/campaign, Habits): in a mission's fight against raiders who fire in earnest, until Blackout is done. */
   private get learning(): boolean {
@@ -1046,7 +1051,7 @@ export class Game implements OnlineGame {
   private readonly share = new ShareButton(
     $('now-playing'),
     () => this.shareWhere(),
-    (open) => this.input.steerWithMouse(this.state === 'playing' && !open),
+    (open) => this.input.steerWithMouse(this.state === 'playing' && !open && !this.gulletOpen),
   );
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
   private readonly engineLights: THREE.PointLight[] = [];
@@ -1547,6 +1552,7 @@ export class Game implements OnlineGame {
     if (new URLSearchParams(location.search).has('campaign')) $<HTMLButtonElement>('campaign').disabled = false;
     $('campaign').addEventListener('click', () => this.showBoard(true));
     $('board-back').addEventListener('click', () => this.showBoard(false));
+    $('gullet-leave').addEventListener('click', () => this.leaveGullet());
     // Nicole's voice clean or through the old board's crackle, once her own is back (see Campaign.crackle)
     $('board-voice').addEventListener('click', () => {
       this.keepCampaign((campaign) => (campaign.crackle = !campaign.crackle));
@@ -1751,6 +1757,10 @@ export class Game implements OnlineGame {
     };
     const pays = (mission: Mission) => (mission.pay ? t('Pays {pay} ☉ before the yard’s cut, {ratings} ratings.', { pay: coinText(mission.pay), ratings: ratingsOf(mission, campaign) }) + goldNote(mission) : t('Pays nothing.'));
     $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
+    // the bars the Host can go to in person, whenever and however often it likes (see Mission.bar)
+    const inPerson = bars(campaign);
+    $('board-bar-label').hidden = !inPerson.length;
+    $('board-bar').replaceChildren(...inPerson.map((mission) => job(mission, t(mission.bar!))));
     const trips = sideTrips(campaign);
     $('board-side-label').hidden = !trips.length;
     // a courier run names its place, for every place has one
@@ -2616,6 +2626,11 @@ export class Game implements OnlineGame {
         }
         break;
       case 'playing':
+        // in the Gullet Escape leaves by its plate, as its button does; nothing else is asked of a key there
+        if (this.gulletOpen) {
+          if (action === 'pause' || action === 'back') this.leaveGullet();
+          break;
+        }
         if (action === 'pause') this.pause();
         // in the sponsor break the kill cam runs behind the ad: Enter boots the clone
         if (this.sponsors.visible) {
@@ -2674,7 +2689,7 @@ export class Game implements OnlineGame {
     this.input.holdFire();
     if (state !== 'playing') this.sponsors.hide();
     this.hud.show(state === 'playing');
-    this.input.steerWithMouse(state === 'playing');
+    this.input.steerWithMouse(state === 'playing' && !this.gulletOpen);
     if (state !== 'playing') {
       this.sound.setEngine(0, 0);
       // the look of a nova core belongs to the round; the next frame of play brings it back
@@ -2943,6 +2958,26 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * The Gullet's plate over the scene in person (see campaign/missions, the Gullet): what the bar
+   * offers (`#gullet-offers`) and the way out (Leave, Escape). While it is shown the mouse is a
+   * pointer for it; the keys and a gamepad's stick still turn the clone's head.
+   */
+  private showGullet(open: boolean) {
+    if (open) this.gulletLeft = false;
+    this.gulletOpen = open;
+    $('gullet').hidden = !open;
+    this.input.steerWithMouse(this.state === 'playing' && !open);
+    if (open) $('gullet-leave').focus();
+  }
+
+  /** The Host leaves the Gullet by its plate: the mission's drill waiting in the bar is done (see SchoolContext.gulletLeft). */
+  private leaveGullet() {
+    if (!this.gulletOpen) return;
+    this.gulletLeft = true;
+    this.showGullet(false);
+  }
+
+  /**
    * One of the campaign's people calls the ship: their bust as a hologram in the comm panel,
    * their name under it, while their line stands; null ends the call.
    */
@@ -3024,8 +3059,9 @@ export class Game implements OnlineGame {
     this.wingman = null;
     this.jumpers = null;
     this.racers = null;
-    // the clone climbs back in: no scene outlives its round
+    // the clone climbs back in: no scene outlives its round, nor the Gullet's plate
     this.setStage(null);
+    if (this.gulletOpen) this.showGullet(false);
     if (this.school) {
       this.speaker.stop();
       this.scene.remove(this.school.root);
@@ -5608,6 +5644,12 @@ export class Game implements OnlineGame {
   private airScene(): boolean {
     const air = this.field.air;
     const jupiter = this.landmarks.jupiter;
+    // a room shut in rock: no sun, a trace of the sky, no weather
+    if (this.stage?.indoors) {
+      this.space.shade(0, INDOORS_SKY, null, null);
+      this.background.copy(this.space.background);
+      return false;
+    }
     if (!air) {
       this.space.shade(1, 1, null, null);
       this.background.copy(this.space.background);
@@ -5708,6 +5750,14 @@ export class Game implements OnlineGame {
     // a trial's drills done: its round is flown next (see Mission.trial, endRound)
     if (school.finished && this.mission?.trial && !this.trialOf) {
       this.startTrial(this.mission);
+      return;
+    }
+    // a visit to a bar over (see Mission.bar): nothing paid or counted, back to the job board
+    if (school.finished && this.mission?.bar) {
+      this.mission = null;
+      this.schoolMark = this.schoolTrack = null;
+      this.showMenu();
+      this.showBoard(true);
       return;
     }
     // a mission flown again done: nothing paid but its medal, if flown clean, back to the job board
@@ -5882,6 +5932,14 @@ export class Game implements OnlineGame {
       },
       claims: () => this.mining.claims(this.field),
       stage: (name) => this.setStage(name),
+      gulletPlate: (open) => this.showGullet(open),
+      get gulletLeft() {
+        return game.gulletLeft;
+      },
+      get gulletRegular() {
+        return game.campaign.gullet;
+      },
+      visitGullet: () => this.keepCampaign((campaign) => (campaign.gullet = true)),
       // a touch the clone feels streams into the Host: a jolt in the link, a dull thump
       feel: () => {
         this.glitch.trigger(FEEL_GLITCH, FEEL_SECONDS);

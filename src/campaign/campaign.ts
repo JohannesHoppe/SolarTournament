@@ -154,7 +154,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | `courier:${ArenaId}` | `ambush:${ArenaId}` | `mining:${ArenaId}`;
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating' | 'fluxTubeRace' | 'tubeFitting' | 'mainDrive' | 'blackout' | 'hollowJack' | 'harpoon' | 'swingShift' | 'sponsorNight' | 'qualifyingHeat' | 'pitFight' | 'hazeDuel' | 'circuitFinal' | 'methaneEcho' | 'secondTube' | 'thrustersOne' | 'plumeYacht' | 'platingTwo' | 'voiceTwo' | 'helloHost' | 'tigerStripes' | 'theRidge' | 'officeHours' | 'driveTwo' | 'lastTallymen' | 'trialRace' | 'trialDeathmatch' | 'trialFlag' | 'trialCarrier' | 'tubesOne' | 'invitation' | 'veronaDrop' | 'amongTheLoose' | 'theSweep' | 'thrustersTwo' | 'geyserField' | 'oldAdmiral' | 'theMemorial' | 'graveShift' | 'thrustersThree' | 'heartRun' | 'theFile' | 'plutoEcho' | 'lastLight' | 'wells' | 'platingThree' | 'haumeaRing' | 'rungTwo' | 'theHunter' | 'driveThree' | 'kiln' | 'granary' | 'granaryEcho' | 'rideComet' | 'tubesComplete' | 'theDrain' | 'scoutOne' | 'feedersComet' | 'firstDeath' | 'lastOrbit' | 'theDeal' | 'parade' | 'certification' | 'firstRound' | 'terminatorRun' | 'mercuryEcho' | 'cloudLine' | 'venusEcho' | 'gullet' | `courier:${ArenaId}` | `ambush:${ArenaId}` | `mining:${ArenaId}`;
 
 export interface Mission {
   id: MissionId;
@@ -192,6 +192,13 @@ export interface Mission {
   ambush?: ArenaId;
   /** A mining run (see campaign/missions, miningRun): the place it is flown at, which the job board names. */
   mining?: ArenaId;
+  /**
+   * A place to go in person between the jobs (the Gullet, see campaign/missions): offered on the
+   * job board by a button of its own once the mission `side` names is done, always, however often
+   * it was visited, with what the board says of it; never a job, so it pays nothing, is never
+   * counted as done and leaves the story's next mission as it was.
+   */
+  bar?: string;
 }
 
 /** Whether the Host passed a trial (see Mission.trial): placed `place` (from 1) in a race or deathmatch, their side leading in Capture the Flag, the battleship down in the President's Fleet. */
@@ -256,6 +263,8 @@ export interface Campaign {
   medals: MissionId[];
   /** The time trials flown within their gold time, each worth its bonus once (see gold). */
   golds: MissionId[];
+  /** The Host has been to the Gullet, Kesh's bar in Occator's market (see Mission.bar): she greets a regular otherwise than a stranger. */
+  gullet: boolean;
 }
 
 /** A medal's bonus, and a gold time's: this share of its job's pay, paid once, as the job's pay is (the yard's cut taken while the debt is unpaid). */
@@ -339,7 +348,7 @@ const HABITS_MAX = 10_000_000;
 export type Choice = 'quietManSpared';
 const CHOICES: readonly Choice[] = ['quietManSpared'];
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [], crackle: false, habits: freshHabits(), medals: [], golds: [], gullet: false });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -362,7 +371,7 @@ export function campaignFrom(text: string | null): Campaign {
     const medals = Array.isArray(kept.medals) ? done.filter((id) => kept.medals!.includes(id) && hasMedal(MISSIONS.find((mission) => mission.id === id)!)) : [];
     // a gold only for a job done with a gold time
     const golds = Array.isArray(kept.golds) ? done.filter((id) => kept.golds!.includes(id) && goldOf(MISSIONS.find((mission) => mission.id === id)!) !== null) : [];
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices, crackle: kept.crackle === true, habits, medals, golds, gullet: kept.gullet === true };
   } catch {
     return fresh;
   }
@@ -371,8 +380,11 @@ export function campaignFrom(text: string | null): Campaign {
 /** The next mission of the story, or null once every mission built is done; side trips are never it (see Mission.side). */
 export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !mission.side && !campaign.done.includes(mission.id)) ?? null;
 
-/** The side trips on offer: those whose mission to start from is done and that are not done themselves (see Mission.side). */
-export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id));
+/** The side trips on offer: those whose mission to start from is done and that are not done themselves (see Mission.side); a bar is none. */
+export const sideTrips = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.side && !mission.bar && campaign.done.includes(mission.side) && !campaign.done.includes(mission.id));
+
+/** The bars open to the Host: those whose mission to start from is done, every time (see Mission.bar). */
+export const bars = (campaign: Campaign): Mission[] => MISSIONS.filter((mission) => mission.bar && mission.side && campaign.done.includes(mission.side));
 
 /**
  * A mission done: it counts, what it fits is fitted, its pay less `fine` (what the Host lost on

@@ -4,6 +4,7 @@ import { cos, hypot, sin } from '../detmath';
 import { planOf, type SceneName } from './scenes';
 import { CAB } from '../world/office';
 import { GALLEY } from '../world/galley';
+import { GULLET } from '../world/gullet';
 import { CAB_RADIUS } from '../world/yard';
 import { DOME_RADIUS } from '../world/moon';
 
@@ -43,6 +44,13 @@ describe('the scenes in person', () => {
   it('Bellamy Crisp’s visit: in Patience’s galley, Crisp at the counter, the clone looking at Hedda', () => {
     expectPlan('sponsor', (point) => Math.abs(point.x - GALLEY.x) < 90 && Math.abs(point.z - GALLEY.z) < 60, 'hedda');
     expect(planOf('sponsor').people.map((person) => person.who)).toEqual(['hedda', 'crisp']);
+  });
+
+  it('the Gullet: everyone inside the cave, Kesh behind her counter facing the clone, the clone looking at her; shut in the rock', () => {
+    // the room: 14 m long, 9 m wide round its middle
+    expectPlan('gullet', (point) => Math.abs(point.x - GULLET.x) < 140 && Math.abs(point.z - GULLET.z) < 90, 'kesh');
+    expect(planOf('gullet').indoors).toBe(true);
+    expect(planOf('galley').indoors).toBeFalsy();
   });
 
   it('the Ballroom: everyone under the dome, the President and Quill a few meters off and facing the clone, the clone looking up at the President', () => {
