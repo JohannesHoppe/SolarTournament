@@ -3,7 +3,7 @@ import { AsteroidField, FIELD_RADIUS, type Placement, type TemplateSet } from '.
 import { fractureSet } from '../world/fracture';
 import { RACK_BOXES, RACK_RELIEFS } from '../world/yard';
 import { createRocks, DETAIL, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
-import { planMining, standClaims, type Plan } from '../world/mining';
+import { claimsOf, planMining, standClaims, type Claim, type Plan } from '../world/mining';
 import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
 
 /** The rock shapes of each detail, built once for all tests (a field only clones them). */
@@ -32,15 +32,24 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
     return group;
   };
   const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true }, rack: { near: RACK_BOXES.map(box), far: [], box: true, reliefs: RACK_RELIEFS } });
-  // the Belt's rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining)
+  // the Belt's and Rheasilvia's rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining)
   const generate = field.generate.bind(field);
   field.generate = (layout) => {
     generate(layout);
-    if (layout.key !== 'belt') return;
-    const plan = claims.get(detail) ?? claims.set(detail, planMining(field)).get(detail)!;
-    standClaims(field, plan);
+    if (!MINED.includes(layout.key)) return;
+    const key = `${layout.key}:${detail}`;
+    standClaims(field, claims.get(key) ?? claims.set(key, planMining(field)).get(key)!);
   };
   return field;
+}
+
+/** The layouts the game dresses with the Rockborn's mining (see Game.enterArena). */
+const MINED = ['belt', 'rheasilvia'];
+
+/** The claims of a field `testField` dressed, as the game's Mining reads them (see world/mining, claimsOf); none for another layout. */
+export function claimsIn(field: AsteroidField, detail: number): Claim[] {
+  const plan = field.layout ? claims.get(`${field.layout.key}:${detail}`) : undefined;
+  return plan ? claimsOf(plan, field) : [];
 }
 
 /** A ship's radius in the ground tests (units, 17 m). */
@@ -75,8 +84,8 @@ export function reliefOutside(relief: (x: number, z: number) => number, half: TH
   return outside;
 }
 
-/** The Belt's mining plan by the rocks' detail, made once for all tests (it follows from the layout and the shapes). */
-const claims = new Map<number, Plan>();
+/** The mining plans by layout and the rocks' detail, made once for all tests (they follow from the layout and the shapes). */
+const claims = new Map<string, Plan>();
 
 const probeSolids = new WeakMap<AsteroidField, { solids: Solid[]; shared: Solid[] }>();
 

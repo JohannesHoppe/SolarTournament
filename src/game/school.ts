@@ -144,8 +144,9 @@ export interface SchoolContext {
   removeRacers(): void;
   /** The rivals that have flown every lap. */
   readonly racersFinished: number;
-  /** Where the pilot last broke a rock. */
+  /** Where the pilot last broke a rock, and which piece it was (its pieces' ids are its own and a dot more, see world/fracture). */
   readonly brokenAt: THREE.Vector3;
+  readonly brokenId: string;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
   /** A torpedo in flight still homes on the pilot. */
@@ -2127,6 +2128,8 @@ export class Markers {
         burst.add(position);
         mesh.visible = false;
       }
+      // a glint of ore comes to rest on the ground it meets, still within a hull's reach skimming it
+      if (mesh.userData.glint && field.overlap(position, GLINT_SIZE)?.ground) velocity.set(0, 0, 0);
     }
     for (const child of this.root.children) {
       if (child.userData.spin) rotateY(child, dt * 1.5);

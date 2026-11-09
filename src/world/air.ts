@@ -284,3 +284,29 @@ export function finSpin(altitude: number, speed: number, fins: number, target: T
 
 /** The haze's numbers for the shaders (see view/haze): extinction, scale heights, the clamp of the depth. */
 export const HAZE_SHAPE = { haze: HAZE, scale: SCALE_HEIGHT, top: TOP_HEIGHT, topDensity: TOP_DENSITY, deepest: DEEPEST, deck: DECK_DEPTH };
+
+/** What of a ship one step in an air reads and writes (see airStep): its flight, its fins, its radiators. */
+export interface AirHull {
+  readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 };
+  readonly perks: { readonly fins: number };
+  readonly finSpin: THREE.Vector3;
+  clog: number;
+  heat: number;
+  overheated: boolean;
+  readonly cooling: number;
+}
+
+/**
+ * A step of `dt` seconds of a ship in an air (see Game.friction): the turn the air forces on a
+ * hull short of a fin (into its finSpin), the clouds clogging its radiators, the air's heat and
+ * the clog's waste heat into them; returns the hull points burnt (see airBurn), `full` the
+ * radiators' limit.
+ */
+export function airStep(ship: AirHull, air: Air, dt: number, full: number): number {
+  const altitude = altitudeIn(air, ship.flight.position);
+  // a hull short of a fin cannot hold its course in air
+  finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
+  ship.clog = clogging(ship.clog, altitude, dt);
+  const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
+  return heat < 1e-4 ? 0 : airBurn(ship, heat, dt, full);
+}
