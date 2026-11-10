@@ -51,6 +51,7 @@ const NO_CLONE_SECONDS = 4;
 /** The game's sides and numbers for raiders (see Game.jumpers): the side they fight on, how near a ship comes before they fight it, how far their saw reaches. */
 const JUMPER_TEAM = 1;
 const ALLY_TEAM = 2;
+const AMBUSH_PREFIX = 'raider';
 const SAW_DISTANCE = 8000;
 const SAW_REACH = 200;
 const JUMPER_NOTICE = 16000;
@@ -819,11 +820,11 @@ export class JobWorld implements SchoolContext {
     return this.torpedoList.list.some((torpedo) => torpedo.target === this.me);
   }
 
-  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false, prefix = 'jumper') {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
-      const bot = this.addBot(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[skill.length - 1]) : (skill as Skill)));
+      const bot = this.addBot(`${prefix}${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[skill.length - 1]) : (skill as Skill)));
       bot.ship.team = JUMPER_TEAM;
       const angle = (i / count) * Math.PI * 2;
       const at = new THREE.Vector3(cos(angle) * hold, hold * 0.5, sin(angle) * hold).add(rig);
@@ -913,7 +914,7 @@ export class JobWorld implements SchoolContext {
     const actors = this.jumpers?.bots.map((bot) => bot.ship) ?? [];
     const rig = this.jumpers?.rig ?? new THREE.Vector3();
     this.jumpers = null;
-    this.spawnJumpers(null, rig, count, skill, names, hold);
+    this.spawnJumpers(null, rig, count, skill, names, hold, false, false, AMBUSH_PREFIX);
     const raiders = this.jumpers!.bots;
     actors.forEach((actor, i) => {
       if (actor.alive) raiders[i % raiders.length].ship.kills++;

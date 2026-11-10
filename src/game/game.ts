@@ -721,6 +721,10 @@ const SAW_REACH = 200;
 const JUMPER_NOTICE = 16000;
 /** The claim-jumpers' side (see Ship.team): the three brothers fight together, the Host stays on none. */
 const JUMPER_TEAM = 1;
+/** The ids of the raiders that turn up in an ambush, apart from the actors' they shoot down (`jumper0` …), so no streak or wreck of one is taken for the other's. */
+const AMBUSH_PREFIX = 'raider';
+/** What a raider holding its fire changes of its controls (see sparesClones). */
+const NO_FIRE = { fire: false } as const;
 /** The side the Host and a mission's wingman fly on (see SchoolContext.wingman), apart from the raiders'. */
 const ALLY_TEAM = 2;
 /** How long the screen stays black when the last clone dies, with no printer for the next (see Drill.lastClone; s). */
@@ -1984,8 +1988,15 @@ export class Game implements OnlineGame {
   /** The Host's stick through a back-room clone's trembling hands (see campaign/campaign, BLACK_SHAKE). */
   private tremble(read: Readonly<Controls>): Controls {
     const shake = () => (Math.random() * 2 - 1) * BLACK_SHAKE;
-    return { ...read, yaw: Math.max(-1, Math.min(1, read.yaw + shake())), pitch: Math.max(-1, Math.min(1, read.pitch + shake())) };
+    const hand = Object.assign(this.trembled, read);
+    hand.yaw = Math.max(-1, Math.min(1, read.yaw + shake()));
+    hand.pitch = Math.max(-1, Math.min(1, read.pitch + shake()));
+    return hand;
   }
+
+  /** The controls of a trembling hand (see tremble) and of a raider holding its fire, filled anew each step. */
+  private readonly trembled: Controls = { ...IDLE };
+  private readonly heldFire: Controls = { ...IDLE };
 
   /**
    * The campaign's own clone lost (see campaign/scars, campaign/campaign printClone): the death
@@ -2513,8 +2524,7 @@ export class Game implements OnlineGame {
    */
   private direct(now: number) {
     if (!this.watching()) return;
-    const pilots = this.ships.filter((ship) => ship !== this.me && ship.alive);
-    if (!pilots.length) {
+    if (!this.ships.some((ship) => ship !== this.me && ship.alive)) {
       this.watchedShip = null;
       return;
     }
@@ -2524,7 +2534,8 @@ export class Game implements OnlineGame {
     if (current && now - this.cutAt < DIRECTOR_HOLD) return;
     let best = current;
     let bestScore = current ? this.drama(current) * DIRECTOR_STICK : -Infinity;
-    for (const ship of pilots) {
+    for (const ship of this.ships) {
+      if (ship === this.me || !ship.alive) continue;
       const score = this.drama(ship);
       if (score > bestScore) {
         best = ship;
@@ -2569,11 +2580,12 @@ export class Game implements OnlineGame {
   private leaveOnline() {
     // a connection still being set up is dropped when it arrives
     this.joinAttempt++;
+    // the own clone watches only in a tournament (or the benchmark's round): it flies the next
+    this.spectating = false;
     if (!this.online) return;
     this.online.leave();
     this.online = null;
     this.room = null;
-    this.spectating = false;
     this.updateLobby();
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     modeName('online').textContent = t('Online tournament');
@@ -2928,8 +2940,9 @@ export class Game implements OnlineGame {
     this.field.obstacle = this.fleet;
     this.fleetCalled = false;
     this.fleetPhase = 1;
-    // against the President every ship is on one side
-    for (const ship of this.ships) ship.team = this.fleet ? 0 : -1;
+    // against the President every ship is on one side; a mission's raiders and wingman keep theirs
+    // through a drill's change of arena
+    for (const ship of this.ships) if (!this.mission || (ship.team !== JUMPER_TEAM && ship.team !== ALLY_TEAM)) ship.team = this.fleet ? 0 : -1;
     // the course of an arena is always the same: its best lap races along; the browser keeps only
     // what parseLaps reads back of the kept laps
     const kept = this.course ? parseLaps(storageGet(LAPS_KEY)) : null;
@@ -3668,7 +3681,7 @@ export class Game implements OnlineGame {
     // own ship broke it, though the other hit arrived later
     const own = this.lastRockHit.get(id);
     if (own && own.at > at) {
-      own.ship.score += ASTEROID_POINTS[destroyed.generation];
+      if (!this.roundOver) own.ship.score += ASTEROID_POINTS[destroyed.generation];
       this.keepBroken(destroyed, own.at, own.ship);
     }
     this.burstRock(destroyed);
@@ -3676,7 +3689,7 @@ export class Game implements OnlineGame {
 
   /** A rock a ship of this browser broke online, kept for remoteRock and rockAt. */
   private keepBroken(rock: Asteroid, at: number, ship: Ship) {
-    this.brokenHere.set(rock.id, { at, ship, points: ASTEROID_POINTS[rock.generation], position: rock.object.position.clone(), radius: rock.radius });
+    this.brokenHere.set(rock.id, { at, ship, points: this.roundOver ? 0 : ASTEROID_POINTS[rock.generation], position: rock.object.position.clone(), radius: rock.radius });
   }
 
   /** A rock breaks apart, and the own pilot hears its debris. */
@@ -3704,11 +3717,12 @@ export class Game implements OnlineGame {
     // over in another round than its own leaves its own behind.
     if (this.roundId < 0) {
       if (this.rejoinedFrom !== null && this.rejoinedFrom !== round.id) this.clearRound();
-      // a newcomer's clone was printed before it knew the round's arena
-      const newcomer = this.rejoinedFrom === null;
+      // a newcomer's clone was printed before it knew the round's arena; one back in a newer
+      // round starts it afresh, wherever its clones flew in the old one
+      const fresh = this.rejoinedFrom !== round.id;
       this.roundId = round.id;
       this.rejoinedFrom = null;
-      this.arriveInRound(newcomer);
+      this.arriveInRound(fresh);
     } else if (round.id > this.roundId) {
       // a new round only once the running one is over; a lead that counts rounds up before
       // has nothing to say about this one, unless its game master chose the new round
@@ -3878,6 +3892,8 @@ export class Game implements OnlineGame {
       ship.score = ship.kills = ship.deaths = ship.gates = 0;
       ship.finish = ship.skipLap = -1;
     }
+    // nothing of the round before runs on in this one (a battleship's sinking blast, the crowd)
+    this.cues.length = 0;
     this.brokenHere.clear();
     this.lastRockHit.clear();
     this.moments.reset();
@@ -4647,7 +4663,7 @@ export class Game implements OnlineGame {
       const steered = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
       // a raider who spares clones fires only into a drive (see jumpers); the Loose, harpooning tugs, never into the Magpie's
       const holds = steered.fire && ((this.sparesClones(ship) && !this.onDrive(ship)) || (this.sparesDrives(ship) && this.onDrive(ship)));
-      const controls = holds ? { ...steered, fire: false } : steered;
+      const controls = holds ? Object.assign(this.heldFire, steered, NO_FIRE) : steered;
       this.outside(ship.flight, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
@@ -5354,19 +5370,25 @@ export class Game implements OnlineGame {
 
   /** The ships a claim-jumper heeds: itself, and the others within JUMPER_NOTICE of it. */
   private noticed(jumper: Ship): Ship[] {
-    return this.ships.filter((ship) => ship === jumper || ship.flight.position.distanceTo(jumper.flight.position) < JUMPER_NOTICE);
+    // one list for every raider's thought, filled anew each time: a bot keeps none of it
+    const near = this.noticedShips;
+    near.length = 0;
+    for (const ship of this.ships) if (ship === jumper || ship.flight.position.distanceTo(jumper.flight.position) < JUMPER_NOTICE) near.push(ship);
+    return near;
   }
+
+  private readonly noticedShips: Ship[] = [];
 
   /**
    * Raiders at a target (see jumpers): `count` bots of `skill` named from `names` around it,
    * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
    * rig stands on, or null for a hull of the drill's; `guard`: guarding it instead.
    */
-  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: Skill | readonly Skill[], names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false, prefix = 'jumper') {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
-      const ship = this.addShip(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
+      const ship = this.addShip(`${prefix}${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
       // brothers: one side, never at each other
       ship.team = JUMPER_TEAM;
       const bot = new Bot(ship, skillsFrom(Array.isArray(skill) ? (skill[i] ?? skill[skill.length - 1]) : (skill as Skill)));
@@ -6405,7 +6427,7 @@ export class Game implements OnlineGame {
         const rig = game.jumpers?.rig ?? new THREE.Vector3();
         // the actors stay out of the new raiders' removal: they go down to them instead
         game.jumpers = null;
-        this.spawnJumpers(null, rig, count, skill, names, hold);
+        this.spawnJumpers(null, rig, count, skill, names, hold, false, false, AMBUSH_PREFIX);
         const raiders = game.jumpers!.bots;
         actors.forEach((actor, i) => {
           if (actor.alive) this.shipDestroyed(actor, raiders[i % raiders.length].ship, null, 'laser');
@@ -7449,6 +7471,7 @@ export class Game implements OnlineGame {
     this.blowUp(torpedo);
     if (shooter.owner !== null) return;
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position, shooter);
+    if (this.roundOver) return;
     shooter.score += TORPEDO_DOWN_POINTS;
     if (!shooter.isLocal) return;
     this.torpedoesDown++;
@@ -7580,7 +7603,7 @@ export class Game implements OnlineGame {
     if (pass && near?.id !== pass.id) {
       // the pass is over: it pays if it was fast and never touched the rock
       this.closePass = null;
-      if (!pass.touched) this.payCloseCall(now);
+      if (!pass.touched && !this.roundOver) this.payCloseCall(now);
     }
     const touched = now - this.lastScrape < 0.1;
     if (near && this.closePass) this.closePass.touched ||= touched;
@@ -7903,15 +7926,17 @@ export class Game implements OnlineGame {
           this.brokenAt.copy(destroyed.object.position);
           this.brokenId = destroyed.id;
         }
-        shooter.score += points;
+        if (!this.roundOver) shooter.score += points;
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)
         if (this.online) this.keepBroken(destroyed, this.field.clock, shooter);
         this.burstRock(destroyed);
         if (shooter.isLocal) {
           this.hud.hit();
-          this.hud.popup(this.camera, destroyed.object.position, `+${points}`, 'points');
           this.kick = Math.min(2, this.kick + 0.6);
-          this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points }), 1.5);
+          if (!this.roundOver) {
+            this.hud.popup(this.camera, destroyed.object.position, `+${points}`, 'points');
+            this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points }), 1.5);
+          }
           this.speaker.say(COMPUTER.asteroid);
         }
       }
