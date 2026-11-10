@@ -34,7 +34,7 @@ export interface Transport {
  * a lobby of their own. A change to a message that a build before it would read otherwise (a
  * key added, removed or required, a bound narrowed, a meaning changed) raises it by one.
  */
-export const PROTOCOL = 7;
+export const PROTOCOL = 8;
 /** Identifies the game and its protocol on the signaling relays and between local tabs; peers with other app ids never meet. */
 const APP_ID = `solartournament-2584-p${PROTOCOL}`;
 /**
@@ -324,8 +324,10 @@ export class LocalTransport extends BaseTransport {
       const now = performance.now() / 1000;
       for (const [id, seen] of this.lastSeen) if (now - seen > LOCAL_TIMEOUT) this.drop(id);
     }, 1000);
-    window.addEventListener('pagehide', () => this.leave());
+    window.addEventListener('pagehide', this.hidden);
   }
+
+  private readonly hidden = () => this.leave();
 
   send(type: string, data: Json, to?: string) {
     this.post({ t: type, d: data, to });
@@ -340,6 +342,7 @@ export class LocalTransport extends BaseTransport {
   }
 
   leave() {
+    window.removeEventListener('pagehide', this.hidden);
     clearInterval(this.heartbeat);
     this.post({ t: '_bye' });
     this.channel.close();

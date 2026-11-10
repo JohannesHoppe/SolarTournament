@@ -92,6 +92,8 @@ export const PROBE_EVERY = 25;
 const PROBE_LIFETIME = PROBE_EVERY * 4;
 /** A dead clone drops at most this many probes: twin laser, plating, nova core. */
 const MAX_DROPS = 3;
+/** s: how long a probe another browser took before this one has it (the arena's next, a death's drops not heard yet) counts as taken; a message's lag and a state's interval are far shorter. */
+const AHEAD_SECONDS = 3;
 /** A probe's reach (units, 15 m): a ship that comes this close plus its own radius takes it. */
 export const PROBE_RADIUS = 300;
 /** In a race, a probe lies this far (units, up to 40 m on each axis) off the line between two gates: well inside a gate's 120 m radius. */
@@ -218,6 +220,13 @@ export class Probes {
   /** Probes of the arena shown so far this round, and the ids taken, so none comes back. */
   private shown = 0;
   private readonly taken = new Set<string>();
+  /**
+   * Ids another browser took a moment before this one has them (the next probe of the arena, the
+   * drops of a death not heard yet), each with the time until it counts as taken: a probe that
+   * turns up by then is gone at once, and a claim of one that never comes is forgotten, so no
+   * browser can wipe out probes ahead of their time.
+   */
+  private readonly ahead = new Map<string, number>();
   private readonly parts = probeParts();
   /** A sponsor's probe is cheap and used again and again: grimy, dented, scratched, a serial and the sponsor's warning stenciled on, a little sheen of the sky on its metal. */
   private readonly hull = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(11, PROBE_WEAR), 1.2), color: 0xa8afb8, flatShading: true, envMap: shine(), envMapIntensity: 0.5 });
@@ -235,6 +244,18 @@ export class Probes {
     while (this.list.length) this.remove(this.list[0]);
     this.shown = 0;
     this.taken.clear();
+    this.ahead.clear();
+  }
+
+  /** Whether the probe `id` is gone at `now`: taken here or by another browser, or claimed a moment ahead (see `ahead`). */
+  private gone(id: string, now: number): boolean {
+    if (this.taken.has(id)) return true;
+    const until = this.ahead.get(id);
+    if (until === undefined) return false;
+    this.ahead.delete(id);
+    if (until < now) return false;
+    this.taken.add(id);
+    return true;
   }
 
   /**
@@ -249,7 +270,7 @@ export class Probes {
       const n = this.shown++;
       const id = `r${round}.${n}`;
       const left = PROBE_FIRST + n * PROBE_EVERY + PROBE_LIFETIME - elapsed;
-      if (this.taken.has(id) || left <= 0) continue;
+      if (left <= 0 || this.gone(id, now)) continue;
       const position = new THREE.Vector3();
       for (let attempt = 0; attempt < 8; attempt++) {
         const h = (k: number) => hash(seed, round, n, attempt, k) / 4294967296;
@@ -268,22 +289,30 @@ export class Probes {
       }
       // in a race the probe is sealed: its luck and the taker's place decide what it holds
       const luck = hash(seed, round, n, 99);
-      this.add(id, kindOf(luck), position, new THREE.Vector3(), now + left, track.length ? luck : null);
+      this.add(id, kindOf(luck), position, new THREE.Vector3(), now, left, track.length ? luck : null);
     }
   }
 
   /**
-   * Whether a probe id taken on another browser could be one: a probe this browser has or knows
-   * taken, one of this round already due (`round` -1 while the round is not known yet), or one
-   * a known ship's dead clone dropped. An invented id never enters the list of probes taken.
+   * Whether a probe id taken on another browser could be one: `now` for a probe this browser has
+   * or knows taken, one of this round already due, or one a known ship's dead clone dropped;
+   * `soon` for one this browser may have in a moment (the arena's next, any while the round is
+   * not known yet as `round` -1, the drops of a death not heard yet); null for an invented id,
+   * which never enters the list of probes taken.
    */
-  plausible(id: string, round: number, deathsOf: (ship: string) => number | null): boolean {
-    if (this.find(id) || this.taken.has(id)) return true;
+  plausible(id: string, round: number, deathsOf: (ship: string) => number | null): 'now' | 'soon' | null {
+    if (this.find(id) || this.taken.has(id)) return 'now';
     const arena = /^r(\d+)\.(\d+)$/.exec(id);
-    if (arena) return round < 0 || (Number(arena[1]) === round && Number(arena[2]) <= this.shown);
+    if (arena) {
+      if (round < 0) return 'soon';
+      const n = Number(arena[2]);
+      return Number(arena[1]) !== round || n > this.shown ? null : n < this.shown ? 'now' : 'soon';
+    }
     const drop = /^(.+)\.(\d+)\.(\d+)$/.exec(id);
     const deaths = drop ? deathsOf(drop[1]) : null;
-    return deaths !== null && Number(drop![2]) <= deaths + 1 && Number(drop![3]) < MAX_DROPS;
+    if (deaths === null || Number(drop![3]) >= MAX_DROPS) return null;
+    const death = Number(drop![2]);
+    return death <= deaths ? 'now' : death === deaths + 1 ? 'soon' : null;
   }
 
   /** The probes in flight, for a browser that joins: it takes them on their slots, wherever they drift (one on a cable just now is back there in a moment, see PROBE_THRUST). */
@@ -296,7 +325,7 @@ export class Probes {
     for (const state of states) {
       const existing = this.find(state.i);
       if (existing) this.remove(existing);
-      this.add(state.i, state.k, new THREE.Vector3().fromArray(state.p), new THREE.Vector3().fromArray(state.v), now + state.u, state.x ?? null);
+      this.add(state.i, state.k, new THREE.Vector3().fromArray(state.p), new THREE.Vector3().fromArray(state.v), now, state.u, state.x ?? null);
     }
   }
 
@@ -305,12 +334,13 @@ export class Probes {
     kinds.forEach((kind, k) => {
       const h = (i: number) => hash(textSeed(shipId), deaths, k, i) / 4294967296;
       const push = new THREE.Vector3(h(1) * 2 - 1, h(2) * 2 - 1, h(3) * 2 - 1).normalize().multiplyScalar(DROP_SPREAD * (0.5 + h(4) * 0.5));
-      this.add(`${shipId}.${deaths}.${k}`, kind, position.clone(), push.add(velocity), now + DROP_LIFETIME, null);
+      this.add(`${shipId}.${deaths}.${k}`, kind, position.clone(), push.add(velocity), now, DROP_LIFETIME, null);
     });
   }
 
-  private add(id: string, kind: ItemKind, position: THREE.Vector3, velocity: THREE.Vector3, until: number, luck: number | null) {
-    if (this.taken.has(id) || this.find(id)) return;
+  private add(id: string, kind: ItemKind, position: THREE.Vector3, velocity: THREE.Vector3, now: number, life: number, luck: number | null) {
+    if (this.find(id) || this.gone(id, now)) return;
+    const until = now + life;
     const { body, wing, dish, mast, beacon: light, ring } = this.parts;
     const mesh = new THREE.Group();
     // a sealed probe runs through every color: nobody knows what it holds
@@ -408,10 +438,18 @@ export class Probes {
     return [...this.taken];
   }
 
-  /** A probe id taken on another browser, before or after this one has it: the probe, if this one has it. */
-  takeId(id: string): Probe | null {
-    this.taken.add(id);
+  /**
+   * A probe id taken on another browser, before or after this one has it: the probe, if this one
+   * has it. One this browser may only have `soon` (see plausible) counts as taken until `now` and
+   * AHEAD_SECONDS, and only if it turns up by then.
+   */
+  takeId(id: string, now = 0, soon = false): Probe | null {
     const probe = this.find(id);
+    if (!probe && soon) {
+      this.ahead.set(id, now + AHEAD_SECONDS);
+      return null;
+    }
+    this.taken.add(id);
     if (probe) this.remove(probe);
     return probe;
   }

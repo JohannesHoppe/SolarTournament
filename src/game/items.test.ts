@@ -136,13 +136,33 @@ describe('probes', () => {
     newcomer.restore(lead.snapshot(12), 12);
     expect(newcomer.list.map((probe) => `${probe.id}:${probe.kind}:${probe.until}`)).toEqual(lead.list.map((probe) => `${probe.id}:${probe.kind}:${probe.until}`));
     const deaths = (ship: string) => (ship === 'p:abc' ? 2 : null);
-    expect(newcomer.plausible('p:abc.2.0', 0, deaths)).toBe(true);
-    expect(newcomer.plausible('p:abc.3.1', 0, deaths)).toBe(true);
-    expect(newcomer.plausible('p:abc.9.0', 0, deaths)).toBe(false);
-    expect(newcomer.plausible('p:xyz.1.0', 0, deaths)).toBe(false);
-    expect(newcomer.plausible('r0.0', 0, deaths)).toBe(true);
-    expect(newcomer.plausible('r0.7', 0, deaths)).toBe(false);
-    expect(newcomer.plausible('r5.0', 0, deaths)).toBe(false);
+    expect(newcomer.plausible('p:abc.2.0', 0, deaths)).toBe('now');
+    expect(newcomer.plausible('p:abc.1.2', 0, deaths)).toBe('now');
+    expect(newcomer.plausible('p:abc.3.1', 0, deaths)).toBe('soon');
+    expect(newcomer.plausible('p:abc.4.0', 0, deaths)).toBe(null);
+    expect(newcomer.plausible('p:abc.9.0', 0, deaths)).toBe(null);
+    expect(newcomer.plausible('p:xyz.1.0', 0, deaths)).toBe(null);
+    expect(newcomer.plausible('r0.0', 0, deaths)).toBe('soon');
+    expect(newcomer.plausible('r0.7', 0, deaths)).toBe(null);
+    expect(newcomer.plausible('r5.0', 0, deaths)).toBe(null);
+  });
+
+  it('take a probe claimed ahead of its time only if it turns up soon after', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const early = new Probes();
+    expect(early.plausible('r0.0', 0, () => null)).toBe('soon');
+    early.takeId('r0.0', 0, true);
+    early.schedule(42, 0, 40, 1, field);
+    expect(early.list.some((probe) => probe.id === 'r0.0')).toBe(false);
+    const late = new Probes();
+    late.takeId('r0.0', 0, true);
+    late.schedule(42, 0, 40, 60, field);
+    expect(late.list.some((probe) => probe.id === 'r0.0')).toBe(true);
+    const drops = new Probes();
+    drops.takeId('p:abc.3.0', 0, true);
+    drops.drop('p:abc', 3, ['nova', 'decoys'], new THREE.Vector3(), new THREE.Vector3(), 10);
+    expect(drops.list.map((probe) => probe.id)).toEqual(['p:abc.3.0', 'p:abc.3.1']);
   });
 
   it('fly out of a dead clone alike on every browser', () => {

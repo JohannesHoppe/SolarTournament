@@ -344,6 +344,15 @@ export class Flags {
     this.claims.push({ ship, team });
   }
 
+  /**
+   * Whether another browser's harpoon could have bitten the core of side `team` from `from`: a
+   * harpoon flies straight, so the lead refuses a claim from behind rock (a cable laid over rock
+   * comes from a ship and core that moved since the bite, never from a bite through it).
+   */
+  inSight(from: THREE.Vector3, team: number): boolean {
+    return this.field.lineOfSight(from, this.cores[team].position);
+  }
+
   /** The cores the harpoon of a ship may bite: the other side's core while it tows none, and its own core adrift; none in tow. */
   hookable(ship: Flier): readonly Mark[] {
     const marks = this.marks;

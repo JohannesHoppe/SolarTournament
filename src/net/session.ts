@@ -95,6 +95,10 @@ const MAX_PART_HITS = Math.max(...Object.values(ZONE_HITS));
  * round state arrives, and messages cross. A new round starts the field time over.
  */
 const ROCK_ORDER_SLACK = 1;
+/** The rounds whose rock hits are kept in order per peer: the round now, the one before and the next (a newcomer's, a game master's new round); a peer naming more rounds is refused for the lowest it no longer keeps. */
+const ROCK_ROUNDS = 3;
+/** The lead sends a newcomer its field once, again when it starts over; a few at once when several join. */
+const MAX_SNAPSHOTS_PER_SECOND = 2;
 /** A browser pings every peer this often (s): the scoreboard's reading is never far stale. */
 const PING_INTERVAL = 1;
 /** The reading shown is the median of a peer's last this many round trips, so one slow or lost packet does not jump it around. */
@@ -241,8 +245,11 @@ export class Session {
   private nextReconcile = 0;
   /** When each peer's start over was last taken up (see PEER_RESTART_GAP). */
   private readonly peerRestartedAt = new Map<string, number>();
-  /** The latest field time of each peer's rock hits in each round ("peer:round", see ROCK_ORDER_SLACK). */
-  private readonly lastRockAt = new Map<string, number>();
+  /** The latest field time of each peer's rock hits in each of its last rounds (see ROCK_ORDER_SLACK, ROCK_ROUNDS). */
+  private readonly lastRockAt = new Map<string, Map<number, number>>();
+  /** The age each peer named last (s, see hear): it only falls when the peer starts over. */
+  private readonly heardAge = new Map<string, number>();
+  private readonly snapshotBudget = new Budget(MAX_SNAPSHOTS_PER_SECOND);
   /** When each peer last spoke; kept when its link drops, so its return is noticed. */
   private readonly lastHeard = new Map<string, number>();
   /** When any peer last spoke. */
@@ -300,7 +307,7 @@ export class Session {
       const victim = id(d?.v);
       // no killer (null), or a killer's id; anything else is refused
       const killer = d?.k === null ? null : (id(d?.k) ?? undefined);
-      const deaths = num(d?.de, 0, MAX_COUNT);
+      const deaths = int(d?.de, 0, MAX_COUNT);
       const position = vec(d?.p, 3, MAX_COORDINATE);
       const velocity = vec(d?.u, 3, MAX_SPEED);
       if (!victim || killer === undefined || deaths === null || ownerOf(victim) !== from || !this.destroyBudget.spend(from)) return;
@@ -422,16 +429,24 @@ export class Session {
     transport.on('r', (d, from) => {
       const rock = id(d?.i);
       const at = num(d?.t, 0, MAX_FIELD_TIME);
-      const round = num(d?.n, 0, MAX_COUNT);
+      const round = int(d?.n, 0, MAX_COUNT);
       const shooter = id(d?.s);
       if (!rock || at === null || round === null || !shooter || ownerOf(shooter) !== from || !this.rockBudget.spend(from)) return;
       // a peer's hits in a round come in the order of its field time: one dated before the last
       // it sent would take another Host's points (see game.remoteRock)
-      const key = `${from}:${round}`;
-      const last = this.lastRockAt.get(key) ?? -Infinity;
+      const rounds = this.lastRockAt.get(from) ?? new Map<number, number>();
+      this.lastRockAt.set(from, rounds);
+      let last = rounds.get(round);
+      if (last === undefined) {
+        if (rounds.size >= ROCK_ROUNDS) {
+          const lowest = Math.min(...rounds.keys());
+          if (round < lowest) return;
+          rounds.delete(lowest);
+        }
+        last = -Infinity;
+      }
       if (at < last - ROCK_ORDER_SLACK) return;
-      if (last === -Infinity && this.lastRockAt.size > 256) this.lastRockAt.clear();
-      this.lastRockAt.set(key, Math.max(last, at));
+      rounds.set(round, Math.max(last, at));
       this.guard(() => this.onRock(rock, at, round, shooter));
     });
     transport.on('pi', (d, from) => {
@@ -452,16 +467,17 @@ export class Session {
     });
     transport.on('y', (d, from) => {
       // only a browser that just joined or started over takes a field, once, and only from the
-      // lead it elects, a peer that was here before it
+      // lead it elects, a peer that was here before it; the field is read only then
+      const age = num(d?.g, 0, MAX_FIELD_TIME);
+      if (age === null || !this.snapshotBudget.spend(from)) return;
+      this.hear(from, age);
+      if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
+      if (from !== this.leadId || (this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       const field = fieldState(d?.f);
       const wrecks = wreckStates(d?.w);
       const taken = ids(d?.p);
       const probes = probeStates(d?.q);
-      const age = num(d?.g, 0, MAX_FIELD_TIME);
-      if (!field || !wrecks || !taken || !probes || age === null) return;
-      this.hear(from, age);
-      if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
-      if (from !== this.leadId || (this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
+      if (!field || !wrecks || !taken || !probes) return;
       this.synced = true;
       // building the field cuts the pieces of its broken rocks (seconds on a slow device): that
       // work is no gap in the frames, only the time before the next one
@@ -475,7 +491,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.syncBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.syncBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget, this.snapshotBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       this.pingSeq.delete(peer);
       this.pingSentAt.delete(peer);
@@ -908,8 +924,12 @@ export class Session {
     const joined = now - age;
     this.claimed.set(peer, joined);
     const known = this.peerJoinedAt.get(peer);
+    // a peer's age only grows while it stays (its messages come in order): a message that comes
+    // late after a stall looks like a later join, but only an age that fell is a start over
+    const before = this.heardAge.get(peer) ?? -Infinity;
+    this.heardAge.set(peer, age);
     if (known === undefined) this.peerJoinedAt.set(peer, this.plausibleJoin(peer, joined));
-    else if (joined > known + RESTART_SLACK) {
+    else if (joined > known + RESTART_SLACK && age < before) {
       // the peer started over: it was the one that was gone
       this.peerJoinedAt.set(peer, joined);
       if (now - (this.peerRestartedAt.get(peer) ?? -Infinity) >= PEER_RESTART_GAP) {

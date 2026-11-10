@@ -136,6 +136,19 @@ describe('capture the flag', () => {
     expect(f.captures).toEqual([1, 0]);
   });
 
+  it('sees a core for another browser harpoon only past rock', () => {
+    const { field, f } = match();
+    // the core adrift 100 m off a rock, a ship as far off its other side
+    const core = f.cores[1].position;
+    const rock = [...field.asteroids.values()].filter((a) => a.radius < 6000).sort((a, b) => a.object.position.distanceTo(core) - b.object.position.distanceTo(core))[0];
+    const away = new THREE.Vector3(1, 0, 0);
+    core.copy(rock.object.position).addScaledVector(away, -rock.radius - 2000);
+    const behind = rock.object.position.clone().addScaledVector(away, rock.radius + 2000);
+    expect(behind.distanceTo(core)).toBeLessThan(HOOK_RANGE);
+    expect(f.inSight(behind, 1)).toBe(false);
+    expect(f.inSight(core.clone().addScaledVector(away, -4000), 1)).toBe(true);
+  });
+
   it('takes a core bitten by the harpoon from afar, on a cable the winch reels in', () => {
     const { f, orange, blue, ships } = match();
     // 800 m in front of blue's ring, its core in reach of the hook

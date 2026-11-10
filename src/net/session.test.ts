@@ -277,6 +277,12 @@ describe('the lead browser', () => {
     hit(98, 2);
     hit(5, 3);
     expect(taken).toEqual([100, 99.4, 5]);
+    // rounds made up to wipe the order out keep none of the peer's hits dated back
+    at(10);
+    for (const round of [7, 8, 9]) hit(1, round);
+    hit(50, 2);
+    hit(1, 3);
+    expect(taken).toEqual([100, 99.4, 5, 1, 1, 1]);
   });
 
   it("takes a ram of the battleship only from the lead that flies it, checked, and no faster than its budget", () => {
@@ -319,9 +325,23 @@ describe('the lead browser', () => {
     transport.states('a', 100);
     at(10);
     transport.states('a', 0.1);
+    at(13);
+    transport.states('a', 3.1);
     at(14);
     transport.states('a', 0.1);
     expect(restarts).toBe(2);
+  });
+
+  it('takes a state that comes late after a stall for no start over', () => {
+    const { session, transport } = joined('n');
+    let restarts = 0;
+    session.onPeerRestart = () => restarts++;
+    at(1);
+    transport.states('a', 100);
+    // its link stalls for three seconds, then what it sent meanwhile comes all at once
+    at(5);
+    for (const age of [100.1, 101, 102, 103]) transport.states('a', age);
+    expect(restarts).toBe(0);
   });
 
   it('gives a vote only to the first Hosts in the room, as many as the tournament has places', () => {

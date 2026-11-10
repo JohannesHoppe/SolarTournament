@@ -7060,7 +7060,7 @@ export class Game implements OnlineGame {
 
   /** A ship of another browser says its harpoon bit a core: the lead's rules decide (see Flags.claim). */
   remoteCoreHook(owner: Ship, team: number) {
-    if (this.flags && this.online?.isLead) this.flags.claim(owner.id, team);
+    if (this.flags && this.online?.isLead && this.flags.inSight(owner.flight.position, team)) this.flags.claim(owner.id, team);
   }
 
   /** A hook of this browser bit: the others are told, and the own pilot feels and hears it. */
@@ -7271,8 +7271,9 @@ export class Game implements OnlineGame {
    */
   remoteProbe(id: string, ship: Ship | null, bucket: number, take = true): ItemKind | null | undefined {
     const deathsOf = (s: string) => this.ships.find((other) => other.id === s)?.deaths ?? null;
-    if (!this.probes.plausible(id, this.roundId, deathsOf)) return undefined;
-    const probe = take ? this.probes.takeId(id) : this.probes.find(id);
+    const when = this.probes.plausible(id, this.roundId, deathsOf);
+    if (!when) return undefined;
+    const probe = take ? this.probes.takeId(id, this.time, when === 'soon') : this.probes.find(id);
     if (!probe) return null;
     const seen = ship ? this.bucketOf(ship) : 1;
     return contents(probe, Math.abs(bucket - seen) <= 1 ? bucket : seen);
