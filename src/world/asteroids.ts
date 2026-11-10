@@ -204,6 +204,8 @@ export interface Asteroid {
   meanRadius: number;
   /** Laser hits the rock withstands before it breaks apart. */
   hitPoints: number;
+  /** The field time of its last hit (-Infinity before the first), for the lead's sync of the field: a count with a hit that may still be on its way is left to it (see world/fieldsync). */
+  lastHit: number;
   generation: number;
   kind: TemplateKind;
   /** Never breaks and gives no points (see SOLID). */
@@ -785,6 +787,7 @@ export class AsteroidField {
       radius: this.boundingRadius(template, scale),
       meanRadius,
       hitPoints: solid ? SOLID : Math.round(4 + meanRadius / (this.layout?.toughness ?? 800)),
+      lastHit: -Infinity,
       generation,
       kind,
       solid,
@@ -818,12 +821,12 @@ export class AsteroidField {
     return asteroid;
   }
 
-  /** Puts a rock where the field time says (now, or `time`): drifted along its velocity, carried along its orbit, turned about its axis; and a correction eased in on top (see Asteroid.ease). */
-  private place(a: Asteroid, time = this.clock) {
+  /** Puts a rock where the field time says (now, or `time`): drifted along its velocity, carried along its orbit, turned about its axis; and, `eased`, a correction eased in on top (see Asteroid.ease). */
+  private place(a: Asteroid, time = this.clock, eased = true) {
     const age = time - a.born;
     positionAt(a, time, a.object.position);
     setFromAxisAngle(a.object.quaternion, a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
-    const ease = a.ease;
+    const ease = eased ? a.ease : null;
     if (ease) {
       const left = Math.min(1, 1 - (time - ease.from) / EASE_SECONDS);
       if (left > 0) {
@@ -838,12 +841,19 @@ export class AsteroidField {
   }
 
   /**
-   * Puts a piece where it is at another field time than the field's (see world/contacts, which
-   * meets pieces on a grid of field time): its collisions and rays then answer for that time,
-   * until it is posed again or the field's clock moves.
+   * Puts a piece where it is at a field time, as every browser has it there (see world/contacts,
+   * which meets pieces on a grid of field time, and game/comet): its collisions and rays then
+   * answer for that time, until it is posed again or the field's clock moves. A correction this
+   * browser eases in (see Asteroid.ease) is left out: what is decided there must come out alike
+   * on every browser. `posed` puts it back as it is drawn.
    */
   pose(a: Asteroid, time: number) {
-    this.place(a, time);
+    this.place(a, time, false);
+  }
+
+  /** Puts a piece back where it is drawn now, after a pose (see pose): at the field's clock, a correction easing in included. */
+  posed(a: Asteroid) {
+    this.place(a);
   }
 
   /** Draws the full relief only within `share` of FAR_LEVEL (see detail); 0 draws every rock in less detail. */
@@ -916,6 +926,7 @@ export class AsteroidField {
     const asteroid = this.asteroids.get(id);
     if (!asteroid || asteroid.solid) return undefined;
     asteroid.hitPoints--;
+    asteroid.lastHit = Math.max(asteroid.lastHit, at);
     return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
   }
 
@@ -1166,6 +1177,13 @@ export class AsteroidField {
       this.broken.set(id, breaks.get(id) ?? state.t);
       if (dust.has(id)) this.dust.add(id);
     }
+    // the breaks of pieces never built here (a piece whose own pieces all crumbled since): kept as
+    // the lead keeps them, so its families and the lead's agree
+    for (const { id, b } of state.x) {
+      if (this.broken.has(id) || later.has(rootOf(id))) continue;
+      this.broken.set(id, b);
+      if (dust.has(id)) this.dust.add(id);
+    }
     for (const rock of state.a) {
       const asteroid = this.asteroids.get(rock.id);
       if (asteroid) asteroid.hitPoints = rock.hp;
@@ -1312,7 +1330,7 @@ export class AsteroidField {
       if (asteroid.crumbles <= time) continue;
       const reach = asteroid.radius + radius;
       if (positionAt(asteroid, time, point).distanceToSquared(center) > reach * reach) continue;
-      this.place(asteroid, time);
+      this.place(asteroid, time, false);
       const touching = this.touches(asteroid, center, radius);
       this.place(asteroid);
       if (touching) return true;
@@ -1495,10 +1513,16 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
   const axes = v.copy(asteroid.semiAxes).addScalar(radius / scale);
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  awayFromMiddle(local);
   const length = hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
   if (length >= 1) return null;
   ellipsoidTouch.length = length;
   return ellipsoidTouch;
+}
+
+/** A point at a piece's very middle has no way out: it is taken as the least bit above it (the same on every browser), so the contact pushes it up, never by a division by zero. */
+function awayFromMiddle(local: THREE.Vector3) {
+  if (local.lengthSq() < 1e-12) local.set(0, 1e-6, 0);
 }
 
 /**
@@ -1516,6 +1540,7 @@ const surfaceTouch = { local: u, length: 0, reach: 0, scale: 1 };
 function surfaceContact(asteroid: Asteroid, surface: Surface, center: THREE.Vector3, radius: number) {
   const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  awayFromMiddle(local);
   const length = local.length();
   const reach = surface.radius(local) + radius / scale;
   if (length >= reach) return null;
@@ -1597,8 +1622,18 @@ const RELIEF_SAMPLES: readonly (readonly [number, number])[] = [
  * ground's outward normal there into `normal`; null where it rises into it nowhere.
  */
 export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief: Relief, radius: number, normal: THREE.Vector3, closest: THREE.Vector3): THREE.Vector3 | null {
-  if (Math.abs(local.x) > half.x || Math.abs(local.z) > half.z || local.y < -half.y - radius) return null;
+  if (local.y < -half.y - radius) return null;
   const ground = (x: number, z: number) => Math.min(half.y, relief(THREE.MathUtils.clamp(x, -half.x, half.x), THREE.MathUtils.clamp(z, -half.z, half.z)));
+  if (Math.abs(local.x) > half.x || Math.abs(local.z) > half.z) {
+    // beside the footprint: the box's side, as high as the ground at its edge, is solid
+    const x = THREE.MathUtils.clamp(local.x, -half.x, half.x);
+    const z = THREE.MathUtils.clamp(local.z, -half.z, half.z);
+    closest.set(x, THREE.MathUtils.clamp(local.y, -half.y, ground(x, z)), z);
+    const distance = closest.distanceTo(local);
+    if (distance >= radius || distance === 0) return null;
+    normal.subVectors(local, closest).divideScalar(distance);
+    return closest;
+  }
   let deepest = 0;
   for (const [u, w] of RELIEF_SAMPLES) {
     const x = local.x + u * radius;

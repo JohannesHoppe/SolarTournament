@@ -208,4 +208,50 @@ describe("the lead's sync of the field", () => {
     expect(forged((s) => (s.f[0].m = [{ id: s.f[0].r, b: 1, p: [0, 0, 0], v: [1e9, 0, 0], q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: KNOCKED }]))).toBeNull();
     expect(forged((s) => (s.f = Array.from({ length: 500 }, () => s.f[0])))).toBeNull();
   });
+
+  it('leaves a hit on its way to the other browser to the message carrying it, and sets an older count right', () => {
+    const arena = arenaById('rings')!;
+    const lead = testField();
+    const follower = testField();
+    for (const field of [lead, follower]) field.generate(arena.layout);
+    const [first, second] = [...lead.asteroids.values()].filter((a) => !a.solid && a.hitPoints > 3 && lead.roots.indexOf(a.id) % SYNC_SLICES === 0);
+    for (const field of [lead, follower]) field.clock = 30;
+    // the follower hit the first a moment ago, its message not at the lead yet; the lead hit the second
+    // a moment ago, its message not here yet; the lead hit the first long before, a hit this one missed
+    follower.hit(first.id, 29.5);
+    lead.hit(second.id, 29.6);
+    lead.hit(first.id, 10);
+    const before = { first: follower.asteroids.get(first.id)!.hitPoints, second: follower.asteroids.get(second.id)!.hitPoints };
+    syncField(follower, fieldSync(JSON.parse(JSON.stringify(fieldSlice(lead, 0))))!);
+    expect(follower.asteroids.get(first.id)!.hitPoints).toBe(before.first);
+    expect(follower.asteroids.get(second.id)!.hitPoints).toBe(before.second);
+    // the messages come; a cycle later both counts agree, and the slice sets nothing
+    follower.hit(second.id, 29.6);
+    lead.hit(first.id, 29.5);
+    for (const field of [lead, follower]) field.clock = 40;
+    syncField(follower, fieldSync(JSON.parse(JSON.stringify(fieldSlice(lead, 0))))!);
+    expect(follower.asteroids.get(first.id)!.hitPoints).toBe(lead.asteroids.get(first.id)!.hitPoints);
+    expect(follower.asteroids.get(second.id)!.hitPoints).toBe(lead.asteroids.get(second.id)!.hitPoints);
+  });
+
+  it('leaves a correction easing in out of what every browser decides alike', () => {
+    const field = testField();
+    field.generate(arenaById('rings')!.layout);
+    const piece = [...field.asteroids.values()].find((a) => !a.solid)!;
+    field.setClock(10);
+    // a point just off its surface where every browser has it
+    const at = piece.object.position.clone().add(new THREE.Vector3(piece.radius + 300, 0, 0));
+    expect(field.overlapAt(at, 200, 10.2)).toBe(false);
+    // this browser draws it gliding in from 45 m nearer the point, into it
+    piece.ease = { offset: new THREE.Vector3(900, 0, 0), turn: new THREE.Quaternion(), from: 10 };
+    field.posed(piece);
+    const drawn = piece.object.position.clone();
+    expect(field.overlap(at, 200)).not.toBeNull();
+    expect(field.overlapAt(at, 200, 10.2)).toBe(false);
+    // posed at a later time and back, the glide goes on as it was
+    field.pose(piece, 30);
+    field.posed(piece);
+    expect(piece.ease).not.toBeNull();
+    expect(piece.object.position.distanceTo(drawn)).toBeLessThan(1);
+  });
 });

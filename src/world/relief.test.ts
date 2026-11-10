@@ -27,6 +27,15 @@ describe('a ground of hills and hollows on a box', () => {
     expect(normal.y).toBeGreaterThan(0);
     // off the footprint: nothing
     expect(reliefContact(new THREE.Vector3(25000, 0, 0), half, hollow, 340, normal, closest)).toBeNull();
+    // beside it under the ground's edge: its side, pushed straight out of it
+    expect(reliefContact(new THREE.Vector3(20200, 0, 0), half, hollow, 340, normal, closest)).not.toBeNull();
+    expect(normal.x).toBeCloseTo(1);
+    expect(closest.x).toBeCloseTo(20000);
+    // beside it above the ground's edge, past its corner: free
+    expect(reliefContact(new THREE.Vector3(20200, 2400, 0), half, hollow, 340, normal, closest)).toBeNull();
+    // at the corner of its edge's top, reaching over it
+    expect(reliefContact(new THREE.Vector3(20200, 2200, 0), half, hollow, 340, normal, closest)).not.toBeNull();
+    expect(closest.toArray()).toEqual([20000, 2000, 0]);
   });
 
   it('stops a ray on its ground, through the box’s empty top', () => {

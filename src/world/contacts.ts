@@ -67,6 +67,11 @@ export function ringFixture(center: THREE.Vector3, facing: THREE.Vector3, radius
 /** The world itself, for points already in it (see pointsInto). */
 const WORLD = new THREE.Matrix4();
 
+/** Whether a piece stands where its place set it for good, as the ring stations do (IMMOVABLE): a world's ground, and what the Boneyard stands on it (the racks, the depot's modules); a piece striking it bounces off and never knocks it loose. */
+function anchored(piece: Asteroid): boolean {
+  return !!piece.ground || piece.kind === 'rack';
+}
+
 /** One piece in a step of the grid: where it is then, how heavy, whether it moves at all. */
 interface Entry {
   piece: Asteroid;
@@ -85,7 +90,8 @@ const samples = new WeakMap<object, Float32Array>();
  */
 function pointsOf(field: AsteroidField, piece: Asteroid): Float32Array {
   const parts = field.attachmentsOf(piece.id);
-  const base = piece.box ? (samples.get(piece.semiAxes) ?? samples.set(piece.semiAxes, new Float32Array(boxGrid(piece.semiAxes, piece.center, BOX_GRID))).get(piece.semiAxes)!) : outline(piece);
+  const key = piece.relief ?? piece.semiAxes;
+  const base = piece.box ? (samples.get(key) ?? samples.set(key, new Float32Array(groundOn(boxGrid(piece.semiAxes, piece.center, BOX_GRID), piece))).get(key)!) : outline(piece);
   if (!parts.length) return base;
   let points = samples.get(parts);
   if (points) return points;
@@ -103,6 +109,15 @@ const ORIGIN = new THREE.Vector3();
 const corner = new THREE.Vector3();
 const gapAt = new THREE.Vector3();
 const gapOther = new THREE.Vector3();
+
+/** A box's points (see boxGrid) on its ground where its top is one (see Relief): none above the ground, so a hollow is no solid to meet. */
+function groundOn(list: number[], piece: Asteroid): number[] {
+  const relief = piece.relief;
+  if (!relief) return list;
+  const { x: cx, y: cy, z: cz } = piece.center;
+  for (let k = 0; k < list.length; k += 3) list[k + 1] = Math.min(list[k + 1], cy + Math.min(piece.semiAxes.y, relief(list[k] - cx, list[k + 2] - cz)));
+  return list;
+}
 
 /** A grid of `n` × `n` points over each face of a box of `half` extents about `center`, as a flat list (xyz). */
 function boxGrid(h: THREE.Vector3, center: THREE.Vector3, n: number): number[] {
@@ -172,7 +187,11 @@ function pointsInto(field: AsteroidField, points: Float32Array, matrix: THREE.Ma
     const z = points[k + 2];
     local.set(e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]).sub(b.center);
     let depth: number;
-    if (b.box) depth = Math.min(h.x - Math.abs(local.x), h.y - Math.abs(local.y), h.z - Math.abs(local.z));
+    if (b.box) {
+      depth = Math.min(h.x - Math.abs(local.x), h.y - Math.abs(local.y), h.z - Math.abs(local.z));
+      // a box whose top is a ground: a point is as deep as it lies under the ground over it, a hollow's air no part of it
+      if (b.relief && depth > 0) depth = Math.min(depth, Math.min(h.y, b.relief(local.x, local.z)) - local.y);
+    }
     else if (b.surface) depth = b.surface.radius(local) - local.length();
     else depth = (1 - hypot(local.x / h.x, local.y / h.y, local.z / h.z)) * Math.min(h.x, h.y, h.z);
     // or in what stands on it (a rig, a buoy), in its piece's units
@@ -237,7 +256,7 @@ export class FieldContacts {
       this.step(field, step * CONTACT_STEP);
       this.fresh = false;
     }
-    if (now >= first) for (const entry of this.entries) field.pose(entry.piece, field.clock);
+    if (now >= first) for (const entry of this.entries) field.posed(entry.piece);
     this.last = now;
     return this.moved;
   }
@@ -270,7 +289,7 @@ export class FieldContacts {
       entry.piece = piece;
       field.positionOf(piece, time, entry.at);
       entry.low = entry.at.x - piece.radius;
-      entry.mass = field.bodyMass(piece);
+      entry.mass = anchored(piece) ? IMMOVABLE : field.bodyMass(piece);
       entry.moving = piece.velocity.lengthSq() > 0 || piece.orbitRate !== 0 || piece.spinRate !== 0;
       entries.push(entry);
       i++;

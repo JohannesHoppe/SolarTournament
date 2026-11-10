@@ -1,7 +1,7 @@
 import { hypot } from '../detmath';
 import type { ShipState } from '../ship/ship';
 import { KNOCKED, rootOf, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
-import { SYNC_SLICES, type FamilyState, type FieldSlice } from '../world/fieldsync';
+import { SYNC_SLICES, type FamilyState, type FieldSlice, type HitState } from '../world/fieldsync';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import { MAX_LOOKS } from '../game/hangar';
@@ -198,13 +198,15 @@ const MAX_FAMILY = 13;
 /** A slice never holds more families than this: the largest field's 160 roots in SYNC_SLICES slices, with room. */
 const MAX_SLICE = 64;
 
-/** A family's list of ids with a number each (its breaks with their field times, its pieces with their hits), each id one of the family's. */
-function familyList(x: unknown, root: string, max: number): [string, number][] | null {
+/** A family's list of ids with a number each (its breaks with their field times, its pieces with their hits), each id one of the family's; with `timed`, a piece's entry may name the field time of its last hit after its hits. */
+function familyList(x: unknown, root: string, max: number, timed = false): HitState[] | null {
   return listOf(x, MAX_FAMILY, (entry) => {
-    if (!Array.isArray(entry) || entry.length !== 2) return null;
+    if (!Array.isArray(entry) || entry.length < 2 || entry.length > (timed ? 3 : 2)) return null;
     const piece = id(entry[0]);
     const value = num(entry[1], 0, max);
-    return piece && rootOf(piece) === root && value !== null ? ([piece, value] as [string, number]) : null;
+    const at = entry.length === 3 ? num(entry[2], 0, MAX_FIELD_TIME) : undefined;
+    if (!piece || rootOf(piece) !== root || value === null || at === null) return null;
+    return at === undefined ? [piece, value] : [piece, value, at];
   });
 }
 
@@ -218,8 +220,8 @@ export function fieldSync(x: unknown): FieldSlice | null {
     const root = id(family.r);
     if (!root || rootOf(root) !== root) return null;
     const moved = listOf(family.m, MAX_FAMILY, shovedState);
-    const breaks = familyList(family.x, root, MAX_FIELD_TIME);
-    const state = complete<FamilyState>({ r: root, x: breaks, d: breaks && dustOf(family.d, MAX_FAMILY, breaks.map(([piece]) => piece)), a: familyList(family.a, root, 1000), m: moved });
+    const breaks = familyList(family.x, root, MAX_FIELD_TIME) as [string, number][] | null;
+    const state = complete<FamilyState>({ r: root, x: breaks, d: breaks && dustOf(family.d, MAX_FAMILY, breaks.map(([piece]) => piece)), a: familyList(family.a, root, 1000, true), m: moved });
     return state && state.m.every((m) => rootOf(m.id) === root) ? state : null;
   });
   return t === null || i === null || !families ? null : { t, i, f: families };

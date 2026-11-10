@@ -541,7 +541,7 @@ function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: numb
   if (rate > 1e-9) axis.divideScalar(rate);
   else axis.copy(wall.spinAxis);
   field.shove(wall.id, at, kick, axis, rate, comet.seed);
-  field.pose(wall, field.clock);
+  field.posed(wall);
   shoved(wall, piece);
 }
 
@@ -572,7 +572,7 @@ function meets(comet: Comet, field: AsteroidField, rock: Asteroid, time: number)
   if (field.positionOf(rock, time, stone).distanceTo(headAt(comet, time, struck)) >= HEAD_RADIUS + rock.radius) return false;
   field.pose(rock, time);
   const touching = field.resolve(rock, struck, HEAD_RADIUS, struckNormal) !== null;
-  field.pose(rock, field.clock);
+  field.posed(rock);
   return touching;
 }
 

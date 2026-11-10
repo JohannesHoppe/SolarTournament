@@ -92,6 +92,16 @@ describe('collision with a rock', () => {
     return { field, rock, mesh, points };
   });
 
+  it('pushes a point at its very middle out up, never into a division by zero', () => {
+    for (const { field, rock } of rocks) {
+      const middle = rock.center.clone().applyMatrix4(rock.object.matrixWorld);
+      const normal = new THREE.Vector3();
+      expect(field.resolve(rock, middle, 340, normal), rock.id).not.toBeNull();
+      expect([...middle.toArray(), ...normal.toArray()].every(Number.isFinite), rock.id).toBe(true);
+      expect(normal.y, rock.id).toBeGreaterThan(0);
+    }
+  });
+
   it('touches where it is seen: just inside its surface is rock, a little outside is not', () => {
     for (const { field, rock, points } of rocks) {
       const center = rock.object.position;
@@ -267,6 +277,15 @@ describe('the smallest pieces', () => {
       // the fragments of the rock stand on as cover
       expect(field.asteroids.has('3.0') && field.asteroids.has('3.1')).toBe(true);
     }
+    // a newcomer once every piece of 3.2 crumbled keeps the breaks and the dust as the lead does
+    const late = testField();
+    late.generate(belt);
+    late.restore(JSON.parse(JSON.stringify(steady.snapshot())), belt);
+    const family = (field: AsteroidField) => {
+      const { broken, dust } = field.familyOf('3');
+      return { broken: broken.map(([id, at]) => `${id}@${at.toFixed(2)}`).sort(), dust: [...dust].sort() };
+    };
+    expect(family(late)).toEqual(family(steady));
     // the dust is drawn for CRUMBLE_SECONDS, shrinking, and then gone from the picture too
     const drawn = steady.group.children.length;
     run(steady, steady.clock, crumbles + CRUMBLE_SECONDS + 0.1, 1 / 60);

@@ -46,8 +46,10 @@ const LOOK_AHEAD = 30;
 export const EASE_REACH = 1000;
 const EASE_TURN = 0.35;
 
-/** A family of pieces as the lead sends it: its root, its breaks (id, field time), which of them went to dust without pieces (crumbled, or ground by a comet), its pieces standing (id, hits) and the motion of each of them something moved. */
-export type FamilyState = { r: string; x: [string, number][]; d: string[]; a: [string, number][]; m: ShovedState[] };
+/** A family of pieces as the lead sends it: its root, its breaks (id, field time), which of them went to dust without pieces (crumbled, or ground by a comet), its pieces standing (id, hits, and the field time of its last hit if it was hit) and the motion of each of them something moved. */
+export type FamilyState = { r: string; x: [string, number][]; d: string[]; a: HitState[]; m: ShovedState[] };
+/** A piece standing as the lead sends it: its id, the hits it withstands yet, and the field time of its last hit if it took one. */
+export type HitState = [string, number] | [string, number, number];
 /** A slice of the field: the lead's field time, which slice, and its families. */
 export type FieldSlice = { t: number; i: number; f: FamilyState[] };
 
@@ -63,7 +65,7 @@ export function fieldSlice(field: AsteroidField, index: number): FieldSlice {
     i: index,
     f: sliceRoots(field, index).map((root) => {
       const { alive, broken, dust } = field.familyOf(root);
-      return { r: root, x: broken.map(([id, at]) => [id, at]), d: dust, a: alive.map((a) => [a.id, a.hitPoints]), m: alive.flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])) };
+      return { r: root, x: broken.map(([id, at]) => [id, at]), d: dust, a: alive.map((a): HitState => (Number.isFinite(a.lastHit) ? [a.id, a.hitPoints, +Math.max(0, a.lastHit).toFixed(2)] : [a.id, a.hitPoints])), m: alive.flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])) };
     }),
   };
 }
@@ -93,13 +95,18 @@ export function syncField(field: AsteroidField, slice: FieldSlice, take: (state:
     const was = new Map(mine.alive.map((a) => [a.id, { position: a.object.position.clone(), turn: a.object.quaternion.clone() }]));
     const moved = new Map(family.m.map((state) => [state.id, state]));
     const sameDust = mine.dust.length === family.d.length && family.d.every((id) => mine.dust.includes(id));
-    if (!sameBreaks(mine.broken, family.x) || !sameDust || !sameStanding(mine.alive, family.a) || mine.alive.some((a) => a.shovedBy !== null && !moved.has(a.id) && a.generation > 0)) {
+    const rebuilt = !sameBreaks(mine.broken, family.x) || !sameDust || !sameStanding(mine.alive, family.a) || mine.alive.some((a) => a.shovedBy !== null && !moved.has(a.id) && a.generation > 0);
+    if (rebuilt) {
       field.rebuildFamily(family.r, family.x, family.d);
       result.rebuilt++;
     }
-    const hits = new Map(family.a);
+    const hits = new Map(family.a.map(([id, left, at]) => [id, { left, at: at ?? -Infinity }]));
     for (const a of field.familyOf(family.r).alive) {
-      a.hitPoints = hits.get(a.id) ?? a.hitPoints;
+      // a piece hit within SYNC_GRACE of the slice, here or on the lead, may have a hit on its way
+      // to the other browser, which counts it when it comes: its count is left to the messages (a
+      // piece built again has none of its own)
+      const theirs = hits.get(a.id);
+      if (theirs && (rebuilt || Math.max(theirs.at, a.lastHit) <= slice.t - SYNC_GRACE)) a.hitPoints = theirs.left;
       const state = moved.get(a.id) ?? (a.shovedBy !== null ? field.originOf(a.id) : null);
       if (state && !sameMotion(field, a, state)) {
         field.move(state);
@@ -130,7 +137,7 @@ function sameBreaks(mine: readonly [string, number][], theirs: readonly [string,
   });
 }
 
-function sameStanding(mine: readonly Asteroid[], theirs: readonly [string, number][]): boolean {
+function sameStanding(mine: readonly Asteroid[], theirs: readonly HitState[]): boolean {
   if (mine.length !== theirs.length) return false;
   const ids = new Set(mine.map((a) => a.id));
   return theirs.every(([id]) => ids.has(id));
@@ -169,6 +176,6 @@ function glideFrom(field: AsteroidField, a: Asteroid, position: THREE.Vector3, t
     return 'set';
   }
   a.ease = { offset: after.copy(offset).clone(), turn: turn.clone().multiply(turnBefore.copy(a.object.quaternion).invert()), from: field.clock };
-  field.pose(a, field.clock);
+  field.posed(a);
   return 'eased';
 }

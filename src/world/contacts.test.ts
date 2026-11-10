@@ -283,6 +283,22 @@ describe('a contact', () => {
     return { field, a, b };
   }
 
+  it('never knocks a piece loose that stands where its place set it: what strikes it bounces off', () => {
+    const { field, a, b } = pair(400, 1, 1);
+    // b as a world's ground stands, as a rack of the Boneyard does
+    b.ground = true;
+    const contacts = new FieldContacts();
+    let moved = 0;
+    while (field.clock < 30) {
+      field.update(1 / 60);
+      moved += contacts.run(field).length;
+    }
+    expect(moved).toBeGreaterThan(0);
+    expect(b.velocity.length()).toBe(0);
+    expect(b.shovedBy).toBeNull();
+    expect(field.surfaceVelocity(a, a.object.position).x).toBeLessThan(0);
+  });
+
   it('keeps the momentum of two pieces, and parts them at a fifth of the speed they met at', () => {
     const { field, a, b } = pair(400, 1, 1);
     const contacts = new FieldContacts();
@@ -375,5 +391,27 @@ describe('a contact', () => {
     // or glancing off its rim (a blow off its center turns it as well)
     expect(a.object.position.x).toBeLessThan(center.x - ringRim(2000).inner);
     expect(field.surfaceVelocity(a, a.object.position).x).toBeLessThan(300 * 0.2);
+  });
+});
+
+describe('a piece on a ground of hills and hollows', () => {
+  /** Miranda's ground with a slope of one in two along x for its relief, and a block of 100 m set on it at `x` (box units from its middle), its bottom `above` the ground under its middle. */
+  function onSlope(above: number) {
+    const field = fieldOf(arenaById('miranda')!);
+    const ground = [...field.asteroids.values()].find((a) => a.ground)!;
+    ground.relief = (x) => x * 0.5;
+    const half = new THREE.Vector3(1000, 1000, 1000);
+    const object = new THREE.Object3D();
+    object.position.set(0, 1000 + above, 0).add(ground.center).applyMatrix4(ground.object.matrixWorld);
+    object.updateMatrixWorld();
+    const block = { id: 'block', box: true, semiAxes: half, center: new THREE.Vector3(), object, inverse: object.matrixWorld.clone().invert(), relief: null } as unknown as Asteroid;
+    return depthBetween(field, block, ground);
+  }
+
+  it('meets the ground where its uphill side reaches into it, however its downhill side hangs over air', () => {
+    // its bottom 15 m over the ground under its middle: the slope rises 25 m by its uphill edge
+    expect(onSlope(300)).toBeGreaterThan(150);
+    // 30 m over it, it touches nothing
+    expect(onSlope(600)).toBe(0);
   });
 });
