@@ -318,8 +318,8 @@ test('a free flight at a place reached: a black box flown onto is taken and kept
   // only the Boneyard is reached, and Patience's galley not yet
   await expect(page.locator('#board-free button')).toHaveCount(1);
   await expect(page.locator('#board-free button')).toContainText('Free flight: The Boneyard');
-  await expect(page.locator('#board-free button')).toContainText('Tags 0/3 · chip not found');
-  await expect(page.locator('#board-finds')).toContainText('Dog tags 0/75 · data chips 0/25');
+  await expect(page.locator('#board-free button')).toContainText('Black boxes 0/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Black boxes 0/75 · data chips 0/25');
   await page.click('#board-free button');
   await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live && window.game.hunt.here.length === 4, null, { timeout: 90_000 });
   // the clone set onto the first black box: taken
@@ -343,8 +343,8 @@ test('a free flight at a place reached: a black box flown onto is taken and kept
   await page.keyboard.press('Escape');
   await page.click('#quit');
   await expect(page.locator('#board')).toBeVisible();
-  await expect(page.locator('#board-free button')).toContainText('Tags 1/3 · chip not found');
-  await expect(page.locator('#board-finds')).toContainText('Dog tags 1/75');
+  await expect(page.locator('#board-free button')).toContainText('Black boxes 1/3 · chip not found');
+  await expect(page.locator('#board-finds')).toContainText('Black boxes 1/75');
   expect(errors).toEqual([]);
 });
 
