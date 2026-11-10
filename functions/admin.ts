@@ -19,6 +19,8 @@ interface Env extends TurnEnv {
 
 /** How long the team's keys are trusted before they are fetched again (ms); Access rotates them every few weeks. */
 const KEYS_MEMORY_MS = 60 * 60 * 1000;
+/** A token signed with a key not among those kept fetches them again no more often than this (ms), however many such tokens come. */
+const KEYS_RETRY_MS = 60 * 1000;
 
 let keys: { team: string; at: number; list: (JsonWebKey & { kid?: string })[] } | null = null;
 
@@ -41,7 +43,9 @@ export async function validAccess(token: string | null, team: string, aud: strin
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (!audiences.includes(aud)) return false;
     if (typeof claims.exp !== 'number' || claims.exp <= nowSeconds) return false;
-    if (!keys || keys.team !== team || Date.now() - keys.at > KEYS_MEMORY_MS) {
+    // a key id not in the list kept is a key Access just rotated in: fetched again, at most once every KEYS_RETRY_MS
+    const unknown = !!keys && !keys.list.some((key) => key.kid === head.kid) && Date.now() - keys.at > KEYS_RETRY_MS;
+    if (!keys || keys.team !== team || Date.now() - keys.at > KEYS_MEMORY_MS || unknown) {
       const answer = await fetchKeys(`${issuer}/cdn-cgi/access/certs`);
       if (!answer.ok) return false;
       keys = { team, at: Date.now(), list: ((await answer.json()) as { keys?: (JsonWebKey & { kid?: string })[] }).keys ?? [] };

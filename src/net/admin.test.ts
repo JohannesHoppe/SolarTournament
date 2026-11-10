@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { onRequestGet, page, validAccess } from '../../functions/admin';
 import { toBase64Url } from './webpush';
 
@@ -33,6 +33,28 @@ describe('the admin page', () => {
     expect(await validAccess(`${head}.${part({ ...good, aud: ['app-aud'], exp: NOW + 99999 })}.${signature}`, 'haushoppe', 'app-aud', NOW, certs)).toBe(false);
     expect(await validAccess(null, 'haushoppe', 'app-aud', NOW, certs)).toBe(false);
     expect(await validAccess('a.b', 'haushoppe', 'app-aud', NOW, certs)).toBe(false);
+  });
+
+  it('fetches the keys again for a key Access just rotated in, at most once a minute', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(NOW * 1000);
+      const { certs, sign } = await team();
+      expect(await validAccess(await sign(good), 'haushoppe', 'app-aud', NOW, certs)).toBe(true);
+      // Access rotates: its new key signs, and the old list kept knows it not
+      const rotated = await team();
+      let fetched = 0;
+      const counted = async (url: string) => (fetched++, rotated.certs(url));
+      const fresh = await rotated.sign(good, 'k2');
+      const served = async (url: string) => (fetched++, Response.json({ keys: [{ ...((await (await rotated.certs(url)).json()) as { keys: JsonWebKey[] }).keys[0], kid: 'k2' }] }));
+      expect(await validAccess(fresh, 'haushoppe', 'app-aud', NOW, counted)).toBe(false);
+      expect(fetched).toBe(0);
+      vi.setSystemTime(NOW * 1000 + 61_000);
+      expect(await validAccess(fresh, 'haushoppe', 'app-aud', NOW, served)).toBe(true);
+      expect(fetched).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('is not found without Access set up or without a token', async () => {

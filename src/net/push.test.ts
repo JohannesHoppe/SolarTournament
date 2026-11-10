@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, OPEN_HEARTBEAT, PUSH_GAP, sendAll, SNOOZE_MAX, TOURNAMENT_FORGET, vapidOf, type PushStore } from '../../functions/push';
+import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, OPEN_HEARTBEAT, PUSH_GAP, sendAll, SNOOZE_MAX, TOURNAMENT_FORGET, vapidOf, PUSH_BATCH, SOURCE_GAP, sourceOf, type Pushing, type PushStore } from '../../functions/push';
 import { freshKeys, toBase64Url, type Subscription } from './webpush';
 import { pushText, snoozeUntil } from './pushtext';
 import type { Locale } from '../i18n/i18n';
@@ -7,10 +7,12 @@ import type { Locale } from '../i18n/i18n';
 /** The function's store as a few maps, its writes counted as D1's would be. */
 function memoryStore() {
   const days = new Map<string, number>();
-  const rooms = new Map<string, number>();
-  const subs = new Map<string, Subscription & { locale: Locale; from?: number; snoozed?: number }>();
+  const rooms = new Map<string, { heard: number; source: string | null }>();
+  const subs = new Map<string, Subscription & { locale: Locale; id: number; from?: number; snoozed?: number }>();
   let last = -Infinity;
   let waiting = false;
+  let pushing: Pushing | null = null;
+  let numbered = 0;
   const store: PushStore = {
     async spend(day, rows) {
       const writes = (days.get(day) ?? 0) + rows + 1;
@@ -18,20 +20,30 @@ function memoryStore() {
       days.set(day, writes);
       return true;
     },
-    async heard(room, now) {
-      const before = rooms.get(room) ?? null;
-      rooms.set(room, now);
-      return before;
-    },
+    lastHeard: async (room) => rooms.get(room)?.heard ?? null,
+    heard: async (room, heard, source) => void rooms.set(room, { heard, source }),
+    sourceBusy: async (source, room, since) => [...rooms].some(([other, kept]) => other !== room && kept.source === source && kept.heard >= since),
     lastPush: async () => last,
     setLastPush: async (now) => void (last = now),
+    countPushes: async () => undefined,
+    pushing: async () => pushing,
+    setPushing: async (value) => void (pushing = value),
+    async advance(after, next) {
+      if (pushing?.after !== after) return false;
+      pushing = next < 0 ? null : { ...pushing, after: next };
+      return true;
+    },
     waiting: async () => waiting,
     setWaiting: async (value) => void (waiting = value),
     stats: async () => ({ subscribers: subs.size, writes: 0, open: 0, heardToday: rooms.size, lastPush: last, pushes: 0 }),
-    subscriptions: async (open, now) => [...subs.values()].filter((s) => (s.from ?? 1) <= open && (s.snoozed ?? 0) <= now),
+    subscriptions: async (open, now, after, limit) =>
+      [...subs.values()]
+        .filter((s) => (s.from ?? 1) <= open && (s.snoozed ?? 0) <= now && s.id > after)
+        .sort((a, b) => a.id - b.id)
+        .slice(0, limit),
     countSubscriptions: async () => subs.size,
-    openCount: async (now) => [...rooms.values()].filter((heard) => heard >= now - TOURNAMENT_FORGET).length,
-    subscribe: async (s, locale, from) => void subs.set(s.endpoint, { ...s, locale, from }),
+    openCount: async (now) => new Set([...rooms].filter(([, kept]) => kept.heard >= now - TOURNAMENT_FORGET).map(([room, kept]) => kept.source ?? room)).size,
+    subscribe: async (s, locale, from) => void subs.set(s.endpoint, { ...s, locale, from, id: subs.get(s.endpoint)?.id ?? numbered++ }),
     unsubscribe: async (endpoint) => void subs.delete(endpoint),
     fromOf: async (endpoint) => subs.get(endpoint)?.from ?? null,
     snoozedOf: async (endpoint) => subs.get(endpoint)?.snoozed ?? 0,
@@ -120,14 +132,78 @@ describe('the notification when a public tournament opens', () => {
 
   it('takes no subscription beyond MAX_SUBSCRIPTIONS', async () => {
     const { store, subs } = memoryStore();
-    for (let i = 0; i < MAX_SUBSCRIPTIONS; i++) subs.set(`x${i}`, { ...subscription(i), endpoint: `x${i}`, locale: 'en' });
+    for (let i = 0; i < MAX_SUBSCRIPTIONS; i++) subs.set(`x${i}`, { ...subscription(i), endpoint: `x${i}`, locale: 'en', id: i });
     expect((await handle(store, { subscribe: subscription(1), locale: 'en' }, 0)).status).toBe(503);
+    // one already kept still changes its choice
+    subs.delete('x0');
+    subs.set(subscription(0).endpoint, { ...subscription(0), locale: 'en', id: 0, from: 1 });
+    expect((await handle(store, { subscribe: subscription(0), locale: 'en', from: 3 }, 0)).status).toBe(200);
+    expect(subs.get(subscription(0).endpoint)?.from).toBe(3);
+  });
+
+  it('writes nothing for an endpoint not subscribed', async () => {
+    const { store, days } = memoryStore();
+    expect((await handle(store, { snooze: subscription(9).endpoint, until: 100 }, 0)).status).toBe(404);
+    expect((await handle(store, { unsubscribe: subscription(9).endpoint }, 0)).status).toBe(200);
+    expect(days.size).toBe(0);
+  });
+
+  it('sends a notification to many subscribers over several calls, each going to the next of them once', async () => {
+    const { store } = memoryStore();
+    const many = PUSH_BATCH * 2 + 3;
+    for (let i = 0; i < many; i++) await handle(store, { subscribe: subscription(i), locale: 'en' }, 0);
+    const first = await handle(store, { open: 'room-one-aaaaaa' }, 1000);
+    expect(first.send).toHaveLength(PUSH_BATCH);
+    expect(first.body).toEqual({ ok: true, more: true });
+    const reached = new Set(first.send!.map((s) => s.endpoint));
+    for (let call = 0; call < 5; call++) {
+      const next = await handle(store, { more: 1 }, 1001 + call);
+      for (const target of next.send ?? []) {
+        expect(reached.has(target.endpoint)).toBe(false);
+        reached.add(target.endpoint);
+      }
+      if (!(next.body as { more: boolean }).more) break;
+    }
+    expect(reached.size).toBe(many);
+    expect((await handle(store, { more: 1 }, 1010)).send).toBeUndefined();
+  });
+
+  it('counts the tournaments of one source as one, and opens none beside another within SOURCE_GAP', async () => {
+    const { store } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en', from: 2 }, 0);
+    await handle(store, { subscribe: subscription(2), locale: 'en', from: 1 }, 0);
+    expect((await handle(store, { open: 'room-one-aaaaaa' }, 1000, 'script')).send).toHaveLength(1);
+    // the same source's made-up codes count nothing, and send nothing past the gap
+    for (let i = 0; i < 5; i++) await handle(store, { open: `fake-room-${i}00000` }, 1100 + i, 'script');
+    // its first tournament's heartbeat keeps it open
+    await handle(store, { open: 'room-one-aaaaaa' }, 1000 + PUSH_GAP - 10, 'script');
+    expect((await handle(store, { open: 'fake-room-900000' }, 1000 + PUSH_GAP, 'script')).send).toBeUndefined();
+    // another source's tournament makes two open
+    const other = await handle(store, { open: 'room-two-bbbbbb' }, 1000 + PUSH_GAP + 10, 'host');
+    expect(other.open).toBe(2);
+    expect(other.send).toHaveLength(2);
+    expect((await handle(store, { open: 'fake-room-800000' }, 1000 + TOURNAMENT_FORGET + 2 * PUSH_GAP, 'script')).send).toBeUndefined();
+    // past SOURCE_GAP since its last word the source opens a new one again
+    expect((await handle(store, { open: 'room-three-cccc' }, 1000 + SOURCE_GAP + 2 * PUSH_GAP, 'script')).send).toHaveLength(1);
+  });
+
+  it('keeps a source as a keyed hash of its network that changes every day', async () => {
+    const a = await sourceOf('203.0.113.7', 'secret', '2026-11-10');
+    expect(a).toMatch(/^[0-9a-f]{24}$/);
+    expect(await sourceOf('203.0.113.7', 'other', '2026-11-10')).not.toBe(a);
+    expect(await sourceOf('203.0.113.7', 'secret', '2026-11-11')).not.toBe(a);
+    expect(await sourceOf('203.0.113.8', 'secret', '2026-11-10')).not.toBe(a);
+    // an IPv6 line by its first 64 bits, however it is written
+    const six = await sourceOf('2001:db8:0:1::5', 'secret', '2026-11-10');
+    expect(await sourceOf('2001:0db8:0000:0001:ffff:1:2:3', 'secret', '2026-11-10')).toBe(six);
+    expect(await sourceOf('2001:db8:0:2::5', 'secret', '2026-11-10')).not.toBe(six);
+    expect(await sourceOf(null, 'secret', '2026-11-10')).toBeNull();
   });
 
   it('sends each Host the notification in its language and forgets a subscription the push service says is gone', async () => {
     const { store, subs } = memoryStore();
     const keys = await freshKeys();
-    const target = { endpoint: 'https://push.example.net/send/gone', keys: { p256dh: toBase64Url(keys.publicKey), auth: toBase64Url(new Uint8Array(16).fill(7)) }, locale: 'de' as Locale };
+    const target = { endpoint: 'https://push.example.net/send/gone', keys: { p256dh: toBase64Url(keys.publicKey), auth: toBase64Url(new Uint8Array(16).fill(7)) }, locale: 'de' as Locale, id: 0 };
     subs.set(target.endpoint, target);
     const sent: string[] = [];
     await sendAll(store, [target], 1, { keys: await freshKeys(), subject: 'https://solartournament.games' }, 1000, async (url: string | URL | Request) => {

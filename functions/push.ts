@@ -18,6 +18,13 @@
  *   most one every PUSH_GAP seconds for all tournaments together. A new one heard within the gap
  *   is kept as waiting, and the first word of any open tournament after the gap sends it: no
  *   tournament goes unannounced, and none waits longer than the gap and a heartbeat.
+ *   Nobody can prove a tournament open (it lives between the browsers), so each word is kept
+ *   with its source, a keyed hash of the sender's network that changes every day: a source
+ *   counts as one open tournament, and one that had another heard within SOURCE_GAP opens no new
+ *   one, so a script with one line sends no more notifications than a Host would.
+ * - POST `{ more: 1 }`: a notification goes out PUSH_BATCH subscriptions a call (a function may
+ *   only make so many requests); the answer to the call that started it and to each of these
+ *   says whether more are left, and the lead browser asks again until none are.
  *
  * The VAPID keys come from the project's environment (VAPID_PUBLIC_KEY a plain variable in
  * wrangler.toml, VAPID_PRIVATE_KEY a secret in the dashboard, the raw private scalar in
@@ -55,28 +62,56 @@ export const PUSH_GAP = 15 * 60;
 export const SNOOZE_MAX = 36 * 60 * 60;
 /** Subscriptions kept at most; beyond it a new one is refused. */
 export const MAX_SUBSCRIPTIONS = 5000;
+/** Pushes sent in one call (see `more`): a free plan's function makes at most 50 requests and 50 database queries a call, and each push that finds its subscription gone deletes it. */
+export const PUSH_BATCH = 25;
+/** A source (see sourceOf) whose other tournament was heard within this long (s) opens no new one: a Host plays one tournament at a time. */
+export const SOURCE_GAP = 60 * 60;
+/** A tournament's word heard again within this long (s) is not written again: its lead says it every OPEN_HEARTBEAT. */
+const HEARD_EVERY = OPEN_HEARTBEAT / 2;
 /** The longest endpoint taken (characters): push services' addresses are far shorter. */
 const MAX_ENDPOINT = 1000;
+
+/** A subscription a notification goes to: its number in the table, the Host's language. */
+export type Target = Subscription & { locale: Locale; id: number };
+
+/** A notification going out over several calls: how many tournaments it says are open, when it started (a pause is judged by then), the last subscription it went to. */
+export interface Pushing {
+  open: number;
+  at: number;
+  after: number;
+}
 
 /** What the logic needs of the database; D1 in the function, a map in the tests. */
 export interface PushStore {
   /** Counts `rows` against the day's writes; false (and nothing counted) once DAILY_WRITES would be passed. */
   spend(day: string, rows: number): Promise<boolean>;
-  /** Keeps a tournament as heard of now; the time it was heard of before, or null. */
-  heard(room: string, now: number): Promise<number | null>;
+  /** When a tournament was heard of last, or null. */
+  lastHeard(room: string): Promise<number | null>;
+  /** Keeps a tournament as heard of now, from `source` (see sourceOf; null for none known). */
+  heard(room: string, now: number, source: string | null): Promise<void>;
+  /** Whether a tournament other than `room` was heard of from `source` since `since`. */
+  sourceBusy(source: string, room: string, since: number): Promise<boolean>;
   /** The time of the last notification, or -Infinity. */
   lastPush(): Promise<number>;
-  /** Keeps the time of a notification and counts the pushes it sends. */
-  setLastPush(now: number, pushes: number): Promise<void>;
+  /** Keeps the time of a notification. */
+  setLastPush(now: number): Promise<void>;
+  /** Counts the pushes sent. */
+  countPushes(pushes: number): Promise<void>;
+  /** The notification still going out (see `more`), or null. */
+  pushing(): Promise<Pushing | null>;
+  /** Starts a notification's next calls (null: it went to everyone). */
+  setPushing(pushing: Pushing | null): Promise<void>;
+  /** Moves the notification going out on from the subscription `after` to `next` (-1: done); false if another call moved it first. */
+  advance(after: number, next: number): Promise<boolean>;
   /** Whether a new tournament waits to be announced (heard within the gap). */
   waiting(): Promise<boolean>;
   setWaiting(waiting: boolean): Promise<void>;
   /** The figures of the admin page (functions/admin.ts). */
   stats(day: string, now: number): Promise<PushStats>;
-  /** The subscriptions that asked to hear of `open` tournaments or fewer and are not paused at `now`. */
-  subscriptions(open: number, now: number): Promise<(Subscription & { locale: Locale })[]>;
+  /** The next `limit` subscriptions after the one numbered `after` (-1: from the first) that asked to hear of `open` tournaments or fewer and are not paused at `now`, in the order of their numbers. */
+  subscriptions(open: number, now: number, after: number, limit: number): Promise<Target[]>;
   countSubscriptions(): Promise<number>;
-  /** The tournaments heard of within TOURNAMENT_FORGET. */
+  /** The tournaments heard of within TOURNAMENT_FORGET, those of one source counted once. */
   openCount(now: number): Promise<number>;
   subscribe(subscription: Subscription, locale: Locale, from: number, now: number): Promise<void>;
   unsubscribe(endpoint: string): Promise<void>;
@@ -136,16 +171,18 @@ export interface PushStats {
 }
 
 /** What a POST asks for, or why it is refused. */
-export type PushAnswer = { status: number; body: unknown; send?: (Subscription & { locale: Locale })[]; open?: number };
+export type PushAnswer = { status: number; body: unknown; send?: Target[]; open?: number };
 
 /**
- * The function's rules on a POST's body, at `now` (s): subscribe, unsubscribe, or a tournament
- * open (and whether that sends the notification to `send`). Every write is counted first.
+ * The function's rules on a POST's body, at `now` (s), from `source` (see sourceOf; null when not
+ * known): subscribe, unsubscribe, pause, or a tournament open (and whether that sends the
+ * notification to `send`), or the next of a notification's calls. Every write is counted first;
+ * an endpoint not subscribed writes nothing.
  */
-export async function handle(store: PushStore, body: unknown, now: number): Promise<PushAnswer> {
+export async function handle(store: PushStore, body: unknown, now: number, source: string | null = null): Promise<PushAnswer> {
   const day = new Date(now * 1000).toISOString().slice(0, 10);
   if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } };
-  const request = body as { subscribe?: unknown; locale?: unknown; from?: unknown; unsubscribe?: unknown; status?: unknown; open?: unknown; snooze?: unknown; until?: unknown };
+  const request = body as { subscribe?: unknown; locale?: unknown; from?: unknown; unsubscribe?: unknown; status?: unknown; open?: unknown; snooze?: unknown; until?: unknown; more?: unknown };
 
   // a read only: nothing counted against the writes
   if ('status' in request) {
@@ -158,6 +195,7 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
   if ('snooze' in request) {
     const until = request.until;
     if (!isText(request.snooze, MAX_ENDPOINT) || typeof until !== 'number' || !Number.isFinite(until) || until < 0 || until > now + SNOOZE_MAX) return { status: 400, body: { error: 'bad request' } };
+    if ((await store.fromOf(request.snooze)) === null) return { status: 404, body: { error: 'not subscribed' } };
     if (!(await store.spend(day, 1))) return { status: 503, body: { error: 'budget spent' } };
     await store.snooze(request.snooze, until);
     return { status: 200, body: { ok: true } };
@@ -168,7 +206,8 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
     if (!subscription) return { status: 400, body: { error: 'bad subscription' } };
     const locale = LOCALES.includes(request.locale as Locale) ? (request.locale as Locale) : 'en';
     const from = Number.isInteger(request.from) && (request.from as number) >= 1 && (request.from as number) <= MAX_FROM ? (request.from as number) : 1;
-    if ((await store.countSubscriptions()) >= MAX_SUBSCRIPTIONS) return { status: 503, body: { error: 'full' } };
+    // a Host already subscribed changes its choice however full the table is
+    if ((await store.fromOf(subscription.endpoint)) === null && (await store.countSubscriptions()) >= MAX_SUBSCRIPTIONS) return { status: 503, body: { error: 'full' } };
     if (!(await store.spend(day, 1))) return { status: 503, body: { error: 'budget spent' } };
     await store.subscribe(subscription, locale, from, now);
     return { status: 200, body: { ok: true } };
@@ -176,6 +215,7 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
 
   if ('unsubscribe' in request) {
     if (!isText(request.unsubscribe, MAX_ENDPOINT)) return { status: 400, body: { error: 'bad request' } };
+    if ((await store.fromOf(request.unsubscribe)) === null) return { status: 200, body: { ok: true } };
     if (!(await store.spend(day, 1))) return { status: 503, body: { error: 'budget spent' } };
     await store.unsubscribe(request.unsubscribe);
     return { status: 200, body: { ok: true } };
@@ -184,29 +224,76 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
   if ('open' in request) {
     // a room's code: six to 64 small letters, digits and dashes (roomCode in src/net/room.ts)
     if (typeof request.open !== 'string' || !/^[a-z0-9-]{6,64}$/.test(request.open)) return { status: 400, body: { error: 'bad request' } };
+    const room = await roomKey(request.open);
+    const before = await store.lastHeard(room);
+    // a word said again at once changes nothing, and writes nothing
+    if (before !== null && now - before < HEARD_EVERY) return { status: 200, body: { ok: true } };
+    const fresh = before === null || now - before > TOURNAMENT_FORGET;
+    // one source, one tournament at a time: a new one beside another is not kept at all
+    if (fresh && source !== null && (await store.sourceBusy(source, room, now - SOURCE_GAP))) return { status: 200, body: { ok: true } };
     // the tournament's row, and the rows of those gone for a day
     if (!(await store.spend(day, 2))) return { status: 503, body: { error: 'budget spent' } };
-    const room = await roomKey(request.open);
-    const before = await store.heard(room, now);
-    const fresh = before === null || now - before > TOURNAMENT_FORGET;
+    await store.heard(room, now, source);
     const waiting = await store.waiting();
-    if (!fresh && !waiting) return { status: 200, body: { ok: true } };
+    // a heartbeat: a notification whose calls stopped (its lead left) is carried on by this lead
+    if (!fresh && !waiting) return { status: 200, body: { ok: true, more: (await store.pushing()) !== null } };
     if (now - (await store.lastPush()) < PUSH_GAP) {
       // within the gap: a new one waits for the gap's end, announced by the next word of any open tournament
       if (fresh && !waiting && (await store.spend(day, 1))) await store.setWaiting(true);
       return { status: 200, body: { ok: true } };
     }
-    if (!(await store.spend(day, 2))) return { status: 200, body: { ok: true } };
+    // the gap, the count, a waiting one done, and the calls to come
+    if (!(await store.spend(day, 6))) return { status: 200, body: { ok: true } };
     if (waiting) await store.setWaiting(false);
     const open = await store.openCount(now);
-    const send = await store.subscriptions(open, now);
+    const send = await store.subscriptions(open, now, -1, PUSH_BATCH);
     // nobody asked to hear of this many: the gap stays open for the next
     if (!send.length) return { status: 200, body: { ok: true } };
-    await store.setLastPush(now, send.length);
-    return { status: 200, body: { ok: true }, send, open };
+    await store.setLastPush(now);
+    await store.countPushes(send.length);
+    const more = send.length === PUSH_BATCH;
+    await store.setPushing(more ? { open, at: now, after: send[send.length - 1].id } : null);
+    return { status: 200, body: { ok: true, more }, send, open };
+  }
+
+  if ('more' in request) {
+    // the next of a notification's calls; the first to take it sends it, a second call at once finds it taken
+    const pushing = await store.pushing();
+    if (!pushing) return { status: 200, body: { ok: true, more: false } };
+    const send = await store.subscriptions(pushing.open, pushing.at, pushing.after, PUSH_BATCH);
+    const next = send.length === PUSH_BATCH ? send[send.length - 1].id : -1;
+    if (!(await store.spend(day, 2))) return { status: 503, body: { error: 'budget spent' } };
+    if (!(await store.advance(pushing.after, next))) return { status: 200, body: { ok: true, more: true } };
+    if (!send.length) return { status: 200, body: { ok: true, more: false } };
+    await store.countPushes(send.length);
+    return { status: 200, body: { ok: true, more: next >= 0 }, send, open: pushing.open };
   }
 
   return { status: 400, body: { error: 'bad request' } };
+}
+
+/**
+ * Where a request comes from, as a keyed hash that changes every day: the sender's network (an
+ * IPv4 address, the first 64 bits of an IPv6 one, which a single line is handed), hashed with
+ * the secret `key` and the day, so neither the table nor anyone reading it can tell an address
+ * from it, nor follow a source from one day to the next. Null when the address is not known.
+ */
+export async function sourceOf(address: string | null, key: string, day: string): Promise<string | null> {
+  if (!address) return null;
+  let network = address.trim().toLowerCase();
+  if (network.includes(':')) {
+    const [head, tail = ''] = network.split('::');
+    const left = head ? head.split(':') : [];
+    const right = network.includes('::') && tail ? tail.split(':') : [];
+    const groups = network.includes('::') ? [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left;
+    network = groups
+      .slice(0, 4)
+      .map((group) => group.replace(/^0+(?=.)/, ''))
+      .join(':');
+  }
+  const hmac = await crypto.subtle.importKey('raw', new TextEncoder().encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const digest = new Uint8Array(await crypto.subtle.sign('HMAC', hmac, new TextEncoder().encode(`${day} ${network}`)));
+  return [...digest.slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** A room's code kept only as its hash: the database never holds a code to join by. */
@@ -227,7 +314,13 @@ export function d1Store(db: D1Like): PushStore {
         // a table made before subscriptions could pause gets the column; one that has it refuses, and that is fine
         .then(() => db.prepare('ALTER TABLE subscriptions ADD COLUMN snoozed REAL NOT NULL DEFAULT 0').bind().run())
         .catch(() => undefined),
-      db.prepare('CREATE TABLE IF NOT EXISTS tournaments (room TEXT PRIMARY KEY, heard INTEGER NOT NULL)').bind().run(),
+      db
+        .prepare('CREATE TABLE IF NOT EXISTS tournaments (room TEXT PRIMARY KEY, heard INTEGER NOT NULL, source TEXT)')
+        .bind()
+        .run()
+        // a table made before sources were kept gets the column; one that has it refuses, and that is fine
+        .then(() => db.prepare('ALTER TABLE tournaments ADD COLUMN source TEXT').bind().run())
+        .catch(() => undefined),
       db.prepare('CREATE TABLE IF NOT EXISTS days (day TEXT PRIMARY KEY, writes INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value REAL NOT NULL)').bind().run(),
     ]);
@@ -240,20 +333,40 @@ export function d1Store(db: D1Like): PushStore {
       const row = await (await run('INSERT INTO days (day, writes) VALUES (?1, ?2) ON CONFLICT(day) DO UPDATE SET writes = writes + ?2 WHERE writes + ?2 <= ?3 RETURNING writes', day, rows + 1, DAILY_WRITES)).first<{ writes: number }>();
       return row !== null;
     },
-    async heard(room, now) {
+    async lastHeard(room) {
       const row = await (await run('SELECT heard FROM tournaments WHERE room = ?1', room)).first<{ heard: number }>();
-      await (await run('INSERT INTO tournaments (room, heard) VALUES (?1, ?2) ON CONFLICT(room) DO UPDATE SET heard = ?2', room, now)).run();
-      // the tournaments gone for a day are of no use any more
-      await (await run('DELETE FROM tournaments WHERE heard < ?1', now - 24 * 60 * 60)).run();
       return row?.heard ?? null;
+    },
+    async heard(room, now, source) {
+      await (await run('INSERT INTO tournaments (room, heard, source) VALUES (?1, ?2, ?3) ON CONFLICT(room) DO UPDATE SET heard = ?2, source = ?3', room, now, source)).run();
+      // the tournaments gone for a day are of no use any more, nor their sources
+      await (await run('DELETE FROM tournaments WHERE heard < ?1', now - 24 * 60 * 60)).run();
+    },
+    async sourceBusy(source, room, since) {
+      return (await (await run('SELECT 1 AS busy FROM tournaments WHERE source = ?1 AND room <> ?2 AND heard >= ?3 LIMIT 1', source, room, since)).first<{ busy: number }>()) !== null;
     },
     async lastPush() {
       const row = await (await run("SELECT value FROM state WHERE key = 'lastPush'")).first<{ value: number }>();
       return row?.value ?? -Infinity;
     },
-    async setLastPush(now, pushes) {
+    async setLastPush(now) {
       await (await run("INSERT INTO state (key, value) VALUES ('lastPush', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1", now)).run();
+    },
+    async countPushes(pushes) {
       await (await run("INSERT INTO state (key, value) VALUES ('pushes', ?1) ON CONFLICT(key) DO UPDATE SET value = value + ?1", pushes)).run();
+    },
+    async pushing() {
+      const { results } = await (await run("SELECT key, value FROM state WHERE key IN ('pushOpen', 'pushAt', 'pushAfter')")).all<{ key: string; value: number }>();
+      const value = (key: string) => results.find((row) => row.key === key)?.value;
+      const after = value('pushAfter');
+      return after === undefined || after < 0 ? null : { open: value('pushOpen') ?? 1, at: value('pushAt') ?? 0, after };
+    },
+    async setPushing(pushing) {
+      if (!pushing) await (await run("INSERT INTO state (key, value) VALUES ('pushAfter', -1) ON CONFLICT(key) DO UPDATE SET value = -1")).run();
+      else await (await run("INSERT INTO state (key, value) VALUES ('pushOpen', ?1), ('pushAt', ?2), ('pushAfter', ?3) ON CONFLICT(key) DO UPDATE SET value = excluded.value", pushing.open, pushing.at, pushing.after)).run();
+    },
+    async advance(after, next) {
+      return (await (await run("UPDATE state SET value = ?2 WHERE key = 'pushAfter' AND value = ?1 RETURNING value", after, next)).first<{ value: number }>()) !== null;
     },
     async waiting() {
       const row = await (await run("SELECT value FROM state WHERE key = 'waiting'")).first<{ value: number }>();
@@ -275,12 +388,12 @@ export function d1Store(db: D1Like): PushStore {
       };
     },
     async openCount(now) {
-      const row = await (await run('SELECT COUNT(*) AS n FROM tournaments WHERE heard >= ?1', now - TOURNAMENT_FORGET)).first<{ n: number }>();
+      const row = await (await run('SELECT COUNT(DISTINCT COALESCE(source, room)) AS n FROM tournaments WHERE heard >= ?1', now - TOURNAMENT_FORGET)).first<{ n: number }>();
       return row?.n ?? 0;
     },
-    async subscriptions(open, now) {
-      const { results } = await (await run('SELECT endpoint, p256dh, auth, locale FROM subscriptions WHERE from_open <= ?1 AND snoozed <= ?3 LIMIT ?2', open, MAX_SUBSCRIPTIONS, now)).all<{ endpoint: string; p256dh: string; auth: string; locale: Locale }>();
-      return results.map(({ endpoint, p256dh, auth, locale }) => ({ endpoint, keys: { p256dh, auth }, locale }));
+    async subscriptions(open, now, after, limit) {
+      const { results } = await (await run('SELECT rowid AS id, endpoint, p256dh, auth, locale FROM subscriptions WHERE from_open <= ?1 AND snoozed <= ?2 AND rowid > ?3 ORDER BY rowid LIMIT ?4', open, now, after, limit)).all<{ id: number; endpoint: string; p256dh: string; auth: string; locale: Locale }>();
+      return results.map(({ id, endpoint, p256dh, auth, locale }) => ({ id, endpoint, keys: { p256dh, auth }, locale }));
     },
     async countSubscriptions() {
       const row = await (await run('SELECT COUNT(*) AS n FROM subscriptions')).first<{ n: number }>();
@@ -388,7 +501,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   }
   const store = d1Store(env.PUSH_DB);
   const now = Date.now() / 1000;
-  const answer = await handle(store, body, now);
+  const source = await sourceOf(request.headers.get('cf-connecting-ip'), env.VAPID_PRIVATE_KEY!, new Date(now * 1000).toISOString().slice(0, 10));
+  const answer = await handle(store, body, now, source);
   if (answer.send?.length) waitUntil(sendAll(store, answer.send, answer.open ?? 1, vapid, now));
   return json(answer.body, answer.status);
 };

@@ -113,6 +113,25 @@ export class OpenBeat {
     if (room === this.room && nowMs - this.at < HEARTBEAT_MS) return;
     this.room = room;
     this.at = nowMs;
-    void post({ open: room }).catch(() => undefined);
+    void carryOn(post({ open: room }));
+  }
+}
+
+/** Calls of a notification asked for at most (see `more` in functions/push.ts): MAX_SUBSCRIPTIONS / PUSH_BATCH there. */
+const MAX_CALLS = 200;
+/** The pause between them (ms). */
+const CALL_GAP_MS = 1000;
+
+/** A notification that goes out over several calls is carried on by the browser that started it, call after call while the server says more are left. */
+async function carryOn(answer: Promise<Response>): Promise<void> {
+  try {
+    for (let call = 0; call < MAX_CALLS; call++) {
+      const { more } = (await (await answer).json()) as { more?: unknown };
+      if (more !== true) return;
+      await new Promise((resolve) => setTimeout(resolve, CALL_GAP_MS));
+      answer = post({ more: 1 });
+    }
+  } catch {
+    // the rest goes out from the next heartbeat of an open tournament (see `more` there)
   }
 }
