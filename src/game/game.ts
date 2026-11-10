@@ -4691,7 +4691,7 @@ export class Game implements OnlineGame {
     this.wrecks.update(dt, now, this.field, this.grinds);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
-    this.decoys.update(dt, now);
+    this.decoys.update(dt, now, this.torpedoes.list);
     this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit), this.touchesSolid);
     this.items(dt, now);
     this.closeCall(now);

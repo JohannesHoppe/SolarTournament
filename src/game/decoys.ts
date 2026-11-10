@@ -6,7 +6,7 @@ import type { Homing, Torpedo } from './torpedoes';
  * Decoys: hot lures a clone drops (an item, two from a sponsor probe, see game/items). One flies
  * off the ship's stern, DECOY_BACK slower than the ship (units/s, 30 m/s), and burns for
  * DECOY_LIFE seconds; every torpedo homing on that ship within DECOY_LURE of it (units, 1 km)
- * turns to it instead and goes off on it as on its target (see Torpedoes.update). Every browser
+ * turns to it instead, while it burns, and goes off on it as on its target (see lure). Every browser
  * drops the decoys every other one tells of, so every torpedo turns alike, and the shooter's
  * browser decides where it goes off, as ever.
  */
@@ -79,11 +79,13 @@ export class Decoys {
     return decoy;
   }
 
-  update(dt: number, now: number) {
+  /** The decoys drift and burn down; while one burns it lures every torpedo that comes for its ship within reach, launched before it was dropped or after. */
+  update(dt: number, now: number, torpedoes: readonly Torpedo[]) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const decoy = this.list[i];
       decoy.flight.position.addScaledVector(decoy.flight.velocity, dt);
       decoy.glow.position.copy(decoy.flight.position);
+      lure(decoy, torpedoes);
       // it flickers as it burns down
       const left = 1 - (now - decoy.bornAt) / DECOY_LIFE;
       decoy.glow.scale.setScalar(DECOY_RADIUS * (4 + 2 * left + Math.random()));
