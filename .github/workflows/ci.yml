@@ -127,13 +127,21 @@ jobs:
           assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
           pointer="$RUNNER_TEMP/sprites-${GITHUB_SHA:0:12}.json"
           echo '{}' > "$pointer.hashes"
+          # the pointer names the hash of the file as stored: a render of the same key kept before
+          # (another run's, not byte for byte this one's) stays, and is what the build fetches
+          stored="$RUNNER_TEMP/stored"
+          mkdir -p "$stored"
           for file in "$SPRITES"/voice-*; do
             name=$(basename "$file")
-            jq --arg name "$name" --arg hash "$(sha256sum "$file" | cut -d' ' -f1)" '. + {($name): $hash}' "$pointer.hashes" > "$pointer.next" && mv "$pointer.next" "$pointer.hashes"
-            if ! grep -qx "$inputs-$name" <<< "$assets"; then
-              cp "$file" "$RUNNER_TEMP/$inputs-$name"
-              gh release upload "$tag" "$RUNNER_TEMP/$inputs-$name" --clobber
+            if grep -qx "$inputs-$name" <<< "$assets"; then
+              gh release download "$tag" --pattern "$inputs-$name" --dir "$stored" --clobber
+              kept="$stored/$inputs-$name"
+            else
+              kept="$RUNNER_TEMP/$inputs-$name"
+              cp "$file" "$kept"
+              gh release upload "$tag" "$kept" --clobber
             fi
+            jq --arg name "$name" --arg hash "$(sha256sum "$kept" | cut -d' ' -f1)" '. + {($name): $hash}' "$pointer.hashes" > "$pointer.next" && mv "$pointer.next" "$pointer.hashes"
           done
           jq --arg inputs "$inputs" '{inputs: $inputs, sha256: .}' "$pointer.hashes" > "$pointer"
           gh release upload "$tag" "$pointer" --clobber

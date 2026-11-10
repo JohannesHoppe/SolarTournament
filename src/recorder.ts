@@ -87,7 +87,8 @@ export class InputRecorder {
     link.href = URL.createObjectURL(new Blob([this.json(seconds)], { type: 'application/json' }));
     link.download = `flight-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     link.click();
-    URL.revokeObjectURL(link.href);
+    // revoked only once the browser has taken the file (at once, some cancel the download)
+    setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
   }
 }
 

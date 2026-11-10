@@ -30,20 +30,26 @@ export async function recordClip(canvas: HTMLCanvasElement, sound: AudioNode, se
   const context = sound.context as AudioContext;
   const tap = context.createMediaStreamDestination();
   sound.connect(tap);
-  const stream = new MediaStream([...canvas.captureStream(FPS).getVideoTracks(), ...tap.stream.getAudioTracks()]);
-  const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BITS });
-  const chunks: Blob[] = [];
-  recorder.ondataavailable = (event) => {
-    if (event.data.size) chunks.push(event.data);
-  };
-  const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
-  recorder.start();
-  await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-  recorder.stop();
-  await stopped;
-  for (const track of stream.getTracks()) track.stop();
-  sound.disconnect(tap);
-  return new Blob(chunks, { type: recorder.mimeType || type });
+  const picture = canvas.captureStream(FPS);
+  // the capture and the tap end however the recording does: a recorder that refuses its type or
+  // fails to start leaves nothing running for the rest of the session
+  try {
+    const stream = new MediaStream([...picture.getVideoTracks(), ...tap.stream.getAudioTracks()]);
+    const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BITS });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data);
+    };
+    const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
+    recorder.start();
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+    recorder.stop();
+    await stopped;
+    return new Blob(chunks, { type: recorder.mimeType || type });
+  } finally {
+    for (const track of [...picture.getTracks(), ...tap.stream.getTracks()]) track.stop();
+    sound.disconnect(tap);
+  }
 }
 
 /**

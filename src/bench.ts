@@ -271,7 +271,7 @@ export async function runBench(game: Game, seconds: number, only: BenchSection[]
   }
 
   game.benchCamera = null;
-  graphics.hold = false;
+  graphics.release();
   game.benchMenu();
   status.textContent = t('Done: {n} measurements of {seconds} s each.', { n: result.measurements.length, seconds });
   report(panel, result);

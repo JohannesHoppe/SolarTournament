@@ -142,6 +142,14 @@ export class Graphics {
     if (next.pixelRatio !== before.pixelRatio) this.resize();
   }
 
+  /** Hands the picture back after the benchmark set its rungs by hand: the governor moves again, from where the Host's choice starts it. */
+  release() {
+    this.hold = false;
+    this.rung = this.startRung();
+    this.watch();
+    this.apply(true, true);
+  }
+
   private startRung(): number {
     const { choice, rung } = this.quality;
     return choice === 'auto' ? (rung ?? this.guessedRung) : TIER_RUNGS[choice];
