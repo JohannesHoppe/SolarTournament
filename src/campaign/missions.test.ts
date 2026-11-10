@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierTimes, layCourier, MINING_PLACES, ON_PAD, TARGET_ZONE, YARD_MIDDLE } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierLimit, courierTimes, layCourier, MINING_PLACES, ON_PAD, TARGET_ZONE, YARD_MIDDLE } from './missions';
 import { PSYCHE_FALL } from '../world/yard';
 import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
@@ -160,7 +160,10 @@ describe('the races of the campaign', () => {
         expect(field.overlap(beacon, RING_RADIUS * 2)).toBeNull();
         expect(beacon.length()).toBeLessThan(ARENA_LIMIT);
       }
-      const { time, gold } = courierTimes(arena);
+      // the limit of the course as laid, lifted clear of the field, never shorter than the course drawn
+      const { time: drawn, gold } = courierTimes(arena);
+      const time = courierLimit(points);
+      expect(time).toBeGreaterThanOrEqual(drawn);
       const from = arenaById(arena)!.start!.at;
       // from where the place prints its clones, inside the arena or not
       const middling = flyTrial(arena, points, normals, from, time, SKILL, false);

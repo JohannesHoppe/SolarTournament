@@ -8,7 +8,7 @@ import { cos, sin } from '../detmath';
 import { firstHull, LASER_RANGE, MAX_HEAT, Ship } from '../ship/ship';
 import { bounceOff, impactDamage, ram, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
-import { approachGate, coilPush } from '../game/race';
+import { approachGate, BOOST_STRAIN, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
 import { aimHook, anchorPoint, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
@@ -797,6 +797,7 @@ export class JobWorld implements SchoolContext {
 
   boost(through: THREE.Vector3) {
     coilPush(this.me.flight.velocity, through, MAX_SPEED);
+    this.me.strain = Math.max(this.me.strain, BOOST_STRAIN);
   }
 
   arm(item: 'torpedo' | 'nova') {
@@ -1093,6 +1094,7 @@ export function flyJob(mission: Mission, campaign: Campaign, host: Host, limit =
   let run = null as DrillRun | null;
   let attempt: Attempt | null = null;
   let heard = 0;
+  let died = 0;
   let started = 0;
   while (!world.school.finished) {
     const index = world.drillIndex;
@@ -1104,15 +1106,17 @@ export function flyJob(mission: Mission, campaign: Campaign, host: Host, limit =
     }
     const now = world.attempt;
     if (now && now !== attempt) {
-      // a new attempt at the same repetition is a start over: the line said for it, or the clone lost
+      // a new attempt at the same repetition is a start over: the clone lost, or the line said for
+      // the fail (a line a drill says on the way, then a death, is the death)
       if (attempt && now.rep === attempt.rep) {
-        const line = world.said.slice(heard).pop();
+        const line = world.deaths.total > died ? undefined : world.said.slice(heard).pop();
         run.fails.push(line ?? 'clone lost');
         if (line && attempt.seconds < QUICK_FAIL) run.quick++;
       }
       if (!attempt || now.rep === attempt.rep) run.attempts++;
       attempt = now;
       heard = world.said.length;
+      died = world.deaths.total;
     }
     if (world.now - started > limit || run.attempts > tries) break;
     world.step();

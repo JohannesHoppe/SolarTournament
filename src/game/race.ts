@@ -148,6 +148,9 @@ export function crowded(field: AsteroidField, point: THREE.Vector3): boolean {
   return field.insideWell(point, room * 4) || inGrip(field.well, point, WELL_CAUTION);
 }
 
+/** A coil's throw presses the clone into its seat: its g-force strain (see Ship.strain) rises at least to this. */
+export const BOOST_STRAIN = 0.3;
+
 /** A coil throws a velocity on along its axis, the way it flies along it, by BOOST_PUSH; never beyond `limit` plus that push (a faster ship keeps its speed). */
 export function coilPush(velocity: THREE.Vector3, axis: THREE.Vector3, limit: number) {
   through.copy(axis);

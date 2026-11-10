@@ -266,6 +266,8 @@ export interface Drill {
   autopilot?: boolean;
   /** The autopilot setting the drill leaves behind, so a flight school resumed later starts with it. */
   autopilotAfter?: boolean;
+  /** The scene in person the drill leaves the clone in (null: back in the cockpit), so a mission resumed after it starts in it. */
+  sceneAfter?: SceneName | null;
   /** While true, the autopilot leaves the drift across the nose alone: the drill's drift is the point. */
   keepsDrift?(ctx: SchoolContext, attempt: Attempt): boolean;
   /** A time trial's gold time (s, from its first coil to its last): flown within it, the job's gold is won (see SchoolContext.goldTime). */
@@ -2247,6 +2249,13 @@ export class FlightSchool {
     let on = false;
     for (let i = 0; i < this.index; i++) on = this.drills[i].autopilotAfter ?? on;
     return on;
+  }
+
+  /** The scene in person a mission resumed at its starting drill starts in, as the drills before left it; null for the cockpit. */
+  get startsStaged(): SceneName | null {
+    let scene: SceneName | null = null;
+    for (let i = 0; i < this.index; i++) scene = this.drills[i].sceneAfter === undefined ? scene : this.drills[i].sceneAfter!;
+    return scene;
   }
 
   /** The music the current drill asks for (see Drill.music, Drill.turn): undefined leaves it to the mission. */

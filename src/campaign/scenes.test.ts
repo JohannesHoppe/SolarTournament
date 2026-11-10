@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { cos, hypot, sin } from '../detmath';
 import { planOf, type SceneName } from './scenes';
+import { MISSIONS } from './missions';
+import { FlightSchool } from '../game/school';
 import { CAB } from '../world/office';
 import { GALLEY } from '../world/galley';
 import { GULLET } from '../world/gullet';
@@ -58,5 +60,20 @@ describe('the scenes in person', () => {
     // the President stands on his dais, above the clone's floor
     const { people, eye } = planOf('ballroom');
     expect(people[0].at.y).toBeGreaterThan(eye.y - 34);
+  });
+});
+
+describe('a mission resumed in a scene in person', () => {
+  it('starts in the room the clone climbed out into, and in the cockpit once it climbed back in', () => {
+    let staged = 0;
+    for (const mission of MISSIONS) {
+      let inside: SceneName | null = null;
+      mission.drills.forEach((drill, i) => {
+        expect(new FlightSchool(null, i, mission).startsStaged).toBe(inside);
+        if (drill.sceneAfter !== undefined) inside = drill.sceneAfter;
+        if (inside) staged++;
+      });
+    }
+    expect(staged).toBeGreaterThan(0);
   });
 });

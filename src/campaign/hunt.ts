@@ -10,6 +10,7 @@ import { FIELD_RADIUS, type Asteroid, type AsteroidField } from '../world/astero
 import { boxUv, hazardSurface, industrialSurface, surfaced } from '../view/surfaces';
 import { radialTexture } from '../view/textures';
 import { TAGS_PER_PLACE, tagId, type HuntPlace } from './finds';
+import { MISSIONS } from './missions';
 
 /**
  * Where the campaign's places hide their black boxes and data chips (see campaign/finds), and how
@@ -27,7 +28,7 @@ export const TAKE_RANGE = 1200;
 export const FIND_CLEAR = 200;
 /** A find lies within this of the place's middle (units): inside the arena, with room to come at it from every side. */
 export const FIND_REACH = ARENA_LIMIT * 0.9;
-/** Finds of a place lie at least this far apart (units, 600 m), and this far from where its clones start (750 m). */
+/** Finds of a place lie at least this far apart (units, 600 m), and this far from wherever its clones start (750 m: the place's own start and every job's there, see startsAt). */
 const FIND_APART = 12000;
 const FIND_FROM_START = 15000;
 /** How far off a piece's surface a find lies in its lee (units, 10 to 30 m), and how high over the ground (15 to 60 m). */
@@ -61,9 +62,9 @@ function direction(r: Randomizer, out: THREE.Vector3) {
 }
 
 /** Whether a point is a fair spot for a find: clear of every piece, out of the well's grip, never under the ground, inside the arena, apart from the others and the start. */
-export function fairSpot(field: AsteroidField, point: THREE.Vector3, others: readonly THREE.Vector3[], start: THREE.Vector3 | null): boolean {
+export function fairSpot(field: AsteroidField, point: THREE.Vector3, others: readonly THREE.Vector3[], starts: readonly THREE.Vector3[]): boolean {
   if (point.length() > FIND_REACH || field.overlap(point, FIND_CLEAR) || field.insideWell(point, FIND_CLEAR) || inGrip(field.well, point, WELL_CAUTION)) return false;
-  if (start && point.distanceTo(start) < FIND_FROM_START) return false;
+  if (starts.some((start) => point.distanceTo(start) < FIND_FROM_START)) return false;
   if (others.some((other) => other.distanceTo(point) < FIND_APART)) return false;
   // under a world's ground looking up, the ground's underside is the first thing hit
   return !field.raycast(point, up, ARENA_LIMIT * 4)?.asteroid?.ground;
@@ -96,6 +97,12 @@ function openSpot(r: Randomizer, height: number): THREE.Vector3 {
   return new THREE.Vector3(out * cos(turn), height + r.range(-0.3, 0.3) * FIELD_RADIUS, out * sin(turn));
 }
 
+/** Where a place's clones start: the place's own start and that of every job begun there (a pad, a race's grid, a lane), so no find lies where a job puts the hull. */
+export function startsAt(place: HuntPlace): THREE.Vector3[] {
+  const starts = [arenaById(place)?.start, ...MISSIONS.filter((mission) => mission.drills[0]?.arena === place).map((mission) => mission.start)];
+  return starts.flatMap((start) => (start ? [new THREE.Vector3(...start.at)] : []));
+}
+
 /**
  * Where a place hides its finds on its field as laid out (its pieces where they first lie): its
  * black boxes and its chip, the same on every visit, each tried in a piece's lee, then over the
@@ -105,6 +112,7 @@ export function layFinds(field: AsteroidField, place: HuntPlace): Find[] {
   const r = new Randomizer(textSeed(`finds:${place}`));
   const start = arenaById(place)?.start;
   const from = start ? new THREE.Vector3(...start.at) : null;
+  const starts = startsAt(place);
   const pieces = [...field.asteroids.values()];
   const lee = pieces.filter((piece) => !piece.ground && piece.radius < LEE_PIECE);
   const grounds = pieces.filter((piece) => piece.ground);
@@ -120,7 +128,7 @@ export function layFinds(field: AsteroidField, place: HuntPlace): Find[] {
     for (const kind of kinds) {
       for (let attempt = 0; !spot && attempt < TRIES; attempt++) {
         const candidate = kind();
-        if (candidate && fairSpot(field, candidate, laid, from)) spot = candidate;
+        if (candidate && fairSpot(field, candidate, laid, starts)) spot = candidate;
       }
       if (spot) break;
     }

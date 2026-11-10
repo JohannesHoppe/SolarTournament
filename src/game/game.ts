@@ -87,7 +87,7 @@ import { knockShare, ramShare, syncShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
-import { approachGate, BOOST_PUSH, BOOST_RADIUS, canSkip, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, canSkip, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
@@ -513,10 +513,9 @@ const CLOSE_CALL_POINTS = 25;
 /** The camera hangs back by this share of the ship radius at a full burn, and the view widens by SPEED_FOV degrees at the speed limit: speed is felt. */
 const DRIVE_LAG = 0.6;
 const SPEED_FOV = 10;
-/** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s), and presses the clone into the seat (BOOST_STRAIN). */
+/** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s), and presses the clone into the seat (BOOST_STRAIN in race.ts). */
 const BOOST_FOV = 9;
 const BOOST_FADE = 2.5;
-const BOOST_STRAIN = 0.3;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** What a landed hit says where it struck, by the zone it broke. */
@@ -1977,6 +1976,8 @@ export class Game implements OnlineGame {
     if (!passed) return t('{mission} failed. It waits on the job board.', { mission: t(mission.name) });
     if (this.flyingAgain) {
       this.flyingAgain = false;
+      // flown again, it turns Rask's counter as every job does (see Campaign.flown)
+      this.keepCampaign((campaign) => flownAgain(campaign, mission));
       return t('{mission} done.', { mission: t(mission.name) });
     }
     let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null, standing: null };
@@ -3436,6 +3437,13 @@ export class Game implements OnlineGame {
     this.ease = 0;
     // a resumed flight school starts with the autopilot as the drills before left it
     if (this.school) this.autopilot = this.school.startsWithAutopilot;
+    // and a mission resumed in a scene in person starts in its room, the clone out of the cockpit
+    const staged = this.school?.startsStaged ?? null;
+    if (staged) {
+      this.me!.flight.velocity.set(0, 0, 0);
+      this.me!.flight.angularVelocity.set(0, 0, 0);
+      this.setStage(staged);
+    }
     this.me!.strain = 0;
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad):

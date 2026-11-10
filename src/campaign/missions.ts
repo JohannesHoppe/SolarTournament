@@ -423,6 +423,7 @@ const climbOut = (scene: SceneName, line: string, arena: ArenaId = 'boneyard'): 
   keys: ['turn'],
   arena,
   silent: true,
+  sceneAfter: scene,
   enter(ctx) {
     stop(ctx);
     ctx.stage(scene);
@@ -437,7 +438,7 @@ const felt = (line: string): Drill => ({ ...said(line), enter: (ctx) => ctx.feel
 const inRoom = (line: string, arena: ArenaId): Drill => said(line, arena);
 
 /** The clone climbs back into the cockpit, the hull still held: the scene is over, and `line` said. */
-const climbIn = (line: string, arena: ArenaId): Drill => ({ ...said(line, arena), enter: (ctx) => {
+const climbIn = (line: string, arena: ArenaId): Drill => ({ ...said(line, arena), sceneAfter: null, enter: (ctx) => {
     ctx.stage(null);
     stop(ctx);
   } });
@@ -1852,10 +1853,12 @@ export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, towa
  * coil after it within `time` wins; each coil's core throws the ship on along it, a coil missed
  * (`missed`) or the clock run out (`slow`) starts it over; within `gold` the job's gold is won.
  */
-function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string; lay?: (field: AsteroidField) => { points: THREE.Vector3[]; normals: THREE.Vector3[] } }): Drill {
+function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.Vector3[]; normals: readonly THREE.Vector3[]; time: number; gold: number; missed: string; slow: string; lay?: (field: AsteroidField) => { points: THREE.Vector3[]; normals: THREE.Vector3[] }; timeOf?: (points: readonly THREE.Vector3[]) => number }): Drill {
   // the last coil flown within the gold time this attempt: the gold is the job's only once the
   // drill counts (its clone lives on, see school's SURVIVE), never from an attempt lost after it
   let golden = false;
+  // the limit of the course as laid (a courier run's, lifted clear of the field), else the trial's own
+  let limit = spec.time;
   return {
     line: spec.line,
     gold: spec.gold,
@@ -1869,6 +1872,7 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
       const laid = spec.lay?.(ctx.field);
       a.points = laid?.points ?? spec.points.map((coil) => coil.clone());
       a.normals = laid?.normals ?? spec.normals.map((normal) => normal.clone());
+      limit = laid && spec.timeOf ? spec.timeOf(laid.points) : spec.time;
       a.points.forEach((coil, i) => markers.ring(coil, a.normals[i]));
       markers.highlight(0);
     },
@@ -1894,9 +1898,9 @@ function timeTrial(spec: { line: string; arena: ArenaId; points: readonly THREE.
     leave: (ctx) => {
       if (golden) ctx.goldTime();
     },
-    fail: (_, a) => (a.warned ? spec.missed : a.seconds - a.clockFrom > spec.time ? spec.slow : null),
+    fail: (_, a) => (a.warned ? spec.missed : a.seconds - a.clockFrom > limit ? spec.slow : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
-    mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(spec.time - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
+    mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(limit - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
   };
 }
 
@@ -1957,15 +1961,17 @@ export function layCourier(field: AsteroidField | null, arena: ArenaId): { point
 /** A courier course's length from its first beacon to its last (units), for its limit and its gold time. */
 export const courierLength = (points: readonly THREE.Vector3[]) => points.slice(1).reduce((sum, beacon, k) => sum + beacon.distanceTo(points[k]), 0);
 
-/** A courier run's limit and gold time at a place (s): the limit by its course's length as drawn, at COURIER_PACE; the gold the place's own. */
+/** A courier course's limit (s): its length at COURIER_PACE; the course flown is laid on the place's field, lifted clear of its pieces, and takes the limit of its own length. */
+export const courierLimit = (points: readonly THREE.Vector3[]) => Math.ceil(courierLength(points) / COURIER_PACE);
+
+/** A courier run's limit and gold time at a place (s): the limit of its course as drawn (see courierLimit); the gold the place's own. */
 export function courierTimes(arena: ArenaId): { time: number; gold: number } {
-  const length = courierLength(layCourier(null, arena).points);
-  return { time: Math.ceil(length / COURIER_PACE), gold: COURIER_PLACES.find(([place]) => place === arena)![2] };
+  return { time: courierLimit(layCourier(null, arena).points), gold: COURIER_PLACES.find(([place]) => place === arena)![2] };
 }
 
 /** A courier run's drill at a place: its time trial, laid on the place's own field. */
 function courier(arena: ArenaId): Drill {
-  return timeTrial({ line: CAMPAIGN.courier, arena, points: [], normals: [], ...courierTimes(arena), missed: CAMPAIGN.courierMissed, slow: CAMPAIGN.courierSlow, lay: (field) => layCourier(field, arena) });
+  return timeTrial({ line: CAMPAIGN.courier, arena, points: [], normals: [], ...courierTimes(arena), missed: CAMPAIGN.courierMissed, slow: CAMPAIGN.courierSlow, lay: (field) => layCourier(field, arena), timeOf: courierLimit });
 }
 
 /**

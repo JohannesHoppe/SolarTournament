@@ -8,7 +8,7 @@ import { TITLE_FIRST, TITLE_SECOND } from '../music/lines';
 import { MISSIONS } from './campaign';
 import { firstJobAt, freeFlight } from './missions';
 import { chipsFound, CHIPS, HUNT_PLACES, TAG_IDS, tagOf, TAGS, TAGS_PER_PLACE } from './finds';
-import { FIND_CLEAR, FIND_REACH, layFinds } from './hunt';
+import { FIND_CLEAR, FIND_REACH, layFinds, startsAt } from './hunt';
 import { inGrip, WELL_CAUTION } from '../game/alarms';
 
 const up = new THREE.Vector3(0, 1, 0);
@@ -42,20 +42,22 @@ describe('what the campaign’s places hide', () => {
     expect(chipsFound(null)).toEqual([]);
   });
 
-  it('lays every find inside its arena, clear of rock and ground, never under it, out of a well’s grip, apart from the others and the same on every visit', () => {
+  it('lays every find inside its arena, clear of rock and ground, never under it, out of a well’s grip, apart from the others and from where every job there starts and the same on every visit', () => {
+    // the Boneyard's jobs start on bay 3's pad, away from where Cold Boot does
+    expect(startsAt('boneyard').length).toBeGreaterThan(1);
     for (const place of HUNT_PLACES) {
       const field = testField(DETAIL);
       field.generate(arenaById(place)!.layout);
       const finds = layFinds(field, place);
       expect(finds.map((find) => find.kind)).toEqual(['tag', 'tag', 'tag', 'chip']);
-      const start = arenaById(place)!.start;
+      const starts = startsAt(place);
       for (const find of finds) {
         const at = `${place} ${find.id} at ${find.position.toArray().map(Math.round).join(', ')}`;
         expect(find.position.length(), at).toBeLessThan(Math.min(FIND_REACH, ARENA_LIMIT));
         expect(field.overlap(find.position, FIND_CLEAR), at).toBeNull();
         expect(field.raycast(find.position, up, ARENA_LIMIT * 4)?.asteroid?.ground ?? false, at).toBe(false);
         expect(inGrip(field.well, find.position, WELL_CAUTION), at).toBe(false);
-        if (start) expect(find.position.distanceTo(new THREE.Vector3(...start.at)), at).toBeGreaterThan(10000);
+        for (const start of starts) expect(find.position.distanceTo(start), at).toBeGreaterThan(10000);
         for (const other of finds) if (other !== find) expect(other.position.distanceTo(find.position), at).toBeGreaterThan(10000);
       }
       const again = testField(DETAIL);
