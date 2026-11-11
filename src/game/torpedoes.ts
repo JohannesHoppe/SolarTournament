@@ -42,11 +42,11 @@ export const TORPEDO_TOP_SPEED = 7200;
 /** Its main drive along its flight (units/s², 20 g): from a standing launch to top speed in under 2 s, quick on a straight line. */
 export const TORPEDO_THRUST = 3924;
 /**
- * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the 11 g
+ * Its thrusters across its flight, and against it to brake (units/s², 10 g): about half the 19 g
  * a ship turns with at the speed limit (see gripAt), so a hard turn at the right moment leaves it wide. At top speed it turns on a
- * circle of about 1.5 km; one that went past brakes and comes round again.
+ * circle of about 1.3 km; one that went past brakes and comes round again.
  */
-export const TORPEDO_LATERAL = 1766;
+export const TORPEDO_LATERAL = 1962;
 /** How hard it steers for the velocity it wants (1/s): a gap of 100 m/s asks for 10 g. */
 const STEER_GAIN = 2;
 /** Its seeker reads the target's velocity this late (s, the time constant of its smoothing): a jink is seen only after it began. */

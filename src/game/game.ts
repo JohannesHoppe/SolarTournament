@@ -49,7 +49,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -479,13 +479,14 @@ const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove along the nose
- * (OVERDRIVE_PUSH, 150 m/s), past the tournament's limit. It leaves the clone at the edge of
+ * (OVERDRIVE_PUSH, 200 m/s), past the tournament's limit; with a rival under the aim assist, on a
+ * ram course at it (see overdriveShove). It leaves the clone at the edge of
  * blacking out (OVERDRIVE_STRAIN) and the main drive glowing: no thrust for
  * OVERDRIVE_DRIVE_COOLDOWN seconds, while the thrusters still turn the ship and the laser
  * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again.
  */
 const OVERDRIVE_STRAIN = 0.9;
-const OVERDRIVE_RECHARGE = 60;
+const OVERDRIVE_RECHARGE = 20;
 /** The flight ahead of a well's alarm (see wellEscape) runs again this often (s): a fifth of a second late at most. */
 const ESCAPE_EVERY = 0.2;
 /**
@@ -5856,7 +5857,7 @@ export class Game implements OnlineGame {
     }
     const speed = me.flight.velocity.length();
     const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
-    this.guide.show(me.flight.position, heading, speed, me.flight, line, this.field, next, missed, wallClock());
+    this.guide.show(me.flight.position, heading, speed, me.flight, this.autopilot, line, this.field, next, missed, wallClock());
   }
 
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
@@ -6706,7 +6707,7 @@ export class Game implements OnlineGame {
     const me = this.me!;
     if (!me.alive || !me.perks.overdrive || this.time < this.overdriveReadyAt) return;
     this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
-    me.flight.velocity.addScaledVector(me.flight.forward(forward), OVERDRIVE_PUSH);
+    me.flight.velocity.add(overdriveShove(me.flight, this.aimTarget()?.flight ?? null, forward));
     me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     // about sixty g at once: the clone is pressed to the edge of blacking out
     me.strain = Math.max(me.strain, OVERDRIVE_STRAIN);

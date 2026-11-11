@@ -4,7 +4,7 @@ import { InputRecorder } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { flyByNose, FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { flyByNose, FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, overdriveShove, RCS_THRUST, turnRadius } from './flight';
 import { IDLE } from '../input/input';
 import { assistAim } from './computer';
 import { arenaById } from '../world/arenas';
@@ -191,7 +191,7 @@ describe('the autopilot: the ship flies where its nose points', () => {
 });
 
 describe('the autopilot at full speed', () => {
-  it('turns at the speed limit more than twice as tight as the thrusters alone, and has the flight back on the nose after a 90° turn', () => {
+  it('turns at the speed limit more than half again as tight as the thrusters alone, and has the flight back on the nose after a 90° turn', () => {
     const ship = new Cockpit(MAX_SPEED);
     const seconds = turnBy(ship, Math.PI / 2);
     // a steady turn: the radius from how fast the flight turns
@@ -203,7 +203,7 @@ describe('the autopilot at full speed', () => {
     console.info(`At the speed limit: a 90° turn of the nose takes ${seconds.toFixed(1)} s, on a radius of ${(radius / MS).toFixed(0)} m (thrusters alone ${(turnRadius(MAX_SPEED, { driveFactor: 0, thrusterFactor: 1 }) / MS).toFixed(0)} m); the flight is back within ${Math.round(ON_NOSE / DEGREE)}° of the nose ${back.toFixed(2)} s after letting go, the slip at most ${(Math.max(...ship.samples.map(slip)) / DEGREE).toFixed(0)}°`);
     expect(ship.flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.97);
     expect(radius).toBeLessThan(turnRadius(MAX_SPEED) * 1.1);
-    expect(radius).toBeLessThan((MAX_SPEED * MAX_SPEED) / RCS_THRUST / 2);
+    expect(radius).toBeLessThan((MAX_SPEED * MAX_SPEED) / RCS_THRUST / 1.5);
     expect(back).toBeLessThan(LEAD_TIME + 0.05);
     expect(convergence(ship.samples, ship.flight.forward(), released).overshoot).toBeLessThan(DEGREE);
   });
@@ -412,5 +412,41 @@ describe('the turn back into an attitude', () => {
     flight.reset(new THREE.Vector3(), home);
     const out = flight.attitude(home, 2.5, { ...IDLE, off: 0 });
     expect(Math.abs(out.yaw) + Math.abs(out.pitch) + Math.abs(out.roll)).toBeLessThan(1e-9);
+  });
+});
+
+describe("the overdrive's shove", () => {
+  const ship = (x: number, y: number, z: number, vx: number, vy: number, vz: number) => {
+    const flight = new FlightModel();
+    flight.position.set(x, y, z);
+    flight.velocity.set(vx, vy, vz);
+    return flight;
+  };
+
+  it('pushes along the nose with no rival in sight', () => {
+    const me = ship(0, 0, 0, 0, 0, -MAX_SPEED);
+    const shove = overdriveShove(me, null, new THREE.Vector3());
+    expect(shove.length()).toBeCloseTo(OVERDRIVE_PUSH, 6);
+    expect(angleTo(shove, me.forward())).toBeLessThan(1e-9);
+  });
+
+  it('puts a ship on a ram course at a rival: the drift past it taken out, the rest straight at it', () => {
+    // a rival 300 m ahead and 20 m up, flying as fast, drifting 20 m/s to the side
+    const me = ship(0, 0, 0, 0, 0, -MAX_SPEED);
+    const rival = ship(0, 400, -6000, 400, 0, -MAX_SPEED);
+    const shove = overdriveShove(me, rival, new THREE.Vector3());
+    expect(shove.length()).toBeCloseTo(OVERDRIVE_PUSH, 6);
+    const closing = me.velocity.clone().add(shove).sub(rival.velocity);
+    expect(angleTo(closing, rival.position.clone().sub(me.position))).toBeLessThan(1e-9);
+    // nearly all of the shove closes on it
+    expect(closing.length()).toBeGreaterThan(OVERDRIVE_PUSH * 0.99);
+  });
+
+  it('takes out what it can of a drift past the rival larger than the shove', () => {
+    const me = ship(0, 0, 0, 0, 0, 0);
+    const rival = ship(0, 0, -6000, OVERDRIVE_PUSH * 2, 0, 0);
+    const shove = overdriveShove(me, rival, new THREE.Vector3());
+    expect(shove.length()).toBeCloseTo(OVERDRIVE_PUSH, 6);
+    expect(shove.x).toBeCloseTo(OVERDRIVE_PUSH, 6);
   });
 });

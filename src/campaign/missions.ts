@@ -970,8 +970,8 @@ const helloHost = duel({ line: CAMPAIGN.helloHost, arena: 'enceladus', name: 'Sp
 const TIGER_PER_STRIPE = 2;
 const TIGER_OVER = 3200;
 export const TIGER_TIME = 75;
-/** The gold time (s): between a middling bot's 72 s and a sharp one's 64 s (see missions.test.ts). */
-export const TIGER_GOLD = 66;
+/** The gold time (s): between a middling bot's 64 s and a sharp one's 57 s (see missions.test.ts). */
+export const TIGER_GOLD = 60;
 const VENTS_PER = VENTS.length / STRIPE_NAMES.length;
 export const TIGER_COURSE = STRIPE_NAMES.flatMap((_, k) => {
   const coils = [1, 3].map((i) => VENTS[k * VENTS_PER + i].clone().setY(ENCELADUS_LAND + TIGER_OVER));
@@ -1834,9 +1834,9 @@ const SPRINT_COILS = 6;
 const SPRINT_FROM = 62000;
 const SPRINT_GAP = 20000;
 const SPRINT_OVER = 2000;
-export const SPRINT_TIME = 25;
-/** The gold time (s): between a middling bot's 23 s and a sharp one's 20 s (see missions.test.ts). */
-export const SPRINT_GOLD = 21;
+export const SPRINT_TIME = 26;
+/** The gold time (s): between a middling bot's 25 s and a sharp one's 21 s (see missions.test.ts). */
+export const SPRINT_GOLD = 22;
 const SPRINT_WAY = point(-1, 0, 0);
 const SPRINT_HEIGHT = (() => {
   let highest = -Infinity;
@@ -1937,9 +1937,9 @@ export const COURIER_PLACES: readonly (readonly [ArenaId, MissionId, number])[] 
   ['pluto', 'heartRun', 15],
   ['haumea', 'haumeaRing', 16],
   ['eris', 'rungTwo', 16],
-  ['lantern', 'kiln', 20],
-  ['granary', 'granary', 17],
-  ['ballroom', 'parade', 16],
+  ['lantern', 'kiln', 18],
+  ['granary', 'granary', 16],
+  ['ballroom', 'parade', 17],
 ];
 
 /** A place's courier course where `field` lies (see COURIER_PLACES), or as drawn before it is laid (null): its beacons and the way each is flown through. */
@@ -3032,7 +3032,7 @@ const GEYSER_FROM = point(48000, TRITON_LAND + 3000, 36000);
 const GEYSER_OFF = GEYSER_RADIUS + 2400;
 const GEYSER_OVER = 3000;
 export const GEYSER_TIME = 60;
-/** The gold time (s): between a middling bot's 44 s and a sharp one's 41 s (see missions.test.ts). */
+/** The gold time (s): between a middling bot's 43 s and a sharp one's 38 s (see missions.test.ts). */
 export const GEYSER_GOLD = 42;
 const GEYSER_WAY = new THREE.Vector3().subVectors(MEMORIAL_AT, GEYSER_FROM).setY(0).normalize();
 const GEYSER_SIDE = new THREE.Vector3(-GEYSER_WAY.z, 0, GEYSER_WAY.x);

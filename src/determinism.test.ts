@@ -101,6 +101,6 @@ describe('the shared world on every machine', () => {
   });
 
   it('flies a ship to the pinned bits', () => {
-    expect(flown()).toBe('e5f44f0ce9173867');
+    expect(flown()).toBe('36652332d754215f');
   });
 });

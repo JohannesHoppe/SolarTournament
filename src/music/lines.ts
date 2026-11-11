@@ -589,7 +589,7 @@ export const CAMPAIGN = {
   iceRunTugLost: 'They have dragged one tug away. That is the one we can spare. No more.',
   iceRunLost: 'A second tug is gone. The convoy turns back. We start over.',
   iceRunDone: 'The convoy is out of the craters, on its way to Ganymede. They wanted the ice, not us. Strange bandits, Host.',
-  valhallaSprint: 'Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-five seconds to the last.',
+  valhallaSprint: 'Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-six seconds to the last.',
   valhallaSprintSlow: 'Too slow for the show. Back to the start, and once more.',
   courier: 'A courier run, Host. Six beacons in order, and the client pays for speed. The clock starts at the first.',
   courierMissed: 'We missed a beacon, Host. From the start.',

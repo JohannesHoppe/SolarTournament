@@ -116,6 +116,12 @@ const JINK_MEMORY = 0.6;
 const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
 const JINK_SCATTER_MAX = 2.5;
+/**
+ * A bot under attack jinks with this share of its thrusters (4 g of their 10 g): enough to throw a
+ * chaser's aim off, while a Host of middling skill still lands its hits; the rest stays a Host's
+ * edge.
+ */
+const JINK_PUSH = 0.4;
 /** A bot attacking a battleship's part holds this far from it (units, 600 m), and fires with its nose within SIEGE_AIM of it (rad). */
 export const SIEGE_DISTANCE = 12000;
 const SIEGE_AIM = 0.02;
@@ -141,7 +147,7 @@ const WELL_PULL = 0.3;
  * that by up to AIR_RISE (units/s, 80 m/s), in full from AIR_RISE_SPAN under it (units, 500 m),
  * and never sinks under it of its own wish, after a rival or a probe neither: it waits above. Over
  * it, it sinks no faster than it could stop at it braking with AIR_BRAKE (units/s², 1.5 g: its
- * thrusters' 4 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
+ * thrusters' 10 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
  * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
  * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
  * a bot of AIR_DARING and more follows its target down into them; and one heading home from
@@ -706,7 +712,7 @@ export class Bot {
         this.dodge = -this.dodge;
         this.nextDodge = now + 0.4 + Math.random() * 0.4;
       }
-      controls.strafeX = this.dodge;
+      controls.strafeX = this.dodge * JINK_PUSH;
     }
     this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;

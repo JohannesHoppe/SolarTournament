@@ -218,7 +218,7 @@ export type WellEscape = 'drive' | 'overdrive' | 'lost';
 /** The Host's time to act on Nicole's call (s), before the nose starts to turn. */
 export const ESCAPE_REACTION = 0.5;
 /** The flight ahead in steps of this (s), for at most this long (s): a ship still out of the body by then counts as out. */
-const ESCAPE_STEP = 1 / 30;
+const ESCAPE_STEP = 1 / 60;
 const ESCAPE_HORIZON = 40;
 
 const probe = new FlightModel();

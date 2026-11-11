@@ -249,7 +249,7 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
       const from = line.progress(flight.position, gate, 0);
       let slowest = missed ? RETURN_SPEED : Infinity;
       for (let s = from; s < from + Math.min(RIBBON_REACH, speed * BRAKE_SECONDS); s += RIBBON_STEP) {
-        slowest = Math.min(slowest, cornerSpeed(bendRadius(line.clear(s - BEND_SPAN, field, a), line.clear(s, field, b), line.clear(s + BEND_SPAN, field, c)), flight));
+        slowest = Math.min(slowest, cornerSpeed(bendRadius(line.clear(s - BEND_SPAN, field, a), line.clear(s, field, b), line.clear(s + BEND_SPAN, field, c)), flight, autopilot));
       }
       wanted = Math.min(cruise, slowest * GLOW);
       if (!autopilot) {

@@ -7,12 +7,16 @@ import { angleTo, setFromAxisAngle } from '../detthree';
 export const METERS_PER_UNIT = 0.05;
 /** Acceleration of the main drive at full thrust (units/s²): 127.5 m/s², 13 g. Hard and quick: the speed limit is two seconds away, and so is a stop. */
 export const MAIN_THRUST = 2550;
-/** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
-export const RCS_THRUST = 800;
+/** Acceleration of the maneuvering thrusters along any axis (units/s²): 100 m/s², about 10 g, so a sidestep throws off an aim and a flight at the limit bends hard round with the drive. */
+export const RCS_THRUST = 2000;
 /** Tournament rule: no ship's own push makes it faster than this (units/s, 250 m/s); the flight computer cuts any push of drive and thrusters beyond it. Gravity is no push of the ship's and pulls it past. */
 export const MAX_SPEED = 5000;
-/** The overdrive's shove along the nose (units/s, 150 m/s): past the tournament's limit, see Game.overdrive. */
-export const OVERDRIVE_PUSH = 3000;
+/**
+ * The overdrive's shove (units/s, 200 m/s): past the tournament's limit, see Game.overdrive. Rammed
+ * from behind at that much faster, a drive or a flank goes down and the rammer's armored nose holds
+ * (see impact's RAM_SCALE).
+ */
+export const OVERDRIVE_PUSH = 4000;
 /** After the overdrive the main drive glows and gives no thrust for this long (s). */
 export const OVERDRIVE_DRIVE_COOLDOWN = 4;
 /**
@@ -416,13 +420,19 @@ function bend(flight: FlightModel, speed: number, moving: number, pilot: number,
   // flight is wanted as far as it is the Host's or free, so the thrusters never burn against it
   const wanted = Math.max(pilot, out.thrust * free) * thrust * nose.dot(path);
   demand.addScaledVector(nose, -out.thrust * thrust).addScaledVector(path, wanted);
-  flight.toLocalDirection(demand, across).divideScalar(Math.max(thrusters, 1e-6));
-  const side = hypot(across.x, across.y);
-  if (side > 1) across.multiplyScalar(1 / side);
-  const room = Math.sqrt(Math.max(0, 1 - Math.min(1, side * side)));
+  // across the flight first, wherever the nose points, with all of the thrusters if need be (in
+  // a hard turn the nose leads the flight far, and a push across the nose would bend it only by
+  // the lead's cosine); what they have left goes along the flight
+  const along = demand.dot(path);
+  across.copy(demand).addScaledVector(path, -along);
+  const side = across.length();
+  if (side > thrusters) across.multiplyScalar(thrusters / side);
+  const room = Math.sqrt(Math.max(0, thrusters * thrusters - Math.min(side, thrusters) * Math.min(side, thrusters)));
+  across.addScaledVector(path, THREE.MathUtils.clamp(along, -room, room));
+  flight.toLocalDirection(across, across).divideScalar(Math.max(thrusters, 1e-6));
   if (!controls.strafeX) out.strafeX = across.x;
   if (!controls.strafeY) out.strafeY = across.y;
-  if (!controls.strafeZ) out.strafeZ = THREE.MathUtils.clamp(-across.z, -room, room);
+  if (!controls.strafeZ) out.strafeZ = -across.z;
   return out;
 }
 
@@ -470,27 +480,51 @@ export function leadLimit(speed: number, driving = true): number {
 }
 
 /**
- * How hard the autopilot bends a flight at `speed` at most (units/s² across it), with the Host's
+ * How hard a flight at `speed` bends at most (units/s² across it). With the autopilot, the Host's
  * drive held or at the speed limit: the drive at the lead's limit (all of it from 90° on) and the
- * thrusters.
+ * thrusters. In free drift (`autopilot` false) the Host turns the nose across the flight and burns:
+ * the drive alone, all of it.
  */
-export function gripAt(speed: number, health: Health = HEALTHY): number {
+export function gripAt(speed: number, health: Health = HEALTHY, autopilot = true): number {
+  if (!autopilot) return MAIN_THRUST * health.driveFactor;
   return MAIN_THRUST * health.driveFactor * sin(Math.min(leadLimit(speed), Math.PI / 2)) + RCS_THRUST * health.thrusterFactor;
 }
 
-/** The tightest turn the autopilot flies at a speed (units, radius). */
-export const turnRadius = (speed: number, health: Health = HEALTHY) => (speed * speed) / gripAt(speed, health);
+/** The tightest turn flown at a speed (units, radius), with the autopilot or in free drift. */
+export const turnRadius = (speed: number, health: Health = HEALTHY, autopilot = true) => (speed * speed) / gripAt(speed, health, autopilot);
 
-/** The fastest the autopilot takes a bend of a radius (units/s; found by halving, since the grip falls with the speed). */
-export function cornerSpeed(radius: number, health: Health = HEALTHY): number {
+/** The fastest a bend of a radius is taken (units/s; found by halving, since the autopilot's grip falls with the speed), with the autopilot or in free drift. */
+export function cornerSpeed(radius: number, health: Health = HEALTHY, autopilot = true): number {
   let low = 0;
   let high = LEAD_TOP;
-  if (turnRadius(high, health) <= radius) return high;
+  if (turnRadius(high, health, autopilot) <= radius) return high;
   for (let i = 0; i < 18; i++) {
     const mid = (low + high) / 2;
-    if (turnRadius(mid, health) <= radius) low = mid;
+    if (turnRadius(mid, health, autopilot) <= radius) low = mid;
     else high = mid;
   }
   return low;
 }
 
+const sight = new THREE.Vector3();
+const sideways = new THREE.Vector3();
+
+/**
+ * The overdrive's shove (OVERDRIVE_PUSH long) into `out`: along the nose, or, with a ship under
+ * the aim assist (`target`), on a ram course: it first takes out the drift across the line to
+ * the target (what would carry the ship past it) and puts the rest along that line, so the two
+ * close straight on. A drift across larger than the shove takes all of it.
+ */
+export function overdriveShove(flight: FlightModel, target: FlightModel | null, out: THREE.Vector3): THREE.Vector3 {
+  if (!target) return flight.forward(out).multiplyScalar(OVERDRIVE_PUSH);
+  sight.subVectors(target.position, flight.position);
+  const range = sight.length();
+  if (range < 1) return flight.forward(out).multiplyScalar(OVERDRIVE_PUSH);
+  sight.divideScalar(range);
+  // the drift across the line of sight, relative to the target
+  sideways.subVectors(flight.velocity, target.velocity);
+  sideways.addScaledVector(sight, -sideways.dot(sight));
+  const drift = sideways.length();
+  if (drift >= OVERDRIVE_PUSH) return out.copy(sideways).multiplyScalar(-OVERDRIVE_PUSH / drift);
+  return out.copy(sideways).negate().addScaledVector(sight, Math.sqrt(OVERDRIVE_PUSH * OVERDRIVE_PUSH - drift * drift));
+}

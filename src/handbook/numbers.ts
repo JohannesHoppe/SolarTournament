@@ -190,7 +190,7 @@ function hotDepth(): number {
  */
 export const FROM_README: Record<string, { value: number; readme: string }> = {
   overdriveHeat: { value: 4, readme: 'for # seconds it gives no thrust' },
-  overdriveRecharge: { value: 60, readme: 'needs # seconds before it fires again' },
+  overdriveRecharge: { value: 20, readme: 'needs # seconds before it fires again' },
   dodge: { value: 60, readme: 'a kick of # m/s' },
   dodgeRecharge: { value: 1.5, readme: 'the thrusters need # seconds before the next dodge' },
   early: { value: 0.3, readme: 'A drive lit within # seconds before BURN!' },

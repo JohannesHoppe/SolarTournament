@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { hypot } from '../detmath';
 import { CentripetalCurve } from '../detthree';
 import type { AsteroidField } from '../world/asteroids';
-import { MAX_SPEED, turnRadius } from '../ship/flight';
+import { turnRadius } from '../ship/flight';
 
 /** Samples of the line between two gates, for its length and for finding the point nearest a ship. */
 const SAMPLES = 48;
@@ -13,11 +13,11 @@ export const CLEARANCE = 2000;
 /** Within this distance along the line of a gate (units, 80 m, two thirds of a gate's 120 m radius) the line runs through the gate's center, whatever lies beside it. */
 const GATE_FADE = 1600;
 /**
- * Around rock the line bends no tighter than this (units, about 730 m): a quarter more than the
+ * Around rock the line bends no tighter than this (units, about 730 m): more than twice the
  * autopilot's tightest turn at the speed limit (see turnRadius), so a Host holding the drive on
- * the line never meets a bend the flight cannot follow.
+ * the line flies its bends flat out with grip to spare, and has it to correct a hand's error.
  */
-export const BOW_RADIUS = Math.ceil(turnRadius(MAX_SPEED) * 1.25);
+export const BOW_RADIUS = 14574;
 /** The line bows around rock as it lies at most this long ago (s of field time): it moves slowly, so the bows are laid anew every so often. */
 const BOW_REFRESH = 1;
 /**

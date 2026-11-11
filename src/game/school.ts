@@ -355,15 +355,15 @@ export const CURVE_SPEED = 2000;
 /** A marker of the curve drill counts within this distance (units, 100 m), shown as a sphere around it. */
 export const CURVE_ZONE = 2000;
 /**
- * The rings of the brake drill: the first 1.5 km ahead, then a bend of about 470 m radius to the
- * second, 475 m to the right, and on to the third. At the speed limit the autopilot turns no
- * tighter than about 585 m (see turnRadius), so the racing line glows orange before the bend; at
- * about 225 m/s it takes the bend, after a short brake.
+ * The rings of the brake drill: the first 1.5 km ahead, then a bend of about 270 m radius to the
+ * second, 240 m to the right, and on to the third. At the speed limit the autopilot turns no
+ * tighter than about 325 m (see turnRadius), so the racing line glows orange before the bend; at
+ * about 230 m/s it takes the bend, after a short brake.
  */
 export const BRAKE_COURSE: readonly [number, number, number][] = [
   [0, 0, -30000],
-  [9500, 0, -38500],
-  [20000, 0, -48000],
+  [4750, 0, -34250],
+  [10000, 0, -39000],
 ];
 /**
  * The rings of the full-speed drill: five, about 570 m apart, weaving 125 m to the right and 100 m

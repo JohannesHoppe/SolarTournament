@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { FlightModel } from './flight';
+import { FlightModel, RCS_THRUST } from './flight';
 import { NANO_SECONDS, NANO_WAIT, Ship } from './ship';
 import { STOCK } from '../game/hangar';
 import { shipState } from '../net/validate';
@@ -116,9 +116,9 @@ describe("another browser's ship", () => {
     owner.flight.velocity.set(0, -40, 0);
     seen.applyState(shipState(owner.toState(0.1))!, 0.1);
     expect(seen.flight.rcs.length()).toBe(0);
-    // the same change of velocity with nothing pulling is its thrusters' push
+    // half the thrusters' push, with nothing pulling, is their push
     seen.pull.set(0, 0, 0);
-    owner.flight.velocity.set(0, -80, 0);
+    owner.flight.velocity.set(0, -40 - RCS_THRUST * 0.1 * 0.5, 0);
     seen.applyState(shipState(owner.toState(0.2))!, 0.2);
     expect(seen.flight.rcs.length()).toBeGreaterThan(0.3);
   });

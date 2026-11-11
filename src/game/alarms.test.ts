@@ -208,11 +208,11 @@ describe("the overdrive's last chance at a well", () => {
   it('never calls it for a whole drive at rest past its point of no return, nor where the drive alone still gets out', () => {
     // at rest 500 m from the hole, burning away: the shove carries the ship up, the cold drive lets it fall back in
     expect(wellEscape(hole, new THREE.Vector3(10000, 0, 0), new THREE.Vector3(), away, 1, 0, true, true)).toBe('lost');
-    // at rest 620 m from it, CRITICAL, burning away: the drive gets out, and the shove with its cold drive would not
+    // at rest 620 m from it, CRITICAL, burning away: the drive gets out, so the overdrive is not called
     const critical = new THREE.Vector3(12400, 0, 0);
     expect(escapeLoad(hole, critical, new THREE.Vector3(), MAIN_THRUST)).toBeGreaterThan(WELL_CRITICAL);
+    expect(flownOut(12400, 0, 1, false, true)).toBe(true);
     expect(wellEscape(hole, critical, new THREE.Vector3(), away, 1, 0, true, true)).toBe('drive');
-    expect(flownOut(12400, 0, 1, true, true)).toBe(false);
   });
 
   it('turns the nose first: a ship facing the hole needs longer than one facing away', () => {

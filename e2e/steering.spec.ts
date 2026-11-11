@@ -51,15 +51,15 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
   await play(page, 0.3);
   const viewport = page.viewportSize()!;
   const center = { x: viewport.width / 2, y: viewport.height / 2 };
-  // the drive held, the pointer to the right until the flight points back, then centered
+  // the drive held, the pointer to the right until the nose (the crosshair, which a Host steers
+  // by) points back, then centered; the flight follows the nose
   await page.mouse.move(center.x, center.y);
   await page.keyboard.down('KeyW');
   await page.mouse.move(center.x + Math.min(viewport.width, viewport.height) * 0.22, center.y, { steps: 8 });
   await page.waitForFunction(
     (start) => {
-      const velocity = window.game.me.flight.velocity;
-      const speed = velocity.length();
-      return (velocity.x * start.x + velocity.y * start.y + velocity.z * start.z) / speed < -0.95;
+      const nose = window.game.me.flight.forward(window.game.me.flight.velocity.clone());
+      return nose.x * start.x + nose.y * start.y + nose.z * start.z < -0.95;
     },
     start,
     { timeout: 120_000 },

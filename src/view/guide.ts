@@ -35,8 +35,8 @@ const OFF_NEAR = 1000;
 const OFF_FAR = 5000;
 const OFF_BOOST = 0.8;
 /**
- * Brake zones: where the line bends tighter than the ship, at its speed now, can turn with the
- * autopilot (see cornerSpeed), the ribbon glows orange; measured over BEND_SPAN samples to either
+ * Brake zones: where the line bends tighter than the ship, at its speed now, can turn (with the
+ * autopilot, or in free drift by the drive alone; see cornerSpeed), the ribbon glows orange; measured over BEND_SPAN samples to either
  * side (60 m), and fading in from BRAKE_FROM to BRAKE_FULL of the speed that bend allows.
  */
 const BEND_SPAN = 3;
@@ -156,9 +156,9 @@ export class GuideLine {
    * (units/s), on its way to gate `next` of the ideal `line`; `time` in seconds runs the pulses.
    * A ship that `missed` the gate is led back to it, onto the line well before the gate. Where
    * the line bends tighter than a ship of that speed turns with its drive and thrusters as
-   * `health` has them (see turnRadius), it glows orange.
+   * `health` has them, with the `autopilot` or in free drift (see turnRadius), it glows orange.
    */
-  show(from: THREE.Vector3, heading: THREE.Vector3, speed: number, health: Health, line: RacingLine, field: AsteroidField, next: number, missed: boolean, time: number) {
+  show(from: THREE.Vector3, heading: THREE.Vector3, speed: number, health: Health, autopilot: boolean, line: RacingLine, field: AsteroidField, next: number, missed: boolean, time: number) {
     const join = Math.max(JOIN_MIN, speed * JOIN_SECONDS);
     const at = line.progress(from, next, missed ? join : 0);
     // the samples lie on a grid every SAMPLE from the start of each lap, so the dashes stay where
@@ -204,7 +204,7 @@ export class GuideLine {
       point.fromArray(positions, 2 * i * 3);
       after.fromArray(positions, 2 * b * 3);
       const radius = a < i && i < b ? bendRadius(before, point, after) : Infinity;
-      this.hot[2 * i] = this.hot[2 * i + 1] = THREE.MathUtils.smoothstep(speed / cornerSpeed(radius, health), BRAKE_FROM, BRAKE_FULL);
+      this.hot[2 * i] = this.hot[2 * i + 1] = THREE.MathUtils.smoothstep(speed / cornerSpeed(radius, health, autopilot), BRAKE_FROM, BRAKE_FULL);
     }
     // off the line, the line shows brighter and wider
     const off = from.distanceTo(line.clear(at, field, onLine));

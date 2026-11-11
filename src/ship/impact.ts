@@ -65,7 +65,7 @@ export const RAM_SAFE = 300;
  *
  * At 60 m/s (the dodge kicked into a flank) the blow is about 17: a flank loses 8 hull points;
  * into a drive, 17 points and a fifth of its thrust. An overdrive's shove into a
- * drive (about 150 m/s closing) kills the ship ahead and costs the rammer's nose about 46.
+ * drive or a flank (about 200 m/s closing) kills the ship ahead and costs the rammer's nose about 86.
  */
 const RAM_SCALE = 219;
 const RAM_NOSE = 0.3;
