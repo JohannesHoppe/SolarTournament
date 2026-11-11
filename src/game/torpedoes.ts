@@ -10,8 +10,17 @@ import { MASS } from '../world/bodies';
 import { LOCK_DEPTH } from '../world/air';
 import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
-/** Torpedoes a fresh clone carries. */
-export const TORPEDOES = 2;
+/** Torpedoes a fresh clone carries: enough for a salvo that a ship's decoys (one torpedo each, see game/decoys) cannot all draw. */
+export const TORPEDOES = 4;
+/** Torpedoes a sponsor probe carries in a round of the tournament (see game/items). */
+export const TORPEDOES_PER_PROBE = 4;
+/**
+ * The drills' lean load: what a drill of the flight school or a campaign's job hands the Host's
+ * clone, what every other ship flying in one carries (a drone, a sparring bot, claim-jumpers, a
+ * bounty, racers, a wingman, a flock: Ship.lean), and what a probe carries there. Torpedoes are
+ * scarce off the tournament, as on Lot 7731 (see campaign/campaign, hullOf).
+ */
+export const DRILL_TORPEDOES = 2;
 /** The most a fresh clone carries online: the standard load and its tubes up to the online cap (see game/hangar). */
 export const ONLINE_LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
 /** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */

@@ -5,10 +5,12 @@ import type { Homing, Torpedo } from './torpedoes';
 /**
  * Decoys: hot lures a clone drops (an item, two from a sponsor probe, see game/items). One flies
  * off the ship's stern, DECOY_BACK slower than the ship (units/s, 30 m/s), and burns for
- * DECOY_LIFE seconds; every torpedo homing on that ship within DECOY_LURE of it (units, 1 km)
- * turns to it instead, while it burns, and goes off on it as on its target (see lure). Every browser
- * drops the decoys every other one tells of, so every torpedo turns alike, and the shooter's
- * browser decides where it goes off, as ever.
+ * DECOY_LIFE seconds; while it burns it draws one torpedo homing on that ship within DECOY_LURE of
+ * it (units, 1 km), the nearest, launched before the drop or after, which turns to it and goes off
+ * on it as on its target (see lure). One decoy, one torpedo: once the torpedo it drew is gone, the
+ * decoy is spent, so a salvo larger than the decoys a ship drops gets through. Every browser drops
+ * the decoys every other one tells of, so every torpedo turns alike, and the shooter's browser
+ * decides where it goes off, as ever.
  */
 export const DECOY_LIFE = 6;
 export const DECOY_LURE = 20000;
@@ -24,6 +26,8 @@ export class Decoy implements Homing {
   readonly radius = DECOY_RADIUS;
   readonly flight: { position: THREE.Vector3; velocity: THREE.Vector3 };
   alive = true;
+  /** The torpedo it drew (see lure), or null while it draws none. */
+  drawn: Torpedo | null = null;
   constructor(
     readonly id: string,
     readonly name: string,
@@ -46,16 +50,28 @@ export function decoyLaunch(ship: Ship, position: THREE.Vector3, velocity: THREE
   velocity.copy(ship.flight.velocity).addScaledVector(back, DECOY_BACK);
 }
 
-/** Turns every torpedo homing on the decoy's ship within DECOY_LURE of it to the decoy; returns how many turned. */
-export function lure(decoy: Decoy, torpedoes: readonly Torpedo[]): number {
-  let turned = 0;
+/**
+ * A decoy drawing no torpedo turns the one homing on its ship nearest to it within DECOY_LURE to
+ * itself; returns it, or null. A torpedo it drew that lost sight of it (behind a rock) lets it draw
+ * another.
+ */
+export function lure(decoy: Decoy, torpedoes: readonly Torpedo[]): Torpedo | null {
+  if (decoy.drawn && decoy.drawn.target === decoy) return null;
+  decoy.drawn = null;
+  let nearest: Torpedo | null = null;
+  let best = DECOY_LURE * DECOY_LURE;
   for (const torpedo of torpedoes) {
     if (torpedo.target !== decoy.owner) continue;
-    if (torpedo.position.distanceTo(decoy.flight.position) > DECOY_LURE) continue;
-    torpedo.target = decoy;
-    turned++;
+    const distance = torpedo.position.distanceToSquared(decoy.flight.position);
+    if (distance > best) continue;
+    best = distance;
+    nearest = torpedo;
   }
-  return turned;
+  if (nearest) {
+    nearest.target = decoy;
+    decoy.drawn = nearest;
+  }
+  return nearest;
 }
 
 /** The decoys in flight: they drift and glow, and go out after DECOY_LIFE. */
@@ -79,10 +95,14 @@ export class Decoys {
     return decoy;
   }
 
-  /** The decoys drift and burn down; while one burns it lures every torpedo that comes for its ship within reach, launched before it was dropped or after. */
+  /** The decoys drift and burn down; while one burns it draws a torpedo that comes for its ship within reach, launched before it was dropped or after; one whose torpedo is gone is spent. */
   update(dt: number, now: number, torpedoes: readonly Torpedo[]) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const decoy = this.list[i];
+      if (decoy.drawn && !torpedoes.includes(decoy.drawn)) {
+        this.remove(decoy);
+        continue;
+      }
       decoy.flight.position.addScaledVector(decoy.flight.velocity, dt);
       decoy.glow.position.copy(decoy.flight.position);
       lure(decoy, torpedoes);

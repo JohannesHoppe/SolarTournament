@@ -4,7 +4,7 @@ import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SIL
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
-import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
+import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
@@ -60,6 +60,7 @@ export const FROM_CODE: Record<string, number> = {
   streak: STREAK_SECONDS,
   hull: MAX_HULL,
   torpedoes: TORPEDOES,
+  probeTorpedoes: TORPEDOES_PER_PROBE,
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
   lockRange: km(LOCK_DISTANCE),
   torpedoDamage: TORPEDO_DAMAGE,

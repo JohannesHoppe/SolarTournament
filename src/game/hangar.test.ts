@@ -44,7 +44,9 @@ describe('the hangar', () => {
     expect(solo.cooling).toBeGreaterThan(online.cooling);
     expect(online.cooling).toBeCloseTo(1 + 0.15 * ONLINE_LEVEL);
     expect(solo.damage).toBeLessThan(1);
-    expect(solo.torpedoes).toBe(2);
+    // two torpedoes more at the first step of the tubes and two at the third
+    expect(solo.torpedoes).toBe(4);
+    expect(online.torpedoes).toBe(2);
     expect(online.neon).toBe(LEVELS);
     // the Sovereign flies like a complete interceptor with all the gear, whatever was bought
     expect(perksOf(emptyHangar(), 'sovereign', false)).toEqual({ ...solo, hook: true, nanobots: true, selfDestruct: true });

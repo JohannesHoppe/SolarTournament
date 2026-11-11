@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { atan2, hypot } from '../detmath';
 import { angleTo, setFromAxisAngle } from '../detthree';
 import { MAX_SPEED } from '../ship/flight';
-import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME } from '../game/torpedoes';
+import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { DECOYS_PER_PROBE } from '../game/decoys';
 import { HOOK_RANGE } from '../game/hook';
 import { FINISH_GATES } from '../game/race';
@@ -32,7 +32,7 @@ const PLAUSIBLE_SLACK = 10000;
 /** After a new round or a nova a ship is printed somewhere else: its position and nose are not checked this long (s). */
 const REPRINT_GRACE = 10;
 /** A clone may launch this many torpedoes beyond what it had, for messages of a round change that cross. */
-const TORPEDO_SLACK = 2;
+export const TORPEDO_SLACK = 2;
 /** A ship may claim this many kills beyond the deaths everyone saw, for reports that arrive after its state. */
 const KILL_SLACK = 2;
 /** Kills beyond that count only once they stay so long (s): a nova's victims are told of by their own browsers, a moment after the killer's state. */
@@ -389,7 +389,7 @@ export class Plausibility {
     if (!seen && !first) return;
     if (kind === null) track.tookAt = now;
     if (kind === 'nova') track.nova = true;
-    if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
+    if (kind === 'torpedoes' || kind === null) track.torpedoes += TORPEDOES_PER_PROBE;
     if (kind === 'decoys' || kind === null) track.decoys += DECOYS_PER_PROBE;
   }
 

@@ -12,7 +12,7 @@ import { approachGate, BOOST_STRAIN, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
 import { aimHook, anchorPoint, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
-import { Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
+import { DRILL_TORPEDOES, Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
 import { hullOf, spareSkills, type Campaign, type Choice, type Mission } from '../campaign/campaign';
 import type { SceneName } from '../campaign/scenes';
@@ -626,6 +626,11 @@ export class JobWorld implements SchoolContext {
 
   private addShip(id: string, name: string, type: 'human' | 'alien' | 'magpie'): Ship {
     const ship = new Ship(id === 'me' ? id : `${id}#${++this.shipCount}`, name, type, this.assets, id === 'me');
+    // a drill's ships carry its lean load, as in the game (see DRILL_TORPEDOES)
+    if (id !== 'me') {
+      ship.lean = true;
+      ship.torpedoes = DRILL_TORPEDOES;
+    }
     this.ships.push(ship);
     return ship;
   }
@@ -802,7 +807,7 @@ export class JobWorld implements SchoolContext {
 
   arm(item: 'torpedo' | 'nova') {
     if (item === 'nova') this.me.nova = true;
-    else this.me.torpedoes = Math.max(this.me.torpedoes, 2);
+    else this.me.torpedoes = Math.max(this.me.torpedoes, DRILL_TORPEDOES);
   }
 
   torpedoAt(from: Ship) {

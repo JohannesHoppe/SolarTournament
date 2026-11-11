@@ -19,7 +19,7 @@ const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, 
  * stay with the clone and fly out again as probes when it dies; the rest is used at once.
  * - twin: the laser fires twice as fast at half the heat per shot.
  * - plating: two hits into the drive bounce off, or one torpedo.
- * - torpedoes: two more.
+ * - torpedoes: four more (TORPEDOES_PER_PROBE; a drill's lean load in the flight school and a campaign's job, DRILL_TORPEDOES).
  * - overdrive: ready at once.
  * - repair: hull, drive and thrusters as new.
  * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
@@ -61,7 +61,7 @@ export function placeBucket(place: number, count: number): number {
 export const ITEM_NAMES: Record<ItemKind, string> = {
   twin: msg('Twin laser'),
   plating: msg('Plating'),
-  torpedoes: msg('+2 torpedoes'),
+  torpedoes: msg('+{n} torpedoes'),
   overdrive: msg('Overdrive charged'),
   repair: msg('Repair'),
   nova: msg('Nova core'),

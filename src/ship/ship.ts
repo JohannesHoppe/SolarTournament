@@ -8,7 +8,7 @@ import { raySphere } from '../world/asteroids';
 import { CLOG_LOSS } from '../world/air';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
-import { ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
+import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
@@ -329,6 +329,8 @@ export class Ship {
   hull = MAX_HULL;
   /** Torpedoes left (see game/torpedoes); every clone comes with a full load. */
   torpedoes = TORPEDOES;
+  /** A ship of a drill other than the Host's (see DRILL_TORPEDOES): every clone of it comes with the drills' lean load. */
+  lean = false;
   /** Torpedoes this ship fired with this clone and before, for their ids. */
   torpedoesFired = 0;
   /** Items the clone holds (see game/items): a twin laser, and plating charges left. */
@@ -573,7 +575,7 @@ export class Ship {
     this.previous.copy(position);
     this.holdTrigger();
     this.repair();
-    this.torpedoes = TORPEDOES + this.perks.torpedoes;
+    this.torpedoes = (this.lean ? DRILL_TORPEDOES : TORPEDOES) + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
     this.nova = false;

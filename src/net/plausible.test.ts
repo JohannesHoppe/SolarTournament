@@ -2,14 +2,17 @@ import * as THREE from 'three';
 import { hypot } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle } from '../detthree';
 import { describe, expect, it } from 'vitest';
-import { TORPEDO_LIFETIME } from '../game/torpedoes';
+import { ONLINE_LOAD, TORPEDO_LIFETIME, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
 import { NOVA_RADIUS } from '../game/items';
 import { killScore } from '../game/friendly';
 import { BOT_RESPAWN_SECONDS } from '../game/sponsors';
 import { streakBonus, Streaks } from '../game/streaks';
 import { TOURNAMENT_SIZE } from './session';
-import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, TORPEDO_SLACK, type Margins, type Seen, type Standing } from './plausible';
+
+/** Torpedoes a clone online may launch without a probe before the check calls it a cheat. */
+const ALLOWED = ONLINE_LOAD + TORPEDO_SLACK;
 import { Fleet, FLEET_SPEED, type FleetState } from '../game/fleet';
 import { arenaById } from '../world/arenas';
 import type { ShovedState } from '../world/asteroids';
@@ -109,7 +112,7 @@ describe('plausibility of what other browsers report', () => {
     // a take refused here (the taker too far, as lag may have it) may have held a core or torpedoes, once
     check.probe('s', '3.0', null, 21);
     for (let t = 21.1; t < 30; t += 0.1) check.probe('s', '3.0', null, t);
-    for (let i = 0; i < 7; i++) expect(check.torpedo('s', 30)).toBeNull();
+    for (let i = 0; i < ALLOWED + TORPEDOES_PER_PROBE; i++) expect(check.torpedo('s', 30)).toBeNull();
     expect(check.torpedo('s', 30)).toBe('torpedoes');
     check.state('s', alive(0, { nova: true }), 30);
     expect(check.nova('s', [0, 0, 0], 30.1)).toBe('nova');
@@ -117,7 +120,7 @@ describe('plausibility of what other browsers report', () => {
     const other = flying(new Plausibility(), 't');
     other.probe('s', '4.0', null, 21);
     other.probe('t', '4.0', null, 21.5);
-    for (let i = 0; i < 5; i++) expect(other.torpedo('t', 22)).toBeNull();
+    for (let i = 0; i < ALLOWED; i++) expect(other.torpedo('t', 22)).toBeNull();
     expect(other.torpedo('t', 22)).toBe('torpedoes');
     other.state('t', alive(0, { nova: true }), 22);
     expect(other.nova('t', [0, 0, 0], 22.1)).toBe('nova');
@@ -134,7 +137,7 @@ describe('plausibility of what other browsers report', () => {
     check.probe('s', '5.0', 'twin', 21, false);
     check.state('s', alive(0, { nova: true }), 21.5);
     expect(check.nova('s', [0, 0, 0], 21.6)).toBe('nova');
-    for (let i = 0; i < 5; i++) expect(check.torpedo('s', 22)).toBeNull();
+    for (let i = 0; i < ALLOWED; i++) expect(check.torpedo('s', 22)).toBeNull();
     expect(check.torpedo('s', 22)).toBe('torpedoes');
     // a probe 't' took here holds nothing for another ship that names it later
     check.probe('t', '6.0', 'nova', 23);
@@ -157,7 +160,7 @@ describe('plausibility of what other browsers report', () => {
 
   it('count torpedoes per clone, with the tubes allowed online, probes and some slack; a clone is new only after a death it saw', () => {
     const check = flying(new Plausibility());
-    for (let i = 0; i < 5; i++) expect(check.torpedo('s', 21)).toBeNull();
+    for (let i = 0; i < ALLOWED; i++) expect(check.torpedo('s', 21)).toBeNull();
     expect(check.torpedo('s', 21)).toBe('torpedoes');
     // dying and living again in its own states gives no fresh load
     check.state('s', dead, 21.5);
@@ -167,7 +170,7 @@ describe('plausibility of what other browsers report', () => {
     check.state('s', dead, 22);
     check.state('s', alive(0), 25);
     check.probe('s', '1.0', 'torpedoes', 26);
-    for (let i = 0; i < 7; i++) expect(check.torpedo('s', 27)).toBeNull();
+    for (let i = 0; i < ALLOWED + TORPEDOES_PER_PROBE; i++) expect(check.torpedo('s', 27)).toBeNull();
     expect(check.torpedo('s', 27)).toBe('torpedoes');
   });
 
@@ -201,7 +204,7 @@ describe('plausibility of what other browsers report', () => {
 
   it('give a browser that started over a new clone, without forgetting its kills', () => {
     const check = flying(new Plausibility());
-    for (let i = 0; i < 5; i++) check.torpedo('s', 21);
+    for (let i = 0; i < ALLOWED; i++) check.torpedo('s', 21);
     check.reprint('s', 22);
     expect(check.state('s', alive(100000), 22.1)).toEqual([]);
     expect(check.torpedo('s', 22.2)).toBeNull();
@@ -613,9 +616,9 @@ describe('evidence of what a ship did', () => {
     expect(strikes.count('b:gone:7', 'aim')).toBe(0);
     expect(strikes.count('p:stays', 'aim')).toBe(1);
     // a forgotten ship starts with a fresh load: the probe's torpedoes went with it
-    for (let i = 0; i < 5; i++) check.torpedo('p:gone', 11);
+    for (let i = 0; i < ALLOWED; i++) check.torpedo('p:gone', 11);
     expect(check.torpedo('p:gone', 11)).toBe('torpedoes');
-    for (let i = 0; i < 7; i++) expect(check.torpedo('p:stays', 11)).toBeNull();
+    for (let i = 0; i < ALLOWED + TORPEDOES_PER_PROBE; i++) expect(check.torpedo('p:stays', 11)).toBeNull();
   });
 
   it("counts a torpedo's hit on the battleship after its shooter died, a laser's only from a living one", () => {

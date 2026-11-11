@@ -79,7 +79,7 @@ import { clipType, recordClip } from '../view/clip';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, hullLooks, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
@@ -3542,6 +3542,11 @@ export class Game implements OnlineGame {
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {
     const ship = new Ship(id, name, type, this.assets, isLocal);
+    // a drill's ships carry its lean load (see DRILL_TORPEDOES)
+    if (this.school && !isLocal) {
+      ship.lean = true;
+      ship.torpedoes = DRILL_TORPEDOES;
+    }
     this.ships.push(ship);
     this.scene.add(ship.root);
     this.lendLight(ship);
@@ -5564,7 +5569,7 @@ export class Game implements OnlineGame {
       const mark = this.probeMarks[i];
       const probe = this.probes.list[i];
       mark.position.copy(probe.position);
-      mark.label = t(probe.luck === null ? ITEM_NAMES[probe.kind] : SEALED_NAME);
+      mark.label = probe.luck === null ? this.itemName(probe.kind) : t(SEALED_NAME);
       list.push(mark);
     }
     const holder = this.ships.find((ship) => ship.nova && ship.alive && ship !== subject);
@@ -6353,7 +6358,7 @@ export class Game implements OnlineGame {
       boost: (through) => this.coilPush(this.me!, through),
       arm: (item) => {
         if (item === 'nova') game.me!.nova = true;
-        else game.me!.torpedoes = Math.max(game.me!.torpedoes, TORPEDOES);
+        else game.me!.torpedoes = Math.max(game.me!.torpedoes, DRILL_TORPEDOES);
       },
       torpedoAt: (from) => this.drillTorpedo(from),
       get torpedoes() {
@@ -7257,6 +7262,16 @@ export class Game implements OnlineGame {
     return placeBucket(standings.indexOf(ship), standings.length);
   }
 
+  /** Torpedoes a probe carries here: the tournament's load (a trial of the campaign is a round of the Games), or a drill's lean one. */
+  private probeTorpedoes() {
+    return this.school ? DRILL_TORPEDOES : TORPEDOES_PER_PROBE;
+  }
+
+  /** An item's name as the HUD shows it, with the torpedoes a probe carries here. */
+  private itemName(kind: ItemKind) {
+    return t(ITEM_NAMES[kind], { n: this.probeTorpedoes() });
+  }
+
   /** What an item does to the ship that took it. */
   private useItem(ship: Ship, kind: ItemKind) {
     switch (kind) {
@@ -7267,7 +7282,7 @@ export class Game implements OnlineGame {
         ship.plating = PLATING_CHARGES;
         break;
       case 'torpedoes':
-        ship.torpedoes += 2;
+        ship.torpedoes += this.probeTorpedoes();
         break;
       case 'overdrive':
         if (ship === this.me) this.overdriveReadyAt = 0;
@@ -7285,7 +7300,7 @@ export class Game implements OnlineGame {
         break;
     }
     if (ship.isLocal) {
-      this.hud.flashMessage(this.time, `${t(ITEM_NAMES[kind])} · ${t(ITEM_HINTS[kind])}`, kind === 'nova' ? 4 : 2.5);
+      this.hud.flashMessage(this.time, `${this.itemName(kind)} · ${t(ITEM_HINTS[kind])}`, kind === 'nova' ? 4 : 2.5);
       if (kind === 'nova') this.speaker.say(COMPUTER.nova, 'urgent');
       this.sound.beep(988, 0.07, 0.15);
       this.sound.beep(1319, 0.07, 0.15, 0.07);

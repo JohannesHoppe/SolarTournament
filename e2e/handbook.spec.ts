@@ -25,8 +25,8 @@ for (const locale of LOCALES) {
     else expect(contents).not.toContain('Dirty tricks');
     // a phone reads it without scrolling sideways
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    // the link to a section lands on it
-    expect(await page.evaluate(() => Math.abs(document.getElementById('torpedoes')!.getBoundingClientRect().top) < 40)).toBe(true);
+    // the link to a section lands on it, once the page has laid out its fonts and numbers
+    await expect.poll(() => page.evaluate(() => Math.abs(document.getElementById('torpedoes')!.getBoundingClientRect().top) < 40)).toBe(true);
     expect(errors).toEqual([]);
   });
 }

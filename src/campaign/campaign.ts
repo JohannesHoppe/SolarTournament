@@ -3,7 +3,7 @@ import type { Mood } from '../music/radio';
 import type { Flavor } from '../music/songs';
 import type { ArenaId } from '../world/arenas';
 import type { RoundMode } from '../game/race';
-import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP, tubeTorpedoes, type Perks } from '../game/hangar';
+import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
 import { evenSkills, type Skills } from '../ship/bots';
@@ -74,7 +74,7 @@ export const THRUSTERS_ONE_PRICE = 1000;
 export const PLATING_TWO_PRICE = 3000;
 /** Main drive II and Radiators II (chapter 11), at Iapetus: each the hangar's second step (see DRIVE_STEP, RADIATOR_STEP), each at this price (☉), paid as the laser's is. */
 export const DRIVE_TWO_PRICE = 2500;
-/** Torpedo tubes I (chapter 12), the trials' prize: the hangar's first step of the tubes (see tubeTorpedoes), its price (☉), paid as the laser's is. */
+/** Torpedo tubes I (chapter 12), the trials' prize: the hangar's first step of the tubes (see campaignTubes), its price (☉), paid as the laser's is. */
 export const TUBES_ONE_PRICE = 1500;
 /** The overdrive (chapter 13), the Loose's hack: its fitting's price (☉), paid as the laser's is. */
 export const OVERDRIVE_PRICE = 3000;
@@ -86,7 +86,7 @@ export const THRUSTERS_THREE_PRICE = 5000;
 export const PLATING_THREE_PRICE = 6000;
 /** Main drive III and Radiators III (chapter 16), at the Ladder's depots: each the hangar's third step, each at this price (☉), paid as the laser's is. */
 export const DRIVE_THREE_PRICE = 5000;
-/** Torpedo tubes II and III (chapter 17), from the Feeders: the hangar's second and third steps of the tubes (see tubeTorpedoes), their prices (☉), paid as the laser's is. */
+/** Torpedo tubes II and III (chapter 17), from the Feeders: the hangar's second and third steps of the tubes (see campaignTubes), their prices (☉), paid as the laser's is. */
 export const TUBES_TWO_PRICE = 3000;
 export const TUBES_THREE_PRICE = 6000;
 
@@ -111,6 +111,13 @@ const MODULES: readonly Module[] = ['targeting', 'racingLine', 'radar', 'threat'
 export const MODULE_NAMES: Record<Module, string> = { targeting: msg('targeting'), racingLine: msg('racing line'), radar: msg('radar'), threat: msg('threat'), voice: msg('her own voice'), wells: msg('wells') };
 
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
+/**
+ * Torpedoes the campaign's tubes add past the second tube's two at a step of the hangar's tubes:
+ * one at the first step and one more at the third, half what a tournament ship's add (see
+ * tubeTorpedoes), for torpedoes are scarce on Lot 7731, as the probes of its jobs are lean.
+ */
+export const campaignTubes = (step: number) => Math.ceil(step / 2);
+
 export function hullOf(campaign: Campaign): Perks {
   const hull: Perks = { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR, bareFlank: true };
   if (campaign.parts.includes('cutter')) Object.assign(hull, { laser: true, laserReach: CUTTER_REACH, laserHeat: CUTTER_HEAT });
@@ -135,7 +142,7 @@ export function hullOf(campaign: Campaign): Perks {
   // and a second step on the first
   if (campaign.parts.includes('platingTwo')) hull.damage -= PLATING_STEP;
   if (campaign.parts.includes('platingThree')) hull.damage -= PLATING_STEP;
-  // a torpedo tube: one torpedo a clone, a stock ship's two less one
+  // a torpedo tube: one torpedo a clone
   if (campaign.parts.includes('tube')) hull.torpedoes = 1 - TORPEDOES;
   // the main drive a step past a stock ship's, once it is overhauled to stock
   if (campaign.parts.includes('driveOne')) hull.drive = STOCK.drive + DRIVE_STEP;
@@ -144,12 +151,12 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('driveThree')) hull.drive = STOCK.drive + 3 * DRIVE_STEP;
   // Jack's harpoon on a tug's winch: the hook
   if (campaign.parts.includes('hook')) hull.hook = true;
-  // the second tube: two torpedoes, a stock ship's
+  // the second tube: two torpedoes
   if (campaign.parts.includes('secondTube')) hull.torpedoes = 2 - TORPEDOES;
-  // the tubes a step past a stock ship's: a torpedo more
-  if (campaign.parts.includes('tubesOne')) hull.torpedoes = 2 - TORPEDOES + tubeTorpedoes(1);
-  if (campaign.parts.includes('tubesTwo')) hull.torpedoes = 2 - TORPEDOES + tubeTorpedoes(2);
-  if (campaign.parts.includes('tubesThree')) hull.torpedoes = 2 - TORPEDOES + tubeTorpedoes(3);
+  // the tubes past the second: a torpedo more at the first step and at the third
+  if (campaign.parts.includes('tubesOne')) hull.torpedoes = 2 - TORPEDOES + campaignTubes(1);
+  if (campaign.parts.includes('tubesTwo')) hull.torpedoes = 2 - TORPEDOES + campaignTubes(2);
+  if (campaign.parts.includes('tubesThree')) hull.torpedoes = 2 - TORPEDOES + campaignTubes(3);
   // the thrusters a step past a stock ship's
   if (campaign.parts.includes('thrustersOne')) hull.thrusters = STOCK.thrusters + THRUSTER_STEP;
   if (campaign.parts.includes('thrustersTwo')) hull.thrusters = STOCK.thrusters + 2 * THRUSTER_STEP;

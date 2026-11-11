@@ -245,8 +245,8 @@ test('two tabs see a probe on a hook travel to the hooking ship, and be taken th
   // the second tab saw it come more than half the way towards the hooking ship, then it was gone
   expect(Math.max(...seen.filter((z) => !Number.isNaN(z)))).toBeGreaterThan(4000);
   expect(Number.isNaN(seen[seen.length - 1])).toBe(true);
-  // taken by the ship that hooked it, on its arrival: two more torpedoes, and gone on both tabs
-  expect(await a.evaluate(() => window.game.me.torpedoes)).toBe(before + 2);
+  // taken by the ship that hooked it, on its arrival: four more torpedoes, and gone on both tabs
+  expect(await a.evaluate(() => window.game.me.torpedoes)).toBe(before + 4);
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.probes.find('e2e.0.0'))).toBeNull();
   await ranHonestly(errors, a, b);
 });

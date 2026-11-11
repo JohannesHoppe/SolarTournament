@@ -305,11 +305,11 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 7 | Torpedo tube | 2,000 | One torpedo per clone (built: Tube Fitting) |
 | 7 | Main drive I | 1,000 | The main drive pushes 5 % of a stock ship's harder, the hangar's first step (built: Main Drive I) |
 | 8 | The hook | 1,500 (fitting) | Jack's harpoon and a tug's winch (built: The Harpoon) |
-| 9 | Second tube | 2,000 | Two torpedoes: stock (built: Second Tube) |
+| 9 | Second tube | 2,000 | Two torpedoes, half a ship of the Games' four: torpedoes stay scarce on Lot 7731, and in its jobs every other ship and every probe carries two (built: Second Tube) |
 | 9 | Thrusters I | 1,000 | The thrusters push 8 % of a stock ship's harder, the hangar's first step (built: Thrusters I) |
 | 10 | Plating II | 3,000 | Every hit hurts two of the hangar's steps less (built: Plating II, from Crisp's people) |
 | 11 | Main drive II, radiators II | 2,500 each | Each the hangar's second step (built: Drive II, paid with money Quill's office sent ahead) |
-| 12 | Torpedo tubes I | 1,500 | A torpedo more, the hangar's first step (built: Torpedo Tubes I) |
+| 12 | Torpedo tubes I | 1,500 | A torpedo more, the hangar's first step at the campaign's lean measure (a ship of the Games gets two) (built: Torpedo Tubes I) |
 | 13 | The overdrive | 3,000 (fitting) | The Loose's gift (built: Among the Loose) |
 | 13 | Thrusters II | 2,500 | The hangar's second step (built: Thrusters II) |
 | 14 | Thrusters III | 5,000 | The hangar's third step (built: Thrusters III) |
@@ -806,7 +806,7 @@ Then the job board again. Her offers on the plate (built):
 
 **PIM**: Pit crew of the Circuit owed me a favor. Second tube, two thousand. Two fish now, like the rich kids.
 
-**NICOLE**: Two torpedoes now, Host, as many as any ship in the Games carries.
+**NICOLE**: Two torpedoes now, Host. A salvo of two, and only one has to get through.
 
 **PIM**: Circuit-grade nozzles for your thrusters, a thousand. You'll slide like a racer. Try not to slide into anything.
 
@@ -978,7 +978,7 @@ Then the job board again. Her offers on the plate (built):
 
 **PIM** *(Torpedo Tubes I)*: Trial prize: a third tube, fifteen hundred off the purse. Navy fittings, Ministry stamps on every bolt. Hold still.
 
-**NICOLE**: A torpedo tube more, Host. Three now, more than a stock ship carries.
+**NICOLE**: A torpedo tube more, Host. Three now, one for their decoy and two for them.
 
 ### The Invitation (chapter 12, built)
 

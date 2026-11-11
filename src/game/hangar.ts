@@ -49,7 +49,7 @@ export const COINS_PER_POINT = 1;
 /**
  * The upgrades. What they do per step: radiators shed heat 15 % faster, the thrusters push and
  * turn 8 % harder, the main drive pushes 5 % harder (the speed limit stays), the torpedo tubes
- * hold one more torpedo at the first and at the third step, the plating takes 7 % of every
+ * hold two more torpedoes at the first and at the third step, the plating takes 7 % of every
  * damage away. The neon trim lights a strip along both flanks, adds one across the stern, then
  * a running light (see Ship.outfit); the drive flame burns azure, violet, then white-hot.
  */
@@ -326,8 +326,8 @@ export function payOut(hangar: Hangar, points: number): number {
   return coins;
 }
 
-/** Torpedoes a clone carries beyond the standard load for the steps of its tubes: one for every two. */
-export const tubeTorpedoes = (level: number) => Math.ceil(level / 2);
+/** Torpedoes a clone carries beyond the standard load for the steps of its tubes: two at the first step and two more at the third. */
+export const tubeTorpedoes = (level: number) => 2 * Math.ceil(level / 2);
 
 /** How a ship flies with the steps it has (a trophy: every step), online at most ONLINE_LEVEL of each but the looks. */
 export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): Perks {

@@ -91,7 +91,7 @@ export interface SchoolContext {
   visitGullet(): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
-  /** Hands the pilot's clone two torpedoes, or a nova core. */
+  /** Hands the pilot's clone DRILL_TORPEDOES torpedoes (see game/torpedoes), or a nova core. */
   arm(item: 'torpedo' | 'nova'): void;
   /** A torpedo from a ship (the drone), homing on the pilot. */
   torpedoAt(from: Ship): void;
