@@ -1,4 +1,4 @@
-import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
+import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
@@ -50,6 +50,7 @@ export const FROM_CODE: Record<string, number> = {
   settle: LEAD_TIME,
   onNose: Math.round((ON_NOSE * 180) / Math.PI),
   overdrive: meters(OVERDRIVE_PUSH),
+  hoverHeight: meters(HOVER_HEIGHT),
   gates: GATES,
   laps: LAPS,
   gateRadius: meters(GATE_RADIUS),

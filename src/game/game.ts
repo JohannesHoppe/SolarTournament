@@ -38,6 +38,9 @@ import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from './decoys';
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
+/** A hull gliding over a world's ground faster than this (units/s, 20 m/s) throws sparks, about GLIDE_SPARK_RATE bursts a second (see glideOver). */
+const GLIDE_SPARKS = 400;
+const GLIDE_SPARK_RATE = 6;
 /** A decoy dropped jolts the camera by this much (see kick): the clamp letting go is felt, far less than a hit. */
 const DECOY_KICK = 0.4;
 /** Rivals' torpedoes are marked on screen within this range (units, 3 km: as far as a torpedo locks), in sight. */
@@ -53,7 +56,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type FlightModel } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -63,7 +66,8 @@ import { MAX_FROM, snoozeUntil } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { copyGround, glide, outside as outsideOn } from '../world/hover';
+import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -482,9 +486,9 @@ const CINEMA_DRIFT = 0.25;
 const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
 /**
- * The overdrive (E): the drive's reactor dumps everything into one shove along the nose
- * (OVERDRIVE_PUSH, 200 m/s), past the tournament's limit; with a rival under the aim assist, on a
- * ram course at it (see overdriveShove). It leaves the clone at the edge of
+ * The overdrive (E): the drive's reactor dumps everything into one shove (OVERDRIVE_PUSH,
+ * 200 m/s), past the tournament's limit, that puts the ship onto the crosshair's line: a ram
+ * course at whatever lies there (see crosshairMark, overdriveShove). It leaves the clone at the edge of
  * blacking out (OVERDRIVE_STRAIN) and the main drive glowing: no thrust for
  * OVERDRIVE_DRIVE_COOLDOWN seconds, while the thrusters still turn the ship and the laser
  * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again.
@@ -4598,7 +4602,7 @@ export class Game implements OnlineGame {
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
-        if (ship.alive) this.outside(ship.flight, dt, ship.pull);
+        if (ship.alive) this.outside(ship, dt, ship.pull);
         ship.updateRemote(dt, now);
         // the synced throttle is all the drive's trail needs
         if (ship.alive) this.exhaust(ship, dt);
@@ -4691,7 +4695,7 @@ export class Game implements OnlineGame {
       // a raider who spares clones fires only into a drive (see jumpers); the Loose, harpooning tugs, never into the Magpie's
       const holds = steered.fire && ((this.sparesClones(ship) && !this.onDrive(ship)) || (this.sparesDrives(ship) && this.onDrive(ship)));
       const controls = holds ? Object.assign(this.heldFire, steered, NO_FIRE) : steered;
-      this.outside(ship.flight, dt, gravity);
+      this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
       ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
@@ -4703,7 +4707,7 @@ export class Game implements OnlineGame {
       // a rock between the ship and the sun shades it from the worst of the plasma; the own
       // pilot hears of it through the flare's alarm (see flareAlarm)
       if (this.survival && flareClearance(ship.flight.position, this.field.clock) < 0) this.burn(ship, ship.inShadow ? FLARE_SHADE : 1, FLARE_HEAT, FLARE_BURN, null, null, 'flare', dt, now);
-      this.collide(ship, now);
+      this.collide(ship, dt, now);
       this.cometStrike(ship, now);
       this.hitWreckage(ship, now);
       this.scorch(ship, dt, now);
@@ -6746,14 +6750,62 @@ export class Game implements OnlineGame {
     return target;
   }
 
+  /**
+   * What the overdrive flies at (see overdriveShove): whatever the aim assist holds (a ship or a
+   * torpedo), else the first thing the laser would hit on the nose's line (rock, ice, junk,
+   * wreckage, the battleship, a ring and the other solids), with how it moves there, else the
+   * point AIM_ASSIST_RANGE ahead, at rest. So after the shove the ship flies where the crosshair shows.
+   */
+  private crosshairMark(): { position: THREE.Vector3; velocity: THREE.Vector3 } {
+    const me = this.me!;
+    const mark = this.markAhead;
+    const target = this.aimTarget();
+    if (target) {
+      const flight = target instanceof Ship ? target.flight : target;
+      mark.position.copy(flight.position);
+      mark.velocity.copy(flight.velocity);
+      return mark;
+    }
+    const origin = me.nose(muzzle);
+    const direction = me.flight.forward(forward);
+    mark.velocity.set(0, 0, 0);
+    let reach = this.field.air ? reachIn(this.field.air, origin, direction, SIGHT_DEPTH, LASER_RANGE) : LASER_RANGE;
+    let found = false;
+    const rock = this.field.raycast(origin, direction, reach, false, laserHit);
+    if (rock) {
+      reach = rock.distance;
+      found = true;
+      if (rock.asteroid) this.field.surfaceVelocity(rock.asteroid, mark.position.copy(origin).addScaledVector(direction, reach), mark.velocity);
+    }
+    const wreck = this.wrecks.raycast(origin, direction, reach);
+    if (wreck) {
+      reach = wreck.distance;
+      found = true;
+      mark.velocity.copy(wreck.wreck.velocity);
+    }
+    const hull = this.fleet?.raycast(origin, direction, reach, this.field.clock) ?? null;
+    if (hull) {
+      reach = hull.distance;
+      found = true;
+      mark.velocity.copy(this.fleet!.velocity);
+    }
+    const solid = this.solidRay(origin, direction, reach);
+    if (solid !== null) {
+      reach = solid;
+      found = true;
+      mark.velocity.set(0, 0, 0);
+    }
+    mark.position.copy(origin).addScaledVector(direction, found ? reach : AIM_ASSIST_RANGE);
+    return mark;
+  }
+  private readonly markAhead = { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
+
   /** E: the overdrive, a last resort; see OVERDRIVE_STRAIN. */
   private overdrive() {
     const me = this.me!;
     if (!me.alive || !me.perks.overdrive || this.time < this.overdriveReadyAt) return;
     this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
-    // a ram course at whatever the aim assist holds, a ship or a torpedo
-    const target = this.aimTarget();
-    me.flight.velocity.add(overdriveShove(me.flight, target instanceof Ship ? target.flight : target, forward));
+    me.flight.velocity.add(overdriveShove(me.flight, this.crosshairMark(), forward));
     me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     // about sixty g at once: the clone is pressed to the edge of blacking out
     me.strain = Math.max(me.strain, OVERDRIVE_STRAIN);
@@ -7706,7 +7758,7 @@ export class Game implements OnlineGame {
       controls: { ...hand },
       pointer: this.input.pointer,
       out: { ...IDLE },
-      gravity: this.outside(flight, dt, gravity).toArray(),
+      gravity: this.outside(this.me!, dt, gravity).toArray(),
       position: flight.position.toArray(),
       velocity: flight.velocity.toArray(),
       orientation: flight.orientation.toArray() as [number, number, number, number],
@@ -7745,15 +7797,23 @@ export class Game implements OnlineGame {
       this.flightMode = 'swing';
       return out;
     }
-    return flyByNose(me.flight, controls, this.outside(me.flight, MAX_STEP, gravity), out);
+    const pull = this.outside(me, MAX_STEP, gravity);
+    return flyByNose(me.flight, controls, pull, out, this.hoverGround);
   }
 
-  /** What pulls and brakes a ship from outside over a step of `dt` (units/s²): the field's gravity, and the drag of an arena's air (see world/air). */
-  private outside(flight: FlightModel, dt: number, target: THREE.Vector3): THREE.Vector3 {
-    this.field.gravity(flight.position, target);
-    if (this.field.air) dragOn(this.field.air, flight.position, flight.velocity, dt, target);
+  /**
+   * What pulls and brakes a ship from outside over a step of `dt` (units/s²): the field's gravity,
+   * the hover field over a world's ground, and the drag of an arena's air (see world/hover);
+   * `hoverGround` the ground while the ship rides it.
+   */
+  private outside(ship: Ship, dt: number, target: THREE.Vector3): THREE.Vector3 {
+    const ground = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, dt, target);
+    this.hoverGround = ground ? copyGround(ground, this.hoverUnder) : null;
     return target;
   }
+  /** The ground under the ship `outside` last reckoned, while it rides it (see world/hover). */
+  private hoverGround: Ground | null = null;
+  private readonly hoverUnder: Ground = { normal: new THREE.Vector3(), gap: 0 };
 
   /** Whether a point lies under the cloud deck of an arena's air. */
   private underDeck(position: THREE.Vector3): boolean {
@@ -8279,7 +8339,7 @@ export class Game implements OnlineGame {
   }
 
   /** Ship vs asteroid: the ship bounces off; fast impacts wreck the hull. */
-  private collide(ship: Ship, now: number) {
+  private collide(ship: Ship, dt: number, now: number) {
     const flight = ship.flight;
     // the depths of a planet's air crush a ship, a black hole swallows it; no protection holds
     if (this.field.insideWell(flight.position, ship.radius)) {
@@ -8297,6 +8357,8 @@ export class Game implements OnlineGame {
     }
     const asteroid = this.field.overlap(flight.position, ship.radius);
     if (asteroid && this.field.resolve(asteroid, flight.position, ship.radius, normal)) {
+      // a world's ground: the hover field cushions the hull, which glides over it (see world/hover)
+      if (asteroid.ground) return this.glideOver(ship, dt, now);
       // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
       this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
       this.bounce(ship, surface, now, 'rock');
@@ -8408,6 +8470,21 @@ export class Game implements OnlineGame {
       return true;
     }
     return !!this.school?.touchesRing(position, radius, normal);
+  }
+
+  /**
+   * A ship touched a world's ground (the outward `normal` of this frame): it glides over it, never
+   * bounced and never hurt (see world/hover, glide); fast along it, the hull's underside throws
+   * sparks and grinds through the hull.
+   */
+  private glideOver(ship: Ship, dt: number, now: number) {
+    glide(ship.flight.velocity, normal, dt);
+    if (ship === this.me) this.lastScrape = now;
+    ship.syncTransform();
+    const speed = ship.flight.velocity.length();
+    if (speed < GLIDE_SPARKS || Math.random() > dt * GLIDE_SPARK_RATE) return;
+    this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 10 + speed * 0.01);
+    if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(0.5, speed / 4000), rate: 2.2 });
   }
 
   /** A ship touched a surface (`what`: a rock, a battleship's hull, a gate) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
@@ -8542,9 +8619,9 @@ export class Game implements OnlineGame {
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
-      // a rock, the well's body or the battleship's hull
+      // a rock, the well's body or the battleship's hull; a world's ground never hurts (see world/hover)
       const hit = this.field.raycast(flight.position, heading, speed * 20, true, impactHit);
-      if (hit) {
+      if (hit && !hit.asteroid?.ground) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
         // damaged thrusters turn the ship more slowly

@@ -7,7 +7,7 @@ import type { Effects } from '../view/effects';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
-import { LOCK_DEPTH } from '../world/air';
+import { dragOn, LOCK_DEPTH } from '../world/air';
 import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
 /** Torpedoes a fresh clone carries: enough for a salvo that a ship's decoys (one torpedo each, see game/decoys) cannot all draw. */
@@ -138,6 +138,12 @@ const across = new THREE.Vector3();
 const from = new THREE.Vector3();
 const step = new THREE.Vector3();
 const previous = new THREE.Vector3();
+/** No pull from outside (see flyTorpedo). */
+const NO_PULL: Readonly<THREE.Vector3> = new THREE.Vector3();
+/** A torpedo's push with the outside's pull countered (see flyTorpedo). */
+const countered = new THREE.Vector3();
+/** What pulls and brakes a torpedo this step (see flyTorpedo). */
+const pulled = new THREE.Vector3();
 
 /** Whether a torpedo is a bomb on a string: on a hook's rope, or let go from one within FLING_CREDIT. */
 export const onString = (torpedo: Torpedo, now: number) => !!torpedo.holder || now - torpedo.releasedAt < FLING_CREDIT;
@@ -183,8 +189,14 @@ function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
  * the torpedo (an overdrive) is chased where it is. It steers for that velocity, its push follows
  * the steering STEER_LAG late, bounded by its drive and thrusters (see bound). Without a target
  * it burns on straight ahead.
+ *
+ * What pulls and brakes it from outside (`outside`, units/s²: a world's gravity, a well's pull, a
+ * column's push, an air's drag) acts on it as on a ship, and its computer counters it as a ship's
+ * autopilot holds gravity off, at once and within what its drive and thrusters give besides the
+ * steering, so it flies straight lines (one fired at the horizon without a lock does not sink) where its drive
+ * and thrusters are strong enough, and is bent only where they are not (a strong well up close).
  */
-export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number) {
+export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL) {
   const { position, velocity, push, seen } = torpedo;
   const speed = velocity.length();
   if (target) {
@@ -202,7 +214,8 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   else course.copy(command).normalize();
   push.lerp(bound(command, speed, dt), 1 - exp(-dt / STEER_LAG));
   bound(push, speed, dt);
-  velocity.addScaledVector(push, dt);
+  // the outside's pull countered at once, within what drive and thrusters give besides the steering
+  velocity.addScaledVector(bound(countered.subVectors(push, outside), speed, dt).add(outside), dt);
   const limit = Math.max(speed, TORPEDO_TOP_SPEED);
   if (velocity.lengthSq() > limit * limit) velocity.setLength(limit);
   position.addScaledVector(velocity, dt);
@@ -378,8 +391,11 @@ export class Torpedoes {
       previous.copy(torpedo.position);
       // the motor pushes while it burns (on a rope too, against whatever pulls it, see game/hook); burnt out it only drifts
       const burning = now - torpedo.bornAt < TORPEDO_LIFETIME;
-      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt);
-      else torpedo.position.addScaledVector(torpedo.velocity, dt);
+      // a world's gravity, a well's pull, a column's push and an air's drag act on it as on a ship; it has no hover field
+      field.gravity(torpedo.position, pulled);
+      if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled);
+      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled);
+      else torpedo.position.addScaledVector(torpedo.velocity.addScaledVector(pulled, dt), dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it
       if (burning && Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);

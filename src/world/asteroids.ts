@@ -427,6 +427,8 @@ const u = new THREE.Vector3();
 const v = new THREE.Vector3();
 const point = new THREE.Vector3();
 const pull = new THREE.Vector3();
+/** A ground's normal in its own frame (see groundBelow). */
+const groundNormal = new THREE.Vector3();
 const sight = new THREE.Vector3();
 /** The rock of the last cast (see AsteroidField.cast), null for the well, an obstacle or nothing; and the center of what it hit. */
 let castRock: Asteroid | null = null;
@@ -475,6 +477,8 @@ export class AsteroidField {
   well: Well | null = null;
   /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
   fall = 0;
+  /** The pieces that are a world's ground (see Placement.ground), for the hover field (see groundBelow). */
+  private readonly grounds: Asteroid[] = [];
   /** The columns that shove (see FieldLayout.columns). */
   columns: readonly Column[] = [];
   /** The air of the arena, if it dips into a planet's (see world/air). */
@@ -593,7 +597,10 @@ export class AsteroidField {
       const asteroid = this.asteroids.get(id)!;
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
-      if (piece.ground) asteroid.ground = true;
+      if (piece.ground) {
+        asteroid.ground = true;
+        this.grounds.push(asteroid);
+      }
       // a welded body's frost and plating ride on it as it drifts (see world/worldship)
       if (asteroid.weld !== null) this.frosts.set(asteroid.weld, weldFrost(asteroid.object, asteroid.weld));
       this.place(asteroid);
@@ -720,6 +727,7 @@ export class AsteroidField {
   clear() {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
+    this.grounds.length = 0;
     this.weldHomes.clear();
     this.broken.clear();
     this.frosts.clear();
@@ -1433,6 +1441,38 @@ export class AsteroidField {
     // the orbit carries the rock (and turns its drift) about the field's center
     target.add(applyAxisAngle(v.copy(asteroid.velocity), asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
+  }
+
+  /**
+   * How high `position` lies over a world's ground (units, along the ground's normal there; see
+   * Placement.ground), the nearest ground under it within its footprint, with the ground's outward
+   * normal there into `normal`; null over no ground. A point below a ground's top lies at a
+   * negative height. Only the ground itself counts: what stands on it (a rack, a module, a rock) is
+   * not ground.
+   */
+  groundBelow(position: THREE.Vector3, normal: THREE.Vector3): number | null {
+    let best: number | null = null;
+    for (const ground of this.grounds) {
+      const scale = ground.object.matrixWorld.getMaxScaleOnAxis();
+      const local = u.copy(position).applyMatrix4(ground.inverse).sub(ground.center);
+      const half = ground.semiAxes;
+      if (Math.abs(local.x) > half.x || Math.abs(local.z) > half.z || local.y < -half.y) continue;
+      const relief = ground.relief;
+      const top = relief ? Math.min(half.y, relief(local.x, local.z)) : half.y;
+      if (relief) {
+        const x0 = Math.max(-half.x, local.x - RELIEF_STEP);
+        const x1 = Math.min(half.x, local.x + RELIEF_STEP);
+        const z0 = Math.max(-half.z, local.z - RELIEF_STEP);
+        const z1 = Math.min(half.z, local.z + RELIEF_STEP);
+        const at = (x: number, z: number) => Math.min(half.y, relief(x, z));
+        groundNormal.set((at(x0, local.z) - at(x1, local.z)) / (x1 - x0), 1, (at(local.x, z0) - at(local.x, z1)) / (z1 - z0)).normalize();
+      } else groundNormal.set(0, 1, 0);
+      const height = (local.y - top) * groundNormal.y * scale;
+      if (best !== null && height >= best) continue;
+      best = height;
+      normal.copy(groundNormal).transformDirection(ground.object.matrixWorld);
+    }
+    return best;
   }
 
   /**

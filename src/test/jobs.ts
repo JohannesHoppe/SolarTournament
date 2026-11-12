@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { IDLE, type Controls, type Device } from '../input/input';
 import { Bot, evenSkills, pressOn, raceSpeedOf, skillsFrom, type Skill, type Skills } from '../ship/bots';
-import { flyByNose, MAIN_THRUST, MAX_SPEED } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, type Ground } from '../ship/flight';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
 import { cos, sin } from '../detmath';
 import { firstHull, LASER_RANGE, MAX_HEAT, Ship } from '../ship/ship';
@@ -20,7 +20,8 @@ import type { ItemKind } from '../game/items';
 import { arenaById, DEFAULT_ARENA, type ArenaProfile } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { FIELD_RADIUS, raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
-import { airStep, dragOn, reachIn, SIGHT_DEPTH } from '../world/air';
+import { airStep, reachIn, SIGHT_DEPTH } from '../world/air';
+import { copyGround, glide, outside as outsideOn } from '../world/hover';
 import { IMMOVABLE, massOf, MASS, type Body } from '../world/bodies';
 import type { Claim } from '../world/mining';
 import { DETAIL } from '../world/rocks';
@@ -294,7 +295,7 @@ export class JobWorld implements SchoolContext {
     const flight = this.me.flight;
     if (hands.brake) return this.brakeComputer.fly(flight, hands.controls, this.me.drive * this.me.perks.drive, this.computed);
     // with the autopilot the ship flies where its nose points, unless the drill's drift is the point or the hook holds (see Game.trimDrift)
-    const out = !this.autopilot || this.keepDrift || this.tether ? Object.assign(this.computed, hands.controls) : flyByNose(flight, hands.controls, this.outside(this.me, gravity), this.computed);
+    const out = !this.autopilot || this.keepDrift || this.tether ? Object.assign(this.computed, hands.controls) : flyByNose(flight, hands.controls, this.outside(this.me, gravity), this.computed, this.ground);
     return this.assistAim(keepUpright(flight, out));
   }
 
@@ -348,12 +349,14 @@ export class JobWorld implements SchoolContext {
     this.contacts.reset();
   }
 
-  /** What pulls and brakes a ship: the field's gravity and an air's drag (see Game.outside). */
+  /** What pulls and brakes a ship: the field's gravity, the hover field over a world's ground and an air's drag (see Game.outside); `ground` the ground while the ship rides it. */
   private outside(ship: Ship, target: THREE.Vector3) {
-    this.field.gravity(ship.flight.position, target);
-    if (this.field.air) dragOn(this.field.air, ship.flight.position, ship.flight.velocity, JOB_STEP, target);
+    const under = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, JOB_STEP, target);
+    this.ground = under ? copyGround(under, this.under) : null;
     return target;
   }
+  private ground: Ground | null = null;
+  private readonly under: Ground = { normal: new THREE.Vector3(), gap: 0 };
 
   /** A planet's air heats a ship by its speed and depth; what the radiators cannot shed burns the hull (see Game.friction). */
   private friction(ship: Ship) {
@@ -390,6 +393,11 @@ export class JobWorld implements SchoolContext {
     }
     const rock = this.field.overlap(flight.position, ship.radius);
     if (rock && this.field.resolve(rock, flight.position, ship.radius, normal)) {
+      // a world's ground: the hull glides over it, never hurt (see Game.glideOver)
+      if (rock.ground) {
+        glide(flight.velocity, normal, JOB_STEP);
+        return;
+      }
       this.field.surfaceVelocity(rock, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
       this.bounce(ship, surface, 'rock');
     } else if (this.school.touchesRing(flight.position, ship.radius, normal)) this.bounce(ship, surface.set(0, 0, 0), 'gate');

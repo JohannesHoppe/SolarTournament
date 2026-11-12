@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Planned, not built; what is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity) is built, its rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -17,7 +17,7 @@ Every ship carries a **hover field** (the one name for it everywhere: "hover fie
 - **Touching the ground never hurts.** Where the field is too weak to hold a ship (a dive at speed, a soft world), the hull touches the ground: it slides over it, never bounces off it and never takes damage (the field cushions it at contact). The speed across the ground is kept but for a light scrape (a share of it lost per second while touching, sparks under the hull, a grinding through the hull). A ship cannot be destroyed by a world's ground, in any mode, in the campaign too: no clone dies of the Boneyard's floor in the first mission.
 - **Walls.** The ground of a world bends up into slopes and the walls of a canyon. The field holds a ship off whatever of the ground is under it along the ground's normal, so a slope is ridden up and a wall of the ground is glided along, never hit; this is what lets a race run down Europa's Crack. Only what stands on the ground (a rack, a module, a hull, a rock) is an obstacle.
 - **Bots** glide alike: the field is physics, not a pilot's choice.
-- **The autopilot** counts the field as an outside force as it counts gravity (it holds the flight along the nose against both), but over ground it leaves the push along the ground's normal to the field, so the ship rides the ground's shape instead of flying straight through its hills.
+- **The autopilot** rides the ground within 100 m of it: it flies the nose's way along the ground and leaves the world's pull and the field along the ground's normal to carry the ship; within the field's reach it brings the hull to the ride height (2 m/s per metre off it, up to 50 m/s), so the ship hugs the ground's shape instead of flying straight through its hills, and a ship a crest threw higher comes down in an arc; a nose pointing away from the ground steeper than about 10° climbs.
 
 ## Gravity
 
@@ -61,7 +61,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 
 ## Steps
 
-1. **The hover field, the overdrive's one rule, and torpedoes under gravity and drag.** The field over every world's ground (the campaign's places first: no clone dies of a floor), its push, damping and the glide that never hurts; the autopilot riding the ground; the overdrive at whatever the crosshair shows. Tests: a ship dropped onto every place's ground at any speed never takes damage and settles at the ride height; a ship flown low over a relief keeps within the field; the simulated Host's tests (`playability`, `hostrace`) pass; the overdrive's shove at a rock, a moving ship and empty space.
+1. **Built: the hover field, the overdrive's one rule, and torpedoes under gravity and drag.** The field over every world's ground (the campaign's places first: no clone dies of a floor), its push, damping and the glide that never hurts; the autopilot riding the ground; the overdrive at whatever the crosshair shows. Tests: a ship dropped onto every place's ground at any speed never takes damage and settles at the ride height; a ship flown low over a relief keeps within the field; the simulated Host's tests (`playability`, `hostrace`) pass; the overdrive's shove at a rock, a moving ship and empty space.
 2. **A race world.** Europa's Crack as the first race arena, with the HUD's GRAV, AIR, HOVER and GRIP: a track from one end of the Crack to the other and out over the ice plain, its gates low in the canyon; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
 3. **Lift in air.** Titan's Kraken Mare as a race world with air; Jupiter's deck carving.
 4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.

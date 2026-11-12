@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Well } from '../world/asteroids';
-import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH } from '../ship/flight';
+import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { angleTo } from '../detthree';
 
@@ -224,6 +224,8 @@ const ESCAPE_HORIZON = 40;
 const probe = new FlightModel();
 const probeControls: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 const awayFrom = new THREE.Vector3();
+const shove = new THREE.Vector3();
+const shoveMark = { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
 const probePull = new THREE.Vector3();
 const probeTarget = new THREE.Vector3();
 const probeLook = new THREE.Matrix4();
@@ -253,7 +255,9 @@ function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, 
     // out: beyond where the drive outpulls the well, climbing, the drive burning (a cold drive lets it fall back)
     if (r >= free && flight.velocity.dot(awayFrom) >= 0 && thrusting && (fired || !overdrive)) return true;
     if (overdrive && !fired && t >= turned) {
-      flight.velocity.addScaledVector(awayFrom, OVERDRIVE_PUSH);
+      // nothing on the crosshair out there: the shove puts the flight onto the nose's line, at rest (see overdriveShove)
+      shoveMark.position.copy(flight.position).addScaledVector(awayFrom, OVERDRIVE_PUSH);
+      flight.velocity.add(overdriveShove(flight, shoveMark, shove));
       coldUntil = Math.max(coldUntil, t + OVERDRIVE_DRIVE_COOLDOWN);
       fired = true;
     }

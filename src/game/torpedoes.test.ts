@@ -165,7 +165,7 @@ describe('a torpedo', () => {
   });
 
   it(`burns out after ${TORPEDO_LIFETIME} s, and goes off at the hull of the ship it reaches`, () => {
-    const field = { lineOfSight: () => true, obstacle: null, overlap: () => false, insideWell: () => false } as unknown as AsteroidField;
+    const field = { lineOfSight: () => true, obstacle: null, overlap: () => false, insideWell: () => false, gravity: (_: THREE.Vector3, target: THREE.Vector3) => target.set(0, 0, 0), air: null } as unknown as AsteroidField;
     const shooter = { id: 'a', alive: true, radius: HULL, flight: { position: v(0, 0, 0), velocity: v(0, 0, 0) }, allyOf: () => false } as unknown as GameShip;
     const target = (z: number) => ({ id: 'b', name: 'b', alive: true, radius: HULL, flight: { position: v(0, 0, z), velocity: v(0, 0, 0) }, allyOf: () => false }) as unknown as GameShip;
     const flight = (distance: number) => {
@@ -196,7 +196,7 @@ describe('a torpedo', () => {
 /** The hook's tests step at twice the game's rate, for the rope. */
 const ROPE_DT = 1 / 120;
 /** Open space: nothing in the way, nothing to strike. */
-const SPACE = { lineOfSight: () => true, obstacle: null, overlap: () => null, insideWell: () => false } as unknown as AsteroidField;
+const SPACE = { lineOfSight: () => true, obstacle: null, overlap: () => null, insideWell: () => false, gravity: (_: THREE.Vector3, target: THREE.Vector3) => target.set(0, 0, 0), air: null } as unknown as AsteroidField;
 const EFFECTS = { puff: () => {} } as unknown as Effects;
 
 /** A ship as the torpedoes see it, `id` at `x`, of no side but its own. */
@@ -308,5 +308,39 @@ describe("a torpedo's warhead", () => {
     expect(gone).toBe(false);
     torpedoes.update(DT, TORPEDO_ARMING, SPACE, [], () => (gone = true), () => true);
     expect(gone).toBe(true);
+  });
+});
+
+describe('a torpedo under gravity', () => {
+  const G = 196.2;
+  const launch = () => ({ position: new THREE.Vector3(), velocity: new THREE.Vector3(0, 0, -TORPEDO_TOP_SPEED), push: new THREE.Vector3(), seen: new THREE.Vector3() });
+
+  it('holds its straight line fired at the horizon without a lock: its computer counters a pull its thrusters can bear', () => {
+    // a whole g, far more than any world of the campaign pulls
+    const torpedo = launch();
+    for (let t = 0; t < 10; t += DT) flyTorpedo(torpedo, null, DT, new THREE.Vector3(0, -G, 0));
+    // sagging only while its push catches up with its steering: a few metres in 3.6 km
+    expect(torpedo.position.y).toBeGreaterThan(-100);
+    expect(Math.abs(torpedo.velocity.y)).toBeLessThan(10);
+  });
+
+  it('flies onto a ship it locked on, the pull taken out first', () => {
+    const target = { position: new THREE.Vector3(0, 300, -40000), velocity: new THREE.Vector3() };
+    const torpedo = launch();
+    const before = new THREE.Vector3();
+    let hit = false;
+    for (let t = 0; t < TORPEDO_LIFETIME && !hit; t += DT) {
+      before.copy(torpedo.position);
+      flyTorpedo(torpedo, target, DT, new THREE.Vector3(0, -G, 0));
+      hit = strikes(before, torpedo.position, target, HULL, DT);
+    }
+    expect(hit).toBe(true);
+  });
+
+  it('is bent where the pull outdoes its thrusters', () => {
+    // a well's pull of 15 g across its flight, beyond its 10 g thrusters
+    const torpedo = launch();
+    for (let t = 0; t < 2; t += DT) flyTorpedo(torpedo, null, DT, new THREE.Vector3(0, -15 * G, 0));
+    expect(torpedo.velocity.y).toBeLessThan(-(15 * G - TORPEDO_LATERAL) * 1.5);
   });
 });

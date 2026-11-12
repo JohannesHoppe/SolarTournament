@@ -271,10 +271,37 @@ const nose = new THREE.Vector3();
 const across = new THREE.Vector3();
 const demand = new THREE.Vector3();
 const want = new THREE.Vector3();
+/** What the autopilot holds off of the pull from outside (see bend). */
+const held = new THREE.Vector3();
 
 /** The health of drive and thrusters a reckoning takes (see FlightModel.driveFactor). */
 export type Health = Pick<FlightModel, 'driveFactor' | 'thrusterFactor'>;
 const HEALTHY: Health = { driveFactor: 1, thrusterFactor: 1 };
+
+/** The hover field's ride height: the hull's underside this far over a world's ground (units, 5 m; see world/hover). */
+export const HOVER_HEIGHT = 100;
+/** Beyond this many ride heights (20 m) the hover field is gone (see world/hover). */
+export const HOVER_REACH = 4;
+/**
+ * Within this many ride heights of a world's ground (100 m) the autopilot rides it: it flies the
+ * nose's way along the ground, holding neither the world's pull nor the hover field's push off
+ * along the ground's normal. Within the field's reach it brings the hull to the ride height at
+ * RIDE_GAIN (1/s), no faster than RIDE_SPEED (units/s, 50 m/s), with drive and thrusters as it
+ * takes out any drift, so a ship hugs the ground's shape over crests and hollows; higher it
+ * leaves the speed along the normal alone, and a ship a crest threw up comes down in an arc (a
+ * geyser's column throws it up all the same). A nose pointing away from the ground steeper than
+ * HOVER_CLIMB (the sine of about 10°) climbs: the autopilot then flies it as anywhere.
+ */
+export const HOVER_RIDE = 20;
+const RIDE_GAIN = 2;
+const RIDE_SPEED = 1000;
+export const HOVER_CLIMB = 0.17;
+
+/** A world's ground under a ship (see world/hover): its outward normal, and the height of the hull's underside over it (units). */
+export interface Ground {
+  readonly normal: THREE.Vector3;
+  gap: number;
+}
 
 /**
  * The autopilot: the ship flies where its nose points. The Host turns the nose as in free drift
@@ -291,8 +318,11 @@ const HEALTHY: Health = { driveFactor: 1, thrusterFactor: 1 };
  * radius grows with the speed (see turnRadius), and free drift (the autopilot off) is where a
  * ship slides. Writes the commands for one step into `out`, from the Host's `controls` and the
  * gravity at the ship.
+ *
+ * Within HOVER_RIDE of a world's ground (`ground`; see world/hover) it rides the ground at the
+ * ride height (see HOVER_RIDE), unless the nose climbs away from it.
  */
-export function flyByNose(flight: FlightModel, controls: Readonly<Controls>, gravity: THREE.Vector3, out: Controls): Controls {
+export function flyByNose(flight: FlightModel, controls: Readonly<Controls>, gravity: THREE.Vector3, out: Controls, ground: Ground | null = null): Controls {
   Object.assign(out, controls);
   const pilot = THREE.MathUtils.clamp(controls.thrust, 0, 1);
   // the lead's limit first: reckoning it the first time flies a ship of its own on the same scratch vectors
@@ -300,7 +330,7 @@ export function flyByNose(flight: FlightModel, controls: Readonly<Controls>, gra
   const speed = sense(flight);
   const moving = THREE.MathUtils.smoothstep(speed, AUTO_REST, AUTO_MOVING);
   hold(flight, lead, moving, out);
-  return bend(flight, speed, moving, pilot, gravity, controls, out);
+  return bend(flight, speed, moving, pilot, gravity, controls, out, ground && nose.dot(ground.normal) < HOVER_CLIMB ? ground : null);
 }
 
 /**
@@ -398,14 +428,24 @@ function stop(out: Controls, moving: number) {
  * drive) or free (at the speed limit). The Host's drive fires along the nose as ever, and the
  * Host's own thruster input on an axis goes first.
  */
-function bend(flight: FlightModel, speed: number, moving: number, pilot: number, gravity: THREE.Vector3, controls: Readonly<Controls>, out: Controls): Controls {
+function bend(flight: FlightModel, speed: number, moving: number, pilot: number, gravity: THREE.Vector3, controls: Readonly<Controls>, out: Controls, ground: Ground | null = null): Controls {
   const thrust = MAIN_THRUST * flight.driveFactor;
   const thrusters = RCS_THRUST * flight.thrusterFactor;
   // the velocity wanted: the speed along the nose as it is (at rest, none); gravity is held off
   // across the flight, along it it changes the speed as ever (at rest, it is held off altogether).
   // The kept speed has no share of `moving`, which would brake a slow coast to rest by itself
   want.copy(nose).multiplyScalar(flight.velocity.dot(nose) * THREE.MathUtils.smoothstep(speed, AUTO_REST / 2, AUTO_REST));
-  demand.subVectors(want, flight.velocity).multiplyScalar(AUTO_GAIN).sub(gravity).addScaledVector(path, gravity.dot(path) * moving);
+  held.copy(gravity);
+  if (ground) {
+    // riding a world's ground: the nose's way along it, the hull brought to the ride height; along
+    // the ground's normal the world's pull and the hover field carry the ship, not held off
+    const normal = ground.normal;
+    // within the field's reach it brings the hull to the ride height; higher it leaves the speed along the normal as it is, and the world's pull brings the ship down
+    const along = ground.gap < HOVER_HEIGHT * HOVER_REACH ? THREE.MathUtils.clamp(RIDE_GAIN * (HOVER_HEIGHT - ground.gap), -RIDE_SPEED, RIDE_SPEED) : flight.velocity.dot(normal);
+    want.addScaledVector(normal, along - want.dot(normal));
+    held.addScaledVector(normal, -held.dot(normal));
+  }
+  demand.subVectors(want, flight.velocity).multiplyScalar(AUTO_GAIN).sub(held).addScaledVector(path, held.dot(path) * moving);
   across.copy(demand).addScaledVector(path, -demand.dot(path));
   const sideways = across.length();
   let drive = 0;

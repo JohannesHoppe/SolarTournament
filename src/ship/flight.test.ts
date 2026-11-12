@@ -442,6 +442,23 @@ describe("the overdrive's shove", () => {
     expect(closing.length()).toBeGreaterThan(OVERDRIVE_PUSH * 0.99);
   });
 
+  it('puts a drifting ship onto the nose line with nothing on the crosshair: the point ahead, at rest', () => {
+    // flying ahead at 100 m/s, sliding 150 m/s to the side
+    const me = ship(0, 0, 0, 3000, 0, -2000);
+    const ahead = { position: me.forward().multiplyScalar(40000), velocity: new THREE.Vector3() };
+    const flown = me.velocity.clone().add(overdriveShove(me, ahead, new THREE.Vector3()));
+    expect(angleTo(flown, me.forward())).toBeLessThan(1e-9);
+    expect(flown.length()).toBeCloseTo(2000 + Math.sqrt(OVERDRIVE_PUSH * OVERDRIVE_PUSH - 3000 * 3000), 6);
+  });
+
+  it('rams a rock on the crosshair as it rams a ship: onto it as it drifts', () => {
+    const me = ship(0, 0, 0, 1500, 0, -MAX_SPEED);
+    const rock = { position: new THREE.Vector3(800, -600, -30000), velocity: new THREE.Vector3(-400, 200, 0) };
+    const shove = overdriveShove(me, rock, new THREE.Vector3());
+    const closing = me.velocity.clone().add(shove).sub(rock.velocity);
+    expect(angleTo(closing, rock.position.clone().sub(me.position))).toBeLessThan(1e-9);
+  });
+
   it('rams a torpedo under the aim assist the same way, by where it is and how it moves', () => {
     const me = ship(0, 0, 0, 0, 0, -MAX_SPEED);
     const torpedo = { position: new THREE.Vector3(200, 0, -8000), velocity: new THREE.Vector3(-600, 0, 7200) };

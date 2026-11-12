@@ -336,7 +336,7 @@ Built. The Host holds every death of every clone; some teach. Each clone the cam
 
 | Scar | What teaches it | A tier |
 |---|---|---|
-| Stone Memory | rock, ground, wreckage, a ram, a shove into rock | the impact warning 0.5 s earlier |
+| Stone Memory | rock, wreckage, a ram, a shove into rock | the impact warning 0.5 s earlier |
 | Flinch | a beam | every hit 3 % softer |
 | Burn Scar | a planet's air, a solar flare, a drive's plume, the battleship's exhaust | the radiators shed 4 % of a stock ship's more |
 | Blast Nerves | a torpedo, a blast, a nova, a comet's head or shower, a battery, a self-destruct | the thrusters 3 % of a stock ship's harder |

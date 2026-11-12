@@ -5,7 +5,8 @@ import { FlightModel, MAX_SPEED } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { bounceOff, impactDamage } from '../ship/impact';
 import { COOLING_SHADOW, COOLING_SUN, MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
-import { airBurn, airHeat, altitudeIn, dragOn } from '../world/air';
+import { airBurn, airHeat, altitudeIn } from '../world/air';
+import { glide, outside } from '../world/hover';
 import { approachGate, coilPush, ringCrossing } from '../game/race';
 import type { RacingLine } from '../game/racingline';
 
@@ -105,8 +106,7 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
   const result = (crashed: boolean): Flight => ({ passed: offs.length, offs, missed, seconds, hull, crashed });
   while (offs.length < rings.points.length && seconds < limit) {
     const next = offs.length;
-    field.gravity(flight.position, gravity);
-    if (field.air) dragOn(field.air, flight.position, flight.velocity, STEP, gravity);
+    outside(field, flight.position, flight.velocity, SHIP_RADIUS, STEP, gravity);
     const controls = driver(flight, next, seconds, gravity);
     before.copy(flight.position);
     flight.update(STEP, controls, gravity);
@@ -125,7 +125,10 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
     const hit = moved > SHIP_RADIUS ? field.raycast(before, path.subVectors(flight.position, before).divideScalar(moved), moved) : null;
     if (hit) flight.position.copy(before).addScaledVector(path, Math.max(0, hit.distance - 1));
     const rock = field.overlap(flight.position, SHIP_RADIUS);
-    if (rock && field.resolve(rock, flight.position, SHIP_RADIUS, normal)) {
+    const touched = !!rock && !!field.resolve(rock, flight.position, SHIP_RADIUS, normal);
+    // a world's ground: the hull glides over it, never hurt (see Game.glideOver)
+    if (touched && rock.ground) glide(flight.velocity, normal, STEP);
+    else if (touched && rock) {
       field.surfaceVelocity(rock, surface.copy(flight.position).addScaledVector(normal, -SHIP_RADIUS), surface);
       hull -= impactDamage(bounceOff(flight.velocity, surface, normal));
       if (hull <= 0) return result(true);

@@ -4,7 +4,7 @@ import { angleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, COURSE_ROOM, GATE_RADIUS, GATES } from './race';
 import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
-import { cornerSpeed, MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
+import { cornerSpeed, MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove, turnRadius } from '../ship/flight';
 import { wellEscape } from './alarms';
 import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RESCUE_DRIVE, RESCUE_START, rescueFree, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
@@ -271,7 +271,8 @@ describe("the flight school's courses", () => {
         const verdict = wellEscape(well, flight.position, flight.velocity, flight.forward(), RESCUE_DRIVE, Math.max(0, coldUntil - t), true, coldUntil === 0);
         if (verdict === 'overdrive' && calledAt < 0) calledAt = t;
         if (overdrive && calledAt >= 0 && coldUntil === 0 && t >= calledAt + late) {
-          flight.velocity.addScaledVector(flight.forward(), OVERDRIVE_PUSH);
+          // nothing on the crosshair: the shove puts the flight onto the nose's line (see overdriveShove)
+          flight.velocity.add(overdriveShove(flight, { position: flight.forward().multiplyScalar(OVERDRIVE_PUSH).add(flight.position), velocity: new THREE.Vector3() }, new THREE.Vector3()));
           coldUntil = t + OVERDRIVE_DRIVE_COOLDOWN;
         }
         field.gravity(flight.position, gravity);

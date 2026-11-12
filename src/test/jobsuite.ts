@@ -52,10 +52,10 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   hollowJack: 'Hollow Jack (0.7) and three raiders at once',
   firstDeath: 'Perihelion (0.75) and four of the Navy at once, Spare on the wing',
   theHunter: 'Perihelion (0.7) and two escorts (0.5), two pressing at once: won or lost as the run’s chance falls, lost in the whole run',
-  // bounties: the face and its escorts at once (the other 46 are won)
+  // bounties: the face and its escorts at once (the other 44 are won)
   // the face and its escorts, two pressing at once, are won or lost as the run's chance falls: a
-  // change anywhere shifts which of them the whole run loses (these five lost, others won)
-  ...Object.fromEntries(['bounty:occator:1', 'bounty:occator:3', 'bounty:phobos:3', 'bounty:titan:1', 'bounty:iapetus:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
+  // change anywhere shifts which of them the whole run loses (these seven lost, others won)
+  ...Object.fromEntries(['bounty:occator:1', 'bounty:occator:3', 'bounty:europa:3', 'bounty:titan:1', 'bounty:enceladus:3', 'bounty:iapetus:2', 'bounty:ballroom:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
   'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
   'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',

@@ -8,7 +8,7 @@ import type { Perks } from '../game/hangar';
  * every clone printed from then on flies with what the Host learned. Only in the campaign: nothing
  * of it reaches a tournament's hull.
  *
- * - Stone Memory (rock, ground, wreckage, a ram, a shove into rock): the impact warning comes
+ * - Stone Memory (rock, wreckage, a ram, a shove into rock): the impact warning comes
  *   STONE_SECONDS earlier a tier.
  * - Flinch (a beam): the clone turns the armor into a line of fire before it knows why; every hit
  *   hurts FLINCH less a tier.
