@@ -480,6 +480,8 @@ const CINEMA_SOFTNESS = 0.3;
 const CINEMA_DRIFT = 0.25;
 /** A landed hit jolts the camera by this share of the ship radius (a kill by twice that), fading at KICK_FADE (1/s). */
 const KICK_SHAKE = 0.06;
+/** Cinema mode's note says how to bring the HUD back for this long (s, wall clock). */
+const CINEMA_NOTE = 4;
 const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove along the nose
@@ -996,6 +998,8 @@ export class Game implements OnlineGame {
   private cockpit = false;
   /** Cinema mode is on (see toggleCinema). */
   private cinema = false;
+  /** Hides the cinema mode's note (see setCinema). */
+  private cinemaNoteTimer = 0;
   /**
    * What the Host owns (see game/hangar) and the courses of the flight school it completed (see
    * readEarned), the ship it flies, the ship on show above the logo, and whether the hangar's
@@ -3377,6 +3381,8 @@ export class Game implements OnlineGame {
    */
   private startRound(mode: 'solo' | 'school' | 'online') {
     if (this.input.touchActive) this.enterFullscreen();
+    // every round starts with its HUD: cinema mode is the round's, never carried into the next
+    if (this.cinema) this.setCinema(false);
     this.showLinkLost(false);
     $('no-clone').hidden = true;
     this.noClone = false;
@@ -9081,7 +9087,8 @@ export class Game implements OnlineGame {
       if (waypoint) plane.drop(waypoint, this.camera);
     }
     const aim = this.me?.alive ? aimPoint : this.camera.getWorldDirection(scratch).multiplyScalar(AIM_DEPTH).add(this.camera.position);
-    plane.update(shown, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
+    // cinema mode shows nothing but the picture, the grid neither
+    plane.update(shown && !this.cinema, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
     if (!hud) return;
     this.hud.setAltitude(subject, airAround(this.field.air, subject.flight.position));
     const references = this.shownReferences;
@@ -9229,9 +9236,24 @@ export class Game implements OnlineGame {
    * and drifts a little (see updateCamera). The same key brings everything back.
    */
   private toggleCinema() {
-    this.cinema = !this.cinema;
-    document.body.classList.toggle('cinema', this.cinema);
+    this.setCinema(!this.cinema);
     if (!this.cinema) this.hud.flashMessage(this.time, t('Cinema mode off'), 1.5);
+  }
+
+  /**
+   * Cinema mode on or off. Switched on, it hides the whole HUD, so a note outside it says how to
+   * bring the HUD back for a few seconds: a key hit by mistake must never look like a lost HUD.
+   */
+  private setCinema(on: boolean) {
+    this.cinema = on;
+    document.body.classList.toggle('cinema', on);
+    const note = $('cinema-note');
+    clearTimeout(this.cinemaNoteTimer);
+    note.hidden = !on;
+    if (on) {
+      note.textContent = t('Cinema mode · H brings the HUD back');
+      this.cinemaNoteTimer = window.setTimeout(() => (note.hidden = true), CINEMA_NOTE * 1000);
+    }
   }
 
   /**

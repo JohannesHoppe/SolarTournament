@@ -151,7 +151,7 @@ The game speaks English, German, Spanish and French. It starts in the language t
 | E | RB | Overdrive, the last resort: one shove of 200 m/s along the nose, past the speed limit, on a ram course at a rival under the aim assist. It leaves the clone at the edge of blacking out and the main drive overheated for 4 seconds (no thrust; turning, sidestepping and firing go on), and recharges for 20 seconds (the HUD counts down). Aim it across the attacker's line of fire or ahead of the own drift: straight away from a ship on the own tail it only makes a farther target. On touch screens the OVERDRIVE button |
 | Click / Space | LT / A | Fire laser |
 | C | View | Chase / cockpit camera |
-| H | | Cinema mode, for recordings and trailers: the HUD, the radio's title, the subtitles and the touch controls step aside, and the chase camera hangs 1.4 ship radii farther back, follows at 30 % of its usual speed and drifts slowly around the ship (a ship radius sideways, a quarter up and down). H again brings everything back ("Cinema mode off") |
+| H | | Cinema mode, for recordings and trailers: the HUD, the reference plane's grid, the radio's title, the subtitles and the touch controls step aside (a note says for 4 seconds that H brings the HUD back), and the chase camera hangs 1.4 ship radii farther back, follows at 30 % of its usual speed and drifts slowly around the ship (a ship radius sideways, a quarter up and down). H again brings everything back ("Cinema mode off"), and so does the start of every round |
 | M | | Radio on / off (also with the ♪ button in the top right corner; a click on the song title opens the radio page) |
 | Esc / P | Menu | Pause |
 | Q | | On the pause screen: quit the round |

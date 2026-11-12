@@ -877,7 +877,9 @@ body:has(#hangar-plate:not([hidden])) #hangar {
  * the top (and on touch screens), it follows the alarms below the crosshair in their column, so
  * the two never cover each other. Fixed inside the column means: placed on the whole HUD.
  */
-#hud-message {
+/* the HUD's message, and cinema mode's note, which stands outside the HUD it hides */
+#hud-message,
+#cinema-note {
   position: fixed;
   top: 30%;
   left: 50%;

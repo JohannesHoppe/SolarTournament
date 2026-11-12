@@ -359,6 +359,7 @@ export const ES: Catalog = {
   KNOCKOUT: 'K. O.',
   INTERCEPTED: 'INTERCEPTADO',
   OVERTAKEN: 'ADELANTAMIENTO',
+  'Cinema mode · H brings the HUD back': 'Modo cine · H devuelve el HUD',
   'Cinema mode off': 'Modo cine desactivado',
   'Cinema mode: no HUD, a softer camera, for recordings': 'Modo cine: sin HUD, una cámara más suave, para grabar',
   'Vaporized by the nova of {name}': 'Vaporizado por la nova de {name}',
