@@ -5,3 +5,4 @@ Design documents for parts of the game that are planned or being built, written 
 | Folder | What it holds |
 |---|---|
 | `campaign/` | The solo campaign: its story, worlds, characters, missions and progression |
+| `worlds/` | Flying over worlds: races and fights low over a world's ground under its gravity, the hover field, lift in air, tracks from one place to another, the overdrive's one rule |
