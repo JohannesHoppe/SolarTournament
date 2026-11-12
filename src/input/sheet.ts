@@ -24,7 +24,6 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('V / Right click'), msg('Hook: bite a rock or a ship and reel in; press again to let go and fly off')],
     [msg('B (hold)'), msg('Self-destruct: takes every rival close by along')],
     ['C', msg('Cockpit / chase camera')],
-    ['H', msg('Cinema mode: no HUD, a softer camera, for recordings')],
     ['M', msg('Radio on / off')],
     [msg('Esc / P'), msg('Pause; Q there quits the round')],
     [msg('Tab (hold)'), msg('Standings: kills, deaths, score, in a race the lap')],

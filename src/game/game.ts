@@ -471,7 +471,7 @@ const CAMERA_FAR = 700000;
 const DRIVE_FOV_KICK = 7;
 const DRIVE_SHAKE = 0.012;
 /**
- * Cinema mode (see toggleCinema): the chase camera hangs CINEMA_DISTANCE ship radii farther
+ * Cinema mode (see setCinema): the chase camera hangs CINEMA_DISTANCE ship radii farther
  * back, follows and turns at CINEMA_SOFTNESS of its usual speed, and drifts around the ship by a
  * ship radius sideways and a quarter up and down, slowly (CINEMA_DRIFT, rad/s).
  */
@@ -480,8 +480,6 @@ const CINEMA_SOFTNESS = 0.3;
 const CINEMA_DRIFT = 0.25;
 /** A landed hit jolts the camera by this share of the ship radius (a kill by twice that), fading at KICK_FADE (1/s). */
 const KICK_SHAKE = 0.06;
-/** Cinema mode's note says how to bring the HUD back for this long (s, wall clock). */
-const CINEMA_NOTE = 4;
 const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove along the nose
@@ -996,10 +994,8 @@ export class Game implements OnlineGame {
   private bots: Bot[] = [];
   private me: Ship | null = null;
   private cockpit = false;
-  /** Cinema mode is on (see toggleCinema). */
+  /** Cinema mode is on (see setCinema). */
   private cinema = false;
-  /** Hides the cinema mode's note (see setCinema). */
-  private cinemaNoteTimer = 0;
   /**
    * What the Host owns (see game/hangar) and the courses of the flight school it completed (see
    * readEarned), the ship it flies, the ship on show above the logo, and whether the hangar's
@@ -2854,7 +2850,6 @@ export class Game implements OnlineGame {
         }
         // a watching Host has no cockpit of its own
         if (action === 'camera' && !this.watching()) this.cockpit = !this.cockpit;
-        if (action === 'cinema') this.toggleCinema();
         if (action === 'autopilot' && this.me?.alive && !this.stage) this.toggleAutopilot();
         // Enter skips a round's intro
         if (action === 'confirm' && this.introOpen) this.skipIntro();
@@ -9231,30 +9226,16 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Cinema mode, for recordings and trailers: the whole HUD, the radio's title and the
-   * subtitles step aside (body.cinema), and the chase camera hangs farther back, follows softer
-   * and drifts a little (see updateCamera). The same key brings everything back.
+   * Cinema mode, for our own recordings and trailers, never a Host's option: switched from the
+   * console in development (`game.setCinema(true)`). The whole HUD, the grid, the radio's title and
+   * the subtitles step aside (body.cinema), and the chase camera hangs farther back, follows
+   * softer and drifts a little (see updateCamera); every round starts without it.
    */
-  private toggleCinema() {
-    this.setCinema(!this.cinema);
-    if (!this.cinema) this.hud.flashMessage(this.time, t('Cinema mode off'), 1.5);
-  }
-
-  /**
-   * Cinema mode on or off. Switched on, it hides the whole HUD, so a note outside it says how to
-   * bring the HUD back for a few seconds: a key hit by mistake must never look like a lost HUD.
-   */
-  private setCinema(on: boolean) {
+  setCinema(on: boolean) {
     this.cinema = on;
     document.body.classList.toggle('cinema', on);
-    const note = $('cinema-note');
-    clearTimeout(this.cinemaNoteTimer);
-    note.hidden = !on;
-    if (on) {
-      note.textContent = t('Cinema mode · H brings the HUD back');
-      this.cinemaNoteTimer = window.setTimeout(() => (note.hidden = true), CINEMA_NOTE * 1000);
-    }
   }
+
 
   /**
    * The intro's flight (see startIntro): it opens on the arena's landmark as the menu shows it,
