@@ -143,6 +143,8 @@ export class Hud {
   private readonly height = $('hud-height');
   private readonly climb = $('hud-climb');
   private readonly markers = new Map<string, Marker>();
+  /** The triangles over torpedoes, one element each, reused from frame to frame (see updateTorpedoMarks). */
+  private readonly torpedoMarks: HTMLElement[] = [];
   /** Ships marked this frame, reused from frame to frame. */
   private readonly seen = new Set<string>();
   /** Where the names written this frame sit (x, y pairs, px), reused from frame to frame. */
@@ -264,6 +266,7 @@ export class Hud {
     this.setLock('', null);
     this.markerLayer.replaceChildren();
     this.markers.clear();
+    this.torpedoMarks.length = 0;
     this.message.textContent = '';
     this.countdownText.textContent = '';
     this.bannerText.textContent = '';
@@ -356,13 +359,14 @@ export class Hud {
 
   /**
    * The crosshair turns orange while the laser would hit a hull: bright and glowing over a drive,
-   * a plain orange ring over armor, where a shot only heats the laser. Over a ship of the own
-   * side it stays azure, crossed out, with FRIEND beneath: a shot would hit it all the same.
+   * a plain orange ring over armor, where a shot only heats the laser, bright too over a rival's
+   * torpedo, which a shot sets off. Over a ship of the own side, or a torpedo of the own ship or
+   * side, it stays azure, crossed out, with FRIEND beneath: a shot would hit it all the same.
    */
-  setOnTarget(hit: 'drive' | 'armor' | 'friend' | null) {
-    setClass(this.crosshair, 'on-target', hit === 'drive');
+  setOnTarget(hit: OnTarget | null) {
+    setClass(this.crosshair, 'on-target', hit === 'drive' || hit === 'torpedo');
     setClass(this.crosshair, 'on-armor', hit === 'armor');
-    setClass(this.crosshair, 'on-friend', hit === 'friend');
+    setClass(this.crosshair, 'on-friend', hit === 'friend' || hit === 'friend-torpedo');
   }
 
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
@@ -973,6 +977,32 @@ export class Hud {
     if (edges.length || labeled.length || this.courseEdge.shown) this.placeNames();
   }
 
+  /**
+   * A triangle over each torpedo in `marks` that lies on screen, in its shooter's tint, orange
+   * while it is `locked` (the aim assist's target or under the crosshair): a torpedo is a dot of
+   * a few pixels at any range worth shooting it at, nearly invisible without its mark. One off
+   * screen goes unmarked; the lock warning points to the one homing on the own ship.
+   */
+  updateTorpedoMarks(camera: THREE.Camera, marks: readonly TorpedoMark[]) {
+    let shown = 0;
+    for (const mark of marks) {
+      const { x, y, offscreen } = toScreen(camera, mark.position, EDGE_X, EDGE_Y);
+      if (offscreen) continue;
+      let element = this.torpedoMarks[shown];
+      if (!element) {
+        element = this.torpedoMarks[shown] = document.createElement('div');
+        element.className = 'torpedo-mark';
+        this.markerLayer.append(element);
+      }
+      shown++;
+      element.hidden = false;
+      element.style.transform = `translate(${x}px, ${y}px)`;
+      if (element.style.getPropertyValue('--tint') !== mark.tint) element.style.setProperty('--tint', mark.tint);
+      setClass(element, 'locked', mark.locked);
+    }
+    for (let i = shown; i < this.torpedoMarks.length; i++) this.torpedoMarks[i].hidden = true;
+  }
+
   private addMarker(ship: Ship): Marker {
     const element = document.createElement('div');
     element.className = 'marker';
@@ -1090,6 +1120,16 @@ export class Hud {
 }
 
 /** A ship's marker: its element, its name (beside the arrow at the screen's edge) and its distance. */
+/** What the laser would hit now, as the crosshair shows it (see Hud.setOnTarget). */
+export type OnTarget = 'drive' | 'armor' | 'friend' | 'torpedo' | 'friend-torpedo';
+
+/** A torpedo the HUD marks (see Hud.updateTorpedoMarks): where it is, its shooter's tint, and whether the own ship has it locked. */
+export interface TorpedoMark {
+  readonly position: THREE.Vector3;
+  tint: string;
+  locked: boolean;
+}
+
 interface Marker {
   element: HTMLElement;
   tag: HTMLElement;

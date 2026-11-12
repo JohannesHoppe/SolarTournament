@@ -510,12 +510,12 @@ const sight = new THREE.Vector3();
 const sideways = new THREE.Vector3();
 
 /**
- * The overdrive's shove (OVERDRIVE_PUSH long) into `out`: along the nose, or, with a ship under
- * the aim assist (`target`), on a ram course: it first takes out the drift across the line to
+ * The overdrive's shove (OVERDRIVE_PUSH long) into `out`: along the nose, or, with whatever the
+ * aim assist holds (`target`: a ship or a torpedo, where it is and how it moves), on a ram course: it first takes out the drift across the line to
  * the target (what would carry the ship past it) and puts the rest along that line, so the two
  * close straight on. A drift across larger than the shove takes all of it.
  */
-export function overdriveShove(flight: FlightModel, target: FlightModel | null, out: THREE.Vector3): THREE.Vector3 {
+export function overdriveShove(flight: FlightModel, target: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 } | null, out: THREE.Vector3): THREE.Vector3 {
   if (!target) return flight.forward(out).multiplyScalar(OVERDRIVE_PUSH);
   sight.subVectors(target.position, flight.position);
   const range = sight.length();

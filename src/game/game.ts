@@ -20,7 +20,7 @@ import { OrbitPath } from '../view/orbitpath';
 import { referencesOf } from '../world/reference';
 import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
-import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
+import { Hud, METERS_PER_UNIT, meters, type OnTarget, type TorpedoMark } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
@@ -38,6 +38,10 @@ import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from './decoys';
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
+/** A decoy dropped jolts the camera by this much (see kick): the clamp letting go is felt, far less than a hit. */
+const DECOY_KICK = 0.4;
+/** Rivals' torpedoes are marked on screen within this range (units, 3 km: as far as a torpedo locks), in sight. */
+const TORPEDO_MARK_RANGE = LOCK_DISTANCE;
 const BOT_DECOY_RATE = 3;
 import { AGAIN_SHARE, BLACK_GLITCH, BLACK_PRINT_PRICE, BLACK_SHAKE, BLACK_TREMOR, BOND_MAX, buySalvage, type Campaign, campaignFrom, complete, counterOf, flownAgain, freshRun, gold, goldOf, styleRatings, HABIT_NEAR, hasMedal, hullOf, isJob, keepsStep, master, medal, MEDAL_SHARE, PRINT_PRICE, pitNight, placeBet, printClone, buyRumor, settleBet, sideJobAt, trialPassed, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf, sideTrips, spareSkills, bars, takeChip, takeTag } from '../campaign/campaign';
 import { scar, SCAR_EFFECTS, SCAR_KINDS, SCAR_NAMES, scarNumbers, scarOf, scarTier, stoneSeconds } from '../campaign/scars';
@@ -79,7 +83,7 @@ import { clipType, recordClip } from '../view/clip';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, hullLooks, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_ARMING, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
@@ -853,6 +857,8 @@ const clonesLeftText = (n: number) => (n === 1 ? t('{n} clone left', { n }) : t(
 
 /** The sensors see nothing (a solar storm). */
 const blind = () => false;
+/** No torpedo marked, while the sensors see none (see markTorpedoes). */
+const NO_TORPEDO_MARKS: readonly TorpedoMark[] = [];
 
 /** Real time in seconds; unlike game time it never slows down or pauses. */
 const wallClock = () => performance.now() / 1000;
@@ -1086,7 +1092,13 @@ export class Game implements OnlineGame {
   /** How much the bots go easy on the Host in a solo round, 0..1 (see DEATH_EASE). */
   private ease = 0;
   /** The nose is on a ship: the laser would hit now (see assistAim). */
-  private onTarget: 'drive' | 'armor' | 'friend' | null = null;
+  private onTarget: OnTarget | null = null;
+  /** The rival torpedo the aim assist holds, and the one the laser would hit now (see aimTarget): their marks turn orange. */
+  private aimLock: Torpedo | null = null;
+  /** The torpedoes marked this frame, and the records they are kept in (see markTorpedoes). */
+  private readonly torpedoMarkList: TorpedoMark[] = [];
+  private readonly torpedoMarkPool: TorpedoMark[] = [];
+  private shotLock: Torpedo | null = null;
   /** When the on-target tick last sounded (see ON_TARGET_TICK). */
   private onTargetTickAt = -Infinity;
   /** The flight school's marker as the frame's last step left it (see teach), or null; the screen shows it once a frame (see showSchoolHud). */
@@ -4794,7 +4806,7 @@ export class Game implements OnlineGame {
     const onTarget = me.alive && this.aid('targeting') ? this.onTarget : null;
     // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
     // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
-    if (onTarget && onTarget !== 'friend' && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
+    if (onTarget && onTarget !== 'friend' && onTarget !== 'friend-torpedo' && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
       this.onTargetTickAt = now;
       this.sound.beep(1760, 0.03, 0.07);
     }
@@ -4808,6 +4820,7 @@ export class Game implements OnlineGame {
       // a solar storm blinds the sensors, and a flight computer without the targeting module marks no ship
       const marking = !this.storming && this.aid('targeting');
       this.hud.updateMarkers(this.camera, this.ships, subject, marking ? this.inSight : blind, marking ? this.cueTarget(subject) : null, subject === me ? this.attackerOf : undefined);
+      this.hud.updateTorpedoMarks(this.camera, marking ? this.markTorpedoes(subject) : NO_TORPEDO_MARKS);
     }
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
@@ -6647,7 +6660,7 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Aim assist: a ship in sight within AIM_ASSIST_ANGLE of the nose pulls the nose onto it,
+   * Aim assist: a ship or a rival's torpedo in sight within AIM_ASSIST_ANGLE of the nose pulls the nose onto it,
    * the firmer the closer it already is, and the less the pilot steers away. The bots aim
    * with a computer too; the pilot still pulls the trigger. Sets `onTarget` to what the laser
    * would hit now.
@@ -6656,25 +6669,28 @@ export class Game implements OnlineGame {
     const target = this.aimTarget();
     if (!target) return out;
     const flight = this.me!.flight;
-    toAim.subVectors(target.flight.position, flight.position);
+    toAim.subVectors(target instanceof Ship ? target.flight.position : target.position, flight.position);
     if (this.recording) this.recording.aim = toAim.toArray();
     return assistAim(flight, toAim, out);
   }
 
   /**
-   * The ship in sight closest to the nose within AIM_ASSIST_ANGLE, not of the own side, or null;
-   * sets `onTarget` to what the laser would hit now: the closest hull, whoever's,
-   * in sight within the laser's reach whose radius covers the nose, as the laser's own hit test
-   * sees it. Only the nose counts, never the pointer.
+   * The ship or rival torpedo in sight closest to the nose within AIM_ASSIST_ANGLE, not of the own
+   * side, or null (`aimLock` the torpedo, when it is one); sets `onTarget` to what the laser would
+   * hit now: the closest hull, whoever's, in sight within the laser's reach whose radius covers
+   * the nose, as the laser's own hit test sees it, or a torpedo nearer than that hull, which the
+   * beam takes first. Only the nose counts, never the pointer.
    * It runs while the brake or the flip turns the nose too, so the crosshair always tells.
    */
-  private aimTarget(): Ship | null {
+  private aimTarget(): Ship | Torpedo | null {
     const me = this.me!;
     const flight = me.flight;
     this.onTarget = null;
+    this.aimLock = null;
+    this.shotLock = null;
     if (!me.alive) return null;
     const nose = flight.forward(forward);
-    let target: Ship | null = null;
+    let target: Ship | Torpedo | null = null;
     let angle = AIM_ASSIST_ANGLE;
     // the hull the laser would hit: the nose within its radius as seen from here, the closest
     let hit: Ship | null = null;
@@ -6699,6 +6715,33 @@ export class Game implements OnlineGame {
       }
     }
     if (hit) this.onTarget = hit.allyOf(me) ? 'friend' : hit.tailToward(toAim.subVectors(hit.flight.position, flight.position)) ? 'drive' : 'armor';
+    // a torpedo is taken like a ship: the laser sets it off, so the assist pulls onto a rival's
+    let shot: Torpedo | null = null;
+    for (const torpedo of this.torpedoes.list) {
+      // the own torpedo leaving the tube is not hit by the own laser (see Torpedoes.raycast)
+      if (torpedo.shooter === me && this.time - torpedo.bornAt < TORPEDO_ARMING) continue;
+      const line = toAim.subVectors(torpedo.position, flight.position);
+      const range = line.length();
+      if (range > LASER_RANGE) continue;
+      const off = angleTo(nose, line);
+      const onIt = off < TORPEDO_RADIUS / Math.max(range, 1) && range < hitRange;
+      const rival = torpedo.shooter !== me && !torpedo.shooter.allyOf(me);
+      const assist = rival && off < angle && range <= AIM_ASSIST_RANGE;
+      if ((!onIt && !assist) || !this.field.lineOfSight(flight.position, torpedo.position)) continue;
+      if (onIt) {
+        shot = torpedo;
+        hitRange = range;
+      }
+      if (assist) {
+        target = torpedo;
+        angle = off;
+      }
+    }
+    if (shot) {
+      this.onTarget = shot.shooter === me || shot.shooter.allyOf(me) ? 'friend-torpedo' : 'torpedo';
+      if (this.onTarget === 'torpedo') this.shotLock = shot;
+    }
+    if (target && !(target instanceof Ship)) this.aimLock = target;
     return target;
   }
 
@@ -6707,7 +6750,9 @@ export class Game implements OnlineGame {
     const me = this.me!;
     if (!me.alive || !me.perks.overdrive || this.time < this.overdriveReadyAt) return;
     this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
-    me.flight.velocity.add(overdriveShove(me.flight, this.aimTarget()?.flight ?? null, forward));
+    // a ram course at whatever the aim assist holds, a ship or a torpedo
+    const target = this.aimTarget();
+    me.flight.velocity.add(overdriveShove(me.flight, target instanceof Ship ? target.flight : target, forward));
     me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     // about sixty g at once: the clone is pressed to the edge of blacking out
     me.strain = Math.max(me.strain, OVERDRIVE_STRAIN);
@@ -7160,7 +7205,10 @@ export class Game implements OnlineGame {
     this.online?.sendDecoy(ship, decoyAt, decoyVelocity);
     if (ship.isLocal) {
       this.hud.flashMessage(this.time, t('Decoy away'), 1.2);
-      this.sound.beep(660, 0.08, 0.12);
+      // the clamp lets go: a clonk through the hull and a jolt the pilot feels
+      this.sound.play('clonk', { volume: 1.2 });
+      this.sound.beep(660, 0.08, 0.12, 0.12);
+      this.kick = Math.min(2, this.kick + DECOY_KICK);
     }
   }
 
@@ -9053,6 +9101,28 @@ export class Game implements OnlineGame {
     // the campaign's finds within their ping (see seekFinds)
     if (this.school) for (const reference of this.hunt.references) references.push(reference);
     this.hud.setReferences(this.camera, subject, references);
+  }
+
+  /**
+   * The rivals' torpedoes the HUD marks for `subject`: in sight within TORPEDO_MARK_RANGE, in
+   * their shooter's tint, locked while the own ship's aim assist holds one or the laser would hit
+   * it (see aimTarget). The marks are reused from frame to frame.
+   */
+  private markTorpedoes(subject: Ship): readonly TorpedoMark[] {
+    const marks = this.torpedoMarkList;
+    marks.length = 0;
+    if (!subject.alive) return marks;
+    for (const torpedo of this.torpedoes.list) {
+      if (torpedo.shooter === subject || torpedo.shooter.allyOf(subject)) continue;
+      if (torpedo.position.distanceToSquared(subject.flight.position) > TORPEDO_MARK_RANGE * TORPEDO_MARK_RANGE) continue;
+      if (!this.field.lineOfSight(this.camera.position, torpedo.position)) continue;
+      const mark = (this.torpedoMarkPool[marks.length] ??= { position: new THREE.Vector3(), tint: '', locked: false });
+      mark.position.copy(torpedo.position);
+      mark.tint = shownTint(torpedo.shooter);
+      mark.locked = subject === this.me && (torpedo === this.aimLock || torpedo === this.shotLock);
+      marks.push(mark);
+    }
+    return marks;
   }
 
   /** The ship whose range and closure rate the HUD shows: what a torpedo would lock on now, else the nearest rival in sight. */

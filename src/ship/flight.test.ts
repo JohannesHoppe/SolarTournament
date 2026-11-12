@@ -442,6 +442,15 @@ describe("the overdrive's shove", () => {
     expect(closing.length()).toBeGreaterThan(OVERDRIVE_PUSH * 0.99);
   });
 
+  it('rams a torpedo under the aim assist the same way, by where it is and how it moves', () => {
+    const me = ship(0, 0, 0, 0, 0, -MAX_SPEED);
+    const torpedo = { position: new THREE.Vector3(200, 0, -8000), velocity: new THREE.Vector3(-600, 0, 7200) };
+    const shove = overdriveShove(me, torpedo, new THREE.Vector3());
+    expect(shove.length()).toBeCloseTo(OVERDRIVE_PUSH, 6);
+    const closing = me.velocity.clone().add(shove).sub(torpedo.velocity);
+    expect(angleTo(closing, torpedo.position.clone().sub(me.position))).toBeLessThan(1e-9);
+  });
+
   it('takes out what it can of a drift past the rival larger than the shove', () => {
     const me = ship(0, 0, 0, 0, 0, 0);
     const rival = ship(0, 0, -6000, OVERDRIVE_PUSH * 2, 0, 0);

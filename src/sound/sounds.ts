@@ -5,8 +5,41 @@
  */
 import { exp, pow, sin } from '../detmath';
 
-export function synthesizeSounds(context: BaseAudioContext): Record<'laser' | 'explosion' | 'boost', AudioBuffer> {
-  return { laser: laser(context), explosion: explosion(context), boost: boost(context) };
+export function synthesizeSounds(context: BaseAudioContext): Record<'laser' | 'explosion' | 'boost' | 'clonk', AudioBuffer> {
+  return { laser: laser(context), explosion: explosion(context), boost: boost(context), clonk: clonk(context) };
+}
+
+/**
+ * A clamp letting go of a decoy: the latch's hard knock, the hull's plate ringing a moment in
+ * a few inharmonic partials, as struck steel does, and a low thump as the decoy springs free.
+ */
+function clonk(context: BaseAudioContext): AudioBuffer {
+  const rate = context.sampleRate;
+  const buffer = context.createBuffer(1, Math.round(rate * 0.5), rate);
+  const data = buffer.getChannelData(0);
+  // the plate's partials (Hz) and how fast each dies away (1/s)
+  const partials = [
+    [212, 14],
+    [347, 18],
+    [529, 26],
+    [811, 38],
+  ];
+  const phases = partials.map(() => 0);
+  let thump = 0;
+  for (let i = 0; i < data.length; i++) {
+    const t = i / rate;
+    thump += (2 * Math.PI * (70 + 80 * exp(-t * 40))) / rate;
+    let ring = 0;
+    for (let p = 0; p < partials.length; p++) {
+      phases[p] += (2 * Math.PI * partials[p][0]) / rate;
+      ring += sin(phases[p]) * exp(-t * partials[p][1]) / (p + 1);
+    }
+    const knock = (Math.random() * 2 - 1) * exp(-t * 300);
+    const attack = Math.min(1, t / 0.002);
+    const release = Math.min(1, (data.length - i) / (rate * 0.03));
+    data[i] = 0.75 * attack * release * (0.8 * sin(thump) * exp(-t * 12) + 0.6 * ring + 0.6 * knock);
+  }
+  return buffer;
 }
 
 /**

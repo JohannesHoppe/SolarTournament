@@ -93,3 +93,58 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
   expect(end.steered).toBe(true);
   expect(errors).toEqual([]);
 });
+
+/**
+ * A rival's torpedo is a dot of a few pixels: the HUD marks it with a triangle, and the aim
+ * assist takes it as it takes a ship, its triangle orange while it holds it. A decoy dropped is
+ * felt: the clamp's jolt shakes the view.
+ */
+test("a rival's torpedo is marked and locked, and a decoy dropped jolts the view", async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch');
+  await page.waitForFunction(() => !window.game.clamped && window.game.me?.alive && window.game.state === 'playing', null, { timeout: 60_000 });
+  const set = await page.evaluate(() => {
+    const game = window.game;
+    const me = game.me;
+    const rival = game.ships.find((ship: any) => ship !== me);
+    for (const ship of game.ships) {
+      if (ship === me || ship === rival) continue;
+      ship.alive = false;
+      ship.respawnAt = Infinity;
+    }
+    const Vector3 = me.flight.position.constructor;
+    const nose = me.flight.forward(new Vector3());
+    // a place with 1.2 km of open space ahead
+    let place = me.flight.position.clone();
+    for (let i = 0; i < 400 && (game.field.raycast(place, nose, 30000) || game.field.overlap(place, 2000)); i++) place = new Vector3((i * 7919) % 90000 - 45000, ((i * 104729) % 30000) - 15000, ((i * 1299709) % 90000) - 45000);
+    me.flight.position.copy(place);
+    me.flight.velocity.set(0, 0, 0);
+    me.flight.angularVelocity.set(0, 0, 0);
+    me.protectedUntil = Infinity;
+    me.syncTransform();
+    // the rival 1.1 km ahead, facing the own ship, fires one torpedo at it and is gone
+    rival.flight.position.copy(place).addScaledVector(nose, 22000);
+    rival.flight.velocity.set(0, 0, 0);
+    rival.flight.orientation.copy(me.flight.orientation).multiply(new me.flight.orientation.constructor(0, 1, 0, 0));
+    rival.syncTransform();
+    rival.torpedoes = 1;
+    game.fireTorpedo(rival);
+    rival.alive = false;
+    rival.respawnAt = Infinity;
+    return game.torpedoes.list.length;
+  });
+  expect(set, 'the rival fired').toBe(1);
+  await page.waitForSelector('.torpedo-mark:not([hidden])', { timeout: 10_000 });
+  await page.waitForSelector('.torpedo-mark.locked:not([hidden])', { timeout: 10_000 });
+  const jolt = await page.evaluate(() => {
+    const game = window.game;
+    game.torpedoes.list.length = 0;
+    game.me.decoys = 1;
+    game.kick = 0;
+    game.dropDecoy(game.me);
+    return { kick: game.kick, left: game.me.decoys };
+  });
+  expect(jolt.left).toBe(0);
+  expect(jolt.kick).toBeGreaterThan(0.3);
+  expect(errors).toEqual([]);
+});
