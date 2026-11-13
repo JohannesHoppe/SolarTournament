@@ -338,6 +338,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside; low over a world's ground the hover field's rush and the grind of a hull gliding on it |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion, a gate's boost, the clonk of a decoy let go |
+| `sound/chatter.ts` | Nicole's chatter in real rounds: a pool of lines for each moment that comes again and again (start, lost clone, next clone, round's end, a race's places, a capture), no line of the last few again, often silence, praise seldom; warnings never pass through it |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite; the campaign's other people (Rask, Pim, Hedda, the Saw Brothers, Ma Tally, the Navy officer, Hollow Jack, Bellamy Crisp, Spare, Commissioner Quill, Admiral Vey, Perihelion, Kesh, the President) on a comm of their own, a narrow radio band; Nicole thin in the campaign until it gives her own voice back |
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills, drive's pedal bass and its timbre); every decision is an integer hash of seed, bar and step |

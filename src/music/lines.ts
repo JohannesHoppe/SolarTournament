@@ -488,6 +488,10 @@ export const SPONSOR_BREAK = [
   'One day, when you have been brave enough, we will meet. For real. I promise.',
   'There is a real me, you know. Somewhere out there. Keep fighting, and maybe one day I will tell you where.',
   'I would love to meet you in person. Someone as brave as you. Just a few more rounds, darling.',
+  'That one is gone. The ad pays for the next.',
+  'Gone. I felt it too, you know. Just watch the ad.',
+  'Another body on the bill. Sit through the sponsor, and we go again.',
+  'Breathe. That was the clone, not you. Mostly.',
 ] as const;
 
 /** Nicole when the next clone boots. */
@@ -497,7 +501,62 @@ export const SPONSOR_HAPPY = [
   'Fresh body, same old you. Go get them.',
   'A fresh body, just for me. Hurry up.',
   'I missed you. Again.',
+  'Linked again. Same mind, new knees.',
+  'Back in. Try not to do that twice.',
+  'New body. It still smells of the printer.',
+  'Link is up. Your last one is still drifting out there.',
+  'Welcome back. I kept the cockpit warm.',
+  'Printed and plugged in. Off you go.',
+  'Back again. The printer says hello.',
 ] as const;
+
+/**
+ * Nicole's chatter in real rounds, one pool for each moment that comes again and again (see
+ * sound/chatter: she picks from a pool, never one of the last she said, and often says
+ * nothing). Each pool's first line is the one the screen's message stands for.
+ */
+export const CHATTER = {
+  launch: [
+    COMPUTER.launch,
+    'Link is up. You have the stick.',
+    'You are in. Try to keep this one a little longer.',
+    'Link established. Everything it feels, you feel. Fly carefully.',
+    'Clone online. Systems green. Mostly.',
+    'We are live. The sponsors are watching. So am I.',
+    'Here we go again. Eyes open, nose cold.',
+    'Link holds. Drive warm. The rest is up to you.',
+    'All right, sweetheart. Show them how it is done.',
+    'You again. Good. I like it when it is you.',
+    'Online. Remember, nobody out there likes you as much as I do.',
+    'Fresh round, fresh body. Let us not waste either.',
+  ],
+  death: SPONSOR_BREAK,
+  reprint: SPONSOR_HAPPY,
+  roundOver: [
+    COMPUTER.roundOver,
+    'Round over. Breathe.',
+    'That is the round. Let us see what it cost.',
+    'Over. Your clones thank you. The ones still breathing.',
+    'Round over. Not bad. Not bad at all.',
+    'And that is it. You can let go of the stick.',
+    'Round done. The sponsors got their show.',
+    'That was the round, sweetheart. Come here.',
+  ],
+  passed: [
+    COMPUTER.passed,
+    'Clean pass.',
+    'Past them. Keep it.',
+    'That one never saw you.',
+    'Nicely done.',
+    'One more behind you.',
+    'Good line. They will not catch that.',
+    'Oh, I liked that one, handsome.',
+  ],
+  lead: [COMPUTER.lead, 'Front of the pack.', 'Nobody ahead of you now.', 'Leading. Do not look back too often.'],
+  lostLead: [COMPUTER.lostLead, 'Someone is in front of you now.', 'The lead is gone. Take it back.'],
+  passedBy: [COMPUTER.passedBy, 'You have been passed.', 'One got by. Close the gap.', 'Behind again. Push.'],
+  captured: [COMPUTER.captured, 'Core home. A point for us.', 'We scored!', 'That is a capture. Nicely towed.'],
+} as const satisfies Record<string, readonly string[]>;
 
 /** How many other Hosts Nicole names by number when they shoot at the Host (see ATTACKED). */
 export const ATTACKER_HOSTS = 8;
@@ -1027,7 +1086,7 @@ export function allLines(language: Language): string[] {
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
       return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, ANNOUNCER_ADMITTED, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
-      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(CHATTER).flat(), ...Object.values(ATTACKED.bot), ...ATTACKED.host];
     case 'rask':
       return [...Object.values(RASK)];
     case 'pim':
