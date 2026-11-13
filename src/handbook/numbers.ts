@@ -5,12 +5,12 @@ import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dr
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
 import * as THREE from 'three';
-import { CRACK_TRACK } from '../world/crack';
+import { CRACK_TRACK, FLOOR_HALF, MASSIF, RIFT_DEPTH } from '../world/crack';
 import { BOOST_HEAT, BOOST_RECHARGE, BURNOUT_DAMAGE, BURNOUT_HEAT, BURNOUT_SECONDS, DRIVE_HEAT_SHED } from '../ship/driveheat';
 import { THROAT_AIR, THROAT_TRACK } from '../world/throat';
 import { TITAN_AIR, TITAN_FALL } from '../world/titan';
 import { bendRadius, RacingLine } from '../game/racingline';
-import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
+import { EUROPA_FALL } from '../world/europa';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
@@ -88,8 +88,9 @@ export const FROM_CODE: Record<string, number> = {
   burnoutSeconds: BURNOUT_SECONDS,
   burnoutDamage: BURNOUT_DAMAGE,
   boostTop: meters(MAX_SPEED + OVERDRIVE_PUSH),
-  crackWidth: meters(CRACK_WIDTH),
-  crackDepth: meters(CRACK_DEPTH),
+  riftFloor: Math.round(meters(2 * FLOOR_HALF) / 10) * 10,
+  riftDepth: meters(RIFT_DEPTH),
+  gorgeDepth: meters(RIFT_DEPTH + MASSIF),
   crackGravity: Math.round((meters(EUROPA_FALL) / 9.81) * 100) / 100,
   throatLength: Math.round(km(lengthOf(THROAT_TRACK.points))),
   throatGravity: Math.round((meters(TITAN_FALL) / 9.81) * 100) / 100,

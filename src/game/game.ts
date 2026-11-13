@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cos, exp, hypot, pow, sin } from '../detmath';
-import { angleTo, applyAxisAngle, slerp } from '../detthree';
+import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
@@ -516,6 +516,8 @@ const BOOST_CAP = MAX_SPEED + OVERDRIVE_PUSH;
 /** A racing bot's line ahead is measured for its boost over this much to either side of each point (units, 60 m), as the racing line measures its bends (see botBoost). */
 const BEND_SPAN = 1200;
 const BOOST_NOSE_COS = cos(BOOST_NOSE);
+/** A racing bot never boosts with a ship this close ahead on its nose's line (units, 400 m: two seconds of the shove's gain), within twice their hit radii of it. */
+const BOOST_CLEAR = 8000;
 const boostHere = new THREE.Vector3();
 const boostAhead = new THREE.Vector3();
 const boostBeyond = new THREE.Vector3();
@@ -560,6 +562,17 @@ const NEAR_EASE = 4;
 const NEAR_FOV = 6;
 const HOVER_SHAKE = 0.012;
 const SCRAPE_SHAKE = 0.03;
+/**
+ * Low over a world's ground (as near as the nearness above: full within 5 m, gone by 100 m) the
+ * chase camera looks GROUND_TILT down past the nose (rad, 5°), so the ground and the horizon fill
+ * the picture instead of the sky over the nose, and leans with a banked ground by GROUND_LEAN of
+ * the ground's tilt across the ship, at most LEAN_MOST (rad, 10°); both ease in and out at
+ * GROUND_LOOK_EASE (1/s). In free space the camera looks along the nose.
+ */
+const GROUND_TILT = 0.087;
+const GROUND_LEAN = 0.35;
+const LEAN_MOST = 0.17;
+const GROUND_LOOK_EASE = 2;
 /**
  * The hover field lifts the ground's dust under a hull riding it faster than GLIDE_SPARKS: up to
  * LIFT_DUST puffs a second from LIFT_FULL on (units/s, 50 m/s) at the ride height, fewer higher up,
@@ -755,6 +768,14 @@ const normal = new THREE.Vector3();
 /** The ground's normal under a ship for the looks and sound of flying low (see feltNear, liftDust), and a dust puff's spread and motion. */
 const feltNormal = new THREE.Vector3();
 const dustSpread = new THREE.Vector3();
+/** The chase camera's turn from the nose over a world's ground (see GROUND_TILT), and what it is built of. */
+const groundLook = new THREE.Quaternion();
+const groundLean = new THREE.Quaternion();
+const shipTurn = new THREE.Quaternion();
+const cameraAim = new THREE.Quaternion();
+const leanNormal = new THREE.Vector3();
+const ACROSS = new THREE.Vector3(1, 0, 0);
+const ALONG = new THREE.Vector3(0, 0, 1);
 const dustVelocity = new THREE.Vector3();
 const relative = new THREE.Vector3();
 const closingVelocity = new THREE.Vector3();
@@ -1249,6 +1270,9 @@ export class Game implements OnlineGame {
   private lastGlide = -Infinity;
   /** How near the camera's pilot flies to something, 0..1, eased (see feltNear). */
   private near = 0;
+  /** How far the chase camera looks down past the nose and leans with the ground (rad, eased; see GROUND_TILT). */
+  private groundTilt = 0;
+  private groundLean = 0;
   /** The brake (it beeps once at rest). */
   private readonly brake = new Brake();
   /**
@@ -7193,6 +7217,12 @@ export class Game implements OnlineGame {
     const along = line.clear(s + BEND_SPAN, this.field, boostAhead).sub(line.clear(s, this.field, boostHere)).normalize();
     const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
     if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
+    // never into a ship on the nose's line close ahead (the grid's row in front at the start): the shove would ram it
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
+      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return;
+    }
     let straight = true;
     for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
       straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;
@@ -9816,7 +9846,9 @@ export class Game implements OnlineGame {
       flight.toWorld(cameraGoal.set(film * me.radius * sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)), cameraGoal);
       const soft = this.cinema ? CINEMA_SOFTNESS : 1;
       this.camera.position.lerp(cameraGoal, 1 - exp(-CAMERA_FOLLOW * soft * dt));
-      slerp(this.camera.quaternion, flight.orientation, 1 - exp(-CAMERA_TURN * soft * dt));
+      // along the nose, over a world's ground a little down past it and leaning with the ground (see GROUND_TILT)
+      setFromAxisAngle(groundLook, ACROSS, -this.groundTilt).multiply(setFromAxisAngle(groundLean, ALONG, this.groundLean));
+      slerp(this.camera.quaternion, cameraAim.copy(flight.orientation).multiply(groundLook), 1 - exp(-CAMERA_TURN * soft * dt));
     }
     this.riding = me.alive ? flight.velocity : null;
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
@@ -9882,6 +9914,11 @@ export class Game implements OnlineGame {
     const height = me.alive && this.field.fall > 0 ? this.field.groundBelow(flight.position, feltNormal) : null;
     const gap = height === null ? Infinity : height - me.radius;
     const ground = 1 - THREE.MathUtils.smoothstep(gap, NEAR_FULL, NEAR_REACH);
+    // the chase camera looks down past the nose over the ground, and leans as the ground banks across the ship
+    const across = height === null ? 0 : leanNormal.copy(feltNormal).applyQuaternion(shipTurn.copy(flight.orientation).invert()).x;
+    const ease = 1 - exp(-GROUND_LOOK_EASE * dt);
+    this.groundTilt += (ground * GROUND_TILT - this.groundTilt) * ease;
+    this.groundLean += (ground * THREE.MathUtils.clamp(-across * GROUND_LEAN, -LEAN_MOST, LEAN_MOST) - this.groundLean) * ease;
     const close = me.alive && !!this.field.overlap(flight.position, me.radius * CLOSE_CALL_REACH);
     this.near += ((close ? 1 : ground) - this.near) * (1 - exp(-NEAR_EASE * dt));
     // the hover field carries within its reach (see world/hover)
