@@ -77,7 +77,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { arenaById, arenasFor, ARENAS, DEFAULT_ARENA, arenaByKey, arenaOfRound, FIGHT_WORLDS, PREVIEW_FROM, TOURNAMENT_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
+import { arenaById, arenasFor, ARENAS, DEFAULT_ARENA, arenaByKey, arenaOfRound, FIGHT_WORLDS, PREVIEW_FROM, RACE_WORLDS, TOURNAMENT_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { JET_WELDS } from '../world/derelict';
 import { animateHull, setHullFrost } from '../world/worldship';
@@ -8890,7 +8890,7 @@ export class Game implements OnlineGame {
     const key = `${seed}.${this.roundId}.${this.venue.id}.${!!this.school}`;
     if (key !== this.cometsOfKey) {
       this.cometsOfKey = key;
-      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school || this.overWorld);
+      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school || this.overWorld || RACE_WORLDS.includes(this.venue));
     }
     const comet = cometAt(this.comets, clock);
     // the alarm follows only the comet that comes now

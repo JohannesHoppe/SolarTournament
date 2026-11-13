@@ -342,7 +342,7 @@ export function cometsOf(seed: number, round: number, well: Well | null = null):
 
 /**
  * The comets a venue brings: in a round (`round` 0 or more) those of cometsOf; none where it is
- * `calm` (the flight school, and a world fought over, whose ground a head's route would plough
+ * `calm` (the flight school, and a world raced or fought over, whose ground a head's route would plough
  * through) and none outside a round, so nothing there ever warns of one.
  */
 export function roundComets(seed: number, round: number, well: Well | null, calm: boolean): Comet[] {
