@@ -74,7 +74,7 @@ import { copyGround, glide, outside as outsideOn } from '../world/hover';
 import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
-import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
+import { Arena, ARENA_GRACE, ARENA_LIMIT, outsideArena } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
@@ -463,8 +463,13 @@ const AIM_DEPTH = 40000;
 const SPAWN_CANDIDATES = 12;
 /** Where a clone is printed when no place in the field is clear: this share of the field's layout radius out, beyond its rocks, and never beyond 95 % of the arena's edge. */
 const SPAWN_BEYOND = 1.1;
-/** Over a world fought over a clone is printed at least this high over the ground (units, 100 m), at most four times as high: low enough to fight over it at once, clear of its ridges. */
+/** Where a world fought over finds no clear ground for a clone, it is printed at least this high over the ground (units, 100 m), at most four times as high, clear of its ridges. */
 const SPAWN_OVER_GROUND = 2000;
+/** Over a world fought over a clone is printed on the ground: level ground has its normal at least LEVEL up (about 14° of slope at most); and no clone is printed within PAD_CLEAR (units, 80 m) of another ship. */
+const LEVEL = 0.97;
+const PAD_CLEAR = 1600;
+/** Under an arena's edge of its own (see Bounds) a bot keeps within this share of its radius. */
+const BOUNDS_HOME = 0.85;
 /**
  * Nicole's free drift tip in a deathmatch (see crossingTip): an enemy within CROSSING_RANGE
  * (units, 500 m), more than CROSSING_ANGLE (rad, 60°) off the own nose and crossing faster than
@@ -886,6 +891,8 @@ const frontPoint = new THREE.Vector3();
 const emberDrift = new THREE.Vector3();
 const spawnMiddle = new THREE.Vector3();
 const groundUp = new THREE.Vector3();
+/** A spot on the ground a clone may be printed on (see groundSpawn). */
+const groundSpot = new THREE.Vector3();
 
 /** Within this distance of a solar flare's front (units, 1 km) the camera sees embers blown off it. */
 const EMBER_REACH = 20000;
@@ -4157,19 +4164,14 @@ export class Game implements OnlineGame {
     if (!this.survival) spawnMiddle.set(0, 0, 0);
     const scorched = (point: THREE.Vector3) => this.survival && flareClearance(point, clock) < ship.radius * 10;
     const base = this.flags && ship.team >= 0 ? this.flags.bases[ship.team] : null;
-    for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start; attempt++) {
+    // over a world fought over, on the ground: on one of its pads, or on level ground at the field's edge (see groundSpawn)
+    const grounded = !course && !start && this.overWorld && this.groundSpawn(ship, position, edge);
+    if (grounded) best = 0;
+    for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start && !grounded; attempt++) {
       if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
       else this.edgePoint(candidate, edge);
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
-      let nearest = Infinity;
-      let seen = false;
-      for (const other of this.ships) {
-        if (other === ship || !other.alive || other.allyOf(ship)) continue;
-        const distance = other.flight.position.distanceTo(candidate);
-        nearest = Math.min(nearest, distance);
-        seen ||= distance < LOCK_RANGE && this.field.lineOfSight(other.flight.position, candidate);
-      }
-      const score = Math.min(nearest, FIELD_RADIUS * 3) - (seen ? FIELD_RADIUS * 3 : 0);
+      const score = this.spawnScore(ship, candidate);
       if (score > best) {
         best = score;
         position.copy(candidate);
@@ -4199,6 +4201,54 @@ export class Game implements OnlineGame {
       this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
     }
+  }
+
+  /** How good a place `at` is for a new clone of `ship`: the farther from the nearest enemy the better (up to three field radii), and far worse where an enemy within lock range sees it; -Infinity where any other ship is within PAD_CLEAR (on top of a rival). */
+  private spawnScore(ship: Ship, at: THREE.Vector3): number {
+    let nearest = Infinity;
+    let seen = false;
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const distance = other.flight.position.distanceTo(at);
+      if (distance < PAD_CLEAR) return -Infinity;
+      if (other.allyOf(ship)) continue;
+      nearest = Math.min(nearest, distance);
+      seen ||= distance < LOCK_RANGE && this.field.lineOfSight(other.flight.position, at);
+    }
+    return Math.min(nearest, FIELD_RADIUS * 3) - (seen ? FIELD_RADIUS * 3 : 0);
+  }
+
+  /**
+   * Over a world fought over, a clone is printed on the ground (into `position`): of the arena's
+   * pads (see ArenaProfile.pads), or of SPAWN_CANDIDATES spots of level ground on the field's edge
+   * `edge` out (see levelGround), the best by spawnScore, its hull at the hover field's ride
+   * height over it, clear of anything solid. Returns false where none is.
+   */
+  private groundSpawn(ship: Ship, position: THREE.Vector3, edge: number): boolean {
+    const pads = this.venue.pads;
+    let best = -Infinity;
+    for (let i = 0; i < (pads?.length ?? SPAWN_CANDIDATES); i++) {
+      if (pads) groundSpot.copy(pads[i]);
+      else if (!this.levelGround(groundSpot, edge)) continue;
+      groundSpot.y += ship.radius + HOVER_HEIGHT;
+      if (this.field.overlap(groundSpot, ship.radius)) continue;
+      // ties (no enemy alive yet, as a round starts) go to a pad by chance
+      const score = this.spawnScore(ship, groundSpot) + Math.random();
+      if (score > best) {
+        best = score;
+        position.copy(groundSpot);
+      }
+    }
+    return best > -Infinity;
+  }
+
+  /** A spot of level ground (its normal at least LEVEL up) on the field's edge `edge` out (see edgePoint), into `out`; false where the ground there is steeper. */
+  private levelGround(out: THREE.Vector3, edge: number): boolean {
+    this.edgePoint(out, edge);
+    const height = this.field.groundBelow(out, groundUp);
+    if (height === null || groundUp.y < LEVEL) return false;
+    out.addScaledVector(groundUp, -height);
+    return true;
   }
 
   /** Whether the round is fought over a world (see FIGHT_WORLDS): its ground below, the arena's edge around it. */
@@ -4727,6 +4777,7 @@ export class Game implements OnlineGame {
   private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.mesh.visible = !this.venue.open;
+    this.arena.shape(this.venue.bounds ?? null);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
     if (this.venue.id === 'derelict') this.moveBreak();
@@ -4867,8 +4918,12 @@ export class Game implements OnlineGame {
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
-        bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
+        // under an edge of its own over a world, the bot keeps inside it across the ground and under its ceiling
+        const bounds = this.venue.bounds;
+        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
+        bot.flat = !!bounds;
+        bot.roof = bounds?.ceiling ?? Infinity;
         bot.glide = this.overWorld;
         // a mission's raiders keep to the place they raid (it has no edge, see keepInArena)
         if (this.jumpers?.bots.includes(bot)) bot.homeAt = this.jumpers.rig;
@@ -7640,7 +7695,7 @@ export class Game implements OnlineGame {
     if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points);
+    if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points, this.venue.probeAt);
     const shared = (this.slotSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, SLOT_BOUNCES)]);
     this.probes.update(dt, now, this.field, (this.probeSolids ??= [...shared, ...pushesOf(this.solids, PROBE_BOUNCES.filter((kind) => !SLOT_BOUNCES.includes(kind)))]), shared);
     for (const ship of this.ships) {
@@ -9570,7 +9625,7 @@ export class Game implements OnlineGame {
   private keepInArena(ship: Ship, now: number) {
     if (!ship.alive) return;
     // a place of the campaign has no edge: space goes on, empty, as far as a ship cares to fly
-    if (this.venue.open || ship.flight.position.length() < ARENA_LIMIT) {
+    if (this.venue.open || !outsideArena(ship.flight.position, this.venue.bounds)) {
       ship.outsideSince = null;
       return;
     }

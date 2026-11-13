@@ -263,9 +263,10 @@ export class Probes {
    * round): each at a place in the field and with a kind its number decides; places taken by
    * rock, or so deep in a massive body's grip that its pull alone would sound the escape gauge's
    * WARNING (see inGrip), are skipped over to the next one. In a race they lie on the track:
-   * between two gates of `track`, close to the straight line from one to the next.
+   * between two gates of `track`, close to the straight line from one to the next; in an arena
+   * with places of its own for them (`at`, see ArenaProfile.probeAt) where it puts them.
    */
-  schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField, track: readonly THREE.Vector3[] = []) {
+  schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField, track: readonly THREE.Vector3[] = [], at?: (h: (k: number) => number, out: THREE.Vector3) => THREE.Vector3) {
     while (PROBE_FIRST + this.shown * PROBE_EVERY <= elapsed) {
       const n = this.shown++;
       const id = `r${round}.${n}`;
@@ -279,6 +280,8 @@ export class Probes {
           position
             .lerpVectors(track[gate], track[(gate + 1) % track.length], 0.25 + h(2) * 0.5)
             .add(new THREE.Vector3(h(3) * 2 - 1, h(4) * 2 - 1, h(5) * 2 - 1).multiplyScalar(TRACK_SPREAD));
+        } else if (at) {
+          at(h, position);
         } else {
           position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
         }

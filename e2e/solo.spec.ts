@@ -65,10 +65,22 @@ for (const { world, title, air, pull } of [
 }
 
 for (const arena of ['valhalla', 'lineae']) {
-  test(`a solo deathmatch over the world ${arena} starts and runs without errors, every clone printed over its ground and none hurt by it`, async ({ page }) => {
+  test(`a solo deathmatch over the world ${arena} starts and runs without errors, every clone printed on its ground and none hurt by it`, async ({ page }) => {
     const errors = await openGame(page);
     await startSolo(page, 'deathmatch', arena);
-    await play(page, 8);
+    await play(page, 1);
+    // every clone rests on the ground as the round starts, on the hover field's ride height (within its reach of 20 m)
+    const printed = await page.evaluate(() => {
+      const game = window.game;
+      const up = game.me.flight.position.clone();
+      return game.ships.filter((ship: { alive: boolean }) => ship.alive).map((ship: { radius: number; flight: { position: unknown } }) => (game.field.groundBelow(ship.flight.position, up) ?? Infinity) - ship.radius);
+    });
+    expect(printed.length).toBeGreaterThan(4);
+    for (const gap of printed) {
+      expect(gap).toBeGreaterThan(0);
+      expect(gap).toBeLessThan(400);
+    }
+    await play(page, 7);
     const state = await page.evaluate(() => {
       const game = window.game;
       const up = game.me.flight.position.clone();

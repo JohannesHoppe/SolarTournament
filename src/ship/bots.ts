@@ -150,6 +150,9 @@ export const SIEGE_DISTANCE = 12000;
 const SIEGE_AIM = 0.02;
 /** Bots stay this far inside the arena, unless the game draws them closer in (see Bot.home). */
 export const HOME_RADIUS = 50000;
+/** Under an arena's ceiling (see Bot.roof) a bot turns down within ROOF_MARGIN of it (units, 80 m), and roams ROAM_UNDER under it (520 m: over Valhalla 30 m over the plain, the cruiser's height), low over the world below. */
+const ROOF_MARGIN = 1600;
+const ROAM_UNDER = 10400;
 /**
  * Near a massive body a bot burns away from it: within WELL_MARGIN (units, 750 m) of its
  * surface, or once its escape gauge reads WELL_PULL (a black hole's grip: the pull, and the
@@ -447,6 +450,9 @@ export class Bot {
   /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
   homeAt: THREE.Vector3 | null = null;
+  /** Set by the game: an arena's edge of its own over a world (see world/arena, Bounds): `home` reckoned across the ground alone, and its ceiling at `roof` (units, a height), which the bot keeps under. */
+  flat = false;
+  roof = Infinity;
   /** Set by the game: the bot keeps the speed its boost gave it until then (s, see BOOST_KEEP). */
   boostUntil = 0;
   /** Set by the game: over a world fought over, the bot takes its ground for no danger, as a racer does (the hover field and its glide carry the hull over it and along its walls), and dives into its hollows and over its ridges with its target. */
@@ -531,7 +537,8 @@ export class Bot {
       // the aim wanders around the target: a direction and a share of the full error (see aimError)
       this.aimOffset.randomDirection().multiplyScalar(Math.random());
       this.snipe = Math.random() < SNIPE_CHANCE;
-      if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 30000);
+      if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * (this.flat ? this.home : 30000));
+      if (this.flat) this.wanderTarget.y = this.roof - ROAM_UNDER;
     }
 
     // the nearest ship in sight, but one that others already hunt (as the bot sees them: their
@@ -661,8 +668,11 @@ export class Bot {
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
     const fromHome = this.homeAt ? local.subVectors(me.position, this.homeAt) : local.copy(me.position);
+    if (this.flat) fromHome.y = 0;
     const homeDistance = fromHome.length();
     if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
+    const overRoof = me.position.y - (this.roof - ROOF_MARGIN);
+    if (overRoof > 0) desired.y -= CRUISE_SPEED * Math.min(1, overRoof / ROOF_MARGIN);
     const givingWay = this.keepClear(ships, field);
     const hot = this.air(field, racing, defending, !!target, homeDistance > this.home, now);
     // a massive body pulls: near it, away from it comes first
