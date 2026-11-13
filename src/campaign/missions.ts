@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { ANNOUNCER_ADMITTED, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, CAMPAIGN, CRISP, HEDDA, JACK, KESH, NAVY, PERIHELION, PIM, PRESIDENT, QUILL, RASK, SAW, SPARE, TALLY, VEY } from '../music/lines';
 import { aimError, clear, CORE_SHARE, DRILL, burstOnRock, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
-import type { Skill } from '../ship/bots';
+import type { Skill, Skills } from '../ship/bots';
 import { MASS } from '../world/bodies';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
@@ -877,12 +877,13 @@ const pitFight: Drill = {
 };
 
 /**
- * The Haze Duel (9.3): Perihelion alone (skill PERIHELION_SKILL), DUEL_DEPTH under Titan's deck,
- * where the eye sees some 600 m and the radar twice that; once his hull is down to
+ * The Haze Duel (9.3): Perihelion alone (PERIHELION_SKILL: a sharp shot with quick reflexes,
+ * but careful, since his clone has never died), DUEL_FIELD under Titan's deck, where the eye
+ * sees some 600 m and the radar twice that; once his hull is down to
  * PERIHELION_BREAK (of 100) he breaks off, as he always does before his clone can die, and the
  * duel is won.
  */
-const PERIHELION_SKILL = 0.65;
+const PERIHELION_SKILL: Skills = { aim: 0.65, reflexes: 0.65, daring: 0.4 };
 const PERIHELION_BREAK = 35;
 const DUEL_FIELD = point(0, -25000, 0);
 const DUEL_GONE = point(-60000, -10000, -20000);
@@ -893,7 +894,7 @@ const DUEL_GONE = point(-60000, -10000, -20000);
  * flies off to `gone` with any `escorts` (a few of the Navy beside him), Nicole says `breaks`, and
  * the duel is won a few seconds later.
  */
-function duel(spec: { line: string; arena: ArenaId; name: string; skill: number | ((ctx: SchoolContext) => Skill); field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string; escorts?: { names: readonly string[]; skill: number } }): Drill {
+function duel(spec: { line: string; arena: ArenaId; name: string; skill: Skill | ((ctx: SchoolContext) => Skill); field: THREE.Vector3; breakAt: number; gone: THREE.Vector3; breaks: string; mark: string; escorts?: { names: readonly string[]; skill: number } }): Drill {
   const names = [spec.name, ...(spec.escorts?.names ?? [])];
   return {
     line: spec.line,
@@ -902,7 +903,7 @@ function duel(spec: { line: string; arena: ArenaId; name: string; skill: number 
     autopilot: false,
     music: 'fight',
     enter(ctx) {
-      const leader = typeof spec.skill === 'number' ? spec.skill : spec.skill(ctx);
+      const leader = typeof spec.skill === 'function' ? spec.skill(ctx) : spec.skill;
       const skills = names.map((_, i) => (i ? spec.escorts!.skill : leader));
       ctx.spawnJumpers(null, spec.field, names.length, skills, names, 8000, true);
       ctx.me.heat = 0;
