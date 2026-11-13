@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { complete, freshCampaign, MISSIONS, type Campaign, type Mission } from '../campaign/campaign';
-import { flyJob, type JobRun, type JobWorld } from './jobs';
+import { flyJob, JobWorld, type JobRun } from './jobs';
 import { host } from './jobhost';
 import { BEHAVIORS } from './jobbehaviors';
 import { Randomizer, textSeed } from '../random';
@@ -118,6 +118,13 @@ export function flyJobs(from: number, to: number) {
   describe('the campaign’s jobs, flown by a middling Host', () => {
     // the bots' and the Host's hands use Math.random: seeded per job, so a run comes out alike every time
     let random = new Randomizer(1);
+    // a world built once before any job fills what the game builds on first use (the rock shapes of
+    // a detail, ...): three.js names every object it makes with Math.random, so a job flown first,
+    // or alone (JOB), would otherwise draw other dice than the same job flown after others
+    beforeAll(() => {
+      const first = MISSIONS[0];
+      new JobWorld(first, campaignFor(first), host(BEHAVIORS[first.id]));
+    });
     beforeEach(() => {
       vi.spyOn(Math, 'random').mockImplementation(() => random.nextFloat());
     });
