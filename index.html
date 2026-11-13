@@ -150,6 +150,8 @@
       <span id="radio-title">Radio 2584</span>
       <span id="radio-style"></span>
     </a>
+    <button type="button" id="np-back" class="np-dj" title="Previous song (game master as DJ)" aria-label="Previous song" data-i18n-attr="title aria-label">⏮</button>
+    <button type="button" id="np-next" class="np-dj" title="Next song (game master as DJ)" aria-label="Next song" data-i18n-attr="title aria-label">⏭</button>
   </div>
 
   <div id="sponsor" hidden>
@@ -272,6 +274,7 @@
     <button type="button" id="invite" hidden data-i18n>Invite friends</button>
     <button type="button" id="fullscreen-pause" hidden data-i18n>Fullscreen</button>
     <button type="button" id="new-round-open" hidden data-i18n>New round</button>
+    <button type="button" id="dj-open" hidden data-i18n>Music (DJ)</button>
     <button type="button" id="pause-controls" data-i18n>Controls</button>
     <a id="pause-handbook" class="button" href="handbook.html" target="_blank" data-i18n>Pilot's Handbook</a>
     <button type="button" id="quit" data-i18n>Quit round <kbd>Q</kbd></button>
@@ -286,6 +289,21 @@
     <div class="choice-grid" role="group" aria-label="Rounds" data-i18n-attr="aria-label" data-choice="new-round-mode"></div>
     <button type="button" id="new-round-start" class="primary" data-i18n>Start new round <kbd>Enter</kbd></button>
     <button type="button" id="new-round-back" data-i18n>Back <kbd>Esc</kbd></button>
+  </div>
+
+  <div id="dj" class="plate" hidden>
+    <h2 data-i18n>Game master (and DJ)</h2>
+    <p class="plate-label" data-i18n>On air</p>
+    <p id="dj-on-air" class="dj-on-air"></p>
+    <div class="dj-steps">
+      <button type="button" id="dj-back" data-i18n>Previous song</button>
+      <button type="button" id="dj-next" data-i18n>Next song</button>
+    </div>
+    <label class="field"><span data-i18n>Title words</span> <input id="dj-words" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Orbit Terror"></label>
+    <p class="plate-note" data-i18n>The same words always make the same song: a title heard on the radio plays again for every Host.</p>
+    <p id="dj-note" class="plate-note" role="status"></p>
+    <button type="button" id="dj-play" class="primary" data-i18n>Play <kbd>Enter</kbd></button>
+    <button type="button" id="dj-close" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="results" class="plate" hidden>

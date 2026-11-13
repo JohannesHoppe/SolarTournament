@@ -92,6 +92,45 @@ test('the game master, named on its screen alone, cuts a round short for a new o
   await ranHonestly(errors, a, b);
 });
 
+test('the game master is the DJ: it skips the song and types a title, and the other tab plays the same at the same beat, without controls of its own', async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}d`);
+  const onAir = (page: Page) => page.evaluate(() => window.game.musicCue() as { title: string; elapsed: number });
+  const deck = (page: Page) => page.evaluate(() => getComputedStyle(document.getElementById('np-next')!).display !== 'none');
+  await a.waitForFunction(() => document.getElementById('now-playing')!.classList.contains('dj'));
+  expect(await deck(a)).toBe(true);
+  expect(await deck(b)).toBe(false);
+  expect(await a.evaluate(() => document.getElementById('hud-room')!.textContent)).toContain('(and DJ)');
+  const programme = (await onAir(a)).title;
+  expect((await onAir(b)).title).toBe(programme);
+  // forward through the programme from the radio's own button: the other tab follows
+  await a.evaluate(() => document.getElementById('np-next')!.click());
+  const next = (await onAir(a)).title;
+  expect(next).not.toBe(programme);
+  await b.waitForFunction((title) => window.game.musicCue().title === title, next, { timeout: 10_000 });
+  // title words on the DJ's plate; the other tab offers no plate
+  await b.evaluate(() => window.game.pause());
+  expect(await b.evaluate(() => document.getElementById('dj-open')!.hidden)).toBe(true);
+  await b.evaluate(() => document.getElementById('resume')!.click());
+  await a.evaluate(() => {
+    window.game.pause();
+    document.getElementById('dj-open')!.click();
+  });
+  await a.locator('#dj-words').fill('orbit   terror');
+  await a.keyboard.press('Enter');
+  await b.waitForFunction(() => window.game.musicCue().title === 'Orbit Terror', undefined, { timeout: 10_000 });
+  expect((await onAir(a)).title).toBe('Orbit Terror');
+  // the same beat: both a few seconds into the song, within the round clock's agreement
+  const [cueA, cueB] = [await onAir(a), await onAir(b)];
+  expect(cueA.elapsed).toBeLessThan(15);
+  expect(Math.abs(cueA.elapsed - cueB.elapsed)).toBeLessThan(1);
+  // words the radio does not take change nothing and say why
+  await a.locator('#dj-words').fill('<b>x</b>');
+  await a.keyboard.press('Enter');
+  expect(await a.evaluate(() => document.getElementById('dj-note')!.textContent)).not.toBe('');
+  expect((await onAir(a)).title).toBe('Orbit Terror');
+  await ranHonestly(errors, a, b);
+});
+
 test('two tabs show a ping for each other and agree on who leads', async ({ context }) => {
   const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}p`);
   const read = (page: Page) =>

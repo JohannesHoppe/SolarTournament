@@ -107,3 +107,16 @@ describe('a rock broken on another browser', () => {
     expect(calls.rocks).toBe(1);
   });
 });
+
+describe('the round state of another browser', () => {
+  it("is taken only from the lead: no other Host's browser sets the round or puts a song on air as DJ", () => {
+    const rounds: unknown[] = [];
+    const { session } = online([], { syncRound: (round) => void rounds.push(round), setBotCount: () => {} });
+    Object.assign(session, { leadId: 'lead', selfId: 'me', isLead: false });
+    const round = { id: 1, left: 100, field: 5, d: { o: 3, t: 'Orbit Terror', f: 10 } };
+    session.onStates([], round, 'other', null);
+    expect(rounds).toEqual([]);
+    session.onStates([], round, 'lead', null);
+    expect(rounds).toEqual([round]);
+  });
+});

@@ -159,6 +159,45 @@ test('alone, the pause menu pays out the round and starts a new one at once, in 
   expect(errors).toEqual([]);
 });
 
+test('alone, the Host is the DJ: back and forward on the radio, title words on the pause menu\'s plate; the flight school has no DJ', async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch');
+  await play(page, 3);
+  const title = () => page.evaluate(() => window.game.musicCue().title as string);
+  const programme = await title();
+  await page.waitForFunction(() => document.getElementById('now-playing')!.classList.contains('dj'));
+  await page.evaluate(() => document.getElementById('np-next')!.click());
+  const next = await title();
+  expect(next).not.toBe(programme);
+  await page.evaluate(() => document.getElementById('np-back')!.click());
+  expect(await title()).toBe(programme);
+  // the plate: what is on air, and the words of a title
+  await page.evaluate(() => {
+    window.game.pause();
+    document.getElementById('dj-open')!.click();
+  });
+  expect(await page.evaluate(() => document.getElementById('dj-on-air')!.textContent)).toBe(programme);
+  await page.locator('#dj-words').fill('golden damage');
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => [document.getElementById('dj-on-air')!.textContent, window.game.state])).toEqual(['Golden Damage', 'paused']);
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => [document.getElementById('dj')!.hidden, document.getElementById('pause')!.hidden])).toEqual([true, false]);
+  // a solo round's pause plays the lounge; back in the round the DJ's title is on air
+  await page.evaluate(() => document.getElementById('resume')!.click());
+  expect(await title()).toBe('Golden Damage');
+  // the flight school plays no radio and has no DJ
+  const school = await page.evaluate(() => {
+    const game = window.game;
+    game.showMenu();
+    document.getElementById('school-basic')!.click();
+    game.pause();
+    return document.getElementById('dj-open')!.hidden;
+  });
+  expect(school).toBe(true);
+  await page.waitForFunction(() => !document.getElementById('now-playing')!.classList.contains('dj'));
+  expect(errors).toEqual([]);
+});
+
 test('the hangar sells an upgrade for Solar Coins and keeps it, and neither the Magpie nor the Sovereign is flown before it is earned', async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('seeded')) localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 1200, ship: 'human' }));

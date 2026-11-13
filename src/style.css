@@ -516,7 +516,8 @@ body:has(#hangar-plate:not([hidden])) #hangar {
 }
 
 #solo,
-#new-round {
+#new-round,
+#dj {
   width: min(560px, calc(100vw - 32px));
 }
 
@@ -3051,7 +3052,8 @@ body.glitching #now-playing {
   font-size: 0.8rem;
 }
 
-#radio {
+#radio,
+.np-dj {
   width: 28px;
   height: 28px;
   padding: 0;
@@ -3066,6 +3068,33 @@ body.glitching #now-playing {
 #radio.off {
   color: var(--muted);
   text-decoration: line-through;
+}
+
+/* the game master's buttons as DJ, back and forward through the programme: only on its radio, in a round */
+.np-dj {
+  display: none;
+  font-size: 0.7rem;
+}
+
+#now-playing.dj .np-dj {
+  display: inline-block;
+}
+
+/* the DJ's plate: the song on air in the radio's orange, back and forward side by side */
+.dj-on-air {
+  margin: 0 0 8px;
+  color: var(--tube-orange);
+  font-family: var(--font-display);
+  text-shadow: var(--neon-orange);
+}
+
+.dj-steps {
+  display: flex;
+  gap: 8px;
+}
+
+.dj-steps button {
+  flex: 1;
 }
 
 /* the radio's volume: a slim orange slider, on the game's radio and on the radio page */

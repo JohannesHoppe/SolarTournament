@@ -24,6 +24,7 @@ import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HO
 import { Hud, METERS_PER_UNIT, meters, type OnTarget, type TorpedoMark } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
+import { DJ_IDLE, DJ_TITLE_MAX, djFromWire, djNewRound, djSong, djStep, djTitle, djToWire, djTune, type DjState } from '../music/dj';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
 import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
@@ -32,7 +33,7 @@ import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
 import type { Stage } from '../view/stage';
 import { Speaker } from '../sound/speaker';
-import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
+import { hash, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showRecorded, showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
@@ -1024,6 +1025,12 @@ export class Game implements OnlineGame {
   private roundCut = false;
   /** This browser's Host was last told it is the game master. */
   private toldGameMaster = false;
+  /** What the game master as the round's DJ put on air (see music/dj): online the lead browser's, followed by the others from its round state. */
+  private dj: DjState = { ...DJ_IDLE };
+  /** The DJ's plate is open over the pause menu. */
+  private choosingSong = false;
+  /** The radio shows the game master's buttons (see djReady). */
+  private djDeck = false;
   /** What the running round is, its course when it is a race, its bases and cores in Capture the Flag. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
@@ -2770,7 +2777,8 @@ export class Game implements OnlineGame {
 
   /**
    * What the radio plays now. A tournament round has its own song on the round clock: online,
-   * the room and round number pick it, so every pilot hears the same song at the same beat.
+   * the room and round number pick it, so every pilot hears the same song at the same beat; the
+   * game master as DJ steps it through the programme or tunes it to a title (see music/dj).
    * The menu plays a calm song on a local clock; the flight school plays nothing (null), so
    * Nicole has the cockpit to herself; the campaign plays its music by situation (campaignMood),
    * each track from its start when the situation turns.
@@ -2792,8 +2800,9 @@ export class Game implements OnlineGame {
     if (inRound && Number.isFinite(this.roundEndsAtWall)) {
       // a browser that started over plays on the round it was in until it hears the round again
       const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
-      const seed = this.online ? mixSeed(textSeed(this.online.session.room), round) : this.soloSeed;
-      return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - this.roundClock()), roundLength: ROUND_SECONDS };
+      // the programme's song of the round, or what the game master as DJ put on air, from when it began
+      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+      return { title: djSong(this.dj, seed, round, !!this.online), energy: 'round', elapsed: Math.max(0, this.roundElapsed() - this.dj.from), roundLength: ROUND_SECONDS };
     }
     return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
   }
@@ -2931,6 +2940,11 @@ export class Game implements OnlineGame {
           if (action === 'back' || action === 'pause') this.showNewRound(false);
           break;
         }
+        // on the DJ's plate Escape goes back (Enter in its title words plays them, see buildNewRound)
+        if (this.choosingSong) {
+          if (action === 'back' || action === 'pause') this.showDj(false);
+          break;
+        }
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
         if (action === 'quit') this.endRound();
         break;
@@ -2951,6 +2965,8 @@ export class Game implements OnlineGame {
     $('pause').hidden = state !== 'paused';
     $('new-round').hidden = true;
     this.choosingRound = false;
+    $('dj').hidden = true;
+    this.choosingSong = false;
     $('results').hidden = state !== 'results';
     // a phone held upright is asked to turn sideways while a round is flown (see #turn-phone)
     document.body.classList.toggle('playing', state === 'playing');
@@ -3104,6 +3120,19 @@ export class Game implements OnlineGame {
     $('new-round-open').addEventListener('click', () => this.showNewRound(true));
     $('new-round-start').addEventListener('click', () => this.startChosenRound());
     $('new-round-back').addEventListener('click', () => this.showNewRound(false));
+    $('dj-open').addEventListener('click', () => this.showDj(true));
+    $('dj-back').addEventListener('click', () => this.djSkip(-1));
+    $('dj-next').addEventListener('click', () => this.djSkip(1));
+    $('dj-play').addEventListener('click', () => this.playDjWords());
+    // Enter in the title words plays them at once, however soon after the plate opened (the game's confirm waits out a key held from before)
+    $('dj-words').addEventListener('keydown', (event) => {
+      if (event.code !== 'Enter' || event.isComposing) return;
+      event.stopPropagation();
+      this.playDjWords();
+    });
+    $('dj-close').addEventListener('click', () => this.showDj(false));
+    $('np-back').addEventListener('click', () => this.djSkip(-1));
+    $('np-next').addEventListener('click', () => this.djSkip(1));
   }
 
   /** Marks the choices on the plate of a new round. */
@@ -3130,7 +3159,7 @@ export class Game implements OnlineGame {
     $('pause').hidden = open;
     if (open) {
       this.roundChoice = { arena: this.venue.id, mode: this.online ? (this.room?.mode ?? this.roundMode) : this.roundMode };
-      $('new-round-note').textContent = this.online ? t('You are the game master: the round is cut short for every Host, its points paid out as usual.') : t('The round so far is paid out as usual.');
+      $('new-round-note').textContent = this.online ? t('You are the game master (and DJ): the round is cut short for every Host, its points paid out as usual.') : t('The round so far is paid out as usual.');
       this.renderNewRound();
     }
     $(open ? 'new-round-start' : 'resume').focus();
@@ -3164,9 +3193,67 @@ export class Game implements OnlineGame {
     if (online.isLead === this.toldGameMaster) return;
     this.toldGameMaster = online.isLead;
     $('new-round-open').hidden = !online.isLead;
+    $('dj-open').hidden = !online.isLead;
     $('hud-room').classList.toggle('game-master', online.isLead);
-    if (online.isLead) this.hud.flashMessage(this.time, t('You are the game master: the pause menu starts a new round, with any arena and mode'), 8);
-    else if (this.choosingRound) this.showNewRound(false);
+    if (online.isLead) this.hud.flashMessage(this.time, t('You are the game master (and DJ): the pause menu starts a new round, with any arena and mode, and picks the music'), 8);
+    else {
+      if (this.choosingRound) this.showNewRound(false);
+      if (this.choosingSong) this.showDj(false);
+    }
+  }
+
+  /** Seconds into the round on the round clock, alike on every browser of a tournament (the radio's clock). */
+  private roundElapsed() {
+    return ROUND_SECONDS - (this.roundEndsAtWall - this.roundClock());
+  }
+
+  /** The game master may play DJ now: in a round of its own deciding (not the flight school or the campaign), while it runs or its scoreboard shows. */
+  private get djReady() {
+    const inRound = this.state === 'playing' || this.state === 'results' || this.state === 'paused';
+    return this.gameMaster && inRound && Number.isFinite(this.roundEndsAtWall);
+  }
+
+  /** The DJ steps the programme one song forward or back; online the others follow from the lead's round state. */
+  private djSkip(by: 1 | -1) {
+    if (!this.djReady) return;
+    this.dj = djStep(this.dj, by, this.roundElapsed());
+    this.renderDj();
+  }
+
+  /** The DJ tunes the radio to the title its words make (see djTitle): the same words always the same song. Returns whether the words were taken. */
+  private djPlay(words: string): boolean {
+    const title = djTitle(words);
+    if (!this.djReady || title === null) return false;
+    this.dj = djTune(this.dj, title, this.roundElapsed());
+    this.renderDj();
+    return true;
+  }
+
+  /** The DJ's plate over the pause menu: what is on air, back and forward, and title words to type. */
+  private showDj(open: boolean) {
+    this.choosingSong = open;
+    $('dj').hidden = !open;
+    $('pause').hidden = open;
+    $<HTMLInputElement>('dj-words').value = '';
+    $('dj-note').textContent = '';
+    if (open) this.renderDj();
+    $(open ? 'dj-words' : 'resume').focus();
+  }
+
+  /** What the DJ's plate says is on air. */
+  private renderDj() {
+    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+    const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
+    $('dj-on-air').textContent = djSong(this.dj, seed, round, !!this.online);
+  }
+
+  /** Plays the words typed on the DJ's plate, or says what the radio takes. */
+  private playDjWords() {
+    const words = $<HTMLInputElement>('dj-words');
+    if (this.djPlay(words.value)) {
+      words.value = '';
+      $('dj-note').textContent = '';
+    } else $('dj-note').textContent = t('Letters, digits, spaces, hyphens and apostrophes, at most {n} characters', { n: DJ_TITLE_MAX });
   }
 
   /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special; the opening's intro card says it while it runs. */
@@ -3511,6 +3598,8 @@ export class Game implements OnlineGame {
     this.resultsShownFor = null;
     this.pendingRocks.length = 0;
     this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
+    // a round starts on the programme; online the lead browser's DJ is followed from its round state
+    this.dj = { ...DJ_IDLE };
     // online, the lead browser's clock decides (see leadRound and syncRound)
     this.roundStartWall = null;
     if (mode === 'solo') this.setRoundEnd(ROUND_SECONDS);
@@ -3836,6 +3925,8 @@ export class Game implements OnlineGame {
       this.roundId = round.id;
       this.startNextRound();
     } else if (round.id < this.roundId) return;
+    // the radio plays what the lead's game master as DJ put on air
+    this.dj = djFromWire(round.d);
     // the asteroids follow the lead browser's field time: jump when far off, otherwise smooth
     // out the jitter of the network
     const drift = round.field - this.field.clock;
@@ -3863,6 +3954,8 @@ export class Game implements OnlineGame {
     // the lead browser starts the next round once the scoreboard has been shown
     if (this.roundClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
       this.roundId++;
+      // the DJ's programme goes on from the new round's start
+      this.dj = djNewRound(this.dj);
       // what the game master chose: the mode stays the room's rule from here on, the arena is this round's
       if (this.nextRound) {
         if (this.room) this.room.mode = this.nextRound.mode;
@@ -3879,6 +3972,8 @@ export class Game implements OnlineGame {
     const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3), ...(this.room ? { m: this.room.mode } : {}), ...(this.pickedArena?.round === this.roundId ? { a: this.pickedArena.arena } : {}), ...(this.roundCut ? { c: 1 as const } : {}) };
     if (this.flags) round.f = this.flags.toState();
     if (this.fleet) round.b = this.fleet.toState();
+    const dj = djToWire(this.dj);
+    if (dj) round.d = dj;
     return round;
   }
 
@@ -4156,6 +4251,7 @@ export class Game implements OnlineGame {
     // the handbook opens at the section of what is being flown (its sections are named after the modes)
     ($('pause-handbook') as HTMLAnchorElement).hash = this.school ? 'flying' : this.roundMode;
     $('new-round-open').hidden = !this.gameMaster;
+    $('dj-open').hidden = !this.djReady;
     this.setScreen('paused');
     // Enter resumes, so the keyboard's focus starts there too
     $('resume').focus();
@@ -4473,7 +4569,7 @@ export class Game implements OnlineGame {
     }
     $('results').hidden = this.state !== 'playing';
     const seconds = Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time));
-    const next = this.roundCut ? t('The game master ended the round · next round in {seconds} s', { seconds }) : t('Next round in {seconds} s', { seconds });
+    const next = this.roundCut ? t('The game master (and DJ) ended the round · next round in {seconds} s', { seconds }) : t('Next round in {seconds} s', { seconds });
     if ($('results-next').textContent !== next) $('results-next').textContent = next;
   }
 
@@ -4557,6 +4653,12 @@ export class Game implements OnlineGame {
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
+    // the game master's buttons on the radio: back and forward through the programme
+    const deck = this.djReady;
+    if (deck !== this.djDeck) {
+      this.djDeck = deck;
+      $('now-playing').classList.toggle('dj', deck);
+    }
     else if (this.radio.playing) this.radio.stop();
     if (this.state === 'menu' || this.state === 'paused' || this.sponsors.visible) {
       // the idle link flickers now and then
@@ -4887,7 +4989,7 @@ export class Game implements OnlineGame {
       const pilots = { name: this.room?.name ?? t('Online'), n: this.online.pilots };
       const hosts = pilots.n === 1 ? t('{name} · {n} Host', pilots) : t('{name} · {n} Hosts', pilots);
       const relayed = relayOff ? t('{hosts} · Relay off: {reason}', { hosts, reason: t(relayOff) }) : hosts;
-      const room = this.online.isLead ? t('{room} · You are the game master', { room: relayed }) : relayed;
+      const room = this.online.isLead ? t('{room} · You are the game master (and DJ)', { room: relayed }) : relayed;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       this.showGameMaster(this.online);
       if (now >= this.roundEndsAt) this.showOnlineResults();

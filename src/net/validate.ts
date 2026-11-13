@@ -8,6 +8,7 @@ import { MAX_LOOKS } from '../game/hangar';
 import { TINTS } from '../ship/tints';
 import type { FlagsState } from '../game/flags';
 import type { FleetState } from '../game/fleet';
+import { djTitle, MAX_DJ_OFFSET, type DjWire } from '../music/dj';
 
 /**
  * Checks everything that arrives from other browsers before the game touches it. Peers are
@@ -280,4 +281,14 @@ export function fleetState(x: unknown): FleetState | null {
   const rammed = x.c === undefined ? undefined : num(x.c, 0, MAX_FIELD_TIME);
   if (!state || (x.t !== null && target === null) || rammed === null || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
   return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }) };
+}
+
+/** The DJ's word in the lead's round state (see music/dj): a step within MAX_DJ_OFFSET, a start within the round's limit, a title only exactly as the DJ's own words are tidied (djTitle); null for anything else. */
+export function djWire(x: unknown): DjWire | null {
+  if (!isRecord(x)) return null;
+  const o = int(x.o, -MAX_DJ_OFFSET, MAX_DJ_OFFSET);
+  const f = num(x.f, 0, ROUND_LIMIT);
+  if (o === null || f === null) return null;
+  if (x.t === undefined) return { o, f };
+  return djTitle(x.t) === x.t ? { o, t: x.t as string, f } : null;
 }

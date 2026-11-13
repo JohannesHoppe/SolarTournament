@@ -7,10 +7,11 @@ import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import { roomMode } from './room';
 import type { RoomMode } from '../game/race';
 import { arenaById, type ArenaId } from '../world/arenas';
+import type { DjWire } from '../music/dj';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
 import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
-import { fieldState, fieldSync, flagsState, headTimes, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import { djWire, fieldState, fieldSync, flagsState, headTimes, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -113,8 +114,13 @@ const MAX_PING_RATE = 4;
  * rounds; in Capture the Flag also the sides and the cores (see game/flags), in the President's
  * Fleet the battleship (see game/fleet).
  */
-/** The lead's round: `a` names its arena where the game master chose it, `c` says the game master is cutting it short for a new one. */
-export type RoundState = { id: number; left: number; field: number; m?: RoomMode; a?: ArenaId; c?: 1; f?: FlagsState; b?: FleetState };
+/**
+ * The lead's round: `a` names its arena where the game master chose it, `c` says the game master
+ * is cutting it short for a new one, `d` is what the game master as the round's DJ put on air
+ * (see music/dj): its step through the programme `o`, a title it typed `t`, and when that song
+ * began in seconds into the round `f`; without `d` the radio runs as the programme does.
+ */
+export type RoundState = { id: number; left: number; field: number; m?: RoomMode; a?: ArenaId; c?: 1; f?: FlagsState; b?: FleetState; d?: DjWire };
 
 export type Vec = number[];
 
@@ -995,6 +1001,11 @@ export class Session {
       if (!fleet) return undefined;
       state.b = fleet;
     }
+    if (x.d !== undefined) {
+      const dj = djWire(x.d);
+      if (!dj) return undefined;
+      state.d = dj;
+    }
     return state;
   }
 
@@ -1012,3 +1023,4 @@ export class Session {
     if (!this.left) handler();
   }
 }
+

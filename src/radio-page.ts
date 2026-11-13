@@ -3,6 +3,7 @@ import { keepPressing, keptPressing, type Pressing } from './music/kept';
 import { renderTrack, trackSeconds } from './music/preview';
 import { bindVolume, Radio } from './music/radio';
 import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
+import { tidyTitle } from './music/dj';
 import { recipeCards, scaleNote, STRATEGY_NAMES, titleOf } from './music/recipes';
 import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
@@ -36,8 +37,6 @@ const seek = $<HTMLInputElement>('track-seek');
 let dragging = false;
 
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
-/** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
-const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_, space: string, c: string) => space + c.toUpperCase());
 
 const SECTION_LABELS: Record<SectionKind, string> = {
   intro: msg('Intro'),
@@ -51,7 +50,7 @@ const SECTION_LABELS: Record<SectionKind, string> = {
 };
 
 function tune(title: string) {
-  const clean = tidy(title);
+  const clean = tidyTitle(title);
   if (!clean) return;
   stop();
   song = createSong(clean, 'round', ROUND_SECONDS);

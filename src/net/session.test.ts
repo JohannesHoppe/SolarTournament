@@ -69,6 +69,11 @@ describe('the game master in the round state', () => {
   it('drops a message naming an arena that does not exist or a cut that is not one', () => {
     for (const bad of [{ a: 'moon' }, { a: 7 }, { a: 'toString' }, { c: 2 }, { c: true }]) expect(heard(bad)).toBe('nothing');
   });
+
+  it('passes on what the game master as DJ put on air, and drops a word no DJ could send', () => {
+    expect(heard({ d: { o: 1, t: 'Orbit Terror', f: 42.5 } })).toMatchObject({ d: { o: 1, t: 'Orbit Terror', f: 42.5 } });
+    for (const bad of [{ d: { o: 1 } }, { d: { o: 0, f: 0, t: '<script>' } }, { d: 'next' }]) expect(heard(bad)).toBe('nothing');
+  });
 });
 
 describe('the lead browser', () => {
