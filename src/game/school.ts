@@ -67,6 +67,11 @@ export interface SchoolContext {
   spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3, name?: string, mass?: number): void;
   /** Takes the target drone out of the arena, alive or not. */
   removeDrone(): void;
+  /**
+   * Takes the wreckage of ships shot down out of the arena: a drill's leftovers (a drone's plates
+   * flying on at its speed) never strike the clone in the attempt or the drill after it.
+   */
+  clearWreckage(): void;
   /** The sparring bot of the final exam. */
   bot: Ship | null;
   /** A bot at a point; an unarmed one only flees. Skill as in Bot (0..1). */
@@ -2419,6 +2424,7 @@ export class FlightSchool {
         drill.leave?.(ctx);
         // the target drone stays with no drill after its own, where a sparring bot could take it for prey
         ctx.removeDrone();
+        ctx.clearWreckage();
         this.pending = drill.praise ? [drill.praise] : [];
         this.markers.clear();
         this.index++;
@@ -2435,6 +2441,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
+    ctx.clearWreckage();
     this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined, clockFrom: NaN, taken: 0 };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on

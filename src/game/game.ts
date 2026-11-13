@@ -6452,6 +6452,7 @@ export class Game implements OnlineGame {
         if (this.drone) this.removeShip(this.drone);
         this.drone = null;
       },
+      clearWreckage: () => this.wrecks.clear(),
       get bot() {
         return game.sparring?.bot.ship ?? null;
       },

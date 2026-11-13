@@ -254,3 +254,50 @@ describe('the completed courses as the browser keeps them', () => {
     for (const text of ['nonsense', '{}', '"basic"', '[1, 2]', '["basic", null]']) expect(coursesFrom(text)).toBeNull();
   });
 });
+
+describe('a drill leaving wreckage', () => {
+  it('clears it as every attempt begins and as a drill ends, so a drone shot down never strikes the clone after', () => {
+    let wrecks = 0;
+    const ctx = {
+      me: { alive: true, flight: { forward: (out = new THREE.Vector3()) => out.set(0, 0, -1) } },
+      field: {},
+      now: 0,
+      dt: 0.1,
+      speaking: false,
+      autopilot: false,
+      say: () => true,
+      setAutopilot: () => {},
+      removeDrone: () => {},
+      clearWreckage: () => {
+        wrecks = 0;
+      },
+    } as unknown as Parameters<FlightSchool['update']>[0];
+    // the first drill shoots a drone down (a wreck each step) and fails once before it is done; the second waits
+    let failed = false;
+    const shooting = {
+      line: 'shoot',
+      keys: [],
+      done: () => {
+        wrecks++;
+        return failed;
+      },
+      fail: () => {
+        if (failed) return null;
+        failed = true;
+        return 'again';
+      },
+    };
+    const waiting = { line: 'wait', keys: [], done: () => false };
+    const school = new FlightSchool(null, 0, { name: 'test', drills: [shooting, waiting] });
+    const cleared: number[] = [];
+    for (let step = 0; step < 100 && school.stepIndex === 0; step++) {
+      const before = wrecks;
+      school.update(ctx);
+      if (wrecks < before) cleared.push(before);
+    }
+    expect(school.stepIndex).toBe(1);
+    // the failed attempt's wreck went as the next attempt began, the done one's as the drill ended
+    expect(cleared.length).toBe(2);
+    expect(wrecks).toBe(0);
+  });
+});

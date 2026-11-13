@@ -233,26 +233,40 @@ test('the tactician’s turn and shoot drill: the brake flips the nose onto the 
   };
   await tapBrake();
   // as a Host does: the pointer on the drone as the brake brings the nose round to it (the
-  // ship turns towards the pointer), firing while the nose is on it
+  // ship turns towards the pointer), firing while the nose is on it. The hand works in the page,
+  // once a frame, as the Host sees the frames: a loaded machine slows the game's frames and the
+  // hand alike, never the hand alone (a round trip of the test per look lags it by whole frames)
   const viewport = page.viewportSize()!;
-  const trace: string[] = [];
-  for (let i = 0; i < 200; i++) {
-    const aim = await page.evaluate(() => {
-      const game = window.game;
-      const drone = game.drone;
-      if (!drone?.alive) return null;
-      const on = drone.flight.position.clone().project(game.camera);
-      const to = drone.flight.position.clone().sub(game.me.flight.position);
-      return { x: on.x, y: on.y, front: on.z < 1, nose: game.me.flight.noseAngleTo(to), t: game.time, phase: game.brakePhase, hull: drone.hull, v: game.me.flight.velocity.length() / 20 };
-    });
-    if (!aim) break;
-    trace.push(`${aim.t.toFixed(2)} ${aim.phase} nose ${((aim.nose * 180) / Math.PI).toFixed(1)}° v ${aim.v.toFixed(0)} hull ${aim.hull.toFixed(0)}`);
-    if (aim.front) await page.mouse.move(((aim.x + 1) / 2) * viewport.width, ((1 - aim.y) / 2) * viewport.height);
-    if (aim.nose < 0.03) await page.keyboard.down('Space');
-    else await page.keyboard.up('Space');
-    await page.waitForTimeout(30);
-  }
-  await page.keyboard.up('Space');
+  const trace = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const game = window.game;
+        const lines: string[] = [];
+        const until = game.time + 10;
+        let firing = false;
+        const fire = (on: boolean) => {
+          if (on === firing) return;
+          firing = on;
+          window.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { code: 'Space' }));
+        };
+        const look = () => {
+          const drone = game.drone;
+          if (!drone?.alive || game.time > until) {
+            fire(false);
+            resolve(lines);
+            return;
+          }
+          const on = drone.flight.position.clone().project(game.camera);
+          const to = drone.flight.position.clone().sub(game.me.flight.position);
+          const nose = game.me.flight.noseAngleTo(to);
+          lines.push(`${game.time.toFixed(2)} ${game.brakePhase} nose ${((nose * 180) / Math.PI).toFixed(1)}° v ${(game.me.flight.velocity.length() / 20).toFixed(0)} hull ${drone.hull.toFixed(0)}`);
+          if (on.z < 1) document.dispatchEvent(new MouseEvent('mousemove', { clientX: ((on.x + 1) / 2) * window.innerWidth, clientY: ((1 - on.y) / 2) * window.innerHeight }));
+          fire(nose < 0.03);
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      }),
+  );
   expect(await page.evaluate(() => window.game.drone?.alive ?? false), trace.slice(-30).join('\n')).toBe(false);
   // the drone down, the Host lets go of the pointer
   await page.mouse.move(viewport.width / 2, viewport.height / 2);

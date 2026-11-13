@@ -752,6 +752,12 @@ export class JobWorld implements SchoolContext {
     this.drone = null;
   }
 
+  /** How often the drills cleared the wreckage (the headless world keeps none; see SchoolContext.clearWreckage). */
+  wreckageCleared = 0;
+  clearWreckage() {
+    this.wreckageCleared++;
+  }
+
   get bot() {
     return this.sparring?.bot.ship ?? null;
   }
