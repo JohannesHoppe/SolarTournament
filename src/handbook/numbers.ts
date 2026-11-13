@@ -11,6 +11,8 @@ import { THROAT_AIR, THROAT_TRACK } from '../world/throat';
 import { TITAN_AIR, TITAN_FALL } from '../world/titan';
 import { bendRadius, RacingLine } from '../game/racingline';
 import { EUROPA_FALL } from '../world/europa';
+import { PSYCHE_FALL } from '../world/yard';
+import { cushion } from '../world/hover';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
@@ -76,6 +78,9 @@ export const FROM_CODE: Record<string, number> = {
   onNose: Math.round((ON_NOSE * 180) / Math.PI),
   overdrive: meters(OVERDRIVE_PUSH),
   hoverHeight: meters(HOVER_HEIGHT),
+  // the speed of a dive the hover field takes out (see world/hover, cushion)
+  cushionEuropa: Math.round(meters(cushion(EUROPA_FALL))),
+  cushionPsyche: Math.round(meters(cushion(PSYCHE_FALL))),
   gates: GATES,
   trackGates: CRACK_TRACK.gates.length,
   trackRespawn: TRACK_RESPAWN_SECONDS,
@@ -270,8 +275,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   armor: { value: 2, readme: '# of 100 hull points' },
   driveCone: { value: 50, readme: 'within #° of the ship' },
   heatShot: { value: 20, readme: 'Each shot adds # % of the heat capacity' },
-  burstSun: { value: 6, readme: 'a burst of # in sunlight' },
-  burstShade: { value: 9, readme: 'and # in shadow' },
+  burstSun: { value: 6, readme: 'a cool laser fires a burst of #;' },
   cooled: { value: 30, readme: 'cooled down to # %' },
   torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
