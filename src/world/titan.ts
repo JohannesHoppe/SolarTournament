@@ -21,7 +21,7 @@ const KM = 20000;
 /** Titan's pull at its surface (units/s²): 1.35 m/s², a seventh of a g, from its mass of 1.35 × 10²³ kg over its radius of 2,575 km. */
 export const TITAN_FALL = 27;
 /** Titan's radius (units, 2,575 km): the haze's deck is a sphere of it about Titan's middle, so the deck curves away as Titan does. */
-const TITAN_RADIUS = 2575 * KM;
+export const TITAN_RADIUS = 2575 * KM;
 
 /** Titan's air: its deck through the field's middle, a sphere of Titan's radius (see Air). */
 export const TITAN_AIR: Air = { center: new THREE.Vector3(0, -TITAN_RADIUS, 0), radius: TITAN_RADIUS };
@@ -35,7 +35,7 @@ export const seaHeight = (x: number, z: number) => SEA - (x * x + z * z) / (2 * 
 /** How far the sea's solid piece reaches from the field's middle (units, 4 km square), and how deep under its surface. */
 export const SEA_HALF = new THREE.Vector3(4 * KM, 2000, 4 * KM);
 
-/** The sea as the field's piece (see reliefPiece): a ship that touches it crashes as into rock. */
+/** The sea as the field's piece (see reliefPiece): a world's ground, over which the hover field holds a ship (see world/hover). */
 const piece = reliefPiece(seaHeight, SEA_HALF, SEA);
 export const seaRelief = piece.relief;
 export const seaPlacement = piece.placement;

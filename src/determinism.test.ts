@@ -100,6 +100,7 @@ describe('the shared world on every machine', () => {
       hole: '394e88bdcb9fbc9a',
       derelict: 'd51dc8297fd357f6',
       crack: 'c6e20772cfbd35af',
+      throat: '61c4e0677419b614',
       valhalla: '1f76cc3193c365f5',
       lineae: 'b98c15645df93d25',
     });

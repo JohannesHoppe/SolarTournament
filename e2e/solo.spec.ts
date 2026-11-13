@@ -43,20 +43,26 @@ for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   });
 }
 
-test("a solo race over Europa's Crack starts and runs without errors, its track from the start to the finish, the world's readouts under the height", async ({ page }) => {
-  const errors = await openGame(page);
-  await startSolo(page, 'race', 'crack');
-  await play(page, 12);
-  const state = await page.evaluate(() => {
-    const game = window.game;
-    const shown = (id: string) => !document.getElementById(id)!.hidden;
-    return { state: game.state, arena: game.venue.id, alive: game.me.alive, finish: game.finishGates, gravity: shown('hud-grav'), grip: shown('hud-grip'), air: shown('hud-air'), value: document.getElementById('hud-grav-value')!.textContent };
+// the race worlds: the Crack in a vacuum, the Throat in Titan's air
+for (const { world, title, air, pull } of [
+  { world: 'crack', title: "Europa's Crack", air: false, pull: /0[.,]13/ },
+  { world: 'throat', title: "Kraken Mare's Throat", air: true, pull: /0[.,]14/ },
+]) {
+  test(`a solo race over ${title} starts and runs without errors, its track from the start to the finish, the world's readouts under the height`, async ({ page }) => {
+    const errors = await openGame(page);
+    await startSolo(page, 'race', world);
+    await play(page, 12);
+    const state = await page.evaluate(() => {
+      const game = window.game;
+      const shown = (id: string) => !document.getElementById(id)!.hidden;
+      return { state: game.state, arena: game.venue.id, alive: game.me.alive, finish: game.finishGates, gravity: shown('hud-grav'), grip: shown('hud-grip'), air: shown('hud-air'), value: document.getElementById('hud-grav-value')!.textContent };
+    });
+    expect(state).toMatchObject({ state: 'playing', arena: world, alive: true, gravity: true, grip: true, air });
+    expect(state.finish).toBeGreaterThan(15);
+    expect(state.value).toMatch(pull);
+    expect(errors).toEqual([]);
   });
-  expect(state).toMatchObject({ state: 'playing', arena: 'crack', alive: true, gravity: true, grip: true, air: false });
-  expect(state.finish).toBeGreaterThan(15);
-  expect(state.value).toMatch(/0[.,]13/);
-  expect(errors).toEqual([]);
-});
+}
 
 for (const arena of ['valhalla', 'lineae']) {
   test(`a solo deathmatch over the world ${arena} starts and runs without errors, every clone printed over its ground and none hurt by it`, async ({ page }) => {

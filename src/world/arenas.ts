@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -26,6 +26,7 @@ import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMED
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { CRACK_TRACK, crackGroundPlacement, FINISH_MARK } from './crack';
+import { THROAT_FINISH, throatGroundPlacement, THROAT_TRACK } from './throat';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -62,7 +63,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack' | 'valhalla' | 'lineae';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack' | 'valhalla' | 'lineae' | 'throat';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -205,6 +206,21 @@ function derelict(): Placement[] {
  * second, made-up one.
  */
 /** The Long Ladder's rungs (Haumea, Eris, Lantern, Granary): ice in the dark, a body's white below, the sun a star among the others. */
+/** Kraken Mare: over the haze a dim, cold sky and Saturn's cream; under it all orange twilight. */
+const TITAN_MOOD: Mood = {
+  space: 0x030201,
+  sky: 0xa07850,
+  ground: 0x3a2410,
+  ambient: 1.4,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.07, 0.045, 0.02], size: 540000, shape: 1, turn: 2.2 },
+    { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.03], size: 460000, shape: 0, turn: 1.1 },
+  ],
+  stars: 0.8,
+  starmap: true,
+  dust: [0.8, 0.6, 0.38],
+  grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
+};
 /** The Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice itself, a grade cooler than Callisto's. */
 const EUROPA_MOOD: Mood = {
   space: 0x020203,
@@ -451,6 +467,8 @@ const MOODS: Record<ArenaId, Mood> = {
   europa: EUROPA_MOOD,
   // the Crack as a race world: the Lineae's ice and sky
   crack: EUROPA_MOOD,
+  // the Throat as a race world: Kraken Mare's haze and sky
+  throat: TITAN_MOOD,
   // the worlds fought over: their places' ground and sky
   valhalla: CALLISTO_MOOD,
   lineae: EUROPA_MOOD,
@@ -484,21 +502,7 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.66, 0.66, 0.66],
     grade: { gain: [1, 1, 1], lift: [0.0013, 0.0013, 0.0013], saturation: 0.88 },
   },
-  // Kraken Mare: over the haze a dim, cold sky and Saturn's cream; under it all orange twilight
-  titan: {
-    space: 0x030201,
-    sky: 0xa07850,
-    ground: 0x3a2410,
-    ambient: 1.4,
-    nebulae: [
-      { at: [-0.6, 0.5, -0.5], color: [0.07, 0.045, 0.02], size: 540000, shape: 1, turn: 2.2 },
-      { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.03], size: 460000, shape: 0, turn: 1.1 },
-    ],
-    stars: 0.8,
-    starmap: true,
-    dust: [0.8, 0.6, 0.38],
-    grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
-  },
+  titan: TITAN_MOOD,
   // the Plumes: white ice under a black sky, Saturn's cream filling a quarter of it, the plumes glittering
   enceladus: {
     space: 0x010203,
@@ -1229,6 +1233,41 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
     references: [
       { glyph: 'planet', label: msg('Finish'), position: FINISH_MARK, distance: true },
       { glyph: 'planet', label: msg('Jupiter'), position: EUROPA_JUPITER, distance: false },
+    ],
+    open: true,
+  },
+  {
+    id: 'throat',
+    name: msg('The Throat'),
+    tagline: msg("Through the winding strait of Titan's methane sea, low under the orange haze, carving in its air."),
+    // the strait's sea, banks and bluffs along 22 km, under Titan's air, and the track
+    layout: {
+      key: 'throat',
+      seed: 9500,
+      kind: 'rock',
+      count: 0,
+      minScale: 1,
+      maxScale: 1,
+      radius: FIELD_RADIUS,
+      inner: 0,
+      spin: 0,
+      toughness: 800,
+      placements: [throatGroundPlacement(THROAT_TYPE)],
+      fall: TITAN_FALL,
+      air: TITAN_AIR,
+      course: { form: 'track', points: THROAT_TRACK.points, gates: THROAT_TRACK.gates },
+    },
+    cooling: 1,
+    storms: false,
+    // 9.5 AU from the sun, a small cold disk
+    sun: { size: 16000, intensity: 3, color: 0xfff0dd },
+    mood: MOODS.throat,
+    hazeLight: { deck: TITAN_DECK_LIGHT, deep: TITAN_DEEP_LIGHT },
+    // low over the water in the strait, looking along it
+    preview: { from: [-1500, -4600, 40000], at: [1200, -5400, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Finish'), position: THROAT_FINISH, distance: true },
+      { glyph: 'planet', label: msg('Saturn'), position: TITAN_SATURN, distance: false },
     ],
     open: true,
   },

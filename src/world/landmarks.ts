@@ -865,6 +865,7 @@ export class Landmarks {
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
+    this.scenes.set('throat', this.titan());
     this.scenes.set('enceladus', this.enceladus());
     this.scenes.set('miranda', miranda());
     this.scenes.set('pluto', pluto());

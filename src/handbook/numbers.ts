@@ -1,10 +1,14 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
-import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
+import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
+import * as THREE from 'three';
 import { CRACK_TRACK } from '../world/crack';
+import { THROAT_TRACK } from '../world/throat';
+import { TITAN_AIR, TITAN_FALL } from '../world/titan';
+import { bendRadius, RacingLine } from '../game/racingline';
 import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
@@ -30,6 +34,16 @@ import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
 
 const meters = (units: number) => units * METERS_PER_UNIT;
 const km = (units: number) => meters(units) / 1000;
+/** A track's length along its points (units). */
+const lengthOf = (points: readonly THREE.Vector3[]) => points.reduce((sum, point, i, all) => sum + (i ? point.distanceTo(all[i - 1]) : 0), 0);
+/** The tightest bend of a track's racing line (units, radius), measured as the race's bend test measures it: over 50 m either side of every point 20 m apart. */
+function tightestBend(track: { points: readonly THREE.Vector3[]; gates: readonly number[] }): number {
+  const line = new RacingLine(track.points, false, undefined, undefined, track.gates);
+  const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  let least = Infinity;
+  for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.point(s - 1000, a), line.point(s, b), line.point(s + 1000, c)));
+  return least;
+}
 /** Earth's gravity in m/s², the g the README counts accelerations in. */
 const g = (units: number) => Math.round(meters(units) / 9.81);
 const percent = (share: number) => Math.round(share * 100);
@@ -58,10 +72,16 @@ export const FROM_CODE: Record<string, number> = {
   trackGates: CRACK_TRACK.gates.length,
   trackRespawn: TRACK_RESPAWN_SECONDS,
   trackSpeed: meters(TRACK_RESPAWN_SPEED),
-  trackLength: Math.round(km(CRACK_TRACK.points.reduce((sum, point, i, all) => sum + (i ? point.distanceTo(all[i - 1]) : 0), 0))),
+  trackLength: Math.round(km(lengthOf(CRACK_TRACK.points))),
   crackWidth: meters(CRACK_WIDTH),
   crackDepth: meters(CRACK_DEPTH),
   crackGravity: Math.round((meters(EUROPA_FALL) / 9.81) * 100) / 100,
+  throatLength: Math.round(km(lengthOf(THROAT_TRACK.points))),
+  throatGravity: Math.round((meters(TITAN_FALL) / 9.81) * 100) / 100,
+  // the Throat's tightest bend, and the autopilot's tightest turn at the limit in the air over its water and in a vacuum
+  throatBend: Math.round(meters(tightestBend(THROAT_TRACK)) / 10) * 10,
+  throatCarve: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: densityIn(TITAN_AIR, THROAT_TRACK.points[0]) })) / 5) * 5,
+  vacuumTurn: Math.round(meters(turnRadius(MAX_SPEED)) / 5) * 5,
   valhallaGravity: Math.round((meters(CALLISTO_FALL) / 9.81) * 100) / 100,
   laps: LAPS,
   gateRadius: meters(GATE_RADIUS),
