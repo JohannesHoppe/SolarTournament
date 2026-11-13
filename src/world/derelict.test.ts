@@ -102,7 +102,10 @@ describe('the derelict', () => {
   it('lets a ship knock one of its dead away as the far heavier body: the body flies off at twice the closing speed, the ship keeps its speed', () => {
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
     wreck.update(10);
-    const body = wreck.deadAt(0, new THREE.Vector3());
+    // one with none of the others within the ship's reach, so the ship meets it alone
+    const others = Array.from({ length: wreck.count }, (_, i) => wreck.deadAt(i, new THREE.Vector3()));
+    const alone = others.findIndex((at, i) => others.every((other, j) => j === i || other.distanceTo(at) > 1500));
+    const body = wreck.deadAt(alone, new THREE.Vector3());
     // a ship of hit radius 300 units closing at 150 m/s (3000 units/s) along x, just touching it
     const position = body.clone().add(new THREE.Vector3(-310, 0, 0));
     const velocity = new THREE.Vector3(3000, 0, 0);
@@ -112,7 +115,7 @@ describe('the derelict', () => {
     expect(velocity.x).toBeLessThan(3000);
     // the body leaves at about twice the closing speed along the line between them
     wreck.update(11);
-    const flown = wreck.deadAt(0, new THREE.Vector3()).sub(body);
+    const flown = wreck.deadAt(alone, new THREE.Vector3()).sub(body);
     expect(flown.x).toBeGreaterThan(5900);
     expect(flown.x).toBeLessThan(6001);
     // once away it is not met again by a ship flying on behind it
@@ -120,7 +123,7 @@ describe('the derelict', () => {
     // a new round (the field's clock run back) finds it where it drifted before
     wreck.update(5);
     wreck.update(10);
-    expect(wreck.deadAt(0, new THREE.Vector3()).distanceTo(body)).toBeLessThan(1e-6);
+    expect(wreck.deadAt(alone, new THREE.Vector3()).distanceTo(body)).toBeLessThan(1e-6);
   });
 
   it('paints its name, motto and registry only in letters its stencil has', () => {
