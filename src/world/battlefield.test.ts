@@ -100,7 +100,7 @@ describe('Valhalla as a world fought over', () => {
     expect(near / n).toBeGreaterThan(0.5);
   });
 
-  it('holds a ship inside low and tight: 1.25 km round its middle, under a ceiling 550 m over the plain', () => {
+  it('holds a ship inside low and tight: 1.4 km round its middle, under a ceiling 550 m over the plain', () => {
     expect(outsideArena(new THREE.Vector3(BOUNDS.radius * 0.99, LAND + 500 * M, 0), BOUNDS)).toBe(false);
     expect(outsideArena(new THREE.Vector3(BOUNDS.radius * 1.01, LAND, 0), BOUNDS)).toBe(true);
     expect(outsideArena(new THREE.Vector3(0, LAND + 560 * M, 0), BOUNDS)).toBe(true);

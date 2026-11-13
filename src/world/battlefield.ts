@@ -20,7 +20,7 @@ import { LAND, surfaceHeight } from './callisto';
  * thrown-up ice along both its lips; the cruiser lies in it broken in two, its halves apart with
  * a gorge of open space between them, half sunk into the ice. Ice bridges span a few gorges. The
  * clones are printed on pads round the arena's edge, on the ground. The arena is low and tight:
- * BOUNDS (1.25 km from the middle, 550 m over the plain), so a fight stays among the scarps.
+ * BOUNDS (1.4 km from the middle, 550 m over the plain), so a fight stays among the scarps.
  */
 
 /** 1 m and 1 km in units. */
@@ -28,7 +28,7 @@ const M = 20;
 const KM = 20000;
 
 /** The arena's edge over Valhalla (units): RADIUS from the middle across the ground, and its ceiling as a height (550 m over the plain). */
-export const BOUNDS = { radius: 1.25 * KM, ceiling: LAND + 550 * M };
+export const BOUNDS = { radius: 1.4 * KM, ceiling: LAND + 550 * M };
 
 /** The scarps: one every RING_SPACING (units, 650 m) along x, RIDGE_LOW to RIDGE_HIGH (100 m to 250 m) high, rising over RISE of the spacing, flat on top to TOP, dropping off by SCARP. */
 const RING_SPACING = 650 * M;
