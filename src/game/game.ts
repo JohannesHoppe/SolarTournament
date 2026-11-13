@@ -2854,8 +2854,11 @@ export class Game implements OnlineGame {
   }
 
   private onAction(action: Action) {
-    if (action === 'radio') {
-      this.toggleRadio();
+    if (action === 'radio' || action === 'songBack' || action === 'songNext') {
+      // the gamepad's d-pad flies the ship (hook, decoy, self-destruct) and works the radio only off the flight
+      if (this.input.device === 'gamepad' && this.state === 'playing') return;
+      if (action === 'radio') this.toggleRadio();
+      else this.djKey(action === 'songNext' ? 1 : -1);
       return;
     }
     // F1 lays the controls over any screen, the running game included
@@ -3228,6 +3231,12 @@ export class Game implements OnlineGame {
     if (!this.djReady) return;
     this.dj = djStep(this.dj, by, this.djNow());
     this.renderDj();
+  }
+
+  /** A key or button for the DJ's songs: the game master steps the programme; online, another Host is told who picks the music. */
+  private djKey(by: 1 | -1) {
+    if (this.djReady) this.djSkip(by);
+    else if (this.online && !this.gameMaster && this.state !== 'menu') this.hud.flashMessage(this.time, t('Only the game master picks the music'), 3);
   }
 
   /** The DJ tunes the radio to the title its words make (see djTitle): the same words always the same song. Returns whether the words were taken. */
