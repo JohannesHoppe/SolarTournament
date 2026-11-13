@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { contact, IMMOVABLE, MASS, share, type Body } from '../world/bodies';
+import { onCore, plugMass, type JunkBuild } from '../world/junk';
 import { pow } from '../detmath';
 
 /** Impacts slower than this (units/s) only scratch the paint. */
@@ -42,6 +43,41 @@ export function bump(a: Body, b: Body, normal: THREE.Vector3, restitution = REST
 
 /** The hull an impact this fast (units/s) takes. */
 export const impactDamage = (approach: number) => Math.max(0, approach - SAFE_IMPACT) * IMPACT_DAMAGE;
+
+/** What a strike of junk did (see strikeJunk), reused for every strike. */
+const struck = { core: false, felt: 0 };
+const closing = new THREE.Vector3();
+
+/**
+ * A ship (`ship`) meets a piece of the Satellite Junkyard's junk built as `build` (see
+ * world/junk) at `local`, the point struck in the piece's frame; the piece is a body there
+ * (`piece`: its whole mass, its velocity at that point), `normal` points out of it. On its core
+ * the two bump as bodies of their masses (see bump). On a sheet the hull punches through: the
+ * plug it tears out (see plugMass) takes the hull's speed as the two would as one body, the ship
+ * giving up the plug's share of the closing speed and the piece taking the momentum the plug
+ * gained; once, as the hull enters (`through`: it is already in this sheet, and nothing
+ * happens). Both velocities change here. Returns whether it struck the core and the blow the
+ * ship felt (units/s: on a core its own share of the closing speed, on a sheet the speed it gave
+ * up; impactDamage takes it as an impact against rock); null when nothing struck.
+ */
+export function strikeJunk(build: JunkBuild, local: THREE.Vector3, ship: Body, piece: Body, normal: THREE.Vector3, through: boolean): { readonly core: boolean; readonly felt: number } | null {
+  if (onCore(build, local)) {
+    const approach = bump(ship, piece, normal);
+    if (approach <= 0) return null;
+    struck.core = true;
+    struck.felt = approach * share(ship.mass, piece.mass);
+    return struck;
+  }
+  if (through) return null;
+  const plug = plugMass(build);
+  closing.subVectors(ship.velocity, piece.velocity);
+  const parted = plug / (ship.mass + plug);
+  ship.velocity.addScaledVector(closing, -parted);
+  piece.velocity.addScaledVector(closing, (ship.mass * parted) / piece.mass);
+  struck.core = false;
+  struck.felt = closing.length() * parted;
+  return struck;
+}
 
 /**
  * Two ships meeting slower than this (units/s, 15 m/s, their closing speed along the line between

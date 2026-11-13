@@ -916,6 +916,11 @@ export class Landmarks {
     return this.shown === 'derelict' ? this.wreck.mistAt(point) : 0;
   }
 
+  /** A ship meets the derelict's dead (see Derelict.meet): the fastest closing speed met (units/s; 0 in every other arena). */
+  meetDead(position: THREE.Vector3, velocity: THREE.Vector3, radius: number, time: number): number {
+    return this.shown === 'derelict' ? this.wreck.meet(position, velocity, radius, time) : 0;
+  }
+
   /** How thick Enceladus's plumes are at `point` (0..1; 0 in every other arena). */
   plumeAt(point: THREE.Vector3): number {
     return this.shown === 'enceladus' ? plumeDensity(point) : 0;

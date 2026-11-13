@@ -4,7 +4,7 @@ import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENC
 import { pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
-import { testField } from '../test/field';
+import { junkField, testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
 import { airBurn, altitudeIn, clogging, dragOn, heatInto, safeSpeed } from '../world/air';
@@ -197,6 +197,31 @@ describe('bots fly by the Hosts\' rules', () => {
     const gliding = fly(true);
     expect(gliding).toBeLessThan(RADIUS * 4);
     expect(fly(false)).toBeGreaterThan(gliding * 2);
+  });
+
+  it('takes junk a hull punches through for no danger, and steers off the junk that stops it', () => {
+    // a probe 2 km beyond a piece of junk on the bot's way (`type`: a fairing's shell, a stack of satellites; none for an empty field)
+    const fly = (type: number | null) => {
+      const junk = junkField();
+      junk.generate({ key: `junk-${type}`, seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: type === null ? [] : [{ kind: 'debris', type, scale: 1, position: new THREE.Vector3(), orientation: new THREE.Quaternion(), solid: false }] });
+      const me = ship('Kessler', at(-40000), at(1));
+      me.flight.velocity.set(3000, 0, 0);
+      const bot = new Bot(me, evenSkills(0.5));
+      bot.lure = at(40000);
+      let inside = 0;
+      for (let t = 0; t < 30 && me.flight.position.x < 20000; t += STEP) {
+        me.flight.update(STEP, bot.think(t, [me], junk), new THREE.Vector3());
+        if (junk.overlap(me.flight.position, RADIUS)) inside++;
+      }
+      return { inside, path: me.flight.position.toArray().map((x) => Math.round(x)) };
+    };
+    const open = fly(null);
+    // the fairing (template 2) is sheet through and through: the bot flies on as if it were not there, straight through it
+    const fairing = fly(2);
+    expect(fairing.path).toEqual(open.path);
+    expect(fairing.inside).toBeGreaterThan(0);
+    // the stack (template 3) is core through and through: the bot steers off its way
+    expect(fly(3).path).not.toEqual(open.path);
   });
 
   it('reads who hunts whom from the noses it sees, not from the other bots\' minds', () => {

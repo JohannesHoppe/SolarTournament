@@ -8,6 +8,7 @@ import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
+import { onCore } from '../world/junk';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
 import { exp, hypot } from '../detmath';
 
@@ -244,6 +245,8 @@ const wayOrigin = new THREE.Vector3();
 /** The rays of wayAhead (and the shove's check): each cast's hit, and the nearest of them, reused every step. */
 const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
+/** Where a ray of wayAhead met a piece of junk, in the piece's frame (see world/junk, onCore). */
+const wayPoint = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
@@ -862,7 +865,11 @@ export class Bot {
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
       // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
-      if (hit && !(overGround && hit.asteroid?.ground) && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
+      if (!hit || (overGround && hit.asteroid?.ground)) continue;
+      // a sheet of junk (a wing's panels, a fairing, a stage's tank) is none either: the hull punches through it (see world/junk)
+      const junk = hit.asteroid?.junk;
+      if (junk && !onCore(junk.build, wayPoint.copy(wayOrigin).addScaledVector(direction, hit.distance).applyMatrix4(hit.asteroid!.inverse))) continue;
+      if (!best || hit.distance < best.distance) best = Object.assign(wayBest, hit);
     }
     return best;
   }

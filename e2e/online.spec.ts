@@ -481,6 +481,49 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
   expect(errors).toEqual([]);
 });
 
+test("a ship flies through a satellite's solar wing at speed unharmed, and both tabs see the wing go the same way", async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}j&bots=0`);
+  // the game master takes the room to the Satellite Junkyard
+  const round = await a.evaluate(() => window.game.roundId as number);
+  await a.evaluate(() => {
+    window.game.pause();
+    document.getElementById('new-round-open')!.click();
+    document.querySelector<HTMLElement>('#new-round-arenas button[data-value="junkyard"]')!.click();
+    document.querySelector<HTMLElement>('[data-choice="new-round-mode"] button[data-value="deathmatch"]')!.click();
+    document.getElementById('new-round-start')!.click();
+  });
+  for (const page of [a, b]) await page.waitForFunction((round) => window.game.roundId === round + 1 && window.game.venue.id === 'junkyard' && window.game.state === 'playing', round, { timeout: 60_000 });
+  // past the round's opening (its intro flight and the start lights), when the ships fly free
+  await b.waitForFunction(() => window.game.roundSeconds() > 10, undefined, { timeout: 60_000 });
+  // the following tab's ship, 100 m short of a satellite's wing, flying square through it at 250 m/s
+  const struck = await b.evaluate(() => {
+    const game = window.game;
+    const piece = [...game.field.asteroids.values()].find((a: { junk: { build: { kind: string } } | null }) => a.junk?.build.kind === 'satellite');
+    const hard = piece.junk.build.hard as { max: number };
+    const local = piece.object.position.clone().set((hard.max + piece.semiAxes.x) / 2, 0, 0);
+    const at = piece.object.localToWorld(local.clone());
+    const square = piece.object.localToWorld(local.clone().setY(1)).sub(at).normalize();
+    const me = game.me;
+    me.protectedUntil = 0;
+    game.autopilot = false;
+    me.flight.position.copy(at).addScaledVector(square, -2000);
+    me.flight.velocity.copy(game.field.surfaceVelocity(piece, at, at.clone())).addScaledVector(square, 5000);
+    me.flight.orientation.setFromRotationMatrix(game.camera.matrix.clone().lookAt(me.flight.position, at, square.clone().set(0, 1, 0)));
+    return { id: piece.id as string, velocity: piece.velocity.toArray() as number[] };
+  });
+  await play(b, 1.5);
+  const seen = (page: Page, id: string) => page.evaluate((id) => ({ velocity: window.game.field.asteroids.get(id).velocity.toArray() as number[], by: window.game.field.asteroids.get(id).shovedBy as number | null, hull: window.game.me.hull as number, alive: window.game.me.alive as boolean }), id);
+  const there = await seen(b, struck.id);
+  // through the wing at full speed, the hull without a scratch; the wing knocked into a tumble
+  expect(there.alive).toBe(true);
+  expect(there.hull).toBe(100);
+  expect(there.by).toBe(-2);
+  expect(there.velocity).not.toEqual(struck.velocity);
+  // the leading tab took the strike from the striker's word
+  await expect.poll(async () => (await seen(a, struck.id)).velocity, { timeout: 5_000 }).toEqual(there.velocity);
+  expect(errors).toEqual([]);
+});
+
 test("two tabs agree again on a piece one of them moved alone, once the lead's sync of the field came round", async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}s`);
   // where a piece is at a field time both tabs can name, on each tab
