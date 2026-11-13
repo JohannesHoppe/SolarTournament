@@ -166,6 +166,8 @@ test('alone, the Host is the DJ: back and forward on the radio, title words on t
   const title = () => page.evaluate(() => window.game.musicCue().title as string);
   const programme = await title();
   await page.waitForFunction(() => document.getElementById('now-playing')!.classList.contains('dj'));
+  // the radio keeps its cue from frame to frame: the DJ's buttons never stop it
+  expect(await page.evaluate(() => new Promise<boolean>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.game.radio.playing as boolean)))))).toBe(true);
   await page.evaluate(() => document.getElementById('np-next')!.click());
   const next = await title();
   expect(next).not.toBe(programme);

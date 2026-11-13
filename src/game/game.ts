@@ -2798,10 +2798,8 @@ export class Game implements OnlineGame {
     }
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
     if (inRound && Number.isFinite(this.roundEndsAtWall)) {
-      // a browser that started over plays on the round it was in until it hears the round again
-      const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
       // the programme's song of the round, or what the game master as DJ put on air, from when it began
-      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+      const { seed, round } = this.radioProgramme();
       return { title: djSong(this.dj, seed, round, !!this.online), energy: 'round', elapsed: Math.max(0, this.roundElapsed() - this.dj.from), roundLength: ROUND_SECONDS };
     }
     return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
@@ -3193,7 +3191,6 @@ export class Game implements OnlineGame {
     if (online.isLead === this.toldGameMaster) return;
     this.toldGameMaster = online.isLead;
     $('new-round-open').hidden = !online.isLead;
-    $('dj-open').hidden = !online.isLead;
     $('hud-room').classList.toggle('game-master', online.isLead);
     if (online.isLead) this.hud.flashMessage(this.time, t('You are the game master (and DJ): the pause menu starts a new round, with any arena and mode, and picks the music'), 8);
     else {
@@ -3207,6 +3204,19 @@ export class Game implements OnlineGame {
     return ROUND_SECONDS - (this.roundEndsAtWall - this.roundClock());
   }
 
+  /** When the DJ's song begins: now into the round, never before its start (a lead whose eased clock runs a little ahead would send a negative start the others refuse). */
+  private djNow() {
+    return Math.max(0, this.roundElapsed());
+  }
+
+  /** The radio's seed and round: the room's code online, the solo seed alone; a browser that started over plays on the round it was in until it hears the round again. */
+  private radioProgramme() {
+    return {
+      seed: this.online ? textSeed(this.online.session.room) : this.soloSeed,
+      round: this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId,
+    };
+  }
+
   /** The game master may play DJ now: in a round of its own deciding (not the flight school or the campaign), while it runs or its scoreboard shows. */
   private get djReady() {
     const inRound = this.state === 'playing' || this.state === 'results' || this.state === 'paused';
@@ -3216,7 +3226,7 @@ export class Game implements OnlineGame {
   /** The DJ steps the programme one song forward or back; online the others follow from the lead's round state. */
   private djSkip(by: 1 | -1) {
     if (!this.djReady) return;
-    this.dj = djStep(this.dj, by, this.roundElapsed());
+    this.dj = djStep(this.dj, by, this.djNow());
     this.renderDj();
   }
 
@@ -3224,7 +3234,7 @@ export class Game implements OnlineGame {
   private djPlay(words: string): boolean {
     const title = djTitle(words);
     if (!this.djReady || title === null) return false;
-    this.dj = djTune(this.dj, title, this.roundElapsed());
+    this.dj = djTune(this.dj, title, this.djNow());
     this.renderDj();
     return true;
   }
@@ -3242,8 +3252,7 @@ export class Game implements OnlineGame {
 
   /** What the DJ's plate says is on air. */
   private renderDj() {
-    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
+    const { seed, round } = this.radioProgramme();
     $('dj-on-air').textContent = djSong(this.dj, seed, round, !!this.online);
   }
 
@@ -4653,13 +4662,14 @@ export class Game implements OnlineGame {
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
+    else if (this.radio.playing) this.radio.stop();
     // the game master's buttons on the radio: back and forward through the programme
     const deck = this.djReady;
     if (deck !== this.djDeck) {
       this.djDeck = deck;
       $('now-playing').classList.toggle('dj', deck);
+      $('dj-open').hidden = !deck;
     }
-    else if (this.radio.playing) this.radio.stop();
     if (this.state === 'menu' || this.state === 'paused' || this.sponsors.visible) {
       // the idle link flickers now and then
       const now = performance.now() / 1000;

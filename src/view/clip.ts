@@ -30,10 +30,11 @@ export async function recordClip(canvas: HTMLCanvasElement, sound: AudioNode, se
   const context = sound.context as AudioContext;
   const tap = context.createMediaStreamDestination();
   sound.connect(tap);
-  const picture = canvas.captureStream(FPS);
-  // the capture and the tap end however the recording does: a recorder that refuses its type or
-  // fails to start leaves nothing running for the rest of the session
+  let picture: MediaStream | null = null;
+  // the capture and the tap end however the recording does: a canvas that cannot be captured, a
+  // recorder that refuses its type or fails to start leaves nothing running for the rest of the session
   try {
+    picture = canvas.captureStream(FPS);
     const stream = new MediaStream([...picture.getVideoTracks(), ...tap.stream.getAudioTracks()]);
     const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BITS });
     const chunks: Blob[] = [];
@@ -47,7 +48,7 @@ export async function recordClip(canvas: HTMLCanvasElement, sound: AudioNode, se
     await stopped;
     return new Blob(chunks, { type: recorder.mimeType || type });
   } finally {
-    for (const track of [...picture.getTracks(), ...tap.stream.getTracks()]) track.stop();
+    for (const track of [...(picture?.getTracks() ?? []), ...tap.stream.getTracks()]) track.stop();
     sound.disconnect(tap);
   }
 }
