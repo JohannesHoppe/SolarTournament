@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { contact, IMMOVABLE, MASS, share, type Body } from '../world/bodies';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
 import { pow } from '../detmath';
+import { METERS_PER_UNIT } from './flight';
 
 /** Impacts slower than this (units/s) only scratch the paint. */
 export const SAFE_IMPACT = 250;
@@ -44,8 +45,32 @@ export function bump(a: Body, b: Body, normal: THREE.Vector3, restitution = REST
 /** The hull an impact this fast (units/s) takes. */
 export const impactDamage = (approach: number) => Math.max(0, approach - SAFE_IMPACT) * IMPACT_DAMAGE;
 
+/**
+ * A hull punching through a sheet of junk (see strikeJunk) is dented by the plug it tears out:
+ * the plug's kinetic energy in the ship's frame, at the speed the two close, goes into the
+ * armor of the nose. A hull point per this much of it (J): a solar wing's 75 kg plug at
+ * 250 m/s (2.3 MJ) costs 3 points, about a laser's scorch and a half; a fairing's 250 kg plug
+ * (7.8 MJ) 10; a tank's tonne of two walls (31 MJ) 42, a solid hit.
+ */
+const SHEET_JOULES = 750_000;
+/** Slower than this (units/s, 30 m/s) a sheet only scratches the paint: a touch, no dent. */
+export const SHEET_SAFE = 600;
+/**
+ * A sheet tears before it passes more than this to the armor (hull points): it is torn through
+ * and shatters ahead of the nose, so no single sheet wrecks a whole hull, a tank's walls at a
+ * race's boosted speed (450 m/s, 101 MJ) included.
+ */
+const SHEET_MOST = 60;
+
+/** The hull points a plug of `plug` kg torn out of a sheet at a closing speed of `closing` (units/s) costs the armor (see SHEET_JOULES). */
+export function sheetDamage(plug: number, closing: number): number {
+  if (closing < SHEET_SAFE) return 0;
+  const speed = closing * METERS_PER_UNIT;
+  return Math.min(SHEET_MOST, (0.5 * plug * speed * speed) / SHEET_JOULES);
+}
+
 /** What a strike of junk did (see strikeJunk), reused for every strike. */
-const struck = { core: false, felt: 0 };
+const struck = { core: false, felt: 0, dent: 0 };
 const closing = new THREE.Vector3();
 
 /**
@@ -56,21 +81,24 @@ const closing = new THREE.Vector3();
  * plug it tears out (see plugMass) takes the hull's speed as the two would as one body, the ship
  * giving up the plug's share of the closing speed and the piece taking the momentum the plug
  * gained; once, as the hull enters (`through`: it is already in this sheet, and nothing
- * happens). Both velocities change here. Returns whether it struck the core and the blow the
- * ship felt (units/s: on a core its own share of the closing speed, on a sheet the speed it gave
- * up; impactDamage takes it as an impact against rock); null when nothing struck.
+ * happens). Both velocities change here. Returns whether it struck the core, the blow the
+ * ship felt (units/s: on a core its own share of the closing speed, which impactDamage takes as
+ * an impact against rock; on a sheet the speed it gave up) and on a sheet the dent the plug
+ * left in its armor (hull points, see sheetDamage); null when nothing struck.
  */
-export function strikeJunk(build: JunkBuild, local: THREE.Vector3, ship: Body, piece: Body, normal: THREE.Vector3, through: boolean): { readonly core: boolean; readonly felt: number } | null {
+export function strikeJunk(build: JunkBuild, local: THREE.Vector3, ship: Body, piece: Body, normal: THREE.Vector3, through: boolean): { readonly core: boolean; readonly felt: number; readonly dent: number } | null {
   if (onCore(build, local)) {
     const approach = bump(ship, piece, normal);
     if (approach <= 0) return null;
     struck.core = true;
     struck.felt = approach * share(ship.mass, piece.mass);
+    struck.dent = 0;
     return struck;
   }
   if (through) return null;
   const plug = plugMass(build);
   closing.subVectors(ship.velocity, piece.velocity);
+  struck.dent = sheetDamage(plug, closing.length());
   const parted = plug / (ship.mass + plug);
   ship.velocity.addScaledVector(closing, -parted);
   piece.velocity.addScaledVector(closing, (ship.mass * parted) / piece.mass);
