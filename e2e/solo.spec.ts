@@ -13,7 +13,9 @@ test('the title screen stands on two legs: the story Lot 7731, in the making and
   expect(errors).toEqual([]);
 });
 
-test("the Derelict's dead are MakeHuman's figures: all eight load, near and far, and draw without a GL error", async ({ page }) => {
+test("the Derelict's dead are figures: all fourteen load, near and far, and draw without a GL error", async ({ page }) => {
+  // fourteen figures, some 6 MB, fetched from the dev server
+  test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
@@ -23,7 +25,7 @@ test("the Derelict's dead are MakeHuman's figures: all eight load, near and far,
   await page.goto('/');
   await page.waitForFunction(() => window.game?.playSolo, null, { timeout: 60_000 });
   await page.evaluate(() => window.game.playSolo('deathmatch', 'derelict'));
-  await page.waitForFunction(() => window.game.landmarks.wreck.distant.filter(Boolean).length === 8, null, { timeout: 60_000 });
+  await page.waitForFunction(() => window.game.landmarks.wreck.distant.filter(Boolean).length === 14, null, { timeout: 180_000 });
   // the camera held before one of the dead, then far off, so both levels are drawn
   for (const distance of [100, 4000]) {
     await page.evaluate(

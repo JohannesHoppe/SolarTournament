@@ -27,7 +27,7 @@ import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/r
 import { DJ_IDLE, DJ_TITLE_MAX, djFromWire, djNewRound, djSong, djStep, djTitle, djToWire, djTune, type DjState } from '../music/dj';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
@@ -114,6 +114,7 @@ import { FlareView } from '../world/flare';
 import { BEAM_STOPS, PROBE_BOUNCES, pushesOf, SLOT_BOUNCES, rayOf, SHOWER_BURSTS, solidTable, TORPEDO_FUSE, touchOf, WRECK_GRINDS } from './solids';
 import { markedName, markLead, swatch } from '../view/marks';
 import { Coach, type Tip } from './coach';
+import { Chatter, type ChatterMoment } from '../sound/chatter';
 import {
   ALARM_RANK,
   AlarmTones,
@@ -1493,6 +1494,8 @@ export class Game implements OnlineGame {
   private readonly speaker: Speaker;
   /** Nicole's briefings and tips in real rounds. */
   private readonly coach = new Coach();
+  /** Nicole's chatter at the moments that come again and again: varied, seldom praise, often silent (see sound/chatter). */
+  private readonly chatter = new Chatter();
   /** The own pilot's grudges, for its big moments. */
   private readonly moments = new Moments();
   /** The kill streaks of the ships this browser runs, for their bonus and the own pilot's moments. */
@@ -2818,8 +2821,9 @@ export class Game implements OnlineGame {
     const place = standings.indexOf(me);
     const now = this.time;
     if (racing && this.place >= 0 && place !== this.place && now >= this.nextPlaceCall) {
-      const line = place === 0 ? COMPUTER.lead : this.place === 0 ? COMPUTER.lostLead : place < this.place ? COMPUTER.passed : COMPUTER.passedBy;
-      if (this.speaker.say(line, 'chatter')) this.nextPlaceCall = now + PLACE_CALL_COOLDOWN;
+      const moment: ChatterMoment = place === 0 ? 'lead' : this.place === 0 ? 'lostLead' : place < this.place ? 'passed' : 'passedBy';
+      this.sayChatter(moment, 'chatter');
+      this.nextPlaceCall = now + PLACE_CALL_COOLDOWN;
       if (place < this.place) this.moment(place === 0 ? 'lead' : 'pass');
     }
     this.place = racing ? place : -1;
@@ -3713,13 +3717,14 @@ export class Game implements OnlineGame {
     if (mode !== 'school') {
       this.coach.newRound();
       // the hint counts as given once it is on screen, whether the voice could say it or not
+      const launch = this.chatter.line('launch', wallClock());
       hint =
         mouse &&
         this.coach.give('mouse', (line) => {
-          this.speaker.say([COMPUTER.launch, line], 'urgent');
+          this.speaker.say(launch ? [launch, line] : line, 'urgent');
           return true;
         });
-      if (!hint) this.speaker.say(COMPUTER.launch, 'urgent');
+      if (!hint && launch) this.speaker.say(launch, 'urgent');
       // online the round's mode is known once the lead tells it (see arriveInRound)
       if (mode === 'solo') this.briefRound();
       this.broadcastOpened = false;
@@ -4331,12 +4336,18 @@ export class Game implements OnlineGame {
     return point;
   }
 
+  /** Nicole's line at a moment that comes again and again, if she says one (see sound/chatter). */
+  private sayChatter(moment: ChatterMoment, urgency: 'urgent' | 'chatter' = 'urgent') {
+    const line = this.chatter.line(moment, wallClock());
+    if (line) this.speaker.say(line, urgency);
+  }
+
   /** The next clone only boots after the Host has watched an ad. */
   private sponsorBreak() {
     const me = this.me!;
     this.input.steerWithMouse(false);
     this.hud.show(false);
-    this.speaker.say(pick(SPONSOR_BREAK), 'urgent');
+    this.sayChatter('death');
     // the kill again and again behind the ad, until the next clone boots
     this.killcam.again();
     const n = me.kills;
@@ -4344,7 +4355,7 @@ export class Game implements OnlineGame {
     const lost = me.deaths === 1 ? t('{n} clone lost', { n: me.deaths }) : t('{n} clones lost', { n: me.deaths });
     const clones = this.survival ? `${lost} · ${clonesLeftText(clonesLeft(me))}` : lost;
     this.sponsors.show(this.deathCause, t('This round: {kills} · {points} pts · {clones}', { kills, points: me.score, clones }), () => {
-      this.speaker.say(pick(SPONSOR_HAPPY), 'urgent');
+      this.sayChatter('reprint');
       this.killcam.stop();
       this.hud.show(true);
       this.respawn(this.me!);
@@ -4430,7 +4441,7 @@ export class Game implements OnlineGame {
     this.renderScoreboard();
     $('results-next').textContent = this.trialOf ? this.judgeTrial() : '';
     $('again').innerHTML = `${t('Back to hangar')} <kbd>Enter</kbd>`;
-    this.speaker.say(COMPUTER.roundOver, 'urgent');
+    this.sayChatter('roundOver');
     this.setScreen('results');
   }
 
@@ -4683,7 +4694,7 @@ export class Game implements OnlineGame {
       this.crowd.finale();
       this.renderScoreboard();
       $('again').textContent = t('Leave tournament');
-      this.speaker.say(COMPUTER.roundOver, 'urgent');
+      this.sayChatter('roundOver');
     }
     $('results').hidden = this.state !== 'playing';
     const seconds = Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time));
@@ -5368,7 +5379,8 @@ export class Game implements OnlineGame {
       const side = 1 - event.team;
       this.hud.flashMessage(now, t('{side} captures · {score}', { side: t(TEAM_NAMES[side]), score: this.flagScore() }), 4);
       if (ship) this.announce(pick(ANNOUNCER_CAPTURE), ship, true);
-      this.speaker.say(side === me.team ? COMPUTER.captured : COMPUTER.theyCaptured, 'urgent');
+      if (side === me.team) this.sayChatter('captured');
+      else this.speaker.say(COMPUTER.theyCaptured, 'urgent');
       if (ship === me) this.moment('capture');
       this.fanfare();
     }

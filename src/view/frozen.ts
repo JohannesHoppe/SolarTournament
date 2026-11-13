@@ -10,7 +10,7 @@ import type { Surface } from './surfaces';
  * The atlas the world ship's frozen dead wear (see world/derelict): a sheet of FROZEN_COLUMNS by
  * FROZEN_ROWS cells, each a tile of what a body is made of, all of it rimed with the frost that grew
  * on it in the vacuum: everyday cloth (white, the instance's color tints it), a work suit's coarse
- * cloth with a reflective band, skin the cold took, hair with ice crystals caught in it, an old EVA
+ * cloth with a reflective band, skin the cold took, hair with ice crystals caught in it, an emergency
  * suit's off-white panels, and a helmet's visor cracked from a point. Drawn once from a fixed seed,
  * on canvases (see view/surfaces for the hulls' surfaces); empty textures where nothing can be
  * drawn (the unit tests run in Node).
@@ -269,7 +269,7 @@ export function frozenUv(geometry: THREE.BufferGeometry, cell: FrozenCell): THRE
  * opaque parts and the hair and eyebrows cut out by their alpha. The frost lies in the shader over
  * them (see frostMaterial).
  */
-export const FROZEN_FIGURES = 8;
+export const FROZEN_FIGURES = 14;
 /** A figure's meters in world units. */
 const UNITS_PER_METER = 20;
 /**
