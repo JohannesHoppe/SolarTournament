@@ -20,6 +20,7 @@ import { callisto, callistoBeyond } from './valhalla';
 import { BATTLE_GROUND_HALF, battleHeight } from './battlefield';
 import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { crackBeyond, europa } from './lineae';
+import { CRACK_JUPITER } from './crack';
 import { io } from './flux';
 import { ganymede } from './yards';
 import { hazeBackdrop, hazeDeck } from './kraken';
@@ -865,7 +866,7 @@ export class Landmarks {
     this.scenes.set('callisto', this.underJupiter(callisto(), JUPITER_AT, JUPITER_SIZE));
     this.scenes.set('valhalla', this.underJupiter(callistoBeyond(BATTLE_GROUND_HALF.x, battleHeight), JUPITER_AT, JUPITER_SIZE));
     this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
-    this.scenes.set('crack', this.underJupiter(crackBeyond(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
+    this.scenes.set('crack', this.underJupiter(crackBeyond(), CRACK_JUPITER, EUROPA_JUPITER_SIZE));
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
@@ -897,6 +898,8 @@ export class Landmarks {
     const shown = arena.scenery ?? arena.id;
     for (const [id, scene] of this.scenes) scene.visible = id === shown;
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
+    // the planets in the sky lit from where the arena's sun stands (a place's own, as on the Crack)
+    for (const material of this.timed) material.uniforms.sun?.value.copy(arena.sun.direction ?? SUN_DIRECTION);
     if (arena.id === 'giant') this.jupiter.shine();
     else this.jupiter.calm();
   }
