@@ -13,7 +13,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `wide.ts` | Lines 3 pixels wide for the flight computer's projection (the plane's grid and drops, the orbit, the arena edge's grid takes the same width): each segment a quad turned to the screen, cut at the near plane; `setWideLines` sets the picture's size once a frame |
 | `orbitpath.ts` | The orbit the readout sees (ORBIT READY, STABLE ORBIT) drawn into space: the whole ellipse free drift would fly about the well, an azure line over everything; `orbitpath.test.ts` flies a turn about the hole along it |
 | `radar.ts` | The radar sphere on a canvas |
-| `effects.ts` | Particles and laser beams, pooled, fading in a planet's haze; a cheaper picture emits a share of the particles; the maneuvering thrusters' puffs, laid anew each frame at the firing nozzles, fewer points on a cheaper picture |
+| `effects.ts` | Particles and laser beams, pooled, fading in a planet's haze; an explosion a flash, a gas shell going clear and sparks flying straight in vacuum, fire and smoke billowing only in an arena's air; a cheaper picture emits a share of the particles; the maneuvering thrusters' puffs, laid anew each frame at the firing nozzles, fewer points on a cheaper picture |
 | `killcam.ts` | Records the last seconds and replays the own clone's death in slow motion, each ship put between the two kept frames around the moment shown (tested in `killcam.test.ts`) |
 | `clip.ts` | The kill clip: the canvas's picture and the game's sound recorded for a few seconds into a short video, handed to the device's share sheet or saved |
 | `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, looking along the nose |

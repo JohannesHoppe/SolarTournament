@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { contact, IMMOVABLE, MASS, share, type Body } from '../world/bodies';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
-import { pow } from '../detmath';
 import { METERS_PER_UNIT } from './flight';
 
 /** Impacts slower than this (units/s) only scratch the paint. */
@@ -44,6 +43,21 @@ export function bump(a: Body, b: Body, normal: THREE.Vector3, restitution = REST
 
 /** The hull an impact this fast (units/s) takes. */
 export const impactDamage = (approach: number) => Math.max(0, approach - SAFE_IMPACT) * IMPACT_DAMAGE;
+
+/**
+ * One rule for every hull meeting a body: what crushes a hull is the change of speed it takes,
+ * so the blow it feels is the closing speed times the other body's share of their masses
+ * (`other` / (`mass` + `other`); rock, a ring or anything anchored is IMMOVABLE and gives the
+ * whole closing speed, a body as heavy as the ship half of it, a light plate a few percent),
+ * times where it lands (`zone`, see RAM_ZONE; 1 where the pair knows no zone), taken through the
+ * rock's curve (impactDamage). Rock is this rule with a share of one.
+ */
+export function feltBlow(closing: number, mass: number, other: number, zone = 1): number {
+  return closing * share(mass, other) * zone;
+}
+
+/** The hull points a hull of `mass` takes meeting a body of `other` at `closing` (units/s), struck where `zone` says (see feltBlow). */
+export const blowDamage = (closing: number, mass: number, other: number, zone = 1) => impactDamage(feltBlow(closing, mass, other, zone));
 
 /**
  * A hull punching through a sheet of junk (see strikeJunk) is dented by the plug it tears out:
@@ -114,26 +128,22 @@ export function strikeJunk(build: JunkBuild, local: THREE.Vector3, ship: Body, p
  */
 export const RAM_SAFE = 300;
 /**
- * A ram's blow grows with the square of how much faster than RAM_SAFE the ships close: the
- * square of that excess over RAM_SCALE (units/s, about 11 m/s) in hull points, as a rock would
- * deal it. So the jostling of a pack (20 to 60 m/s) costs a few points, while a ram at full
- * speed wrecks: RAM_SCALE is set so that two noses meeting at 215 m/s (two ships at full speed
- * head on) both go down.
+ * A ram is a hull meeting a body like any other (see feltBlow): two interceptors of the same
+ * mass, so each feels half the closing speed, times where it is struck (RAM_ZONE), through the
+ * rock's curve. Where it strikes decides what breaks, as with the laser: the armored nose takes
+ * less of the blow, a flank all of it and a shake of its thrusters (RAM_THRUSTERS of their
+ * health per point of hull), the open drive more than all of it and loses a hundredth of its
+ * thrust per point of hull it takes (RAM_DRIVE), its reactor going critical once nothing is
+ * left. A ram that hurts at all hurts at least as much as a laser's hit (RAM_LEAST hull, and a
+ * fifth of the drive's thrust from behind).
  *
- * Where it strikes decides what breaks, as with the laser: the armored nose takes RAM_NOSE of
- * the blow, a flank RAM_FLANK and a shake of its thrusters (RAM_THRUSTERS of their health per
- * point of hull), the open drive all of it and loses as much of its thrust as RAM_DRIVE points
- * of blow take away all of it (the reactor goes from about 125 m/s on). A ram that hurts at all
- * hurts at least as much as a laser's hit (RAM_LEAST hull, and a fifth of the drive's thrust
- * from behind).
- *
- * At 60 m/s (the dodge kicked into a flank) the blow is about 17: a flank loses 8 hull points;
- * into a drive, 17 points and a fifth of its thrust. An overdrive's shove into a
- * drive or a flank (about 200 m/s closing) kills the ship ahead and costs the rammer's nose about 86.
+ * So a ram hurts from 25 m/s of closing (half of it the felt 12.5 m/s that scratches nothing on
+ * rock). At 60 m/s (the dodge kicked into a flank) a flank loses 29 hull points; a nose into a
+ * nose at 100 m/s costs each 38; two noses meeting faster than 207 m/s (two ships at full
+ * speed head on) both go down; from 112 m/s into a drive its reactor goes critical; an
+ * overdrive's shove into a flank (about 200 m/s closing) kills the ship ahead.
  */
-const RAM_SCALE = 219;
-const RAM_NOSE = 0.3;
-const RAM_FLANK = 0.5;
+export const RAM_ZONE: Readonly<Record<'nose' | 'flank' | 'drive', number>> = { nose: 0.7, flank: 1, drive: 1.3 };
 const RAM_THRUSTERS = 0.01;
 const RAM_DRIVE = 100;
 const RAM_LEAST = 2;
@@ -147,9 +157,8 @@ export type RamZone = 'nose' | 'flank' | 'drive';
 /** What a ram closing at `closing` (units/s) does to a ship struck in `zone`: hull points, and shares of the drive's and the thrusters' health. */
 export function ramDamage(closing: number, zone: RamZone): { hull: number; drive: number; thrusters: number } {
   if (closing <= RAM_SAFE) return { hull: 0, drive: 0, thrusters: 0 };
-  const blow = pow((closing - RAM_SAFE) / RAM_SCALE, 2);
-  if (zone === 'drive') return { hull: Math.max(RAM_LEAST, blow), drive: Math.max(RAM_LEAST_DRIVE, blow / RAM_DRIVE), thrusters: 0 };
-  const hull = Math.max(RAM_LEAST, blow * (zone === 'nose' ? RAM_NOSE : RAM_FLANK));
+  const hull = Math.max(RAM_LEAST, blowDamage(closing, MASS.ship, MASS.ship, RAM_ZONE[zone]));
+  if (zone === 'drive') return { hull, drive: Math.max(RAM_LEAST_DRIVE, hull / RAM_DRIVE), thrusters: 0 };
   return { hull, drive: 0, thrusters: zone === 'flank' ? Math.min(1, hull * RAM_THRUSTERS) : 0 };
 }
 

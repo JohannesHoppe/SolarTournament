@@ -6,8 +6,8 @@ import { junkMass } from './junk';
  * Bodies: everything a rope pulls or a bump shoves has a position, a velocity and a mass (kg).
  * What two bodies do to each other through a rope (see rope) or a contact (see contact) is
  * split by their masses, so a light body is thrown about and a heavy one barely moves; a body
- * of infinite mass (IMMOVABLE) does not move at all. Whether a contact harms is not decided
- * here: each pair has its own rule where it is used.
+ * of infinite mass (IMMOVABLE) does not move at all. What a contact does to a ship's hull is
+ * one rule for every body it meets, by the same shares (see ship/impact, feltBlow).
  */
 export interface Body {
   readonly position: THREE.Vector3;
@@ -24,7 +24,7 @@ export const IMMOVABLE = Infinity;
  * reactor canister 14 m long) a quarter of that; a sponsor probe 60 kg (solar wings, a dish and
  * a beacon on a light frame: a hook's winch has it in at a jerk, and its thrusters, about 20 kN,
  * throw it about at some 33 g, see game/items); a torpedo a
- * tonne (its 20 g motor makes about 196 kN); a piece of wreckage five tonnes; Scout One, the
+ * tonne (its 20 g motor makes about 196 kN); wreckage what it is (see world/wrecks: a hulk of 24 t and plates by their area); Scout One, the
  * campaign's scout, 12 t; the President's
  * battleship (1,150 m) 4.5 million t: a carrier of today, 330 m long, displaces some 100,000 t,
  * and a mass goes with the cube of the length, (1,150 / 330)³ × 100,000 t ≈ 4.2 million t,
@@ -37,7 +37,6 @@ export const MASS = {
   core: 15_000,
   probe: 60,
   torpedo: 1_000,
-  wreck: 5_000,
   battleship: 4.5e9,
 } as const;
 
