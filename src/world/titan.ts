@@ -23,8 +23,12 @@ export const TITAN_FALL = 27;
 /** Titan's radius (units, 2,575 km): the haze's deck is a sphere of it about Titan's middle, so the deck curves away as Titan does. */
 export const TITAN_RADIUS = 2575 * KM;
 
-/** Titan's air: its deck through the field's middle, a sphere of Titan's radius (see Air). */
-export const TITAN_AIR: Air = { center: new THREE.Vector3(0, -TITAN_RADIUS, 0), radius: TITAN_RADIUS };
+/**
+ * Titan's air: its deck through the field's middle, a sphere of Titan's radius (see Air). Its
+ * haze is nitrogen and methane with soot-like organic specks, no ammonia and no sulfur: nothing
+ * in it crusts over a ship's radiators (see Air.clogs), so only the air's own heat counts.
+ */
+export const TITAN_AIR: Air = { center: new THREE.Vector3(0, -TITAN_RADIUS, 0), radius: TITAN_RADIUS, clogs: false };
 
 /** The sea's surface under the field's middle (units, 2 km under the deck): still, glassy, liquid methane. */
 export const SEA = -2 * KM;

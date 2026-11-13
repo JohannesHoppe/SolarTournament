@@ -1,13 +1,13 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
-import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
+import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
 import * as THREE from 'three';
 import { CRACK_TRACK } from '../world/crack';
 import { BOOST_HEAT, BOOST_RECHARGE, BURNOUT_DAMAGE, BURNOUT_HEAT, BURNOUT_SECONDS, DRIVE_HEAT_SHED } from '../ship/driveheat';
-import { THROAT_TRACK } from '../world/throat';
+import { THROAT_AIR, THROAT_TRACK } from '../world/throat';
 import { TITAN_AIR, TITAN_FALL } from '../world/titan';
 import { bendRadius, RacingLine } from '../game/racingline';
 import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
@@ -38,6 +38,13 @@ const km = (units: number) => meters(units) / 1000;
 /** A track's length along its points (units). */
 const lengthOf = (points: readonly THREE.Vector3[]) => points.reduce((sum, point, i, all) => sum + (i ? point.distanceTo(all[i - 1]) : 0), 0);
 /** The tightest bend of a track's racing line (units, radius), measured as the race's bend test measures it: over 50 m either side of every point 20 m apart. */
+/** How much shorter the Throat's canyon is than the strait's own way round the Mesa (units). */
+function throatShortcut(): number {
+  const [branch] = THROAT_TRACK.branches;
+  const { points } = THROAT_TRACK;
+  return lengthOf(points.slice(branch.split, branch.join + 1)) - lengthOf([points[branch.split], ...branch.points, points[branch.join]]);
+}
+
 function tightestBend(track: { points: readonly THREE.Vector3[]; gates: readonly number[] }): number {
   const line = new RacingLine(track.points, false, undefined, undefined, track.gates);
   const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -89,6 +96,9 @@ export const FROM_CODE: Record<string, number> = {
   // the Throat's tightest bend, and the autopilot's tightest turn at the limit in the air over its water and in a vacuum
   throatBend: Math.round(meters(tightestBend(THROAT_TRACK)) / 10) * 10,
   throatCarve: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: densityIn(TITAN_AIR, THROAT_TRACK.points[0]) })) / 5) * 5,
+  // how far the eye reaches over the Throat's water, and how much shorter its canyon is than the Loop round the Mesa
+  throatSight: Math.round(km(reachAt(altitudeIn(THROAT_AIR, THROAT_TRACK.points[0]), SIGHT_DEPTH, clearOf(THROAT_AIR)))),
+  throatShortcut: Math.round(meters(throatShortcut()) / 100) * 100,
   vacuumTurn: Math.round(meters(turnRadius(MAX_SPEED)) / 5) * 5,
   valhallaGravity: Math.round((meters(CALLISTO_FALL) / 9.81) * 100) / 100,
   laps: LAPS,

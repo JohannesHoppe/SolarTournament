@@ -23,6 +23,8 @@ import { crackBeyond, europa } from './lineae';
 import { io } from './flux';
 import { ganymede } from './yards';
 import { hazeBackdrop, hazeDeck } from './kraken';
+import { throatBeyond } from './strait';
+import { THROAT_GROUND_HALF } from './throat';
 import { SATURN_AT, SATURN_SIZE } from './titan';
 import { plumeDensity, SATURN_AT as ENCELADUS_SATURN_AT, SATURN_SIZE as ENCELADUS_SATURN_SIZE } from './enceladus';
 import { enceladus, ENCELADUS_JETS, GRAINS as JET_GRAINS, jets, type Jets } from './plumes';
@@ -867,7 +869,7 @@ export class Landmarks {
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
-    this.scenes.set('throat', this.titan());
+    this.scenes.set('throat', this.titan().add(throatBeyond(THROAT_GROUND_HALF)));
     this.scenes.set('enceladus', this.enceladus());
     this.scenes.set('miranda', miranda());
     this.scenes.set('pluto', pluto());
