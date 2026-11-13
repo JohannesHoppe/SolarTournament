@@ -83,6 +83,46 @@ describe('the derelict', () => {
     }
   });
 
+  it('keeps hundreds of its dead where a pilot sees them: in the mist, on the torn plating, across the gap', () => {
+    const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    expect(wreck.count).toBeGreaterThanOrEqual(300);
+    const at = new THREE.Vector3();
+    let inMist = 0;
+    let caught = 0;
+    for (let i = 0; i < wreck.count; i++) {
+      wreck.deadAt(i, at);
+      if (mistDensity(at) > 0.2) inMist++;
+      if (wreck.jets.some((jet) => jet.from.distanceTo(at) < 1600)) caught++;
+    }
+    // a third or more in the jets' mist, a few dozen at the torn ends
+    expect(inMist).toBeGreaterThan(wreck.count / 3);
+    expect(caught).toBeGreaterThan(20);
+  });
+
+  it('lets a ship knock one of its dead away as the far heavier body: the body flies off at twice the closing speed, the ship keeps its speed', () => {
+    const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    wreck.update(10);
+    const body = wreck.deadAt(0, new THREE.Vector3());
+    // a ship of hit radius 300 units closing at 150 m/s (3000 units/s) along x, just touching it
+    const position = body.clone().add(new THREE.Vector3(-310, 0, 0));
+    const velocity = new THREE.Vector3(3000, 0, 0);
+    expect(wreck.meet(position, velocity, 300, 10)).toBeCloseTo(3000, 6);
+    // the ship loses the body's share: about 0.3 % (90 kg against 60 t)
+    expect(velocity.x).toBeGreaterThan(2990);
+    expect(velocity.x).toBeLessThan(3000);
+    // the body leaves at about twice the closing speed along the line between them
+    wreck.update(11);
+    const flown = wreck.deadAt(0, new THREE.Vector3()).sub(body);
+    expect(flown.x).toBeGreaterThan(5900);
+    expect(flown.x).toBeLessThan(6001);
+    // once away it is not met again by a ship flying on behind it
+    expect(wreck.meet(position.addScaledVector(velocity, 1), velocity, 300, 11)).toBe(0);
+    // a new round (the field's clock run back) finds it where it drifted before
+    wreck.update(5);
+    wreck.update(10);
+    expect(wreck.deadAt(0, new THREE.Vector3()).distanceTo(body)).toBeLessThan(1e-6);
+  });
+
   it('paints its name, motto and registry only in letters its stencil has', () => {
     for (const lettering of Object.values(HULL_PAINT)) {
       expect(stencilable(`${lettering.name ?? ''}${lettering.registry ?? ''}`)).toBe(true);

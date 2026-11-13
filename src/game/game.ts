@@ -4721,6 +4721,24 @@ export class Game implements OnlineGame {
       if (!this.field.weldMotion(weld, this.halves[i])) this.halves[i].identity();
     });
     this.landmarks.moveBreak(this.halves);
+    this.meetDead();
+  }
+
+  private readonly meetScratch = new THREE.Vector3();
+
+  /**
+   * Every ship this browser sees meets the derelict's dead (see Derelict.meet): a body it touches
+   * is knocked away. Looks only: a ship run here keeps its speed but for the body's share, one
+   * another browser runs is not touched, and the own pilot hears a soft knock through the hull.
+   */
+  private meetDead() {
+    if (this.state !== 'playing') return;
+    for (const ship of this.ships) {
+      if (!ship.alive) continue;
+      const velocity = ship.owner === null ? ship.flight.velocity : this.meetScratch.copy(ship.flight.velocity);
+      const closing = this.landmarks.meetDead(ship.flight.position, velocity, ship.radius, this.field.clock);
+      if (closing > 0 && ship === this.me) this.sound.play('clonk', { volume: Math.min(0.6, 0.15 + closing / 6000), rate: 0.45 });
+    }
   }
 
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
