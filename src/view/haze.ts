@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { altitudeIn, HAZE_SHAPE, type Air } from '../world/air';
+import { altitudeIn, clearOf, HAZE_SHAPE, type Air } from '../world/air';
 import { Randomizer } from '../random';
 import { exp } from '../detmath';
 
@@ -91,6 +91,8 @@ function cloudNoise(): THREE.DataTexture {
 export const HAZE_UNIFORMS = {
   hazeCenter: { value: new THREE.Vector3() },
   hazeRadius: { value: 0 },
+  /** The haze's extinction (per unit) of the arena's air: world/air's HAZE times the air's clear (see Air.clear). */
+  hazeExtinction: { value: HAZE_SHAPE.haze },
   hazeDeck: { value: new THREE.Color() },
   hazeDeep: { value: new THREE.Color() },
   hazeFlash: { value: new THREE.Vector4() },
@@ -145,6 +147,7 @@ const CLOUD_GLSL = /* glsl */ `
 export const HAZE_GLSL = /* glsl */ `
   uniform vec3 hazeCenter;
   uniform float hazeRadius;
+  uniform float hazeExtinction;
   uniform vec3 hazeDeck;
   uniform vec3 hazeDeep;
   uniform vec4 hazeFlash;
@@ -162,7 +165,7 @@ export const HAZE_GLSL = /* glsl */ `
     float rise = to - from;
     float mean = abs(rise) < 10.0 ? hazeDensity(0.5 * (from + to)) : (hazeColumn(to) - hazeColumn(from)) / rise;
     vec3 ray = point - eye;
-    float depth = ${f(HAZE_SHAPE.haze)} * length(ray) * mean;
+    float depth = hazeExtinction * length(ray) * mean;
     float deep = min(mix(from, to, 0.5 / max(depth, 1.0)), 0.0);
     float cloud = 0.0;
     if (hazeClouds.w > 0.5 && from < 0.0) {
@@ -170,7 +173,7 @@ export const HAZE_GLSL = /* glsl */ `
       float far = length(ray);
       vec3 view = ray / max(far, 1.0);
       vec3 up = normalize(eye - hazeCenter);
-      float gather = 1.0 / (${f(HAZE_SHAPE.haze)} * hazeDensity(from));
+      float gather = 1.0 / (hazeExtinction * hazeDensity(from));
       float near = min(${f(SAMPLE_NEAR)} * gather, far);
       cloud = hazeCloud(eye + view * near, up, from + dot(view, up) * near);
       if (hazeClouds.w > 1.5) {
@@ -270,6 +273,7 @@ export class Haze {
     if (!air) return;
     HAZE_UNIFORMS.hazeCenter.value.copy(air.center);
     HAZE_UNIFORMS.hazeRadius.value = air.radius;
+    HAZE_UNIFORMS.hazeExtinction.value = HAZE_SHAPE.haze * clearOf(air);
     if (deck) HAZE_UNIFORMS.hazeDeck.value.copy(deck);
     if (deep) HAZE_UNIFORMS.hazeDeep.value.copy(deep);
   }
@@ -282,14 +286,15 @@ export class Haze {
       return shade;
     }
     const altitude = altitudeIn(this.air, eye);
-    shade.sun = exp(-hazeAbove(altitude) / Math.max(sunHeight, 0.05));
-    shade.sky = skyLight(altitude);
+    const clear = clearOf(this.air);
+    shade.sun = exp(-hazeAbove(altitude, clear) / Math.max(sunHeight, 0.05));
+    shade.sky = skyLight(altitude, clear);
     return shade;
   }
 }
 
-/** The haze from an altitude (units) straight up to space: the optical depth of the air and the deck above it (see world/air), leaving out the faint haze over the deck. */
-const hazeAbove = (altitude: number) => (altitude >= 0 ? 0 : HAZE_SHAPE.deck + HAZE_SHAPE.haze * HAZE_SHAPE.scale * (exp(-altitude / HAZE_SHAPE.scale) - 1));
+/** The haze from an altitude (units) straight up to space, in an air of `clear` (see Air.clear): the optical depth of the air and the deck above it (see world/air), leaving out the faint haze over the deck. */
+const hazeAbove = (altitude: number, clear: number) => (altitude >= 0 ? 0 : HAZE_SHAPE.deck + HAZE_SHAPE.haze * clear * HAZE_SHAPE.scale * (exp(-altitude / HAZE_SHAPE.scale) - 1));
 
-/** The share of the sky's diffuse light that reaches an altitude (units) through the haze above it. */
-export const skyLight = (altitude: number) => SKY_FLOOR + (1 - SKY_FLOOR) * exp(-hazeAbove(altitude) / SKY_SPREAD);
+/** The share of the sky's diffuse light that reaches an altitude (units) through the haze above it, in an air of `clear` (see Air.clear). */
+export const skyLight = (altitude: number, clear = 1) => SKY_FLOOR + (1 - SKY_FLOOR) * exp(-hazeAbove(altitude, clear) / SKY_SPREAD);

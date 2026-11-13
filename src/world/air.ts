@@ -11,7 +11,19 @@ import { cbrt, exp, pow } from '../detmath';
 export interface Air {
   center: THREE.Vector3;
   radius: number;
+  /**
+   * The share of the haze's extinction (see HAZE) under the deck, 1 unless an air is drawn
+   * clearer: the eye, the radar, the lock and the laser reach 1/clear as far in it, and the
+   * shaders' fog sums it alike (see view/haze). The density, and with it the drag, the heat and
+   * the lift, stays as it is.
+   */
+  clear?: number;
+  /** Whether its clouds crust over the radiators (see clogging): Jupiter's ammonia and sulfur do; Titan's methane and nitrogen do not. */
+  clogs?: boolean;
 }
+
+/** An air's share of the haze's extinction (see Air.clear). */
+export const clearOf = (air: Air) => air.clear ?? 1;
 
 /**
  * The air's density, relative to its density right under the cloud deck, grows by e every
@@ -91,7 +103,8 @@ export function airBurn(hull: { heat: number; overheated: boolean; readonly cool
 }
 
 /**
- * Under the deck the clouds' ammonia and sulfur crust over the radiators: CLOG_SECONDS (s) to
+ * Under the deck of an air whose clouds clog (Jupiter's, see Air.clogs) their ammonia and sulfur
+ * crust over the radiators: CLOG_SECONDS (s) to
  * clog them through just under the deck, faster the deeper, twice as fast from CLOG_DEPTH (units,
  * 300 m) down, so a ship deep down still has the time to climb out; over the deck the crust boils
  * off in UNCLOG_SECONDS (s), quickly, so a ship that made it out is not burnt over the clouds. Clogged through, they shed
@@ -175,7 +188,7 @@ export function opticalDepth(air: Air, from: THREE.Vector3, to: THREE.Vector3): 
   const length = from.distanceTo(to);
   const a = altitudeIn(air, from);
   const b = altitudeIn(air, to);
-  const haze = HAZE * length * meanDensity(a, b);
+  const haze = HAZE * clearOf(air) * length * meanDensity(a, b);
   if (length < 1e-6 || (a <= 0 && b <= 0)) return haze;
   const crossing = deckCrossing(air, from, line.subVectors(to, from).divideScalar(length));
   if (a > 0 !== b > 0) return haze + DECK_DEPTH * slant;
@@ -240,8 +253,8 @@ export function dragOn(air: Air, position: THREE.Vector3, velocity: THREE.Vector
   return acceleration.addScaledVector(velocity, -lost / (speed * dt));
 }
 
-/** How far a sense reaching `depth` (see SIGHT_DEPTH) sees through level haze at an altitude under the deck (units), the planet's curve left out: for the docs. */
-export const reachAt = (altitude: number, depth: number) => depth / (HAZE * density(altitude));
+/** How far a sense reaching `depth` (see SIGHT_DEPTH) sees through level haze at an altitude under the deck (units), the planet's curve left out, in an air of `clear` (see Air.clear): for the docs. */
+export const reachAt = (altitude: number, depth: number, clear = 1) => depth / (HAZE * clear * density(altitude));
 
 /** The air's drag at a place and speed (units/s²), for the readouts and the docs. */
 export const dragAt = (altitude: number, speed: number) => DRAG * density(altitude) * speed * speed;
@@ -310,7 +323,7 @@ export function airStep(ship: AirHull, air: Air, dt: number, full: number): numb
   const altitude = altitudeIn(air, ship.flight.position);
   // a hull short of a fin cannot hold its course in air
   finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
-  ship.clog = clogging(ship.clog, altitude, dt);
+  ship.clog = air.clogs === false ? 0 : clogging(ship.clog, altitude, dt);
   const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
   return heat < 1e-4 ? 0 : airBurn(ship, heat, dt, full);
 }

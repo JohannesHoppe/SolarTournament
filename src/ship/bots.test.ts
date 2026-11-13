@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { debrisSet } from '../world/shapes';
+import type { JunkBuild } from '../world/junk';
 import { pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
@@ -199,13 +201,15 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(fly(false)).toBeGreaterThan(gliding * 2);
   });
 
-  it('takes junk a hull punches through for no danger, and steers off the junk that stops it', () => {
+  it('takes junk a hull punches through for no danger, flies round a tank whose walls would dent it hard while that costs little, and steers off the junk that stops it', () => {
     // a probe 2 km beyond a piece of junk on the bot's way (`type`: a fairing's shell, a stack of satellites; none for an empty field)
-    const fly = (type: number | null) => {
+    const fly = (type: number | null, across = false) => {
       const junk = junkField();
-      junk.generate({ key: `junk-${type}`, seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: type === null ? [] : [{ kind: 'debris', type, scale: 1, position: new THREE.Vector3(), orientation: new THREE.Quaternion(), solid: false }] });
+      // `across`: the piece's long axis turned across the bot's way, so the bot meets its middle
+      const orientation = across ? new THREE.Quaternion(0, Math.SQRT1_2, 0, Math.SQRT1_2) : new THREE.Quaternion();
+      junk.generate({ key: `junk-${type}-${across}`, seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: type === null ? [] : [{ kind: 'debris', type, scale: 1, position: new THREE.Vector3(), orientation, solid: false }] });
       const me = ship('Kessler', at(-40000), at(1));
-      me.flight.velocity.set(3000, 0, 0);
+      me.flight.velocity.set(4000, 0, 0);
       const bot = new Bot(me, evenSkills(0.5));
       bot.lure = at(40000);
       let inside = 0;
@@ -222,6 +226,15 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(fairing.inside).toBeGreaterThan(0);
     // the stack (template 3) is core through and through: the bot steers off its way
     expect(fly(3).path).not.toEqual(open.path);
+    // a stage's tank (template 1) met across its middle is sheet: flown through slowly, as here, and flown round at speed while it lies far enough ahead (see flyRound)
+    expect(fly(1, true).inside).toBeGreaterThan(0);
+    const [wing, fairingShell, tankWalls] = [0, 2, 1].map((i) => debrisSet().near[i].userData.junk as JunkBuild);
+    // at 200 m/s, a stage's tank seen 2 s ahead is flown round; a wing's panels and a fairing's shell are flown through, and a tank too close or met slowly too
+    expect(flyRound(tankWalls, 4000, 8000)).toBe(true);
+    expect(flyRound(tankWalls, 4000, 4000)).toBe(false);
+    expect(flyRound(tankWalls, 1500, 8000)).toBe(false);
+    expect(flyRound(wing, 5000, 20000)).toBe(false);
+    expect(flyRound(fairingShell, 5000, 20000)).toBe(false);
   });
 
   it('reads who hunts whom from the noses it sees, not from the other bots\' minds', () => {

@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, BRIDGE_TYPE, LINEAE_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -26,7 +26,7 @@ import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMED
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, fightGroundPlacement as lineaeGround, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { bridgePlacements, CRACK_JUPITER, CRACK_SUN, CRACK_TRACK, crackGroundPlacement, FINISH_MARK, stationPlacements as crackStations } from './crack';
-import { THROAT_FINISH, throatGroundPlacement, THROAT_TRACK } from './throat';
+import { landmarkPlacements, THROAT_AIR, THROAT_FINISH, throatGroundPlacement, THROAT_PREVIEW, THROAT_TRACK } from './throat';
 import { BOUNDS as VALHALLA_BOUNDS, battlefieldPlacements, battleProbe, PAD_AT as VALHALLA_PADS, STEADFAST_MARK } from './battlefield';
 import type { Bounds } from './arena';
 import { WALL_TOP, wallPlacement } from './wall';
@@ -1247,7 +1247,7 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
     id: 'throat',
     name: msg('The Throat'),
     tagline: msg("Through the winding strait of Titan's methane sea, low under the orange haze, carving in its air."),
-    // the strait's sea, banks and bluffs along 22 km, under Titan's air, and the track
+    // the strait's sea, banks, bluffs and the Mesa under Titan's air, drawn clearer, its landmarks, and the track with its branch through the canyon
     layout: {
       key: 'throat',
       seed: 9500,
@@ -1259,10 +1259,10 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       inner: 0,
       spin: 0,
       toughness: 800,
-      placements: [throatGroundPlacement(THROAT_TYPE)],
+      placements: [throatGroundPlacement(THROAT_TYPE), ...landmarkPlacements(STRAIT_TYPES)],
       fall: TITAN_FALL,
-      air: TITAN_AIR,
-      course: { form: 'track', points: THROAT_TRACK.points, gates: THROAT_TRACK.gates },
+      air: THROAT_AIR,
+      course: { form: 'track', points: THROAT_TRACK.points, gates: THROAT_TRACK.gates, branches: THROAT_TRACK.branches },
     },
     cooling: 1,
     storms: false,
@@ -1270,8 +1270,8 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
     sun: { size: 16000, intensity: 3, color: 0xfff0dd },
     mood: MOODS.throat,
     hazeLight: { deck: TITAN_DECK_LIGHT, deep: TITAN_DEEP_LIGHT },
-    // low over the water in the strait, looking along it
-    preview: { from: [-1500, -4600, 40000], at: [1200, -5400, 0] },
+    // low over the water before the Esses, looking along the strait
+    preview: THROAT_PREVIEW,
     references: [
       { glyph: 'planet', label: msg('Finish'), position: THROAT_FINISH, distance: true },
       { glyph: 'planet', label: msg('Saturn'), position: TITAN_SATURN, distance: false },

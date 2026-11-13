@@ -8,7 +8,8 @@ import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
-import { onCore } from '../world/junk';
+import { onCore, plugMass, type JunkBuild } from '../world/junk';
+import { sheetDamage } from './impact';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
 import { exp, hypot } from '../detmath';
 
@@ -130,6 +131,19 @@ const RESPAWN_GAP = 1;
 const AVOID_HORIZON = 5;
 /** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
 const AVOID_TUBE = 3;
+/**
+ * A sheet of junk whose plug would dent the hull this much at the bot's speed (hull points, see
+ * sheetDamage: a stage's tank walls at speed, never a wing's panels) is worth flying round, while
+ * it lies at least SHEET_ROOM seconds ahead, where a turn round it costs little; closer, the bot
+ * punches through it.
+ */
+const COSTLY_SHEET = 15;
+const SHEET_ROOM = 1.5;
+
+/** Whether a bot flying at `speed` (units/s) flies round a sheet of junk built as `build` lying `distance` ahead (units): its plug would dent the hull COSTLY_SHEET points or more, and it lies SHEET_ROOM seconds or more ahead. */
+export function flyRound(build: JunkBuild, speed: number, distance: number): boolean {
+  return sheetDamage(plugMass(build), speed) >= COSTLY_SHEET && distance >= speed * SHEET_ROOM;
+}
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
 const BURN_THRESHOLD = 500;
 /** Angular aim error at an aim of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
@@ -868,10 +882,15 @@ export class Bot {
       if (!hit || (overGround && hit.asteroid?.ground)) continue;
       // a sheet of junk (a wing's panels, a fairing, a stage's tank) is none either: the hull punches through it (see world/junk)
       const junk = hit.asteroid?.junk;
-      if (junk && !onCore(junk.build, wayPoint.copy(wayOrigin).addScaledVector(direction, hit.distance).applyMatrix4(hit.asteroid!.inverse))) continue;
+      if (junk && !onCore(junk.build, wayPoint.copy(wayOrigin).addScaledVector(direction, hit.distance).applyMatrix4(hit.asteroid!.inverse)) && !this.roundSheet(junk.build, hit.distance)) continue;
       if (!best || hit.distance < best.distance) best = Object.assign(wayBest, hit);
     }
     return best;
+  }
+
+  /** Whether a sheet of junk built as `build` lying `distance` ahead (units) is worth flying round (see flyRound). */
+  private roundSheet(build: JunkBuild, distance: number): boolean {
+    return flyRound(build, this.ship.flight.velocity.length(), distance);
   }
 
   /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. Returns the ship it gives way to most, or null. */

@@ -8914,7 +8914,19 @@ export class Game implements OnlineGame {
     this.online?.sendStrike(state, this.roundId, ship);
     ship.syncTransform();
     if (ship === this.me) this.lastScrape = now;
-    this.bounceHurts(ship, felt, now, 'junk');
+    if (core) this.bounceHurts(ship, felt, now, 'junk');
+    else if (struck.dent > 0) this.sheetDent(ship, struck.dent, closing, now);
+  }
+
+  /** A plug torn out of a sheet of junk dents the armor of the nose (see sheetDamage): a scrape at a wing, a solid hit at a tank's walls. */
+  private sheetDent(ship: Ship, dent: number, closing: number, now: number) {
+    const status = ship.structural(dent, now);
+    if (ship.isLocal && status !== 'protected') {
+      this.hud.damaged();
+      this.hud.flashMessage(now, t('Impact at {speed} m/s', { speed: Math.round(closing * METERS_PER_UNIT) }), 1.5);
+      this.linkHit(Math.min(1, 0.2 + dent / 60), 0.4);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, null, 'rock', 'junk', closing);
   }
 
   /** The solids besides the field and the battleship (see game/solids): every use below is taken from this one table. */
