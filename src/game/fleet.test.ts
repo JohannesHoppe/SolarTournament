@@ -19,6 +19,7 @@ import { RAMMED, type Asteroid, type AsteroidField, type ShovedState } from '../
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
 import { ramShare } from '../net/plausible';
+import { altitudeIn } from '../world/air';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -464,8 +465,31 @@ describe("the battleship and the field's rock", () => {
     expect(fleet.reaches(fleet.position.clone().setY(RING_SHEET), 1)).toBe(false);
     expect(fleet.reaches(fleet.position.clone().setY(fleet.lane - 1000), 1)).toBe(true);
     expect(new Fleet(23, field).lane).toBeGreaterThan(1600);
-    field.generate(arenaById('giant')!.layout);
-    expect(new Fleet(47, field).lane).toBe(0);
+  });
+
+  it("flies over Jupiter's cloud deck high enough that a ship attacking any part, a battery under the keel too, holds in the clear air over it", () => {
+    const giant = arenaById('giant')!;
+    field.generate(giant.layout);
+    const air = field.air!;
+    const fleet = new Fleet(47, field);
+    // where a ship holds off each part (see siegeFrom), seen from straight along the side the part faces, round the orbit
+    const holdAltitude = (lane: number) => {
+      let lowest = Infinity;
+      for (let k = 0; k < 16; k++) {
+        const angle = (k / 16) * Math.PI * 2;
+        fleet.position.set(cos(angle) * 55000, lane, sin(angle) * 55000);
+        fleet.root.position.copy(fleet.position);
+        fleet.root.updateMatrixWorld(true);
+        for (let zone = 0; zone < fleet.zones.length; zone++) {
+          const hold = fleet.zoneAt(zone).addScaledVector(fleet.zones[zone].face, SIEGE_DISTANCE);
+          lowest = Math.min(lowest, altitudeIn(air, hold));
+        }
+      }
+      return lowest;
+    };
+    expect(holdAltitude(fleet.lane)).toBeGreaterThan(0);
+    // and no higher than it has to: a lane lower sends a hold under the deck
+    expect(holdAltitude(fleet.lane - 1000)).toBeLessThan(1000);
   });
 
   const rings = arenaById('rings')!;
