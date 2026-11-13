@@ -374,8 +374,8 @@ const FIELD_SNAP = 0.5;
 const ANNOUNCER_COOLDOWN = 7;
 /** Nicole names the own passes and the lead at most this often (s of game time). */
 const PLACE_CALL_COOLDOWN = 4;
-/** Song of the menu. The flight school plays no music, so Nicole is heard clearly. */
-const LOUNGE_SEED = 2584;
+/** Song of the menu, a new one each time the page opens (this browser's own, never shared). The flight school plays no music, so Nicole is heard clearly. */
+const LOUNGE_SEED = 1 + Math.floor(Math.random() * 2147483000);
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
 const IDLE_GLITCH_MIN = 5;
 const IDLE_GLITCH_RANGE = 9;
