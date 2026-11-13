@@ -896,6 +896,8 @@ export class Landmarks {
     const shown = arena.scenery ?? arena.id;
     for (const [id, scene] of this.scenes) scene.visible = id === shown;
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
+    // the planets in the sky lit from where the arena's sun stands (a place's own, as on the Crack)
+    for (const material of this.timed) material.uniforms.sun?.value.copy(arena.sun.direction ?? SUN_DIRECTION);
     if (arena.id === 'giant') this.jupiter.shine();
     else this.jupiter.calm();
   }

@@ -527,6 +527,8 @@ const BOOST_CAP = MAX_SPEED + OVERDRIVE_PUSH;
 /** A racing bot's line ahead is measured for its boost over this much to either side of each point (units, 60 m), as the racing line measures its bends (see botBoost). */
 const BEND_SPAN = 1200;
 const BOOST_NOSE_COS = cos(BOOST_NOSE);
+/** A racing bot never boosts with a ship this close ahead on its nose's line (units, 400 m: two seconds of the shove's gain), within twice their hit radii of it. */
+const BOOST_CLEAR = 8000;
 const boostHere = new THREE.Vector3();
 const boostAhead = new THREE.Vector3();
 const boostBeyond = new THREE.Vector3();
@@ -7224,6 +7226,12 @@ export class Game implements OnlineGame {
     const along = line.clear(s + BEND_SPAN, this.field, boostAhead).sub(line.clear(s, this.field, boostHere)).normalize();
     const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
     if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
+    // never into a ship on the nose's line close ahead (the grid's row in front at the start): the shove would ram it
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
+      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return;
+    }
     let straight = true;
     for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
       straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;
