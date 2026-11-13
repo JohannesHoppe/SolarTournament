@@ -12,13 +12,14 @@ import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../wo
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
 /**
- * Comets: now and then a comet crosses the arena, its glowing head first, a swarm of small
- * rocks of ice and dust (its shower) after it, its two harmless tails of gas and dust streaming
- * away from the sun. The head keeps its route, bent only by the
- * arena's massive body, and clears whatever stands in its way: rock breaks, the wreck's hull
- * is shoved aside, ships are run down. The shower is the real danger, a storm of pieces that
- * strike a ship like lasers: the armor shrugs them off, the drive does not. A black hole or
- * Jupiter's depths swallow a comet, its shower after it.
+ * Comets: now and then a comet crosses the arena, its glowing head first, a wide swarm of grit
+ * (its shower) after it, its two harmless tails of gas and dust streaming away from the sun.
+ * The head keeps its route, bent only by the arena's massive body: it runs down ships and what
+ * is lighter than itself, and bursts on the first rock or hull heavier than itself, which takes
+ * its momentum (a rock breaking under the blow). The shower is the real danger, a storm of
+ * grit that strikes a ship like lasers, as hard as its energy: the armor takes it, the drive
+ * does not. A nova core close by breaks the head into blocks. A black hole or Jupiter's depths
+ * swallow a comet, its shower after it.
  *
  * Everything about a comet follows from the room's seed, the round and the field time, which
  * every browser shares: when it comes, from where, how gravity bends it, where each piece of
@@ -1019,7 +1020,7 @@ export class CometView {
     this.flash = new THREE.Sprite(glow.clone());
     // the tails: two ribbons, laid out anew every frame (see layTail), in one geometry
     this.tails = ribbons(TAILS.map((tail) => tail.tint), TAIL_SEGMENTS, TAIL_NEAR, 0);
-    // the shower: small bright pieces of ice and rock, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
+    // the shower: bright knots of grit, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
     this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(KNOT_DRAWN, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.45).multiplyScalar(1.2), toneMapped: false }), SHOWER_PIECES);
     this.pieces.frustumCulled = false;
     const glints = new THREE.BufferGeometry();

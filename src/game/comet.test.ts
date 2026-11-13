@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { sin } from '../detmath';
 import { quaternionAngleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
-import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_MASS, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
+import { BLOCKS, breakHead, headEnd, NOVA_BREAK, COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_MASS, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
 import { SUN_DIRECTION } from '../world/space';
 import { Fleet } from './fleet';
 import { arenaById, ARENAS } from '../world/arenas';
@@ -236,6 +236,42 @@ describe("a comet's head", () => {
       runDown(comet, field, time, (rock) => broken.push(rock.id));
     }
     expect(broken.length).toBe(count);
+  });
+
+  it("breaks apart in a nova core's blast within NOVA_BREAK, alike on every browser, its blocks flying on along its course", () => {
+    const course = new THREE.Vector3(1, 0, 0);
+    const comet = () => makeComet(40, course, new THREE.Vector3(), 9);
+    const [one, two, far] = [comet(), comet(), comet()];
+    const at = 38;
+    const head = headAt(one, at, new THREE.Vector3());
+    // a nova 400 m off breaks it, the same field time on every browser; one 600 m off does not
+    const near = head.clone().add(new THREE.Vector3(0, 8000, 0));
+    expect(NOVA_BREAK).toBeGreaterThan(8000);
+    expect(NOVA_BREAK).toBeLessThan(12000);
+    expect(breakHead(one, at, near)).toBe(true);
+    expect(breakHead(two, at, near)).toBe(true);
+    expect(breakHead(far, at, head.clone().add(new THREE.Vector3(0, 12000, 0)))).toBe(false);
+    expect(one.broken).toBe(at);
+    expect(headEnd(one)).toBe(at);
+    // a head broken once breaks no more
+    expect(breakHead(one, at + 1, headAt(one, at + 1, new THREE.Vector3()))).toBe(false);
+    // its blocks fly on at the head's speed along its course, spread out by the blast at most 25 m/s
+    const a = new Shower(one);
+    const b = new Shower(two);
+    const block = new THREE.Vector3();
+    const other = new THREE.Vector3();
+    expect(a.blockAt(0, at - 0.1, block)).toBeNull();
+    for (let i = 0; i < BLOCKS; i++) {
+      expect(a.blockAt(i, at + 5, block)).not.toBeNull();
+      b.blockAt(i, at + 5, other);
+      expect(block.toArray()).toEqual(other.toArray());
+      const along = block.clone().sub(head).dot(course);
+      expect(along).toBeGreaterThan(COMET_SPEED * 5 - 500 * 5 - 1);
+      expect(block.distanceTo(headAt(one, at + 5, other))).toBeLessThanOrEqual(500 * 5 + 1);
+    }
+    // a block that burst flies no more
+    a.blockStop(3);
+    expect(a.blockAt(3, at + 6, block)).toBeNull();
   });
 
   it("breaks up on the wreck's hull, which takes its momentum the same way on every browser, and a newcomer's snapshot carries it", () => {

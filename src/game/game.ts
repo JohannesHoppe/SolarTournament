@@ -4997,7 +4997,7 @@ export class Game implements OnlineGame {
         // the plume to the side, away from the sun
         const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
-        bot.flee = danger ?? this.cometDanger(ship);
+        bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
@@ -9594,12 +9594,17 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** For a bot close to a comet's route as its head nears or its shower passes: the point of the route nearest it, to fly away from; else null. */
-  private cometDanger(ship: Ship): THREE.Vector3 | null {
+  /**
+   * For a ship close to a comet's route as its head nears (`heed` seconds ahead at most) or its
+   * shower passes: the point of the route nearest it, to fly away from; else null. A bot heeds
+   * the head the more briefly the more daring it is (COMET_WARNING at daring 0, none at 1): a
+   * daring one fights on until the swarm is upon it, and may be caught in it.
+   */
+  private cometDanger(ship: Ship, heed = COMET_WARNING): THREE.Vector3 | null {
     const comet = this.shower?.comet ?? null;
     if (!comet) return null;
     const clock = this.field.clock;
-    routeNearest(comet, ship.flight.position, clock - (SHOWER_LENGTH + COMET_DANGER) / COMET_SPEED, clock + COMET_WARNING, cometAway);
+    routeNearest(comet, ship.flight.position, clock - (SHOWER_LENGTH + COMET_DANGER) / COMET_SPEED, clock + heed, cometAway);
     return cometAway.distanceTo(ship.flight.position) > SHOWER_WIDE + COMET_DANGER ? null : cometAway;
   }
 
