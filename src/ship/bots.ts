@@ -464,6 +464,8 @@ export class Bot {
   siegeClear = false;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
+  /** Set by the game: where a rock's shadow lies, while sunlight its radiators cannot shed heats the bot's hull (the Corona's, see Ship.sunExcess): it flies there, as a Host would. */
+  shade: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
   fleeFrom = '';
   /** Kept by the game: since when (s) its clone holds a nova core, Infinity while it holds none (see novaWorth). */
@@ -688,6 +690,11 @@ export class Bot {
     }
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
+    // out of a sun that burns the hull: into a rock's shadow, slowing as it arrives (it fights on from there)
+    else if (this.shade) {
+      const toShade = local.subVectors(this.shade, me.position);
+      desired.copy(toShade).normalize().multiplyScalar(Math.min(CRUISE_SPEED, toShade.length() * 0.5));
+    }
     const fromHome = this.homeAt ? local.subVectors(me.position, this.homeAt) : local.copy(me.position);
     if (this.flat) fromHome.y = 0;
     const homeDistance = fromHome.length();

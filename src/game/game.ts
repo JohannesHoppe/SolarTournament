@@ -59,7 +59,7 @@ import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaig
 import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
-import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
+import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
@@ -290,6 +290,10 @@ const NOVA_FLASH_MS = 1600;
 const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
 const PLATING_CHARGES = 2;
+/** A bot the sun burns (see Game.shadeFor) heads for a rock's shadow once its heat passes SHADE_HOT (of 100), to a point SHADE_OFF (units, 75 m) beyond the rock's far side from the sun, and stays until it has cooled to SHADE_COOL. */
+const SHADE_HOT = 70;
+const SHADE_COOL = 25;
+const SHADE_OFF = 1500;
 /**
  * Let go by its hook, the own ship flies off along its swing, across its nose. For
  * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
@@ -4988,6 +4992,7 @@ export class Game implements OnlineGame {
         const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
         bot.flee = danger ?? this.cometDanger(ship);
+        bot.shade = this.shadeFor(ship, bot.shade);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
@@ -9174,6 +9179,30 @@ export class Game implements OnlineGame {
    * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
    * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
+  /**
+   * Where a ship sunlight burns (its radiators cannot shed the sun's heat, the Corona's, see
+   * Ship.sunExcess) finds shade: SHADE_OFF beyond the far side of the rock nearest it from the sun,
+   * once its heat passes SHADE_HOT in the sun, and kept (`seeking`, the point it had) until it has
+   * cooled to SHADE_COOL in the shadow; null otherwise. Written into `into` where given.
+   */
+  private shadeFor(ship: Ship, seeking: THREE.Vector3 | null): THREE.Vector3 | null {
+    if (ship.sunlight * SUN_ABSORB <= RADIATE) return null;
+    if (seeking ? ship.heat < SHADE_COOL : ship.inShadow || ship.heat < SHADE_HOT) return null;
+    const into = seeking ?? new THREE.Vector3();
+    let nearest: { radius: number; object: THREE.Object3D } | null = null;
+    let best = Infinity;
+    for (const rock of this.field.asteroids.values()) {
+      if (rock.ground) continue;
+      const distance = rock.object.position.distanceToSquared(ship.flight.position);
+      if (distance < best) {
+        best = distance;
+        nearest = rock;
+      }
+    }
+    if (!nearest) return null;
+    return into.copy(nearest.object.position).addScaledVector(this.space.sunDirection, -(nearest.radius + SHADE_OFF));
+  }
+
   /** Whether a ship at `position` flying along `heading` at `speed` meets the world's ground `distance` ahead hard enough to hurt: faster into it than the hover field's cushion and what rock forgives (see world/hover, groundBlow). */
   private groundHurts(position: THREE.Vector3, heading: THREE.Vector3, speed: number, distance: number): boolean {
     const at = groundAt.copy(position).addScaledVector(heading, distance);
