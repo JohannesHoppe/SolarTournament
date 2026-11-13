@@ -482,6 +482,26 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   hyphens: auto;
 }
 
+/* a race world (shown only while a race is chosen) stands at the top, after "By chance", under its neon mark */
+#solo-arenas > :first-child {
+  order: -2;
+}
+
+.choice-grid button.raced {
+  order: -1;
+}
+
+.race-world {
+  display: block;
+  margin-bottom: 3px;
+  font-family: Michroma, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff3e0;
+  text-shadow: var(--neon-orange);
+}
+
 /* a bot's skills under its name: a label and five pips each, filled as far as it can */
 .skills {
   display: grid;

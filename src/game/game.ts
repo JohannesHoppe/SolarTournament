@@ -349,6 +349,15 @@ const TIP_LINES: ReadonlySet<string> = new Set(Object.values(TIPS));
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Crushed in the depths'), hole: msg('Crossed the event horizon') };
 
+/** An arena on the solo menu and the game master's plate: its name and what it is like; a race world stands first and carries its mark (see RACE_WORLDS). */
+function arenaButton(arena: ArenaProfile): HTMLButtonElement {
+  const raced = RACE_WORLDS.includes(arena);
+  const mark = raced ? `<span class="race-world">${t('Race world')}</span>` : '';
+  const button = Object.assign(document.createElement('button'), { type: 'button', innerHTML: `${mark}${t(arena.name)}<small>${t(arena.tagline)}</small>` });
+  button.classList.toggle('raced', raced);
+  return button;
+}
+
 /** A solo round's arena by chance: a deathmatch half the time over a world, as a tournament's (see arenaOfRound), every other mode one of its arenas. */
 const chanceArena = (mode: RoundMode): ArenaProfile => (mode === 'deathmatch' ? pick(Math.random() < 0.5 ? FIGHT_WORLDS : ARENAS) : pick(arenasFor(mode)));
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -365,8 +374,8 @@ const FIELD_SNAP = 0.5;
 const ANNOUNCER_COOLDOWN = 7;
 /** Nicole names the own passes and the lead at most this often (s of game time). */
 const PLACE_CALL_COOLDOWN = 4;
-/** Song of the menu. The flight school plays no music, so Nicole is heard clearly. */
-const LOUNGE_SEED = 2584;
+/** Song of the menu, a new one each time the page opens (this browser's own, never shared). The flight school plays no music, so Nicole is heard clearly. */
+const LOUNGE_SEED = 1 + Math.floor(Math.random() * 2147483000);
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
 const IDLE_GLITCH_MIN = 5;
 const IDLE_GLITCH_RANGE = 9;
@@ -1211,6 +1220,8 @@ export class Game implements OnlineGame {
   private readonly outAt = new Map<Ship, number>();
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
   private riding: THREE.Vector3 | null = null;
+  /** Whether the menu went to the arena the solo plate showed (see updateMenuCamera): the menu goes back to its own once the plate shows none. */
+  private previewing = false;
   /** The own drive burned in the last frame (see ignite). */
   private burning = false;
   /** When the next dodge is ready (game time, s). */
@@ -2207,7 +2218,11 @@ export class Game implements OnlineGame {
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
     $('solo-arenas').append(
       button(t('By chance'), () => (this.solo.arena = null)),
-      ...TOURNAMENT_ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
+      ...TOURNAMENT_ARENAS.map((arena) => {
+        const element = arenaButton(arena);
+        choose(element, () => (this.solo.arena = arena.id));
+        return element;
+      }),
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
@@ -3103,7 +3118,7 @@ export class Game implements OnlineGame {
   private buildNewRound() {
     $('new-round-arenas').append(
       ...TOURNAMENT_ARENAS.map((arena) => {
-        const button = Object.assign(document.createElement('button'), { type: 'button', innerHTML: `${t(arena.name)}<small>${t(arena.tagline)}</small>` });
+        const button = arenaButton(arena);
         button.dataset.value = arena.id;
         button.addEventListener('click', () => {
           this.roundChoice.arena = arena.id;
@@ -9747,6 +9762,7 @@ export class Game implements OnlineGame {
     const chosen = this.choosingSolo && this.state === 'menu' && this.solo.arena ? arenaById(this.solo.arena) : undefined;
     if (chosen) {
       if (chosen !== this.venue) this.enterArena(chosen);
+      this.previewing = true;
       const at = scratch.fromArray(chosen.preview?.at ?? [0, 0, 0]);
       this.camera.position.fromArray(chosen.preview?.from ?? PREVIEW_FROM).sub(at);
       applyAxisAngle(this.camera.position, UP, this.time * PREVIEW_DRIFT).add(at);
@@ -9756,6 +9772,12 @@ export class Game implements OnlineGame {
       const shift = width * PREVIEW_SHIFT;
       this.camera.setViewOffset(width + 2 * shift, height, 2 * shift, 0, width, height);
       return;
+    }
+    // the plate closed, or shows "By chance": the menu leaves the arena it showed (a planet's haze,
+    // its sky and its color with it) for its own
+    if (this.previewing) {
+      this.previewing = false;
+      if (this.state === 'menu' && this.venue !== DEFAULT_ARENA) this.enterArena(DEFAULT_ARENA);
     }
     this.endPreview();
     const t = this.time * 0.08;
