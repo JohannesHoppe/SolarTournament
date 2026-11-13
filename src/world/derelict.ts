@@ -10,7 +10,7 @@ import { FROZEN_NEAR, frostMaterial, frozenSurface, frozenUv, loadFrozen, type F
 /**
  * The break of the world ship PAAA 01 (see README, "The universe"): ice crystals still escaping
  * from both torn ends as a slow mist, and the ship's dead drifting frozen in it and between the
- * halves, settlers in everyday clothes, crew in work suits, a few in old EVA suits, some caught on
+ * halves, settlers in everyday clothes and crew in coveralls, and as many of the crew in the ship's light emergency suits, who fought the leak from inside until the hull broke and blew them out with the air, most of those where the breach was, some caught on
  * the torn plating at the ends, blown out when it broke, rimed with frost, turning slowly. Scenery:
  * the mist only patters on a hull flying through it (see mistDensity), and a ship that meets one
  * of the dead knocks it away by the two masses (see Derelict.meet), on every browser by its own
@@ -124,20 +124,27 @@ const mistFragment = /* glsl */ `
 /**
  * The dead, by what they look like: each kind one of MakeHuman's figures of the frozen dead (its
  * number, see view/frozen, loadFrozen: a man or a woman, young or old, in everyday clothes, the
- * crew's coveralls or under an old helmet, posed in free fall or against the cold), how many of
- * them (on the full picture; fewer on a cheaper one, see setParticles), and how the figure built
- * in code that stands in for it until it has loaded is dressed and posed. A pair counts as one:
- * two holding on to each other. 360 bodies in all.
+ * crew's coveralls or under an old helmet, posed in free fall or against the cold; or, half of them,
+ * the crew in the ship's light emergency suits, `breach` the ones blown out where the hull broke),
+ * how many of them (on the full picture; fewer on a cheaper one, see setParticles), and how the
+ * figure built in code that stands in for it until it has loaded is dressed and posed. A pair counts
+ * as one: two holding on to each other. 360 bodies in all.
  */
 const DEAD_KINDS = [
-  { dress: 'everyday', pose: 'crouch', count: 60 },
-  { dress: 'everyday', pose: 'spread', count: 55 },
-  { dress: 'work', pose: 'curled', count: 50 },
-  { dress: 'work', pose: 'reach', count: 45 },
-  { dress: 'everyday', pose: 'spread', count: 40 },
-  { dress: 'everyday', pose: 'curled', count: 40 },
-  { dress: 'eva', pose: 'crouch', count: 45 },
-  { dress: 'everyday', pose: 'pair', count: 25 },
+  { dress: 'everyday', pose: 'crouch', count: 30, breach: false },
+  { dress: 'everyday', pose: 'spread', count: 28, breach: false },
+  { dress: 'work', pose: 'curled', count: 25, breach: false },
+  { dress: 'work', pose: 'reach', count: 22, breach: false },
+  { dress: 'everyday', pose: 'spread', count: 20, breach: false },
+  { dress: 'everyday', pose: 'curled', count: 20, breach: false },
+  { dress: 'work', pose: 'crouch', count: 20, breach: false },
+  { dress: 'everyday', pose: 'pair', count: 15, breach: false },
+  { dress: 'suit', pose: 'reach', count: 30, breach: true },
+  { dress: 'suit', pose: 'spread', count: 30, breach: true },
+  { dress: 'suit', pose: 'crouch', count: 30, breach: true },
+  { dress: 'suit', pose: 'curled', count: 30, breach: true },
+  { dress: 'suit', pose: 'reach', count: 30, breach: true },
+  { dress: 'suit', pose: 'spread', count: 30, breach: true },
 ] as const;
 type Dress = (typeof DEAD_KINDS)[number]['dress'];
 type Pose = 'crouch' | 'spread' | 'curled' | 'reach' | 'embrace';
@@ -151,9 +158,13 @@ const DEAD_LEAST = 0.4;
  * Where the dead are: CAUGHT of them on the torn plating at the ends, the rest in GROUPS that were
  * blown out of the same deck together, each some GROUP_REACH (units, 15 m) about its middle:
  * IN_JETS of the groups in the jets of mist (where the air rushed out with them), the rest
- * drifting across the gap between the halves, where the ships fly.
+ * drifting across the gap between the halves, where the ships fly. The crew who fought the leak in
+ * their suits were where the hull broke: BREACH_CAUGHT of them still on the torn plating, and of
+ * the rest BREACH_IN_JETS in the mist's groups.
  */
 const CAUGHT = 0.12;
+const BREACH_CAUGHT = 0.3;
+const BREACH_IN_JETS = 0.85;
 const GROUPS = 36;
 const IN_JETS = 0.55;
 const GROUP_REACH = 300;
@@ -217,20 +228,20 @@ function joints(pose: Pose, side: number): [THREE.Vector3, THREE.Vector3, THREE.
 /**
  * A human body frozen in `pose`, low poly (units; 1.75 m tall standing, the hips at the origin,
  * the front towards +z), dressed in `dress`: everyday clothes or a work suit tinted by the
- * instance's color, hair on a bare head; or an old EVA suit with its pack and a helmet, its visor
- * cracked.
+ * instance's color, hair on a bare head; or the ship's light emergency suit with its air pack and a
+ * helmet, its visor cracked.
  */
 function person(pose: Pose, dress: Dress): THREE.BufferGeometry {
-  const eva = dress === 'eva';
-  const fabric: FrozenCell = eva ? 'suit' : dress === 'work' ? 'work' : 'cloth';
-  const cloth = eva ? 0.15 : 1;
-  const bare: FrozenCell = eva ? 'suit' : 'skin';
+  const suited = dress === 'suit';
+  const fabric: FrozenCell = suited ? 'suit' : dress === 'work' ? 'work' : 'cloth';
+  const cloth = suited ? 0.15 : 1;
+  const bare: FrozenCell = suited ? 'suit' : 'skin';
   const curled = pose === 'curled';
   const head = v(0, curled ? 13.5 : 14.5, curled ? 2.5 : pose === 'crouch' ? 0.8 : 0);
   const parts: THREE.BufferGeometry[] = [];
-  const thick = eva ? 1.35 : 1;
-  // chest and belly, an EVA suit's torso one bulky piece with its pack on the back
-  if (eva) {
+  const thick = suited ? 1.35 : 1;
+  // chest and belly, a suit's torso one piece with its air pack on the back
+  if (suited) {
     parts.push(part(new THREE.BoxGeometry(9.5, 12, 6.5).translate(0, 5.5, 0), fabric, cloth));
     parts.push(part(new THREE.BoxGeometry(8, 9, 3.5).translate(0, 6.5, -5), 'suit', 0));
   } else {
@@ -238,7 +249,7 @@ function person(pose: Pose, dress: Dress): THREE.BufferGeometry {
     parts.push(part(new THREE.BoxGeometry(6.8, 5.5, 4.2).translate(0, 2.75, 0), fabric, cloth));
   }
   parts.push(part(new THREE.BoxGeometry(2, 2, 2).translate(0, 11.5, 0), bare, 0));
-  if (eva) {
+  if (suited) {
     // the helmet, and its visor in front, cracked
     parts.push(part(new THREE.IcosahedronGeometry(4.2, 1).translate(head.x, head.y, head.z), 'suit', 0));
     parts.push(part(new THREE.IcosahedronGeometry(4.25, 1).scale(0.8, 0.62, 0.5).translate(head.x, head.y + 0.3, head.z + 2.2), 'visor', 0));
@@ -248,14 +259,14 @@ function person(pose: Pose, dress: Dress): THREE.BufferGeometry {
     parts.push(part(new THREE.IcosahedronGeometry(2.55, 0).scale(1, 1.05, 1).translate(head.x, head.y + 0.6, head.z - 0.6), 'hair', 0));
   }
   for (const side of [1, -1]) {
-    const shoulder = v(side * 4.6 * (eva ? 1.15 : 1), 9.8, 0);
+    const shoulder = v(side * 4.6 * (suited ? 1.15 : 1), 9.8, 0);
     const hip = v(side * 2, -0.5, 0);
     const [elbow, hand, knee, foot] = joints(pose, side);
     parts.push(limb(shoulder, elbow, 2.6 * thick, fabric, cloth), limb(elbow, hand, 2.2 * thick, fabric, cloth));
     parts.push(part(new THREE.BoxGeometry(1.6 * thick, 2, 1 * thick).translate(hand.x, hand.y, hand.z), bare, 0));
     parts.push(limb(hip, knee, 3.4 * thick, fabric, cloth), limb(knee, foot, 2.8 * thick, fabric, cloth));
     // a shoe or a boot
-    parts.push(part(new THREE.BoxGeometry(2.4 * thick, 1.6, 4.2).translate(foot.x, foot.y, foot.z + 1), eva ? 'suit' : 'hair', 0));
+    parts.push(part(new THREE.BoxGeometry(2.4 * thick, 1.6, 4.2).translate(foot.x, foot.y, foot.z + 1), suited ? 'suit' : 'hair', 0));
   }
   return mergeGeometries(parts);
 }
@@ -359,7 +370,7 @@ export class Derelict {
       const mesh = new THREE.InstancedMesh(bodyOf(kind), material, kind.count);
       mesh.frustumCulled = false;
       for (let i = 0; i < kind.count; i++) {
-        this.dead.push(this.place(r, groups));
+        this.dead.push(this.place(r, groups, kind.breach));
         this.where.push(new THREE.Vector3());
         this.turned.push(new THREE.Quaternion());
         mesh.setColorAt(i, color.set(CLOTHES[r.nextInt() % CLOTHES.length]).lerp(RIME, r.range(0.35, 0.55)));
@@ -406,13 +417,13 @@ export class Derelict {
    * drift together: in the mist and across the gap they keep to groups (see GROUPS), a group
    * wandering as one, each body turning on its own.
    */
-  private place(r: Randomizer, groups: Group[]): Dead {
+  private place(r: Randomizer, groups: Group[], breach: boolean): Dead {
     const where = r.nextFloat();
     const axis = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
     const turn = setFromEuler(new THREE.Quaternion(), r.range(0, 6.3), r.range(0, 6.3), r.range(0, 6.3));
     const spin = r.range(0.25, 1) * DEAD_SPIN * (r.nextFloat() < 0.5 ? -1 : 1);
     const scatter = (reach: number) => v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).multiplyScalar(reach);
-    if (where < CAUGHT) {
+    if (where < (breach ? BREACH_CAUGHT : CAUGHT)) {
       // caught on the torn plating at an end, on the hull's rim
       const jet = r.nextFloat() < 0.5 ? 0 : 1;
       const angle = r.range(0, 6.2832);
@@ -420,7 +431,10 @@ export class Derelict {
       const drift = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(CAUGHT_SWAY);
       return { jet, at: v(r.range(-200, 400), radius * cos(angle), radius * sin(angle)), off: new THREE.Vector3(), drift, rate: r.range(0.05, 0.12), phase: r.range(0, 6.3), turn, axis, spin: spin / 10, shoved: null };
     }
-    const group = groups[r.nextInt() % groups.length];
+    // the suited crew mostly in the mist that rushed out of the breach with them
+    const inJets = Math.round(GROUPS * IN_JETS);
+    const pick = r.nextInt();
+    const group = breach && r.nextFloat() < BREACH_IN_JETS ? groups[pick % inJets] : groups[pick % groups.length];
     // in a jet's frame along, across and up; in the gap beside the point on the line between the ends
     const off = group.jet < 0 ? group.off.clone().add(scatter(GROUP_REACH)) : new THREE.Vector3();
     const at = group.jet < 0 ? group.at.clone() : group.at.clone().add(scatter(GROUP_REACH));
