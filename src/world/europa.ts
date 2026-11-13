@@ -60,12 +60,12 @@ const BUMPS = 80;
 const BUMP_SCALE = 3000;
 const bumps = new Noise(6006);
 
-const smooth = (t: number) => {
+export const smooth = (t: number) => {
   const x = Math.min(1, Math.max(0, t));
   return x * x * (3 - 2 * x);
 };
 /** A raised cosine 1 at 0 to 0 at `width`. */
-const bump = (d: number, width: number) => (Math.abs(d) >= width ? 0 : 0.5 + 0.5 * cos((Math.PI * d) / width));
+export const bump = (d: number, width: number) => (Math.abs(d) >= width ? 0 : 0.5 + 0.5 * cos((Math.PI * d) / width));
 
 /** The x of the Crack's middle line at z. */
 export const crackMiddle = (z: number) => CRACK_SWAY * sin((Math.PI * 2 * z) / CRACK_WAVE);

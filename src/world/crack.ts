@@ -4,7 +4,7 @@ import { setFromAxisAngle } from '../detthree';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import type { Placement } from './asteroids';
-import { chaosAt, CHAOS_TOP, EUROPA_RADIUS, LAND } from './europa';
+import { bump, chaosAt, CHAOS_TOP, EUROPA_RADIUS, LAND, smooth } from './europa';
 
 /**
  * Europa's Crack as a race world (a tournament's arena, see RACE_WORLDS in world/arenas): a rift
@@ -103,13 +103,6 @@ const EDGE_RUBBLE = 700;
 const bumps = new Noise(6501);
 const rubble = new Noise(6502);
 const jag = new Noise(6503);
-
-const smooth = (t: number) => {
-  const x = Math.min(1, Math.max(0, t));
-  return x * x * (3 - 2 * x);
-};
-/** A raised cosine 1 at 0 to 0 at `width`. */
-const bump = (d: number, width: number) => (Math.abs(d) >= width ? 0 : 0.5 + 0.5 * cos((Math.PI * d) / width));
 
 /** How far the rift has swung out to the east at z (0 to 1): the branch's bow. */
 const bowAt = (z: number) => smooth((BRANCH_FROM - z) / BOW_RUN) * smooth((z - BRANCH_TO) / BOW_RUN);
