@@ -888,7 +888,9 @@ export class Landmarks {
   show(arena: ArenaProfile) {
     if (this.shown === arena.id) return;
     this.shown = arena.id;
-    for (const [id, scene] of this.scenes) scene.visible = id === arena.id;
+    // a world fought over shows its place's scenery (see ArenaProfile.scenery)
+    const shown = arena.scenery ?? arena.id;
+    for (const [id, scene] of this.scenes) scene.visible = id === shown;
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
     if (arena.id === 'giant') this.jupiter.shine();
     else this.jupiter.calm();

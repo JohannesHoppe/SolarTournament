@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { testField } from './test/field';
 import { DISTANT_DETAIL } from './world/rocks';
 import { HULL_BOXES } from './world/shapes';
-import { RACE_ARENAS } from './world/arenas';
+import { FIGHT_WORLDS, TOURNAMENT_ARENAS } from './world/arenas';
 import { FieldContacts } from './world/contacts';
 import { Randomizer } from './random';
 import { cometEnd, cometStart, headAt, roundComets, runDown } from './game/comet';
@@ -30,20 +30,22 @@ function digest(values: number[]): string {
 }
 
 function arenaWorld(index: number): string {
-  const arena = RACE_ARENAS[index];
+  const arena = TOURNAMENT_ARENAS[index];
   const field = testField(DISTANT_DETAIL, HULL_BOXES);
   field.generate(arena.layout);
   const values: number[] = [];
+  // a world fought over sees no race and no comet
+  const fought = FIGHT_WORLDS.includes(arena);
 
   // the course and its racing line as the round starts
-  const course = new Course(field, arena.layout.seed);
+  const course = fought ? null : new Course(field, arena.layout.seed);
   const v = new THREE.Vector3();
-  for (const p of course.points) values.push(p.x, p.y, p.z);
-  for (let s = 0; s < course.line.length; s += 250) values.push(...course.line.clear(s, field, v).toArray());
+  if (course) for (const p of course.points) values.push(p.x, p.y, p.z);
+  if (course) for (let s = 0; s < course.line.length; s += 250) values.push(...course.line.clear(s, field, v).toArray());
 
   // the field played on: breaks, comets, contacts
   const contacts = new FieldContacts();
-  const comets = roundComets(arena.layout.seed, 1, field.well, false);
+  const comets = roundComets(arena.layout.seed, 1, field.well, fought);
   const r = new Randomizer(arena.layout.seed + 1);
   let nextBreak = 7.5;
   while (field.clock < SECONDS) {
@@ -62,11 +64,11 @@ function arenaWorld(index: number): string {
   for (const a of pieces) values.push(...a.object.position.toArray(), ...a.velocity.toArray(), ...a.object.quaternion.toArray());
   for (const comet of comets) for (let t = cometStart(comet); t < cometEnd(comet); t += 5) values.push(...headAt(comet, t, v).toArray());
   // the racing line around the rock as it lies now
-  for (let s = 0; s < course.line.length; s += 500) values.push(...course.line.clear(s, field, v).toArray());
+  if (course) for (let s = 0; s < course.line.length; s += 500) values.push(...course.line.clear(s, field, v).toArray());
 
   // the round's probes
   const probes = new Probes();
-  probes.schedule(arena.layout.seed, 1, SECONDS, SECONDS, field, course.points);
+  probes.schedule(arena.layout.seed, 1, SECONDS, SECONDS, field, course?.points);
   for (const probe of probes.list) values.push(...probe.position.toArray(), ...probe.velocity.toArray());
   return digest(values);
 }
@@ -88,7 +90,7 @@ function flown(): string {
 describe('the shared world on every machine', () => {
   it('plays every arena to the pinned bits', { timeout: 120_000 }, () => {
     const hashes: Record<string, string> = {};
-    for (let i = 0; i < RACE_ARENAS.length; i++) hashes[RACE_ARENAS[i].id] = arenaWorld(i);
+    for (let i = 0; i < TOURNAMENT_ARENAS.length; i++) hashes[TOURNAMENT_ARENAS[i].id] = arenaWorld(i);
     expect(hashes).toEqual({
       belt: 'e33c6d365f254b52',
       rings: '5d2d46f48b1ba934',
@@ -98,6 +100,8 @@ describe('the shared world on every machine', () => {
       hole: '394e88bdcb9fbc9a',
       derelict: 'd51dc8297fd357f6',
       crack: 'c6e20772cfbd35af',
+      valhalla: '1f76cc3193c365f5',
+      lineae: 'b98c15645df93d25',
     });
   });
 

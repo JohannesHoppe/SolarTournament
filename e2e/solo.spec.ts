@@ -58,6 +58,25 @@ test("a solo race over Europa's Crack starts and runs without errors, its track 
   expect(errors).toEqual([]);
 });
 
+for (const arena of ['valhalla', 'lineae']) {
+  test(`a solo deathmatch over the world ${arena} starts and runs without errors, every clone printed over its ground and none hurt by it`, async ({ page }) => {
+    const errors = await openGame(page);
+    await startSolo(page, 'deathmatch', arena);
+    await play(page, 8);
+    const state = await page.evaluate(() => {
+      const game = window.game;
+      const up = game.me.flight.position.clone();
+      const heights: (number | null)[] = game.ships.filter((ship: { alive: boolean }) => ship.alive).map((ship: { flight: { position: unknown } }) => game.field.groundBelow(ship.flight.position, up));
+      // the ground of a world kills nothing: no death there is a crash into rock
+      const grounded = game.log.filter('death').filter((death: { cause: string }) => death.cause === 'rock').length;
+      const shown = (id: string) => !document.getElementById(id)!.hidden;
+      return { state: game.state, arena: game.venue.id, alive: game.me.alive, over: heights.every((h) => h !== null && h > 0), grounded, gravity: shown('hud-grav') };
+    });
+    expect(state).toEqual({ state: 'playing', arena, alive: true, over: true, grounded: 0, gravity: true });
+    expect(errors).toEqual([]);
+  });
+}
+
 test('alone, the pause menu pays out the round and starts a new one at once, in the arena and mode chosen; the flight school offers none', async ({ page }) => {
   const errors = await openGame(page);
   await startSolo(page, 'deathmatch');

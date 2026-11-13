@@ -62,7 +62,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack' | 'valhalla' | 'lineae';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -91,6 +91,8 @@ export interface ArenaProfile {
   hazeLight?: { deck: THREE.Color; deep: THREE.Color };
   /** A place of the campaign: no edge, no grid; a ship may fly on into the empty dark as far as it likes. */
   open?: boolean;
+  /** The place whose scenery it shows around its field (see Landmarks.show), where it is not its own: a world fought over shares its place's ground and sky. */
+  scenery?: ArenaId;
   /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
   start?: { at: [number, number, number]; toward: [number, number, number] };
 }
@@ -217,6 +219,22 @@ const EUROPA_MOOD: Mood = {
   starmap: true,
   dust: [0.66, 0.7, 0.76],
   grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
+};
+
+/** Valhalla: Callisto's dark, icy ground under Jupiter's cream and rust, the sky's light warm from Jupiter's side, a far sun, a grade a little warmer than the inner moons'. */
+const CALLISTO_MOOD: Mood = {
+  space: 0x020202,
+  sky: 0x9a8a70,
+  ground: 0x24201a,
+  ambient: 1.3,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.06, 0.04, 0.025], size: 540000, shape: 2, turn: 0.7 },
+    { at: [0.6, 0.3, 0.6], color: [0.03, 0.035, 0.045], size: 460000, shape: 0, turn: 2.1 },
+  ],
+  stars: 0.9,
+  starmap: true,
+  dust: [0.64, 0.6, 0.54],
+  grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
 };
 
 const LADDER_MOOD: Mood = {
@@ -429,25 +447,13 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.6, 0.52, 0.46],
     grade: { gain: [1.02, 1, 0.97], lift: [0.0016, 0.0012, 0.001], saturation: 0.9 },
   },
-  // Valhalla: Callisto's dark, icy ground under Jupiter's cream and rust, the sky's light warm
-  // from Jupiter's side, a far sun, a grade a little warmer than the inner moons'
-  callisto: {
-    space: 0x020202,
-    sky: 0x9a8a70,
-    ground: 0x24201a,
-    ambient: 1.3,
-    nebulae: [
-      { at: [-0.6, 0.5, -0.5], color: [0.06, 0.04, 0.025], size: 540000, shape: 2, turn: 0.7 },
-      { at: [0.6, 0.3, 0.6], color: [0.03, 0.035, 0.045], size: 460000, shape: 0, turn: 2.1 },
-    ],
-    stars: 0.9,
-    starmap: true,
-    dust: [0.64, 0.6, 0.54],
-    grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
-  },
+  callisto: CALLISTO_MOOD,
   europa: EUROPA_MOOD,
   // the Crack as a race world: the Lineae's ice and sky
   crack: EUROPA_MOOD,
+  // the worlds fought over: their places' ground and sky
+  valhalla: CALLISTO_MOOD,
+  lineae: EUROPA_MOOD,
   // Flux on Io: sulfur yellow under Jupiter's cream, the lava's orange from below, a warm grade
   io: {
     space: 0x030202,
@@ -1228,27 +1234,55 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
   },
 ];
 
+/**
+ * The worlds a deathmatch is fought over besides the arenas of free space: tournament arenas of
+ * their own, played only by deathmatches, each a place's ground under its gravity with the
+ * arena's edge around its middle (the ground below, ARENA_LIMIT above): Valhalla's rings of
+ * ridges on Callisto with the Navy's listening post among them, and the Lineae on Europa with the
+ * Crack (200 m wide, 800 m deep) running through the middle and the science station on its floor.
+ */
+export const FIGHT_WORLDS: readonly ArenaProfile[] = [fought('callisto', 'valhalla', 5100), fought('europa', 'lineae', 6100)];
+
+/** A world fought over on a place of the campaign (`place`): its ground, gravity, sky and references, as arena `id` with a field of its own (`seed`), the arena's edge around it and the clones printed where the round finds room. */
+function fought(place: ArenaId, id: ArenaId, seed: number): ArenaProfile {
+  const { open: _open, start: _start, ...profile } = PLACES.find((p) => p.id === place)!;
+  return { ...profile, id, layout: { ...profile.layout, key: id, seed }, mood: MOODS[id], scenery: place };
+}
+
 /** The arenas a race may be flown in: those of free space and the race worlds. */
 export const RACE_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS];
+/** The arenas a deathmatch may be fought in: those of free space and the worlds fought over. */
+export const FIGHT_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...FIGHT_WORLDS];
+/** Every arena of a tournament: free space, the race worlds and the worlds fought over. */
+export const TOURNAMENT_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS, ...FIGHT_WORLDS];
 
-/** The arenas a round of a mode may be played in: a race's (`race`), or those of free space. */
-export const arenasFor = (race: boolean): readonly ArenaProfile[] => (race ? RACE_ARENAS : ARENAS);
+/** The arenas a round of a mode may be played in: a race's, a deathmatch's, or those of free space for every other mode. */
+export const arenasFor = (mode: string): readonly ArenaProfile[] => (mode === 'race' ? RACE_ARENAS : mode === 'deathmatch' ? FIGHT_ARENAS : ARENAS);
 
-export const arenaById = (id: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
+export const arenaById = (id: string): ArenaProfile | undefined => TOURNAMENT_ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
 
 /** The arena the game shows unless something else is chosen: the menu's backdrop, the flight school's home and the solo round's first choice. */
 export const DEFAULT_ARENA: ArenaProfile = arenaById('rings')!;
 
 /** The arena whose field has this layout key (see FieldState). */
-export const arenaByKey = (key: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
+export const arenaByKey = (key: string): ArenaProfile | undefined => TOURNAMENT_ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
 
 /**
- * The arena of a tournament round: the room's code shuffles the arenas of its mode (a race's,
- * `race`, or those of free space) into an order of its own, and the rounds walk through it, so
- * no arena comes twice before all others have come. Every browser works it out alike from code
- * and round.
+ * The arena of a tournament round: the room's code shuffles the arenas of the round's mode into an
+ * order of its own, and the rounds walk through it, so no arena comes twice before all others
+ * have come. A race walks through the arenas of free space and the race worlds together (see
+ * RACE_ARENAS); a deathmatch is fought every other time in free space and over a world, each in
+ * an order of its own (`nth` the round's place among the room's deathmatches: every round of a
+ * room of deathmatches, every fifth of a mixed one); every other mode stays in free space. Every
+ * browser works it out alike from code and round.
  */
-export function arenaOfRound(room: string, round: number, race = false): ArenaProfile {
-  const order = arenasFor(race).map((arena, i) => ({ arena, key: hash(textSeed(room), i, 13) })).sort((a, b) => a.key - b.key);
+export function arenaOfRound(room: string, round: number, mode = 'other', nth = round): ArenaProfile {
+  const shuffled = (arenas: readonly ArenaProfile[], salt: number) => arenas.map((arena, i) => ({ arena, key: hash(textSeed(room), i, salt) })).sort((a, b) => a.key - b.key);
+  if (mode === 'deathmatch') {
+    const worlds = nth % 2 === 1;
+    const order = shuffled(worlds ? FIGHT_WORLDS : ARENAS, worlds ? 17 : 13);
+    return order[Math.floor(nth / 2) % order.length].arena;
+  }
+  const order = shuffled(mode === 'race' ? RACE_ARENAS : ARENAS, 13);
   return order[round % order.length].arena;
 }

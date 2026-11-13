@@ -6,6 +6,7 @@ import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
 import { CRACK_TRACK } from '../world/crack';
 import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
+import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
@@ -61,6 +62,7 @@ export const FROM_CODE: Record<string, number> = {
   crackWidth: meters(CRACK_WIDTH),
   crackDepth: meters(CRACK_DEPTH),
   crackGravity: Math.round((meters(EUROPA_FALL) / 9.81) * 100) / 100,
+  valhallaGravity: Math.round((meters(CALLISTO_FALL) / 9.81) * 100) / 100,
   laps: LAPS,
   gateRadius: meters(GATE_RADIUS),
   core: meters(BOOST_RADIUS),

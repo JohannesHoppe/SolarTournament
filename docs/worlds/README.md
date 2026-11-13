@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), step 2 (the first race world), the lift in air of step 3 and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), step 2 (the first race world), the lift in air of step 3, step 5 (deathmatches over worlds) and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -56,7 +56,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 ## Modes and worlds
 
 - **Races** are flown over worlds only. The first worlds come from the campaign's places, whose grounds are built: Europa's Lineae and the Crack (200 m wide, 800 m deep), Callisto's rings of ridges at Valhalla, Phobos's grooves at Stickney, Titan's Kraken Mare with its air. A world for races is a tournament arena of its own (in `RACE_WORLDS`, built: the Crack), with its track and gravity; the campaign's place stays the campaign's. Until every race has its world, races are flown in the seven arenas of free space too.
-- **Deathmatches** are fought in the seven arenas of free space and, as often, over worlds (the round's arena chosen alike on every browser, `arenaOfRound`).
+- **Deathmatches** are fought in the seven arenas of free space and, as often, over worlds (built: `FIGHT_WORLDS`, Valhalla and the Lineae on their places' ground; the round's arena chosen alike on every browser, `arenaOfRound`, a room's deathmatches alternating between the two kinds).
 - Capture the Flag, Last Clone Standing and the President's Fleet stay in free space until a world suits them.
 
 ## Steps
@@ -65,7 +65,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 2. **Built: a race world.** Europa's Crack as the first race arena (`RACE_WORLDS`), with the HUD's GRAVITY, AIR, HOVER and GRIP: a track from deep in the Crack down the canyon and back over the ice plain, its gates on the ground; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
 3. **Lift in air.** Built: the lift and its drag for every ship and torpedo in every air (Jupiter's deck carving, Titan's and Venus's air in the campaign), the grip and the racing line's bends reckoning with it. Still to come, on step 2's race worlds: Titan's Kraken Mare as a race world with air.
 4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.
-5. **Deathmatches over worlds** in the rotation of rounds.
+5. **Built: deathmatches over worlds** in the rotation of rounds: Valhalla and the Lineae, the arena's edge around the field's middle over the ground, the clones printed low over it, the bots taking the ground for no rock, no comets.
 6. **Built: speed felt:** view, streaks, lifted dust, the rush and the grind through the hull, the tremble.
 
 Every step changes the README, the Pilot's Handbook and their translations in the same commit, and the network's `PROTOCOL` where what other browsers read changes.

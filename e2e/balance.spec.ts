@@ -85,12 +85,12 @@ async function playRound(browser: Browser, mode: string, arena: string): Promise
   }
 }
 
-/** Every arena a mode is played in (as the game has them: src/world/arenas.ts, served by the dev server): a race's with the race worlds. */
+/** Every arena a mode is played in (as the game has them: src/world/arenas.ts, served by the dev server): a race's with the race worlds, a deathmatch's with the worlds fought over. */
 async function arenas(browser: Browser, mode: string): Promise<string[]> {
   const page = await browser.newPage();
   try {
     await page.goto('/');
-    const ids: string[] = await page.evaluate(async ([path, race]) => (await import(path)).arenasFor(race).map((arena: { id: string }) => arena.id), ['/src/world/arenas.ts', mode === 'race'] as const);
+    const ids: string[] = await page.evaluate(async ([path, of]) => (await import(path)).arenasFor(of).map((arena: { id: string }) => arena.id), ['/src/world/arenas.ts', mode] as const);
     if (ONLY && !ids.includes(ONLY)) throw new Error(`no arena ${ONLY}`);
     return ONLY ? [ONLY] : ids;
   } finally {
@@ -105,7 +105,7 @@ async function playRounds(browser: Browser, mode: string) {
   const next = async () => {
     for (let arena = queue.shift(); arena; arena = queue.shift()) rounds.push(await playRound(browser, mode, arena));
   };
-  expect(queue.length, 'the arenas the time-out was made for').toBe(ARENA_COUNT * ROUNDS_PER_ARENA[mode]);
+  expect(queue.length, 'the arenas the time-out was made for').toBe(arenaCount(mode) * ROUNDS_PER_ARENA[mode]);
   await Promise.all(Array.from({ length: PAGES }, next));
   // the whole log of every round goes with the result; its deaths by cause into the detail of a failure
   for (const [i, round] of rounds.entries()) {
@@ -130,10 +130,10 @@ async function playRounds(browser: Browser, mode: string) {
   return { ...result, rounds, detail: JSON.stringify(detail) };
 }
 
-/** The arenas played, for the time the rounds take (checked in playRounds): all seven, or the one of BALANCE_ARENA. */
-const ARENA_COUNT = ONLY ? 1 : 7;
+/** The arenas a mode is played in, for the time the rounds take (checked in playRounds): the seven of free space, a race's with the one race world, a deathmatch's with the two worlds fought over; or the one of BALANCE_ARENA. */
+const arenaCount = (mode: string) => (ONLY ? 1 : mode === 'race' ? 8 : mode === 'deathmatch' ? 9 : 7);
 /** Long enough for every round of a mode, PAGES at a time. */
-const timeout = (mode: string) => Math.ceil((ARENA_COUNT * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
+const timeout = (mode: string) => Math.ceil((arenaCount(mode) * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
 
 test('a deathmatch is a fight, and a middling bot holds its own in it', async ({ browser }) => {
   test.setTimeout(timeout('deathmatch'));

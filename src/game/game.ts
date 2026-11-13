@@ -77,7 +77,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { arenaById, arenasFor, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, RACE_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
+import { arenaById, arenasFor, ARENAS, DEFAULT_ARENA, arenaByKey, arenaOfRound, FIGHT_WORLDS, PREVIEW_FROM, TOURNAMENT_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { JET_WELDS } from '../world/derelict';
 import { animateHull, setHullFrost } from '../world/worldship';
@@ -346,6 +346,9 @@ const TORPEDO_MARK_SECONDS = 2.2;
 const TIP_LINES: ReadonlySet<string> = new Set(Object.values(TIPS));
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Crushed in the depths'), hole: msg('Crossed the event horizon') };
+
+/** A solo round's arena by chance: a deathmatch half the time over a world, as a tournament's (see arenaOfRound), every other mode one of its arenas. */
+const chanceArena = (mode: RoundMode): ArenaProfile => (mode === 'deathmatch' ? pick(Math.random() < 0.5 ? FIGHT_WORLDS : ARENAS) : pick(arenasFor(mode)));
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
 /** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
@@ -458,6 +461,8 @@ const AIM_DEPTH = 40000;
 const SPAWN_CANDIDATES = 12;
 /** Where a clone is printed when no place in the field is clear: this share of the field's layout radius out, beyond its rocks, and never beyond 95 % of the arena's edge. */
 const SPAWN_BEYOND = 1.1;
+/** Over a world fought over a clone is printed at least this high over the ground (units, 100 m), at most four times as high: low enough to fight over it at once, clear of its ridges. */
+const SPAWN_OVER_GROUND = 2000;
 /**
  * Nicole's free drift tip in a deathmatch (see crossingTip): an enemy within CROSSING_RANGE
  * (units, 500 m), more than CROSSING_ANGLE (rad, 60°) off the own nose and crossing faster than
@@ -629,7 +634,7 @@ function loadSolo(): SoloChoice {
     return {
       mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
       // null is a choice of its own: by chance
-      arena: kept.arena === null ? null : RACE_ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
+      arena: kept.arena === null ? null : TOURNAMENT_ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
   } catch {
@@ -867,6 +872,7 @@ const flareAt = new THREE.Vector3();
 const frontPoint = new THREE.Vector3();
 const emberDrift = new THREE.Vector3();
 const spawnMiddle = new THREE.Vector3();
+const groundUp = new THREE.Vector3();
 
 /** Within this distance of a solar flare's front (units, 1 km) the camera sees embers blown off it. */
 const EMBER_REACH = 20000;
@@ -2184,7 +2190,7 @@ export class Game implements OnlineGame {
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
     $('solo-arenas').append(
       button(t('By chance'), () => (this.solo.arena = null)),
-      ...RACE_ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
+      ...TOURNAMENT_ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
@@ -2205,10 +2211,10 @@ export class Game implements OnlineGame {
     const { mode, arena, rivals } = this.solo;
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) button.classList.toggle('selected', button.dataset.value === mode);
     $('solo-mode-note').textContent = t(SOLO_NOTES[mode], { clones: CLONES });
-    // a race world is flown by races alone
+    // a race world is flown by races alone, a world fought over by deathmatches alone
     [...$('solo-arenas').children].forEach((b, i) => {
-      b.classList.toggle('selected', i === 0 ? arena === null : RACE_ARENAS[i - 1].id === arena);
-      if (i > 0) (b as HTMLElement).hidden = !arenasFor(mode === 'race').includes(RACE_ARENAS[i - 1]);
+      b.classList.toggle('selected', i === 0 ? arena === null : TOURNAMENT_ARENAS[i - 1].id === arena);
+      if (i > 0) (b as HTMLElement).hidden = !arenasFor(mode).includes(TOURNAMENT_ARENAS[i - 1]);
     });
     [...$('solo-bots').children].forEach((b, i) => {
       const chosen = rivals.includes(BOT_NAMES[i]);
@@ -3052,7 +3058,13 @@ export class Game implements OnlineGame {
   private roundArena(): ArenaProfile {
     const round = Math.max(0, this.roundId);
     const picked = this.pickedArena?.round === round ? arenaById(this.pickedArena.arena) : undefined;
-    return picked ?? arenaOfRound(this.online!.session.room, round, modeOfRound(this.room?.mode ?? 'deathmatch', round) === 'race');
+    return picked ?? this.rotation(round);
+  }
+
+  /** The arena the room's rotation gives round `round` (see arenaOfRound): a deathmatch's place among the room's deathmatches is every round's in a room of them, every fifth's in a mixed one. */
+  private rotation(round: number): ArenaProfile {
+    const mode = this.room?.mode ?? 'deathmatch';
+    return arenaOfRound(this.online!.session.room, round, modeOfRound(mode, round), mode === 'mixed' ? Math.floor(round / ROUND_MODES.length) : round);
   }
 
   /** This browser's Host decides what is played: online the Host of the lead browser, alone the Host itself; the flight school has its own course. */
@@ -3063,7 +3075,7 @@ export class Game implements OnlineGame {
   /** The plate of a new round: the arenas and the modes to choose from. */
   private buildNewRound() {
     $('new-round-arenas').append(
-      ...RACE_ARENAS.map((arena) => {
+      ...TOURNAMENT_ARENAS.map((arena) => {
         const button = Object.assign(document.createElement('button'), { type: 'button', innerHTML: `${t(arena.name)}<small>${t(arena.tagline)}</small>` });
         button.dataset.value = arena.id;
         button.addEventListener('click', () => {
@@ -3086,13 +3098,13 @@ export class Game implements OnlineGame {
 
   /** Marks the choices on the plate of a new round. */
   private renderNewRound() {
-    // a race world is flown by races alone: for another mode its choice goes back to the first arena of free space
-    const offered = arenasFor(this.roundChoice.mode === 'race');
+    // a race world is flown by races alone, a world fought over by deathmatches alone: for another mode its choice goes back to the first arena of free space
+    const offered = arenasFor(this.roundChoice.mode);
     if (!offered.some((a) => a.id === this.roundChoice.arena)) this.roundChoice.arena = offered[0].id;
     const { arena, mode } = this.roundChoice;
     [...$('new-round-arenas').children].forEach((b, i) => {
-      b.classList.toggle('selected', RACE_ARENAS[i].id === arena);
-      (b as HTMLElement).hidden = !offered.includes(RACE_ARENAS[i]);
+      b.classList.toggle('selected', TOURNAMENT_ARENAS[i].id === arena);
+      (b as HTMLElement).hidden = !offered.includes(TOURNAMENT_ARENAS[i]);
     });
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="new-round-mode"] button[data-value]')) {
       button.classList.toggle('selected', button.dataset.value === mode);
@@ -3457,10 +3469,10 @@ export class Game implements OnlineGame {
     $('hud-room').classList.remove('game-master');
     // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
-    if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0, this.roundMode === 'race'));
+    if (mode === 'online') this.enterArena(this.rotation(0));
     // a mission of the campaign starts at the place of the drill it goes on from
     else if (mode === 'school' && this.mission) this.enterArena(arenaById(this.mission.drills[Math.min(this.missionStep(), this.mission.drills.length - 1)].arena ?? '') ?? DEFAULT_ARENA);
-    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (arenasFor(this.solo.mode === 'race').find((a) => a.id === this.solo.arena) ?? pick(arenasFor(this.solo.mode === 'race'))));
+    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (arenasFor(this.solo.mode).find((a) => a.id === this.solo.arena) ?? chanceArena(this.solo.mode)));
     this.hud.reset();
     this.resetOpening();
     $('hud-room').textContent = '';
@@ -4032,7 +4044,7 @@ export class Game implements OnlineGame {
     const base = this.flags && ship.team >= 0 ? this.flags.bases[ship.team] : null;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start; attempt++) {
       if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
-      else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
+      else this.edgePoint(candidate, edge);
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       let nearest = Infinity;
       let seen = false;
@@ -4051,7 +4063,7 @@ export class Game implements OnlineGame {
     // none clear (a dense field, a base among rocks): the first of more tries that is clear of
     // rock, well and grip at all, and as a last resort the open space just beyond the field's rocks
     for (let attempt = 0; attempt < SPAWN_CANDIDATES * 4 && best === -Infinity; attempt++) {
-      candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
+      this.edgePoint(candidate, edge);
       if (this.field.overlap(candidate, ship.radius * 2) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       best = 0;
       position.copy(candidate);
@@ -4059,7 +4071,9 @@ export class Game implements OnlineGame {
     // (in Last Clone Standing the open space behind the field, away from the sun, which no flare reaches)
     if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
     else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
-    ship.spawn(position, lookingAt(position, course || start ? candidate : spawnMiddle, UP), this.time);
+    // over a world, facing the arena's middle at the clone's own height, level over the ground
+    if (!course && !start && this.overWorld) candidate.set(0, position.y, 0);
+    ship.spawn(position, lookingAt(position, course || start || this.overWorld ? candidate : spawnMiddle, UP), this.time);
     // back in the race on a track: already flying along it at race speed
     if (course?.track && ship.gates > 0) ship.flight.velocity.subVectors(candidate, position).setLength(TRACK_RESPAWN_SPEED);
     if (ship === this.me) {
@@ -4070,6 +4084,27 @@ export class Game implements OnlineGame {
       this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
     }
+  }
+
+  /** Whether the round is fought over a world (see FIGHT_WORLDS): its ground below, the arena's edge around it. */
+  private get overWorld() {
+    return FIGHT_WORLDS.includes(this.venue);
+  }
+
+  /**
+   * A place for a new clone on the field's edge `edge` away from spawnMiddle (units): anywhere
+   * round it in free space; over a world fought over on a ring around the arena's middle, low
+   * over the ground beneath (SPAWN_OVER_GROUND to four times that), never in it.
+   */
+  private edgePoint(point: THREE.Vector3, edge: number): THREE.Vector3 {
+    point.randomDirection();
+    if (!this.overWorld) return point.multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
+    point.y = 0;
+    if (point.lengthSq() < 1e-6) point.set(1, 0, 0);
+    point.normalize().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
+    const height = this.field.groundBelow(point, groundUp);
+    if (height !== null) point.y -= height - SPAWN_OVER_GROUND * (1 + Math.random() * 3);
+    return point;
   }
 
   /** The next clone only boots after the Host has watched an ad. */
@@ -4709,6 +4744,7 @@ export class Game implements OnlineGame {
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
         bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
+        bot.glide = this.overWorld;
         // a mission's raiders keep to the place they raid (it has no edge, see keepInArena)
         if (this.jumpers?.bots.includes(bot)) bot.homeAt = this.jumpers.rig;
         bot.prey = null;
@@ -8845,8 +8881,8 @@ export class Game implements OnlineGame {
 
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
-   * shown at the field time and its head running down the rock in its way. The flight school
-   * sees none (see roundComets), so nothing there warns of one either.
+   * shown at the field time and its head running down the rock in its way. The flight school and
+   * a world fought over see none (see roundComets), so nothing there warns of one either.
    */
   private playComet(dt: number, me: Ship) {
     const clock = this.field.clock;
@@ -8854,7 +8890,7 @@ export class Game implements OnlineGame {
     const key = `${seed}.${this.roundId}.${this.venue.id}.${!!this.school}`;
     if (key !== this.cometsOfKey) {
       this.cometsOfKey = key;
-      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school);
+      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school || this.overWorld);
     }
     const comet = cometAt(this.comets, clock);
     // the alarm follows only the comet that comes now
