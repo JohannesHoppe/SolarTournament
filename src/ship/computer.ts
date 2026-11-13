@@ -68,8 +68,8 @@ export function keepUpright(flight: FlightModel, out: Controls): Controls {
 
 /**
  * The brake (held): the flight computer turns the ship about flat and burns against the flight
- * until it is at rest, the thrusters taking out the drift across the nose; slow, the thrusters
- * stop it alone. At rest it holds still until gravity has pulled the ship clearly out of rest.
+ * until it is at rest, the thrusters pushing against the flight while the nose swings round and
+ * taking out the drift across the nose once it points back; slow, the thrusters stop it alone. At rest it holds still until gravity has pulled the ship clearly out of rest.
  */
 export class Brake {
   /** The ship is at rest. */
@@ -112,6 +112,17 @@ export class Brake {
       // drift that wanders in direction cannot make the ship flip back and forth
       keepUpright(flight, Object.assign(out, controls)).thrust = 0;
       out.strafeZ = THREE.MathUtils.clamp(drift.z / (RCS_THRUST * BRAKE_EASE), -1, 1);
+    }
+    if (this.flipping && !aligned) {
+      // while the nose swings round, the thrusters push straight against the flight, along all
+      // three axes at once: taking out only the drift across the swinging nose would drag the
+      // flight round with it, bending it off its line instead of stopping it
+      // (strafeZ pushes along the nose, -Z)
+      const push = Math.min(1, speed / (RCS_THRUST * BRAKE_EASE)) / speed;
+      out.strafeX = -drift.x * push;
+      out.strafeY = -drift.y * push;
+      out.strafeZ = drift.z * push;
+      return out;
     }
     // the thrusters take out the drift across the nose, which the drive cannot reach
     out.strafeX = THREE.MathUtils.clamp(-drift.x / (RCS_THRUST * BRAKE_EASE), -1, 1);

@@ -185,8 +185,30 @@ test('the tactician’s turn and shoot drill: the brake flips the nose onto the 
   }
   await page.keyboard.up('Space');
   expect(await page.evaluate(() => window.game.drone?.alive ?? false), trace.slice(-30).join('\n')).toBe(false);
+  // the drone down, the Host lets go of the pointer
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
   // pressed again, unless the brake came to rest and turned back by itself already
   if (await page.evaluate(() => window.game.brakePhase === 'brake')) await tapBrake();
+  // a brake that came to rest before the drone went down turns back while the Host still holds the
+  // pointer on the drone, which takes the nose (BRAKE_TAKEOVER): then the Host steers back to the
+  // buoy by hand, the pointer towards it, and lets go once the nose is on it
+  for (let i = 0; i < 400; i++) {
+    const back = await page.evaluate(() => {
+      const game = window.game;
+      const buoy = game.school?.attempt?.points?.[0];
+      if (game.brakePhase !== 'off' || !buoy) return null;
+      const to = game.me.flight.toLocalDirection(buoy.clone().sub(game.me.flight.position));
+      return { x: to.x, y: to.y, nose: game.me.flight.noseAngleTo(to.applyQuaternion(game.me.flight.orientation)) };
+    });
+    if (!back || back.nose < 0.05) break;
+    // full deflection towards the buoy while it is far off the nose, less as it comes on
+    const full = Math.min(viewport.width, viewport.height) * 0.25;
+    const across = Math.hypot(back.x, back.y) || 1;
+    const reach = full * Math.min(1, back.nose / 0.5);
+    await page.mouse.move(viewport.width / 2 + (back.x / across) * reach, viewport.height / 2 - (back.y / across) * reach);
+    await page.waitForTimeout(30);
+  }
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
   await expect.poll(step, { timeout: 30_000 }).toBe('slideShot');
   expect(errors).toEqual([]);
 });

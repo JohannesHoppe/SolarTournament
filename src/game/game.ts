@@ -6685,7 +6685,10 @@ export class Game implements OnlineGame {
         if (flight.noseAngleTo(retrograde.copy(flight.velocity).negate()) > BRAKE_AIM) out.thrust = 0;
         return this.assistAim(out);
       }
-      return out;
+      // the nose held against the flight, and the aim assist on a rival there: a ship on the tail
+      // lies a few degrees off the line the brake flips onto, and a pointer that close to the
+      // center is no steering yet (BRAKE_STEER)
+      return this.assistAim(out);
     }
     this.brake.release();
     if (phase === 'return') {

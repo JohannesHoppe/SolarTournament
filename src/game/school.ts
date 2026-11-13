@@ -432,14 +432,15 @@ export const COVER_DRONE = 40000;
 /**
  * The turn and shoot drill: the pilot drifts at TURN_SHOOT_SPEED (units/s, 150 m/s) towards a
  * buoy TURN_SHOOT_COURSE ahead (units, 2 km), a drone drifting along TURN_SHOOT_TAIL behind
- * (600 m). The brake's burn takes that speed in about 1.2 s once the nose points back, the time
- * to shoot before it stops and turns back by itself; braking, the pilot slows and the drone comes
- * on, some five seconds until it passes. The nose counts as back on the buoy within
- * TURN_SHOOT_BACK (rad, 10°).
+ * (1 km), far enough that the plates of a drone shot down, flying on along the pilot's line, take
+ * longer to come than turning back to the buoy takes. The brake's burn takes that speed in about
+ * 1.2 s once the nose points back, the time to shoot before it stops and turns back by itself;
+ * braking, the pilot slows and the drone comes on, some eight seconds until it passes. The nose
+ * counts as back on the buoy within TURN_SHOOT_BACK (rad, 10°).
  */
 export const TURN_SHOOT_SPEED = 3000;
 export const TURN_SHOOT_COURSE = 40000;
-export const TURN_SHOOT_TAIL = 12000;
+export const TURN_SHOOT_TAIL = 20000;
 const TURN_SHOOT_BACK = 0.17;
 /** Seconds out of the gunner's sight the cover drill wants. */
 const COVER_HOLD = 3;
