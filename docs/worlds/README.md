@@ -29,7 +29,7 @@ In a world's air (Titan's, Venus's clouds, Jupiter's deck, and the race worlds t
 
 ## Torpedoes
 
-Torpedoes obey the same physics as ships: a world's gravity, a well's pull and the push of its columns bend their flight, the air drags them and, with the lift of their fins, lets them turn tighter the faster they fly; but a torpedo's computer counters them with its drive and thrusters, as a ship's autopilot holds gravity off, and flies straight lines: fired at the horizon without a lock it holds its line and never sinks to the ground; with a lock it steers for its aim with the outside forces taken out first. Only where they are stronger than its thrusters (a well up close) do they bend it. They have no hover field: a world's ground sets one off as rock does, so one chasing a ship that dives into a canyon can strike its wall.
+Torpedoes obey the same physics as ships: a world's gravity, a well's pull and the push of its columns bend their flight, the air drags them (a third as hard per tonne as a ship: a slender body nose first, built: `TORPEDO_DRAG`) and, with the lift of their fins, lets them turn tighter the faster they fly; but a torpedo's computer counters them with its drive and thrusters, as a ship's autopilot holds gravity off, and flies straight lines: fired at the horizon without a lock it holds its line and never sinks to the ground; with a lock it steers for its aim with the outside forces taken out first. Only where they are stronger than its thrusters (a well up close) do they bend it. They have no hover field: a world's ground sets one off as rock does, so one chasing a ship that dives into a canyon can strike its wall.
 
 ## What the HUD shows
 

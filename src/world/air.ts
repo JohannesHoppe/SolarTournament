@@ -226,11 +226,12 @@ const end = new THREE.Vector3();
 /**
  * Adds the air's drag on a ship flying at `velocity` (units/s) to `acceleration` (units/s²), for
  * a step of `dt` seconds: the speed the step takes is that of dv/dt = -k v|v| solved over the
- * step, so a slow frame never brakes a ship past standstill.
+ * step, so a slow frame never brakes a ship past standstill. A body that loses less to the air per
+ * unit of its mass than a ship (a torpedo, see TORPEDO_DRAG) passes its `share` of a ship's drag.
  */
-export function dragOn(air: Air, position: THREE.Vector3, velocity: THREE.Vector3, dt: number, acceleration: THREE.Vector3): THREE.Vector3 {
+export function dragOn(air: Air, position: THREE.Vector3, velocity: THREE.Vector3, dt: number, acceleration: THREE.Vector3, share = 1): THREE.Vector3 {
   const speed = velocity.length();
-  const k = DRAG * density(altitudeIn(air, position));
+  const k = DRAG * share * density(altitudeIn(air, position));
   if (speed < 1e-6 || dt <= 0 || k * speed < 1e-9) return acceleration;
   const lost = speed - speed / (1 + k * speed * dt);
   return acceleration.addScaledVector(velocity, -lost / (speed * dt));

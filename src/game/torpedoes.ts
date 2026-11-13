@@ -70,6 +70,16 @@ export const TORPEDO_LIFETIME = 15;
  * FLING_CREDIT seconds (s) after it was let go, a ship it goes off on is the holder's kill.
  */
 export const FLING_CREDIT = 3;
+/**
+ * A torpedo's drag per unit of its mass as a share of a ship's (see world/air, dragOn): a slender
+ * body nose first, an ogive and a boat tail with fins flush to it, against a fighter's blunt hull,
+ * its wings, fins and drive bells broadside to the air in every turn. Drag per mass goes with the
+ * drag coefficient times the frontal area over the mass: a slender missile's coefficient is about a
+ * third of a blunt airframe's, and its frontal area per tonne no larger, so it loses about a third
+ * of what a ship loses to the same air at the same speed (a ballistic coefficient three times a
+ * ship's).
+ */
+export const TORPEDO_DRAG = 1 / 3;
 /** Its own radius, for the laser that shoots it down and for the rock it strikes (units, 6 m). It goes off at a ship's hull (see strikes). */
 export const TORPEDO_RADIUS = 120;
 /** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
@@ -393,7 +403,7 @@ export class Torpedoes {
       const burning = now - torpedo.bornAt < TORPEDO_LIFETIME;
       // a world's gravity, a well's pull, a column's push and an air's drag act on it as on a ship; it has no hover field
       field.gravity(torpedo.position, pulled);
-      if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled);
+      if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled, TORPEDO_DRAG);
       if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled);
       else torpedo.position.addScaledVector(torpedo.velocity.addScaledVector(pulled, dt), dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
