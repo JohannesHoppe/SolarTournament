@@ -18,8 +18,9 @@ import { GROUND_HALF as PLUTO_HALF, groundRelief as plutoRelief } from './pluto'
 import { DOME_HALF, GROUND_HALF as MOON_HALF, groundRelief as moonRelief } from './moon';
 import { GROUND_HALF as MERCURY_HALF, groundRelief as mercuryRelief } from './mercury';
 import { BODY_HALF, HALL_HALF, NECK_HALF, PLATFORM_HALF } from './venus';
-import { BRIDGE_HALF, CRACK_GROUND_HALF, crackRelief } from './crack';
+import { BRIDGE_HALF as SLAB_HALF, CRACK_GROUND_HALF, crackRelief } from './crack';
 import { THROAT_GROUND_HALF, throatRelief } from './throat';
+import { BATTLE_GROUND_HALF, battleRelief, BRIDGE_HALF, FLOOR_HALF, PAD_HALF, ROOF_HALF, TOWER_HALF, TURRET_HALF, WALL_HALF as HULL_WALL_HALF, type BattleTypes } from './battlefield';
 import type { Relief } from './asteroids';
 
 /**
@@ -151,8 +152,8 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
  * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
  * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the places after them in PLACE_BOXES.
  */
-/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io), Ganymede's under the Tug Yards (see world/ganymede), the sea of Kraken Mare on Titan (see world/titan), Enceladus's polar plain at the Plumes (see world/enceladus), Iapetus's ridge at Two Faces (see world/iapetus), Miranda's cliff at Verona (see world/miranda), Triton's plain at Memorial and the Navy's Memorial Station on it (see world/triton), Pluto's heart at Last Light (see world/pluto), the Moon's plain at the Ballroom and the Ballroom's dome on it (see world/moon), Mercury's plain at Caloris and the sun miners' camp on it (see world/mercury), Highball's platform, a hall, the bottle's body and neck over Venus (see world/venus), the ground of Europa's Crack as a race world (see world/crack), and the Throat of Kraken Mare's as another (see world/throat), a slab of ice fallen across the Crack's rift (see world/crack), and the Lineae's ground as a world fought over, its chaos terrain on it (see world/europa). */
-const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF, GANYMEDE_HALF, SEA_HALF, ENCELADUS_HALF, IAPETUS_HALF, MIRANDA_HALF, TRITON_HALF, POST_HALF, PLUTO_HALF, MOON_HALF, DOME_HALF, MERCURY_HALF, POST_HALF, PLATFORM_HALF, HALL_HALF, BODY_HALF, NECK_HALF, CRACK_GROUND_HALF, THROAT_GROUND_HALF, BRIDGE_HALF, EUROPA_HALF];
+/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa), Io's at Flux (see world/io), Ganymede's under the Tug Yards (see world/ganymede), the sea of Kraken Mare on Titan (see world/titan), Enceladus's polar plain at the Plumes (see world/enceladus), Iapetus's ridge at Two Faces (see world/iapetus), Miranda's cliff at Verona (see world/miranda), Triton's plain at Memorial and the Navy's Memorial Station on it (see world/triton), Pluto's heart at Last Light (see world/pluto), the Moon's plain at the Ballroom and the Ballroom's dome on it (see world/moon), Mercury's plain at Caloris and the sun miners' camp on it (see world/mercury), Highball's platform, a hall, the bottle's body and neck over Venus (see world/venus), the ground of Europa's Crack as a race world (see world/crack), the Throat of Kraken Mare's as another (see world/throat), Valhalla's as a world fought over with the cruiser Steadfast's parts, the ice bridges and the clones' pads (see world/battlefield), a slab of ice fallen across the Crack's rift (see world/crack), and the Lineae's ground as a world fought over, its chaos terrain on it (see world/europa). */
+const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF, IO_HALF, GANYMEDE_HALF, SEA_HALF, ENCELADUS_HALF, IAPETUS_HALF, MIRANDA_HALF, TRITON_HALF, POST_HALF, PLUTO_HALF, MOON_HALF, DOME_HALF, MERCURY_HALF, POST_HALF, PLATFORM_HALF, HALL_HALF, BODY_HALF, NECK_HALF, CRACK_GROUND_HALF, THROAT_GROUND_HALF, BATTLE_GROUND_HALF, FLOOR_HALF, FLOOR_HALF, ROOF_HALF, HULL_WALL_HALF, TOWER_HALF, TURRET_HALF, BRIDGE_HALF, PAD_HALF, SLAB_HALF, EUROPA_HALF];
 export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, ...PLACE_BOXES];
 /** The template of the slope under Vesta's claims in the yards' set. */
 export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
@@ -202,11 +203,13 @@ export const CITY_TYPES = { platform: WALL_TYPE + 19, hall: WALL_TYPE + 20, bott
 export const CRACK_TYPE = WALL_TYPE + 23;
 /** The ground of the Throat of Kraken Mare as a race world (see world/throat): a box whose top is the strait's sea and banks. */
 export const THROAT_TYPE = WALL_TYPE + 24;
+/** Valhalla as a world fought over (see world/battlefield): its ground, the cruiser Steadfast's bow and stern halves (each its floor, with the half's looks), roof, walls, bridge tower and turrets, an ice bridge and a clone's pad. */
+export const BATTLE_TYPES: BattleTypes = { ground: WALL_TYPE + 25, bow: WALL_TYPE + 26, stern: WALL_TYPE + 27, roof: WALL_TYPE + 28, wall: WALL_TYPE + 29, tower: WALL_TYPE + 30, turret: WALL_TYPE + 31, bridge: WALL_TYPE + 32, pad: WALL_TYPE + 33 };
 /** A slab of ice fallen across the Crack's rift as a race world (see world/crack, bridgePlacements). */
-export const BRIDGE_TYPE = WALL_TYPE + 25;
+export const BRIDGE_TYPE = WALL_TYPE + 34;
 /** The Lineae's ground as a world fought over (see world/europa, fightHeight): a box whose top is the shell's relief, the Crack cut into it and the chaos's rafts beside it. */
-export const LINEAE_TYPE = WALL_TYPE + 26;
-/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's, Io's, Ganymede's, Enceladus's, Iapetus's, Miranda's, Triton's, Pluto's, the Moon's and Mercury's, the Crack's and the Throat's as race worlds, the Lineae's fought over, and Titan's sea. */
+export const LINEAE_TYPE = WALL_TYPE + 35;
+/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's, Europa's, Io's, Ganymede's, Enceladus's, Iapetus's, Miranda's, Triton's, Pluto's, the Moon's and Mercury's, the Crack's and the Throat's as race worlds, Valhalla's and the Lineae's as worlds fought over, and Titan's sea. */
 const RELIEFS = new Map<number, Relief>([
   [PHOBOS_TYPE, groundRelief],
   [CALLISTO_TYPE, callistoRelief],
@@ -223,6 +226,7 @@ const RELIEFS = new Map<number, Relief>([
   [MERCURY_TYPE, mercuryRelief],
   [CRACK_TYPE, crackRelief],
   [THROAT_TYPE, throatRelief],
+  [BATTLE_TYPES.ground, battleRelief],
   [LINEAE_TYPE, lineaeRelief],
 ]);
 export const RACK_RELIEFS: readonly (Relief | null)[] = RACK_BOXES.map((_, type) => RELIEFS.get(type) ?? null);

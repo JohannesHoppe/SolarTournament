@@ -26,6 +26,7 @@ import type { Lettering } from '../view/lettering';
 import { beacons, biodome, domeGlass, FAILING_SHARE, frosted, paint, rimed, windowMaterials } from './worldship';
 import { cos, hypot, pow, sin } from '../detmath';
 import { rotateX, rotateY, rotateZ } from '../detthree';
+import { BUS_DENSITY, CUBIC, ENGINE_SHARE, FAIRING_SHEET, SQUARE, STACK_DENSITY, TANK_WALL, WING_SHEET, type JunkBuild } from './junk';
 
 /**
  * The shapes the arenas are built from besides rock and ice (see world/ice): the junk of a
@@ -242,6 +243,8 @@ export function debrisSet(): TemplateSet {
     const painted: THREE.BufferGeometry[] = [];
     const parts: THREE.BufferGeometry[] = [];
     const wings: THREE.BufferGeometry[] = [];
+    // what it is built of (see world/junk), in the template's frame before it is centered on its bulk
+    const build: JunkBuild = { kind, sheets: 0, core: 0, hard: null, ply: 0 };
     if (kind === 'satellite' || kind === 'shredded') {
       // a flat bus, a boom and the single wing reaching on to the far end, the wing cut into pieces when shredded (some missing, the rest bent)
       const shredded = kind === 'shredded';
@@ -260,8 +263,13 @@ export function debrisSet(): TemplateSet {
         const wing = wingUv(new THREE.BoxGeometry(piece * 0.96, L * 0.006, L * 0.14), L * 0.14);
         if (shredded) rotateZ(rotateX(wing, r.range(-0.6, 0.6)), r.range(-0.25, 0.25));
         wings.push(wing.translate(start + piece * (k + 0.5), shredded ? r.range(-0.03, 0.03) * L : 0, 0));
+        build.sheets += piece * 0.96 * L * 0.14 * SQUARE * WING_SHEET;
       }
       outline.push(...wings);
+      // the bus and its boom are its core; the wing's panels are sheet
+      build.core = busLength * L * 0.03 * L * 0.15 * CUBIC * BUS_DENSITY;
+      build.hard = { min: x0 - L * 0.01, max: start };
+      build.ply = WING_SHEET;
       const middle = x0 + busLength / 2;
       // the wing's drive at the boom's end
       parts.push(tint(new THREE.BoxGeometry(L * 0.012, L * 0.02, L * 0.024).translate(start - L * 0.006, 0, 0), DARK));
@@ -292,6 +300,12 @@ export function debrisSet(): TemplateSet {
     } else if (kind === 'stage') {
       // a spent upper stage: its tank, the payload adapter's ring at the front, the engine at the back
       const R = L * 0.13;
+      // the tank (its barrel and domes), the adapter's ring and the bell are sheet, two walls deep
+      // through the tank; the thrust frame and the engine's chamber its core, weighing a share of the sheet
+      const walls = (2 * Math.PI * R * L * 0.72 + 2 * Math.PI * R * R + 2 * Math.PI * R * 1.04 * L * 0.08 + Math.PI * R * 1.3 * hypot(L * 0.22, R * 0.6)) * SQUARE * TANK_WALL;
+      build.sheets = walls * (1 + ENGINE_SHARE);
+      build.hard = { min: L * 0.26, max: L * 0.345 };
+      build.ply = 2 * TANK_WALL;
       outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.72, 16), Math.PI / 2).translate(-L * 0.1, 0, 0));
       outline.push(rotateZ(new THREE.CylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true), Math.PI / 2).translate(-L * 0.44, 0, 0));
       outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true), Math.PI / 2).translate(L * 0.37, 0, 0));
@@ -324,6 +338,9 @@ export function debrisSet(): TemplateSet {
     } else if (kind === 'fairing') {
       // half of a payload fairing: a shell open on one side, its ogive nose, lined inside
       const R = L * 0.2;
+      // all of it a shell: half a barrel and half its ogive nose (a cone's frustum as near)
+      build.sheets = (Math.PI * R * L * 0.6 + (Math.PI * R * 1.15 * hypot(L * 0.4, R * 0.85)) / 2) * SQUARE * FAIRING_SHEET;
+      build.ply = FAIRING_SHEET;
       outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.6, 16, 1, true, 0, Math.PI), Math.PI / 2).translate(-L * 0.2, 0, 0));
       outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.15, R, L * 0.4, 16, 1, true, Math.PI, Math.PI), -Math.PI / 2).translate(L * 0.3, 0, 0));
       const shell = (scale: number): [number, number][] => [
@@ -343,6 +360,9 @@ export function debrisSet(): TemplateSet {
       // a stack of flat satellites as they were launched, never released, held by four posts under a lid:
       // each a bus in foil with its wing folded on top, latched to the posts, packed so close that only a hairline shows between them (afar, a gap would flicker)
       const layers = 9;
+      // a block of packed satellites: core through and through
+      build.core = layers * L * 0.7 * L * 0.025 * L * 0.3 * CUBIC * STACK_DENSITY;
+      build.hard = 'all';
       for (let k = 0; k < layers; k++) {
         const y = (k - (layers - 1) / 2) * L * 0.04;
         const loose = k === layers - 1 ? 0.35 : r.range(-0.04, 0.04);
@@ -380,6 +400,9 @@ export function debrisSet(): TemplateSet {
     // centered on its bulk, where the collision ellipsoid sits
     const middle = box.getCenter(new THREE.Vector3());
     for (const part of group.children) part.position.sub(middle);
+    // its core's span in the frame centered on its bulk, as its collisions see it
+    const hard = build.hard;
+    group.userData.junk = { ...build, hard: hard === null || hard === 'all' ? hard : { min: hard.min - middle.x, max: hard.max - middle.x } } satisfies JunkBuild;
     const size = box.getSize(new THREE.Vector3());
     // the collision ellipsoid hugs the bulk of the piece, never thinner than a few percent of it
     group.add(collider(new THREE.Vector3(size.x * 0.48, Math.max(size.y * 0.42, L * 0.06), Math.max(size.z * 0.42, L * 0.06)).round()));

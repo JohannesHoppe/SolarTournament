@@ -16,7 +16,8 @@ import { ceres } from './occator';
 import { WallScene } from './solarwall';
 import { phobos } from './stickney';
 import { MARS_AT, MARS_SIZE } from './phobos';
-import { callisto } from './valhalla';
+import { callisto, callistoBeyond } from './valhalla';
+import { BATTLE_GROUND_HALF, battleHeight } from './battlefield';
 import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { crackBeyond, europa } from './lineae';
 import { CRACK_JUPITER } from './crack';
@@ -861,6 +862,7 @@ export class Landmarks {
     this.scenes.set('wall', this.wall.group);
     this.scenes.set('phobos', this.mars());
     this.scenes.set('callisto', this.underJupiter(callisto(), JUPITER_AT, JUPITER_SIZE));
+    this.scenes.set('valhalla', this.underJupiter(callistoBeyond(BATTLE_GROUND_HALF.x, battleHeight), JUPITER_AT, JUPITER_SIZE));
     this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
     this.scenes.set('crack', this.underJupiter(crackBeyond(), CRACK_JUPITER, EUROPA_JUPITER_SIZE));
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));

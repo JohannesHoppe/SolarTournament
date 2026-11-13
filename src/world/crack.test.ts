@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { asin, cos } from '../detmath';
 import { BRIDGE_HALF, bridgePlacements, CRACK_GROUND_HALF, CRACK_JUPITER, CRACK_SUN, CRACK_TRACK, crackRelief, gorgeMiddle, RIFT_DEPTH, riftDepth, riftHeight, riftMiddle, TRACK_LIFT } from './crack';
 import { LAND } from './europa';
 import { reliefOutside } from '../test/field';
@@ -62,12 +63,12 @@ describe("Europa's Crack as a race world", () => {
 
   it('heads its long straight at Jupiter, low over the horizon, the sun low behind it', () => {
     const toward = CRACK_JUPITER.clone().normalize();
-    const elevation = Math.asin(toward.y);
+    const elevation = asin(toward.y);
     expect(elevation).toBeGreaterThan(0.14);
     expect(elevation).toBeLessThan(0.26);
     // along the second segment the track heads within 10° of it
     const ahead = new THREE.Vector3(0, 0, -1);
-    expect(new THREE.Vector3(toward.x, 0, toward.z).normalize().dot(ahead)).toBeGreaterThan(Math.cos(0.17));
+    expect(new THREE.Vector3(toward.x, 0, toward.z).normalize().dot(ahead)).toBeGreaterThan(cos(0.17));
     expect(CRACK_SUN.dot(ahead)).toBeLessThan(0);
     expect(CRACK_SUN.y).toBeGreaterThan(0.15);
   });

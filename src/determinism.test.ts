@@ -101,7 +101,7 @@ describe('the shared world on every machine', () => {
       derelict: 'd51dc8297fd357f6',
       crack: '12c20ea39716a1e4',
       throat: '61c4e0677419b614',
-      valhalla: '1f76cc3193c365f5',
+      valhalla: 'ccfdfa724f2e5966',
       lineae: '8ceda99699816829',
     });
   });
