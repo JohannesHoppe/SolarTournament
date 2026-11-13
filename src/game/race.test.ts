@@ -47,7 +47,7 @@ describe('the race course', () => {
       junkyard: 'd0509f083fbedab3',
       giant: '1cd64decf1861ab0',
       derelict: 'b85ad9dcd96b2eef',
-      crack: 'dfc4e91cc54b558a',
+      crack: '10f331ef438e512c',
       throat: '5c8c7ac694c3203c',
     });
   });
@@ -67,7 +67,7 @@ describe('the race course', () => {
       junkyard: '20234dbcd0ce36e1',
       giant: '72a8e02d41a0854f',
       derelict: '777d0a716818840b',
-      crack: '32a8354ce654d2a3',
+      crack: '9596d7592bb9a672',
       throat: '4ab2c884b68d6e2e',
     });
   });

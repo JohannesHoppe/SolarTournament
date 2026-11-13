@@ -34,7 +34,7 @@ export interface Transport {
  * a lobby of their own. A change to a message that a build before it would read otherwise (a
  * key added, removed or required, a bound narrowed, a meaning changed) raises it by one.
  */
-export const PROTOCOL = 19;
+export const PROTOCOL = 20;
 /** Identifies the game and its protocol on the signaling relays and between local tabs; peers with other app ids never meet. */
 const APP_ID = `solartournament-2584-p${PROTOCOL}`;
 /**
