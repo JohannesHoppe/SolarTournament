@@ -7912,8 +7912,14 @@ export class Game implements OnlineGame {
     if (shooter.owner !== null) return;
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position, shooter);
     if (this.roundOver) return;
-    shooter.score += TORPEDO_DOWN_POINTS;
+    // the own torpedo shot down earns nothing, only a jeer
+    const own = torpedo.shooter === shooter;
+    if (!own) shooter.score += TORPEDO_DOWN_POINTS;
     if (!shooter.isLocal) return;
+    if (own) {
+      this.hud.popup(this.camera, torpedo.position, t('OWN GOAL'), 'hit');
+      return;
+    }
     this.torpedoesDown++;
     this.hud.popup(this.camera, torpedo.position, t('TORPEDO DOWN +{points}', { points: TORPEDO_DOWN_POINTS }), 'points');
     this.moment('interception');

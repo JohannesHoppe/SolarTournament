@@ -370,6 +370,7 @@ export const DE: Catalog = {
   'NOVA · {name}': 'NOVA · {name}',
   'NOVA CORE ACTIVATED · {distance} · GET OUT': 'NOVA-KERN AKTIVIERT · {distance} · RAUS HIER',
   'TORPEDO DOWN +{points}': 'TORPEDO ABGESCHOSSEN +{points}',
+  'OWN GOAL': 'EIGENTOR',
   'Plating took the torpedo': 'Panzerplatten haben den Torpedo abgefangen',
   'Torpedo hit': 'Torpedotreffer',
   'CLOSE CALL +{points}': 'KNAPP VORBEI +{points}',
