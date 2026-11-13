@@ -2,9 +2,10 @@
 generator in Blender, from MakeHuman's CC0 assets, saved as a .blend and rendered as a picture of
 its bust for review. Run in Blender: Blender -b --python people.py -- <folder> [who ...], every
 person without a name given."""
-import bpy, bmesh, sys, math
+import bpy, bmesh, sys, math, os
 from mathutils import Vector
-from bl_ext.blender_org.mpfb.services import HumanService, TargetService
+sys.path.insert(0, os.path.dirname(__file__))
+from human import human
 
 ARGS = sys.argv[sys.argv.index('--') + 1:]
 OUT, ONLY = ARGS[0], set(ARGS[1:])
@@ -24,9 +25,6 @@ PEOPLE = {
     'kesh': dict(phenotype=dict(gender=0.0, age=0.72, muscle=0.75, weight=0.7, height=0.5, proportions=0.4), hair='short04', eyebrows='eyebrow004', clothes=['male_worksuit01', 'shoes04'], skin='middleage_asian_female', targets={'head-age-incr': 1.0, 'neck-double-incr': 0.3, 'measure-shoulder-dist-incr': 0.8, 'torso-scale-horiz-incr': 0.5, 'l-lowerarm-scale-horiz-incr': 0.6, 'r-lowerarm-scale-horiz-incr': 0.6, 'l-cheek-bones-incr': 0.4, 'r-cheek-bones-incr': 0.4}, shave=0.05, apron=True),
     'saw': dict(phenotype=dict(gender=1.0, age=0.4, muscle=0.55, weight=0.3, height=0.52, proportions=0.45), hair='short04', eyebrows='eyebrow011', clothes=['male_casualsuit05', 'fedora_cocked', 'shoes06'], skin='young_asian_male', targets={'l-cheek-volume-decr': 0.6, 'r-cheek-volume-decr': 0.6}),
 }
-
-def asset(sub, name):
-    return f'{name}/{name}.mhclo' if name else ''
 
 # Kesh's apron: the coverall's front from the chest to above the knees, lifted off it by APRON_LIFT
 # (m) as a part of its own in a copy of the coverall's texture (figure.py dyes it as leather)
@@ -75,25 +73,8 @@ for who, spec in PEOPLE.items():
     if ONLY and who not in ONLY:
         continue
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    info = HumanService._create_default_human_info_dict()
-    pheno = TargetService.get_default_macro_info_dict()
-    pheno.update(spec['phenotype'])
-    pheno['race'] = {'asian': 0.05, 'african': 0.05, 'caucasian': 0.9}
-    info['phenotype'] = pheno
-    info['eyes'] = 'low-poly/low-poly.mhclo'
-    info['eyebrows'] = asset('eyebrows', spec['eyebrows'])
-    info['eyelashes'] = 'eyelashes01/eyelashes01.mhclo'
-    info['hair'] = asset('hair', spec['hair'])
-    info['clothes'] = [asset('clothes', c) for c in spec['clothes']]
-    info['skin_mhmat'] = f"{spec['skin']}/{spec['skin']}.mhmat"
-    info['skin_material_type'] = 'MAKESKIN'
-    info['alternative_materials'] = {}
-    # a rig, so the clothes are rigged as they are put on (figure.py poses the figure on it)
-    info['rig'] = 'game_engine'
-    info['targets'] = [{'target': name, 'value': value} for name, value in spec.get('targets', {}).items()]
-    settings = HumanService.get_default_deserialization_settings()
-    settings['subdiv_levels'] = 0
-    base = HumanService.deserialize_from_dict(info, settings)
+    # rigged, so the clothes follow figure.py's pose
+    base = human(spec)
     if 'shave' in spec:
         shave(next(o for o in bpy.data.objects if o.type == 'MESH' and spec['hair'] in o.name), spec['shave'])
     if spec.get('apron'):

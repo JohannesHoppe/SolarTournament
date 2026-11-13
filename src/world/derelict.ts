@@ -5,7 +5,7 @@ import { sternAt } from './arenas';
 import { MASS } from './bodies';
 import { cos, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { frozenSurface, frozenUv, type FrozenCell } from '../view/frozen';
+import { FROZEN_NEAR, frostMaterial, frozenSurface, frozenUv, loadFrozen, type FrozenCell } from '../view/frozen';
 
 /**
  * The break of the world ship PAAA 01 (see README, "The universe"): ice crystals still escaping
@@ -122,21 +122,28 @@ const mistFragment = /* glsl */ `
 `;
 
 /**
- * The dead, by what they look like: how they were dressed, how they lie frozen, how many of them
- * (on the full picture; fewer on a cheaper one, see setParticles). A pair counts as one: two
- * holding on to each other. 360 bodies in all, some 300 triangles each.
+ * The dead, by what they look like: each kind one of MakeHuman's figures of the frozen dead (its
+ * number, see view/frozen, loadFrozen: a man or a woman, young or old, in everyday clothes, the
+ * crew's coveralls or under an old helmet, posed in free fall or against the cold), how many of
+ * them (on the full picture; fewer on a cheaper one, see setParticles), and how the figure built
+ * in code that stands in for it until it has loaded is dressed and posed. A pair counts as one:
+ * two holding on to each other. 360 bodies in all.
  */
 const DEAD_KINDS = [
-  { dress: 'everyday', pose: 'crouch', count: 70 },
-  { dress: 'everyday', pose: 'spread', count: 70 },
-  { dress: 'work', pose: 'curled', count: 60 },
-  { dress: 'work', pose: 'reach', count: 60 },
-  { dress: 'eva', pose: 'crouch', count: 50 },
+  { dress: 'everyday', pose: 'crouch', count: 60 },
+  { dress: 'everyday', pose: 'spread', count: 55 },
+  { dress: 'work', pose: 'curled', count: 50 },
+  { dress: 'work', pose: 'reach', count: 45 },
+  { dress: 'everyday', pose: 'spread', count: 40 },
+  { dress: 'everyday', pose: 'curled', count: 40 },
+  { dress: 'eva', pose: 'crouch', count: 45 },
   { dress: 'everyday', pose: 'pair', count: 25 },
 ] as const;
 type Dress = (typeof DEAD_KINDS)[number]['dress'];
 type Pose = 'crouch' | 'spread' | 'curled' | 'reach' | 'embrace';
 const DEAD_TOTAL = DEAD_KINDS.reduce((sum, kind) => sum + kind.count, 0);
+/** Beyond any distance a body is drawn at (units): the far level's reach. */
+const FROZEN_BEYOND = 1e9;
 /** The fewest of each kind drawn on the cheapest picture (a share of them). */
 const DEAD_LEAST = 0.4;
 
@@ -314,6 +321,8 @@ export class Derelict {
   readonly jets: Jet[] = JETS.map((jet) => ({ from: jet.from.clone(), along: jet.along.clone() }));
   private readonly mist: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly meshes: THREE.InstancedMesh[] = [];
+  /** Each kind's far level once its figure has loaded (see dress), drawing the same places as its mesh. */
+  private readonly distant: (THREE.InstancedMesh | undefined)[] = [];
   /** Each of the dead, in the order of the meshes and their instances. */
   private readonly dead: Dead[] = [];
   /** Where each of the dead is now and how it is turned (see update). */
@@ -359,6 +368,37 @@ export class Derelict {
       this.group.add(mesh);
     }
     this.update(0);
+    // the figures built in code stand in for MakeHuman's until they have loaded (none in Node's tests)
+    if (typeof document !== 'undefined') this.dress();
+  }
+
+  /**
+   * Each kind's figure of MakeHuman in place of the one built in code, once it has loaded (see
+   * view/frozen, loadFrozen): its near level for the bodies within FROZEN_NEAR of the camera, its
+   * far one, sharing their places, for the rest; the frost in their shader, no instance's color.
+   */
+  private dress() {
+    this.meshes.forEach((mesh, k) => {
+      loadFrozen(k).then(
+        ({ near, far }) => {
+          mesh.geometry.dispose();
+          mesh.geometry = near.geometry;
+          mesh.material = near.maps.map((map, i) => frostMaterial(map, i > 0, [0, FROZEN_NEAR]));
+          mesh.instanceColor = null;
+          const distant = new THREE.InstancedMesh(
+            far.geometry,
+            far.maps.map((map, i) => frostMaterial(map, i > 0, [FROZEN_NEAR, FROZEN_BEYOND])),
+            DEAD_KINDS[k].count,
+          );
+          distant.instanceMatrix = mesh.instanceMatrix;
+          distant.count = mesh.count;
+          distant.frustumCulled = false;
+          this.distant[k] = distant;
+          this.group.add(distant);
+        },
+        (error) => console.warn('Frozen figure failed', k, error),
+      );
+    });
   }
 
   /**
@@ -455,7 +495,10 @@ export class Derelict {
   setParticles(share: number) {
     this.mist.geometry.setDrawRange(0, Math.round(MIST_CRYSTALS * share));
     this.share = Math.max(DEAD_LEAST, share);
-    this.meshes.forEach((mesh, k) => (mesh.count = Math.round(DEAD_KINDS[k].count * this.share)));
+    this.meshes.forEach((mesh, k) => {
+      mesh.count = Math.round(DEAD_KINDS[k].count * this.share);
+      if (this.distant[k]) this.distant[k].count = mesh.count;
+    });
   }
 
   /** How many of the dead there are, drawn or not. */
