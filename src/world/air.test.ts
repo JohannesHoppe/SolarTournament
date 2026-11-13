@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { airAround, airBurn, FINS, finSpin, airHeat, altitudeIn, CLOG_LOSS, clogging, density, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { airAround, airBurn, airStep, FINS, finSpin, airHeat, altitudeIn, CLOG_LOSS, clogging, density, densityIn, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { TITAN_AIR } from './titan';
+import { THROAT_AIR } from './throat';
 import { footOf, skyPointer } from './reference';
 import { arenaById } from './arenas';
 import { ARENA_LIMIT } from './arena';
@@ -194,6 +196,31 @@ describe("Jupiter's air", () => {
     // clean radiators shed the reactor's waste heat without a trace
     expect(heatInto(m(-200), 0, 0)).toBe(0);
     expect(REACTOR_WASTE).toBeLessThan(COOLING);
+  });
+});
+
+describe("Titan's air", () => {
+  const hull = () => ({ flight: { position: new THREE.Vector3(0, -6000, 0), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) }, perks: { fins: FINS }, finSpin: new THREE.Vector3(), clog: 0, heat: 0, overheated: false, cooling: 50 });
+
+  it('clogs no radiators, however long a ship stays under its deck, where Jupiter’s clog them through', () => {
+    const titan = hull();
+    const jupiter = hull();
+    for (let t = 0; t < 60; t += 0.1) {
+      airStep(titan, TITAN_AIR, 0.1, 100);
+      airStep(jupiter, { center: TITAN_AIR.center, radius: TITAN_AIR.radius }, 0.1, 100);
+    }
+    expect(titan.clog).toBe(0);
+    expect(jupiter.clog).toBe(1);
+  });
+
+  it('drawn clearer, lets the eye reach as much farther as its haze is thinner, its density, drag and heat the same', () => {
+    const eye = new THREE.Vector3(0, -6000, 0);
+    const along = new THREE.Vector3(1, 0, 0);
+    const plain = reachIn(TITAN_AIR, eye, along, SIGHT_DEPTH, 400000);
+    const clear = reachIn(THROAT_AIR, eye, along, SIGHT_DEPTH, 400000);
+    expect(clear / plain).toBeCloseTo(3, 1);
+    expect(clear / 20).toBeGreaterThan(4500);
+    expect(densityIn(THROAT_AIR, eye)).toBe(densityIn(TITAN_AIR, eye));
   });
 });
 

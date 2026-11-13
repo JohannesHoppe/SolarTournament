@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { debrisSet } from './shapes';
 import { junkMass, onCore, plugMass, type JunkBuild } from './junk';
 import { MASS, type Body } from './bodies';
-import { impactDamage, strikeJunk } from '../ship/impact';
+import { impactDamage, sheetDamage, SHEET_SAFE, strikeJunk } from '../ship/impact';
 import { MAX_HULL } from '../ship/ship';
 import { junkField } from '../test/field';
 import { arenaById } from './arenas';
@@ -34,7 +34,7 @@ function strike(build: JunkBuild, scale: number, speed: number, local: THREE.Vec
   return {
     core: struck?.core ?? null,
     felt: (struck?.felt ?? 0) / M,
-    hull: impactDamage(struck?.felt ?? 0),
+    hull: struck?.core ? impactDamage(struck.felt) : (struck?.dent ?? 0),
     kept: ship.velocity.x / (speed * M),
     momentum: [before, ship.velocity.x * ship.mass + piece.velocity.x * piece.mass],
   };
@@ -51,19 +51,28 @@ describe('the Satellite Junkyard’s junk', () => {
     expect(builds.map(plugMass)).toEqual([75, 1000, 250, 0, 75, 1000, 75, 0]);
   });
 
-  it('is punched through where it is sheet, at full speed without a scratch and the momentum kept', () => {
+  it('is punched through where it is sheet: the plug dents the armor by its energy, a scrape at a wing, a solid hit at a tank, never a wreck; the momentum kept', () => {
     for (const b of [...of('satellite'), ...of('shredded'), ...of('stage'), ...of('fairing')]) {
       for (const scale of [1, 3]) {
         const local = sheetPoint(b);
         expect(onCore(b, local)).toBe(false);
         const full = strike(b, scale, 250, local);
         expect(full.core).toBe(false);
-        expect(full.hull).toBe(0);
+        // the dent by the plug's kinetic energy alone, whatever the piece's size
+        expect(full.hull).toBeCloseTo(sheetDamage(plugMass(b), 250 * M), 6);
+        // a full hull survives any one sheet, even at a race's boosted 450 m/s
+        expect(strike(b, scale, 450, local).hull).toBeLessThan(MAX_HULL);
         // the ship flies on, slowed by no more than the plug's share
         expect(full.kept).toBeGreaterThan(0.98);
         expect(full.momentum[1]).toBeCloseTo(full.momentum[0], -2);
+        // a slow touch only scratches the paint
+        expect(strike(b, scale, (SHEET_SAFE / M) * 0.99, local).hull).toBe(0);
       }
     }
+    // the ladder at 250 m/s: a wing's panels a scrape, a fairing's shell a dent, a stage's tank walls a solid hit
+    const at = (kind: JunkBuild['kind']) => Math.round(strike(of(kind)[0], 1, 250, sheetPoint(of(kind)[0])).hull);
+    expect([at('satellite'), at('fairing'), at('stage')]).toEqual([3, 10, 42]);
+    expect(Math.round(strike(of('satellite')[0], 1, 100, sheetPoint(of('satellite')[0])).hull * 10) / 10).toBe(0.5);
   });
 
   it('tears its plug out once as the hull enters, never again while the hull is in the sheet', () => {
