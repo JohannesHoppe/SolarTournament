@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { IDLE, type Controls } from '../input/input';
 import { FlightModel, flyByNose, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
 import { Brake } from '../ship/computer';
+import { BOOST_RECHARGE } from '../ship/driveheat';
 import { Randomizer } from '../random';
 import type { Seen } from '../net/plausible';
 
@@ -27,6 +28,8 @@ export interface Roughness {
   wrecked: boolean;
   /** The density of a planet's air the ship flies in (world/air's; 0 or left out: none): its lift bends the flight (see ship/flight, LIFT). */
   air?: number;
+  /** A racer boosting as often as a race's overdrive recharges (see ship/driveheat): a shove along the nose every BOOST_RECHARGE seconds, never past the limit plus one shove. */
+  boost?: boolean;
 }
 
 const random = (r: Randomizer, length = 1) => new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(length);
@@ -55,6 +58,7 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
   let nextState = 0;
   let firing = false;
   let nextShot = 0;
+  let nextBoost = 0;
   let stallUntil = -Infinity;
   let lastArrival = 0;
   // a blow's venting air spins the hull on for a while
@@ -96,6 +100,12 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
       }
       // blow upon blow, no ship comes past about 700 m/s
       flight.velocity.clampLength(0, TOP_SPEED);
+    }
+    if (rough.boost && t >= nextBoost) {
+      nextBoost = t + BOOST_RECHARGE;
+      const before = flight.velocity.length();
+      flight.velocity.add(flight.forward(nose).multiplyScalar(OVERDRIVE_PUSH));
+      flight.velocity.clampLength(0, Math.max(before, MAX_SPEED + OVERDRIVE_PUSH));
     }
     flight.thrusterFactor = rough.wrecked ? 0.25 : 1.08;
     flight.airDensity = rough.air ?? 0;

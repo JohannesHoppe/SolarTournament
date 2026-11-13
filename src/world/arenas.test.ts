@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARENAS, arenaByKey, arenaOfRound, RACE_ARENAS, RACE_WORLDS } from './arenas';
+import { ARENAS, arenaByKey, arenaOfRound, FIGHT_WORLDS, RACE_ARENAS, RACE_WORLDS, TOURNAMENT_ARENAS } from './arenas';
 
 describe('the arena of a tournament round', () => {
   it('is the same on every browser for the same room and round', () => {
@@ -19,17 +19,39 @@ describe('the arena of a tournament round', () => {
   });
 
   it('is found by its layout key, as a snapshot names it', () => {
-    for (const arena of RACE_ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
+    for (const arena of TOURNAMENT_ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
   });
 
   it('of a race walks through the arenas of free space and the race worlds; every other mode stays in free space', () => {
-    const races = new Set(Array.from({ length: RACE_ARENAS.length }, (_, round) => arenaOfRound('a-room-abcdef', round, true).id));
+    const races = new Set(Array.from({ length: RACE_ARENAS.length }, (_, round) => arenaOfRound('a-room-abcdef', round, 'race').id));
     expect(races.size).toBe(RACE_ARENAS.length);
     for (const world of RACE_WORLDS) expect(races.has(world.id)).toBe(true);
     for (let round = 0; round < 40; round++) expect(ARENAS).toContain(arenaOfRound('a-room-abcdef', round));
     // a room playing every mode in turn meets every race arena in its races, every fifth round
-    const mixed = new Set(Array.from({ length: RACE_ARENAS.length }, (_, k) => arenaOfRound('a-room-abcdef', 1 + 5 * k, true).id));
+    const mixed = new Set(Array.from({ length: RACE_ARENAS.length }, (_, k) => arenaOfRound('a-room-abcdef', 1 + 5 * k, 'race').id));
     expect(mixed.size).toBe(RACE_ARENAS.length);
+  });
+
+  it('of a deathmatch is fought every other time over a world, walking through each kind in an order of its own', () => {
+    const fights = Array.from({ length: 4 * FIGHT_WORLDS.length * ARENAS.length }, (_, round) => arenaOfRound('a-room-abcdef', round, 'deathmatch'));
+    fights.forEach((arena, round) => expect(round % 2 ? FIGHT_WORLDS : ARENAS).toContain(arena));
+    // every world and every arena of free space comes before any comes again
+    expect(new Set(fights.filter((_, round) => round % 2).slice(0, FIGHT_WORLDS.length).map((arena) => arena.id)).size).toBe(FIGHT_WORLDS.length);
+    expect(new Set(fights.filter((_, round) => round % 2 === 0).slice(0, ARENAS.length).map((arena) => arena.id)).size).toBe(ARENAS.length);
+    // a mixed room counts its deathmatches (every fifth round): half of them over a world
+    const mixed = Array.from({ length: 2 * ARENAS.length }, (_, k) => arenaOfRound('a-room-abcdef', 5 * k, 'deathmatch', k));
+    expect(mixed.filter((arena) => FIGHT_WORLDS.includes(arena))).toHaveLength(ARENAS.length);
+    // no other mode is played over a world fought over
+    for (const mode of ['survival', 'flag', 'fleet']) for (let round = 0; round < 20; round++) expect(ARENAS).toContain(arenaOfRound('a-room-abcdef', round, mode));
+  });
+
+  it("of a world fought over stands on its place's ground, under its gravity, inside the arena's edge", () => {
+    for (const world of FIGHT_WORLDS) {
+      expect(world.open).toBeUndefined();
+      expect(world.start).toBeUndefined();
+      expect(world.layout.fall).toBeGreaterThan(0);
+      expect(world.layout.placements!.some((piece) => piece.ground)).toBe(true);
+    }
   });
 });
 

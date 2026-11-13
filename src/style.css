@@ -1364,6 +1364,16 @@ body.touch #hud-message {
   animation: blink 0.4s steps(2) infinite;
 }
 
+/* a race's boost heats the drive: orange while one more shove would burn it out, red while it is burnt out */
+#hud-drive-heat.risky {
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(255, 157, 0, 0.8);
+}
+
+#hud-drive-heat.burnt {
+  background: var(--danger);
+}
+
 #hud-shadow {
   color: var(--hud-bright);
   font-size: 1rem;

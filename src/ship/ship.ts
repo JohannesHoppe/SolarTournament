@@ -15,6 +15,7 @@ import { runningLight } from '../view/textures';
 import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
+import { BURNOUT_DAMAGE, BURNOUT_SECONDS, DriveHeat } from './driveheat';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -359,6 +360,9 @@ export class Ship {
   strain = 0;
   /** Game time until which the main drive cools down after an overdrive. */
   private driveOfflineUntil = 0;
+  /** When its overdrive can fire again (game time, s), and the drive's heat gauge of a race's boost (see ship/driveheat); kept by the browser that runs it. */
+  overdriveReadyAt = 0;
+  readonly driveHeat = new DriveHeat();
   /** Shots fired, so the muzzles alternate per ship. */
   private shots = 0;
   /** The rarely changing part of the state as last sent, and when (see toState). */
@@ -389,6 +393,8 @@ export class Ship {
   finish = -1;
   /** The lap in which it left a gate out, its one skip of that lap (see canSkip in game/race; -1 before any); kept by the browser that runs it. */
   skipLap = -1;
+  /** Its way through a track's branches (see Course.branches in game/race), kept by the browser that runs it. */
+  ways = 0;
   respawnAt = 0;
   protectedUntil = 0;
   /** The ship that shoved this one last (a ram, a kick into its side), and when (game time): its crash soon after is that ship's knockout. */
@@ -589,6 +595,7 @@ export class Ship {
     this.overheated = false;
     this.strain = 0;
     this.driveOfflineUntil = 0;
+    this.driveHeat.reset();
     this.shovedBy = null;
     this.alive = true;
     this.outsideSince = null;
@@ -1000,7 +1007,21 @@ export class Ship {
   /** Hull damage, e.g. from a collision; the plating of an upgraded ship takes some of it (see Perks). */
   structural(amount: number, now: number): DamageStatus {
     if (!this.alive || now < this.protectedUntil) return 'protected';
-    this.hull -= amount * this.perks.damage;
+    return this.takeHull(amount * this.perks.damage);
+  }
+
+  /**
+   * The drive burnt out by a race's boost (see ship/driveheat): dark for BURNOUT_SECONDS, and
+   * BURNOUT_DAMAGE off the hull from inside, which neither a new clone's protection nor plating
+   * spares.
+   */
+  burnOut(now: number): DamageStatus {
+    this.overheatDrive(now + BURNOUT_SECONDS);
+    return this.alive ? this.takeHull(BURNOUT_DAMAGE) : 'protected';
+  }
+
+  private takeHull(amount: number): DamageStatus {
+    this.hull -= amount;
     if (this.hull > 0) return 'hit';
     this.hull = 0;
     this.alive = false;

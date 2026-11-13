@@ -32,17 +32,23 @@ const TRACK_TIME = 160;
 
 describe('every race course', () => {
   for (const arena of RACE_ARENAS) {
-    it(`is flown by a middling bot in ${arena.id}: a lap through every gate without a crash, in time`, () => {
-      const field = gameField();
-      field.generate(arena.layout);
-      const course = new Course(field, arena.layout.seed);
-      // a lap: every gate in turn, and the pink one again; on a track from the start to the finish
-      const lap = course.lap();
-      const start = course.startOf(0, 0, new THREE.Vector3());
-      const flight = flyRings(field, { ...lap, radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.line }, start, course.startHeading(0, new THREE.Vector3()), SKILL, RACE_SPEED, course.track ? TRACK_TIME : 90);
-      expect(flight.crashed, `crashed after gate ${flight.passed}`).toBe(false);
-      expect(flight.passed, `${flight.passed} of ${lap.points.length} gates in ${flight.seconds.toFixed(0)} s`).toBe(lap.points.length);
-    });
+    // a track's every way through its branches (see Course.branches), each flown whole
+    const branches = arena.layout.course?.form === 'track' ? (arena.layout.course.branches?.length ?? 0) : 0;
+    for (let ways = 0; ways < 1 << branches; ways++) {
+      const way = branches ? ` on the ways ${ways.toString(2).padStart(branches, '0')} through its branches` : '';
+      it(`is flown by a middling bot in ${arena.id}${way}: a lap through every gate without a crash, in time`, () => {
+        const field = gameField();
+        field.generate(arena.layout);
+        const course = new Course(field, arena.layout.seed);
+        // a lap: every gate in turn, and the pink one again; on a track from the start to the finish
+        const lap = course.lap(ways);
+        const start = course.startOf(0, 0, new THREE.Vector3());
+        const flight = flyRings(field, { ...lap, radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.lineOf(ways) }, start, course.startHeading(0, new THREE.Vector3()), SKILL, RACE_SPEED, course.track ? TRACK_TIME : 90);
+        if (branches) console.info(`${arena.id}, ways ${ways}: ${flight.passed} gates in ${flight.seconds.toFixed(0)} s`);
+        expect(flight.crashed, `crashed after gate ${flight.passed}`).toBe(false);
+        expect(flight.passed, `${flight.passed} of ${lap.points.length} gates in ${flight.seconds.toFixed(0)} s`).toBe(lap.points.length);
+      });
+    }
   }
 });
 

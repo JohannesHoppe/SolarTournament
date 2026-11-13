@@ -865,6 +865,7 @@ export class Landmarks {
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());
+    this.scenes.set('throat', this.titan());
     this.scenes.set('enceladus', this.enceladus());
     this.scenes.set('miranda', miranda());
     this.scenes.set('pluto', pluto());
@@ -888,7 +889,9 @@ export class Landmarks {
   show(arena: ArenaProfile) {
     if (this.shown === arena.id) return;
     this.shown = arena.id;
-    for (const [id, scene] of this.scenes) scene.visible = id === arena.id;
+    // a world fought over shows its place's scenery (see ArenaProfile.scenery)
+    const shown = arena.scenery ?? arena.id;
+    for (const [id, scene] of this.scenes) scene.visible = id === shown;
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
     if (arena.id === 'giant') this.jupiter.shine();
     else this.jupiter.calm();

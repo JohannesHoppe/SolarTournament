@@ -67,8 +67,8 @@ export function ringFixture(center: THREE.Vector3, facing: THREE.Vector3, radius
 /** The world itself, for points already in it (see pointsInto). */
 const WORLD = new THREE.Matrix4();
 
-/** Whether a piece stands where its place set it for good, as the ring stations do (IMMOVABLE): a world's ground, and what the Boneyard stands on it (the racks, the depot's modules); a piece striking it bounces off and never knocks it loose. */
-function anchored(piece: Asteroid): boolean {
+/** Whether a piece stands where its place set it for good, as the ring stations do (IMMOVABLE): a world's ground, and what the Boneyard stands on it (the racks, the depot's modules); a piece striking it bounces off and never knocks it loose, and a comet's head breaks up on it without moving it (see game/comet). */
+export function anchored(piece: Asteroid): boolean {
   return !!piece.ground || piece.kind === 'rack';
 }
 

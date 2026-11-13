@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_MASS, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
 import { SUN_DIRECTION } from '../world/space';
 import { Fleet } from './fleet';
-import { ARENAS } from '../world/arenas';
+import { arenaById, ARENAS } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { testField } from '../test/field';
 
@@ -230,6 +230,22 @@ describe("a comet's head", () => {
     c.setClock(80);
     a.setClock(80);
     expect(c.asteroids.get(hull.id)!.object.position.distanceTo(a.asteroids.get(hull.id)!.object.position)).toBeLessThan(1e-6);
+  });
+
+  it("breaks up on a world's ground without moving it: the ground of a race world stays where it lies", () => {
+    const crack = arenaById('crack')!.layout;
+    const field = testField();
+    field.generate(crack);
+    const ground = [...field.asteroids.values()].find((rock) => rock.ground)!;
+    const before = ground.object.position.clone();
+    // a comet diving into the canyon's floor
+    const at = 40;
+    const comet = makeComet(at, new THREE.Vector3(0.3, -0.6, 0.7).normalize(), new THREE.Vector3(0, -18000, 0), 9);
+    fly(field, comet, 1 / 60, 30, 60);
+    expect(comet.broken).toBeLessThan(Infinity);
+    const after = field.asteroids.get(ground.id)!;
+    expect(after.object.position.distanceTo(before)).toBe(0);
+    expect(Number.isFinite(after.object.quaternion.x + after.velocity.length())).toBe(true);
   });
 
   it('is gone for a newcomer who joins just after it broke up on the hull, which it never shoves twice', () => {

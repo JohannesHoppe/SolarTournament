@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -26,6 +26,7 @@ import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMED
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { CRACK_TRACK, crackGroundPlacement, FINISH_MARK } from './crack';
+import { THROAT_FINISH, throatGroundPlacement, THROAT_TRACK } from './throat';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -62,7 +63,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack' | 'valhalla' | 'lineae' | 'throat';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -91,6 +92,8 @@ export interface ArenaProfile {
   hazeLight?: { deck: THREE.Color; deep: THREE.Color };
   /** A place of the campaign: no edge, no grid; a ship may fly on into the empty dark as far as it likes. */
   open?: boolean;
+  /** The place whose scenery it shows around its field (see Landmarks.show), where it is not its own: a world fought over shares its place's ground and sky. */
+  scenery?: ArenaId;
   /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
   start?: { at: [number, number, number]; toward: [number, number, number] };
 }
@@ -203,6 +206,21 @@ function derelict(): Placement[] {
  * second, made-up one.
  */
 /** The Long Ladder's rungs (Haumea, Eris, Lantern, Granary): ice in the dark, a body's white below, the sun a star among the others. */
+/** Kraken Mare: over the haze a dim, cold sky and Saturn's cream; under it all orange twilight. */
+const TITAN_MOOD: Mood = {
+  space: 0x030201,
+  sky: 0xa07850,
+  ground: 0x3a2410,
+  ambient: 1.4,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.07, 0.045, 0.02], size: 540000, shape: 1, turn: 2.2 },
+    { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.03], size: 460000, shape: 0, turn: 1.1 },
+  ],
+  stars: 0.8,
+  starmap: true,
+  dust: [0.8, 0.6, 0.38],
+  grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
+};
 /** The Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice itself, a grade cooler than Callisto's. */
 const EUROPA_MOOD: Mood = {
   space: 0x020203,
@@ -217,6 +235,22 @@ const EUROPA_MOOD: Mood = {
   starmap: true,
   dust: [0.66, 0.7, 0.76],
   grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
+};
+
+/** Valhalla: Callisto's dark, icy ground under Jupiter's cream and rust, the sky's light warm from Jupiter's side, a far sun, a grade a little warmer than the inner moons'. */
+const CALLISTO_MOOD: Mood = {
+  space: 0x020202,
+  sky: 0x9a8a70,
+  ground: 0x24201a,
+  ambient: 1.3,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.06, 0.04, 0.025], size: 540000, shape: 2, turn: 0.7 },
+    { at: [0.6, 0.3, 0.6], color: [0.03, 0.035, 0.045], size: 460000, shape: 0, turn: 2.1 },
+  ],
+  stars: 0.9,
+  starmap: true,
+  dust: [0.64, 0.6, 0.54],
+  grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
 };
 
 const LADDER_MOOD: Mood = {
@@ -429,25 +463,15 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.6, 0.52, 0.46],
     grade: { gain: [1.02, 1, 0.97], lift: [0.0016, 0.0012, 0.001], saturation: 0.9 },
   },
-  // Valhalla: Callisto's dark, icy ground under Jupiter's cream and rust, the sky's light warm
-  // from Jupiter's side, a far sun, a grade a little warmer than the inner moons'
-  callisto: {
-    space: 0x020202,
-    sky: 0x9a8a70,
-    ground: 0x24201a,
-    ambient: 1.3,
-    nebulae: [
-      { at: [-0.6, 0.5, -0.5], color: [0.06, 0.04, 0.025], size: 540000, shape: 2, turn: 0.7 },
-      { at: [0.6, 0.3, 0.6], color: [0.03, 0.035, 0.045], size: 460000, shape: 0, turn: 2.1 },
-    ],
-    stars: 0.9,
-    starmap: true,
-    dust: [0.64, 0.6, 0.54],
-    grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
-  },
+  callisto: CALLISTO_MOOD,
   europa: EUROPA_MOOD,
   // the Crack as a race world: the Lineae's ice and sky
   crack: EUROPA_MOOD,
+  // the Throat as a race world: Kraken Mare's haze and sky
+  throat: TITAN_MOOD,
+  // the worlds fought over: their places' ground and sky
+  valhalla: CALLISTO_MOOD,
+  lineae: EUROPA_MOOD,
   // Flux on Io: sulfur yellow under Jupiter's cream, the lava's orange from below, a warm grade
   io: {
     space: 0x030202,
@@ -478,21 +502,7 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.66, 0.66, 0.66],
     grade: { gain: [1, 1, 1], lift: [0.0013, 0.0013, 0.0013], saturation: 0.88 },
   },
-  // Kraken Mare: over the haze a dim, cold sky and Saturn's cream; under it all orange twilight
-  titan: {
-    space: 0x030201,
-    sky: 0xa07850,
-    ground: 0x3a2410,
-    ambient: 1.4,
-    nebulae: [
-      { at: [-0.6, 0.5, -0.5], color: [0.07, 0.045, 0.02], size: 540000, shape: 1, turn: 2.2 },
-      { at: [0.6, 0.3, 0.6], color: [0.04, 0.035, 0.03], size: 460000, shape: 0, turn: 1.1 },
-    ],
-    stars: 0.8,
-    starmap: true,
-    dust: [0.8, 0.6, 0.38],
-    grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
-  },
+  titan: TITAN_MOOD,
   // the Plumes: white ice under a black sky, Saturn's cream filling a quarter of it, the plumes glittering
   enceladus: {
     space: 0x010203,
@@ -1211,7 +1221,7 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       toughness: 800,
       placements: [crackGroundPlacement(CRACK_TYPE), stationPlacement(STATION_TYPE, POST_HALF)],
       fall: EUROPA_FALL,
-      course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates },
+      course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates, branches: CRACK_TRACK.branches },
     },
     cooling: 1,
     storms: false,
@@ -1226,29 +1236,92 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
     ],
     open: true,
   },
+  {
+    id: 'throat',
+    name: msg('The Throat'),
+    tagline: msg("Through the winding strait of Titan's methane sea, low under the orange haze, carving in its air."),
+    // the strait's sea, banks and bluffs along 22 km, under Titan's air, and the track
+    layout: {
+      key: 'throat',
+      seed: 9500,
+      kind: 'rock',
+      count: 0,
+      minScale: 1,
+      maxScale: 1,
+      radius: FIELD_RADIUS,
+      inner: 0,
+      spin: 0,
+      toughness: 800,
+      placements: [throatGroundPlacement(THROAT_TYPE)],
+      fall: TITAN_FALL,
+      air: TITAN_AIR,
+      course: { form: 'track', points: THROAT_TRACK.points, gates: THROAT_TRACK.gates },
+    },
+    cooling: 1,
+    storms: false,
+    // 9.5 AU from the sun, a small cold disk
+    sun: { size: 16000, intensity: 3, color: 0xfff0dd },
+    mood: MOODS.throat,
+    hazeLight: { deck: TITAN_DECK_LIGHT, deep: TITAN_DEEP_LIGHT },
+    // low over the water in the strait, looking along it
+    preview: { from: [-1500, -4600, 40000], at: [1200, -5400, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Finish'), position: THROAT_FINISH, distance: true },
+      { glyph: 'planet', label: msg('Saturn'), position: TITAN_SATURN, distance: false },
+    ],
+    open: true,
+  },
 ];
+
+/**
+ * The worlds a deathmatch is fought over besides the arenas of free space: tournament arenas of
+ * their own, played only by deathmatches, each a place's ground under its gravity with the
+ * arena's edge around its middle (the ground below, ARENA_LIMIT above): Valhalla's rings of
+ * ridges on Callisto with the Navy's listening post among them, and the Lineae on Europa with the
+ * Crack (200 m wide, 800 m deep) running through the middle and the science station on its floor.
+ */
+export const FIGHT_WORLDS: readonly ArenaProfile[] = [fought('callisto', 'valhalla', 5100), fought('europa', 'lineae', 6100)];
+
+/** A world fought over on a place of the campaign (`place`): its ground, gravity, sky and references, as arena `id` with a field of its own (`seed`), the arena's edge around it and the clones printed where the round finds room. */
+function fought(place: ArenaId, id: ArenaId, seed: number): ArenaProfile {
+  const { open: _open, start: _start, ...profile } = PLACES.find((p) => p.id === place)!;
+  return { ...profile, id, layout: { ...profile.layout, key: id, seed }, mood: MOODS[id], scenery: place };
+}
 
 /** The arenas a race may be flown in: those of free space and the race worlds. */
 export const RACE_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS];
+/** The arenas a deathmatch may be fought in: those of free space and the worlds fought over. */
+export const FIGHT_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...FIGHT_WORLDS];
+/** Every arena of a tournament: free space, the race worlds and the worlds fought over. */
+export const TOURNAMENT_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS, ...FIGHT_WORLDS];
 
-/** The arenas a round of a mode may be played in: a race's (`race`), or those of free space. */
-export const arenasFor = (race: boolean): readonly ArenaProfile[] => (race ? RACE_ARENAS : ARENAS);
+/** The arenas a round of a mode may be played in: a race's, a deathmatch's, or those of free space for every other mode. */
+export const arenasFor = (mode: string): readonly ArenaProfile[] => (mode === 'race' ? RACE_ARENAS : mode === 'deathmatch' ? FIGHT_ARENAS : ARENAS);
 
-export const arenaById = (id: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
+export const arenaById = (id: string): ArenaProfile | undefined => TOURNAMENT_ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
 
 /** The arena the game shows unless something else is chosen: the menu's backdrop, the flight school's home and the solo round's first choice. */
 export const DEFAULT_ARENA: ArenaProfile = arenaById('rings')!;
 
 /** The arena whose field has this layout key (see FieldState). */
-export const arenaByKey = (key: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
+export const arenaByKey = (key: string): ArenaProfile | undefined => TOURNAMENT_ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
 
 /**
- * The arena of a tournament round: the room's code shuffles the arenas of its mode (a race's,
- * `race`, or those of free space) into an order of its own, and the rounds walk through it, so
- * no arena comes twice before all others have come. Every browser works it out alike from code
- * and round.
+ * The arena of a tournament round: the room's code shuffles the arenas of the round's mode into an
+ * order of its own, and the rounds walk through it, so no arena comes twice before all others
+ * have come. A race walks through the arenas of free space and the race worlds together (see
+ * RACE_ARENAS); a deathmatch is fought every other time in free space and over a world, each in
+ * an order of its own (`nth` the round's place among the room's deathmatches: every round of a
+ * room of deathmatches, every fifth of a mixed one); every other mode stays in free space. Every
+ * browser works it out alike from code and round.
  */
-export function arenaOfRound(room: string, round: number, race = false): ArenaProfile {
-  const order = arenasFor(race).map((arena, i) => ({ arena, key: hash(textSeed(room), i, 13) })).sort((a, b) => a.key - b.key);
+export function arenaOfRound(room: string, round: number, mode = 'other', nth = round): ArenaProfile {
+  const shuffled = (arenas: readonly ArenaProfile[], salt: number) => arenas.map((arena, i) => ({ arena, key: hash(textSeed(room), i, salt) })).sort((a, b) => a.key - b.key);
+  if (mode === 'deathmatch') {
+    const worlds = nth % 2 === 1;
+    const order = shuffled(worlds ? FIGHT_WORLDS : ARENAS, worlds ? 17 : 13);
+    return order[Math.floor(nth / 2) % order.length].arena;
+  }
+  const order = shuffled(mode === 'race' ? RACE_ARENAS : ARENAS, 13);
   return order[round % order.length].arena;
 }

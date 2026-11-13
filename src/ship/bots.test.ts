@@ -8,6 +8,7 @@ import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
 import { airBurn, altitudeIn, clogging, dragOn, heatInto, safeSpeed } from '../world/air';
+import { glide, outside } from '../world/hover';
 
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
 const RADIUS = 340;
@@ -158,6 +159,44 @@ describe('bots fly by the Hosts\' rules', () => {
       expect(f.overlap(me.flight.position, RADIUS)).toBeNull();
     }
     expect(me.flight.position.x).toBeGreaterThan(15000);
+  });
+
+  it('over a world fought over dives for what lies low over its ground, taking the ground for no rock in its way', () => {
+    const lineae = testField();
+    lineae.generate(arenaById('lineae')!.layout);
+    const up = new THREE.Vector3();
+    const groundAt = (x: number, z: number) => {
+      const point = at(x, 0, z);
+      return -lineae.groundBelow(point, up)!;
+    };
+    // a probe 30 m over the ice west of the Crack, 1.5 km ahead of the bot flying level 300 m up
+    const probe = at(-30000, groundAt(-30000, 20000) + 600, 20000);
+    const fly = (glides: boolean) => {
+      const me = ship('Kessler', at(-60000, groundAt(-60000, 20000) + 6000, 20000), at(1));
+      me.flight.velocity.set(3000, 0, 0);
+      const bot = new Bot(me, evenSkills(0.5));
+      bot.glide = glides;
+      bot.lure = probe;
+      const pull = new THREE.Vector3();
+      let closest = Infinity;
+      for (let t = 0; t < 20; t += STEP) {
+        pull.set(0, 0, 0);
+        const controls = bot.think(t, [me], lineae);
+        outside(lineae, me.flight.position, me.flight.velocity, RADIUS, STEP, pull, me.flight);
+        me.flight.update(STEP, controls, pull);
+        const height = lineae.groundBelow(me.flight.position, up);
+        if (height !== null && height < RADIUS) {
+          me.flight.position.addScaledVector(up, RADIUS - height);
+          glide(me.flight.velocity, up, STEP);
+        }
+        closest = Math.min(closest, me.flight.position.distanceTo(probe));
+      }
+      return closest;
+    };
+    // the hover field carries it down to the probe; taking the ground for rock, it turns away from it again and again
+    const gliding = fly(true);
+    expect(gliding).toBeLessThan(RADIUS * 4);
+    expect(fly(false)).toBeGreaterThan(gliding * 2);
   });
 
   it('reads who hunts whom from the noses it sees, not from the other bots\' minds', () => {

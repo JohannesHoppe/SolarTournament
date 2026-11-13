@@ -14,6 +14,22 @@ const undrawn = new THREE.MeshBasicMaterial();
 /** Plain hull boxes (half extents, units): 100 m long, 20 m square, as many as the hull has shapes. */
 const PLAIN_HULLS = Array.from({ length: 8 }, () => new THREE.Vector3(1000, 200, 200));
 
+/** A box piece of these half extents: its collider alone. */
+function box(half: THREE.Vector3): THREE.Group {
+  const group = new THREE.Group();
+  const collider = new THREE.Mesh(new THREE.BoxGeometry(half.x * 2, half.y * 2, half.z * 2));
+  collider.userData.collider = true;
+  group.add(collider);
+  return group;
+}
+/**
+ * The templates of every yard's box (see RACK_BOXES), built once for all tests as the module
+ * loads (a field only clones them): three.js names every object it makes with Math.random, which
+ * the campaign's jobs seed for the hands of their pilots (see test/jobsuite), so how many
+ * templates there are never changes how a job is flown.
+ */
+const RACKS = RACK_BOXES.map(box);
+
 /**
  * A field for tests: the real rock shapes (in low detail, so it builds fast, unless the test
  * asks for another) for every kind, rock and ice breaking into pieces of themselves cut at that
@@ -24,14 +40,7 @@ const PLAIN_HULLS = Array.from({ length: 8 }, () => new THREE.Vector3(1000, 200,
 export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3[] = PLAIN_HULLS): AsteroidField {
   const fracture = fractureSet({ collision: detail, near: detail, far: FAR_DETAIL }, () => undrawn);
   const rocks: TemplateSet = { near: shapes(detail), far: [], fracture };
-  const box = (half: THREE.Vector3) => {
-    const group = new THREE.Group();
-    const collider = new THREE.Mesh(new THREE.BoxGeometry(half.x * 2, half.y * 2, half.z * 2));
-    collider.userData.collider = true;
-    group.add(collider);
-    return group;
-  };
-  const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true }, rack: { near: RACK_BOXES.map(box), far: [], box: true, reliefs: RACK_RELIEFS } });
+  const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true }, rack: { near: RACKS, far: [], box: true, reliefs: RACK_RELIEFS } });
   // the Belt's and Rheasilvia's rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining)
   const generate = field.generate.bind(field);
   field.generate = (layout) => {

@@ -6,6 +6,7 @@ import { ARENAS, RACE_ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
 import { bendRadius } from './racingline';
+import { densityIn } from '../world/air';
 import { touchRing } from '../world/gates';
 
 const course = (arena = ARENAS[0]) => {
@@ -49,6 +50,7 @@ describe('the race course', () => {
       hole: '5f892889362a4630',
       derelict: 'b85ad9dcd96b2eef',
       crack: 'dfc4e91cc54b558a',
+      throat: '399ee30478e31b2d',
     });
   });
 
@@ -70,6 +72,7 @@ describe('the race course', () => {
       hole: '38320122bb46bfbb',
       derelict: '777d0a716818840b',
       crack: '32a8354ce654d2a3',
+      throat: '378f574e27866d6b',
     });
   });
 
@@ -127,19 +130,34 @@ describe('the race course', () => {
     expect(c.crossing(0, before.clone().addScaledVector(side, BOOST_RADIUS * 2), after.clone().addScaledVector(side, BOOST_RADIUS * 2))!).toBeGreaterThan(BOOST_RADIUS);
   });
 
-  it('bends gently enough everywhere to be flown at the speed limit with the autopilot', () => {
-    // a quarter more room than the tightest turn at the limit, for a pilot who is not perfect
-    const tightest = turnRadius(MAX_SPEED) * 1.25;
+  it('bends gently enough everywhere to be flown at the speed limit with the autopilot, in an air with its lift', () => {
     const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     for (const arena of RACE_ARENAS) {
       // the line bots fly and the HUD shows: the loop bowed around the field's rock
       const field = testField();
       field.generate(arena.layout);
       const { line } = new Course(field, arena.layout.seed);
-      let least = Infinity;
-      for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.clear(s - 1000, field, a), line.clear(s, field, b), line.clear(s + 1000, field, c)));
-      expect(least, arena.id).toBeGreaterThan(tightest);
+      let worst = Infinity;
+      for (let s = 0; s < line.length; s += 400) {
+        const bend = bendRadius(line.clear(s - 1000, field, a), line.clear(s, field, b), line.clear(s + 1000, field, c));
+        // a quarter more room than the tightest turn at the limit in the air there, for a pilot who is not perfect
+        const tightest = turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: densityIn(field.air, b) }) * 1.25;
+        worst = Math.min(worst, bend / tightest);
+      }
+      expect(worst, arena.id).toBeGreaterThan(1);
     }
+  });
+
+  it('bends in the Throat where only the air carves a ship round at the speed limit', () => {
+    // its tightest bend: tighter than the autopilot turns at the limit without air, wider than with Titan's
+    const throat = RACE_ARENAS.find((arena) => arena.id === 'throat')!;
+    const field = testField();
+    field.generate(throat.layout);
+    const { line } = new Course(field, throat.layout.seed);
+    const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    let least = Infinity;
+    for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.clear(s - 1000, field, a), line.clear(s, field, b), line.clear(s + 1000, field, c)));
+    expect(least).toBeLessThan(turnRadius(MAX_SPEED));
   });
 });
 

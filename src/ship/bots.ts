@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
 import { detectable, LASER_RANGE, noseOn, type Ship } from './ship';
-import { MAIN_THRUST, RCS_THRUST } from './flight';
+import { MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH, RCS_THRUST } from './flight';
+import { BOOST_HEAT, BURNOUT_HEAT } from './driveheat';
 import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
@@ -69,6 +70,28 @@ const RACE_SPEED_FAST = 4400;
 export const RACE_SPEED = (RACE_SPEED_SLOW + RACE_SPEED_FAST) / 2;
 /** A bot's racing speed: the better it flies on average (aim, reflexes, daring), the faster. */
 export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * meanSkill(skills);
+/** At a branch of a track (see Course.branches in game/race) a bot of this daring and more takes the shorter, riskier way, one of less the longer, safer one. */
+export const RISKY_DARING = 0.5;
+/**
+ * A race's boost (the overdrive, see ship/driveheat): a racing bot shoves only on a straight, its
+ * nose within BOOST_NOSE (rad, about 3°) of its flight and of the line ahead, while that line
+ * bends nowhere tighter than BOOST_BEND (units, 1.5 km) for the next BOOST_LOOK seconds at the
+ * boost's top speed; only below BOOST_BELOW of the limit (already fast, a shove gains little);
+ * and only while the shove leaves the drive's gauge BOOST_MARGIN under its limit, less the more
+ * daring the bot (20 at daring 0, none at 1). It keeps what the boost gave it for BOOST_KEEP (s).
+ */
+export const BOOST_NOSE = 0.05;
+export const BOOST_BEND = 30000;
+export const BOOST_LOOK = 5;
+const BOOST_BELOW = 1.1;
+const BOOST_MARGIN = 20;
+export const BOOST_KEEP = 4;
+
+/** Whether a racing bot of `daring` boosts now: the line ahead straight enough (`straight`), its nose on its flight and the line (`aligned`), at `speed`, with the drive's gauge at `heat` (see BOOST_NOSE). */
+export function wantsBoost(daring: number, straight: boolean, aligned: boolean, speed: number, heat: number): boolean {
+  return straight && aligned && speed < MAX_SPEED * BOOST_BELOW && heat + BOOST_HEAT <= BURNOUT_HEAT - BOOST_MARGIN * (1 - daring);
+}
+
 /** A ring of the round as a bot sees it: where it is, which way it faces (unit length), the radius of its opening. */
 export interface Ring {
   center: THREE.Vector3;
@@ -424,6 +447,10 @@ export class Bot {
   /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
   homeAt: THREE.Vector3 | null = null;
+  /** Set by the game: the bot keeps the speed its boost gave it until then (s, see BOOST_KEEP). */
+  boostUntil = 0;
+  /** Set by the game: over a world fought over, the bot takes its ground for no danger, as a racer does (the hover field and its glide carry the hull over it and along its walls), and dives into its hollows and over its ridges with its target. */
+  glide = false;
   /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
   hookUntil = 0;
   hookReadyAt = 0;
@@ -590,9 +617,11 @@ export class Bot {
       toTarget.subVectors(me.position, chaser.flight.position);
       desired.copy(toTarget).normalize().multiplyScalar(CRUISE_SPEED * 0.6);
     } else if (racing) {
-      // through the next gate, at speed; what a gate's coil gave it, it keeps
+      // through the next gate, at speed; what a gate's coil gave it, it keeps, and what its boost
+      // gave it on a straight for a while (see BOOST_KEEP)
       toTarget.subVectors(this.waypoint!, me.position);
-      desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH)));
+      const keep = now < this.boostUntil ? OVERDRIVE_PUSH : BOOST_PUSH;
+      desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + keep)));
       if (target) this.senseJink(target, dt, now);
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
@@ -654,7 +683,7 @@ export class Bot {
     let danger = falling || hot;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
-      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4, racing);
+      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4, racing || this.glide);
       if (hit) {
         danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
         const away = local.subVectors(me.position, hit.center);
@@ -822,7 +851,7 @@ export class Bot {
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
-      // a racer takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
+      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
       if (hit && !(overGround && hit.asteroid?.ground) && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
     }
     return best;
