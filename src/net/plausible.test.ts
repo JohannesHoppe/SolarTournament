@@ -9,7 +9,11 @@ import { killScore } from '../game/friendly';
 import { BOT_RESPAWN_SECONDS } from '../game/sponsors';
 import { streakBonus, Streaks } from '../game/streaks';
 import { TOURNAMENT_SIZE } from './session';
-import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, TORPEDO_SLACK, type Margins, type Seen, type Standing } from './plausible';
+import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, strikeShare, TORPEDO_SLACK, type Margins, type Seen, type Standing } from './plausible';
+import { debrisSet } from '../world/shapes';
+import { junkMass, type JunkBuild } from '../world/junk';
+import { MASS, share } from '../world/bodies';
+import { strikeJunk } from '../ship/impact';
 
 /** Torpedoes a clone online may launch without a probe before the check calls it a cheat. */
 const ALLOWED = ONLINE_LOAD + TORPEDO_SLACK;
@@ -775,5 +779,42 @@ describe('accusations', () => {
     for (const tab of ['w1', 'w2', 'w3', 'w4']) expect(accusations.add('h', tab, false, 3)).toBe(false);
     expect(accusations.add('h', 'p1', true, 3)).toBe(false);
     expect(accusations.add('h', 'p2', true, 3)).toBe(true);
+  });
+});
+
+describe('a strike of the Satellite Junkyard’s junk another browser tells of', () => {
+  const builds = debrisSet().near.map((template) => template.userData.junk as JunkBuild);
+  /** Units per meter. */
+  const M = 20;
+  const at = new THREE.Vector3(1000, 0, 0);
+
+  it('is taken from an honest ship at any speed it reaches, on a sheet or a core, late as a slow link brings it', () => {
+    let worst = 0;
+    for (const build of builds) {
+      for (const scale of [1, 2, 3]) {
+        // up to the speed limit and an overdrive's shove on top, into a piece crossing at its fastest
+        for (const closing of [50, 250, (MAX_SPEED + OVERDRIVE_PUSH) / M + 25]) {
+          for (const local of [new THREE.Vector3(99999, 0, 0), new THREE.Vector3(0, 0, 0)]) {
+            const ship = { position: at.clone(), velocity: new THREE.Vector3(closing * M, 0, 0), mass: MASS.ship };
+            const piece = { position: at.clone(), velocity: new THREE.Vector3(), mass: junkMass(build, scale) };
+            if (!strikeJunk(build, local, ship, piece, new THREE.Vector3(-1, 0, 0), false)) continue;
+            // a second late, the ship as this browser has it half a kilometer off
+            worst = Math.max(worst, strikeShare(at, at, piece.velocity.length(), share(piece.mass, MASS.ship), 10000, -1));
+          }
+        }
+      }
+    }
+    expect(worst).toBeGreaterThan(0);
+    expect(worst).toBeLessThanOrEqual(1);
+  });
+
+  it('is refused for a piece flung faster than a ship could, struck far from the ship, pushed off, or dated long ago', () => {
+    const most = share(junkMass(builds[0], 1), MASS.ship);
+    const honest = 300 * M * 1.3 * most;
+    expect(strikeShare(at, at, honest, most, 0, 0)).toBeLessThanOrEqual(1);
+    expect(strikeShare(at, at, honest * 3, most, 0, 0)).toBeGreaterThan(1);
+    expect(strikeShare(at, at, honest, most, AIM_SLACK * 2, 0)).toBeGreaterThan(1);
+    expect(strikeShare(at, at.clone().add(new THREE.Vector3(3000, 0, 0)), honest, most, 0, 0)).toBeGreaterThan(1);
+    expect(strikeShare(at, at, honest, most, 0, 10)).toBeGreaterThan(1);
   });
 });

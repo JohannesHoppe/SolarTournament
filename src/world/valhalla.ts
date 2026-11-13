@@ -15,7 +15,7 @@ import { GROUND_HALF, groundRelief, surfaceHeight } from './callisto';
  */
 
 /** Callisto's ground: dark grey-brown dust over ice (it reflects some 20 % of the light), lit faintly by Jupiter's cream glow. */
-const CALLISTO_TINT = 0xd8d2c8;
+export const CALLISTO_TINT = 0xd8d2c8;
 const CALLISTO_GLOW = 0x1c1a16;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/callisto gives (see reliefGround). */
@@ -59,7 +59,10 @@ const DUST = new THREE.Color(0.075, 0.068, 0.058);
 const ICE = new THREE.Color(0.2, 0.2, 0.2);
 const tone = new Noise(5006);
 
-/** The moon beyond the field's ground, from 7 km out to its horizon some 30 km away, drawn behind everything. */
-export function callisto(): THREE.Group {
-  return moonBeyond(GROUND_HALF.x, 30 * 20000, surfaceHeight, (x, z, color) => color.copy(DUST).lerp(ICE, Math.max(0, tone.fractal(x / 40000, 0.5, z / 40000, 3) - 0.15)), CALLISTO_GLOW);
+/** The moon beyond a field's ground of `half` (units, half its width) at the heights `height` gives, out to its horizon some 30 km away, drawn behind everything. */
+export function callistoBeyond(half: number, height: (x: number, z: number) => number): THREE.Group {
+  return moonBeyond(half, 30 * 20000, height, (x, z, color) => color.copy(DUST).lerp(ICE, Math.max(0, tone.fractal(x / 40000, 0.5, z / 40000, 3) - 0.15)), CALLISTO_GLOW);
 }
+
+/** The moon beyond the place's field ground, from 7 km out, drawn behind everything. */
+export const callisto = (): THREE.Group => callistoBeyond(GROUND_HALF.x, surfaceHeight);

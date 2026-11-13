@@ -602,7 +602,7 @@ export const THROAT_PREVIEW = (() => {
 export const RIG_HALF = new THREE.Vector3(60 * M, 85 * M, 50 * M);
 export const SIGN_HALF = new THREE.Vector3(9 * M, 70 * M, 9 * M);
 export const ARCH_HALF = new THREE.Vector3((NARROWS + FACE + 70) * M, 28 * M, 40 * M);
-export const TOWER_HALF = new THREE.Vector3(12 * M, 80 * M, 12 * M);
+export const BEACON_HALF = new THREE.Vector3(12 * M, 80 * M, 12 * M);
 export const WRECK_HALF = new THREE.Vector3(22 * M, 30 * M, 80 * M);
 /** The arches' undersides over the sea (units, 110 m). */
 export const ARCH_CLEARANCE = 110 * M;
@@ -653,7 +653,7 @@ export const LANDMARKS: readonly Landmark[] = (() => {
   const split = LEG_STARTS[LOOP_FIRST] + Math.round((900 * M) / FINE);
   const fork = Math.round((900 * M) / FINE);
   const tip = at(STRAIT, split).add(at(CANYON_LINE, fork)).multiplyScalar(0.5);
-  stand('tower', tip, across(STRAIT, split), TOWER_HALF);
+  stand('tower', tip, across(STRAIT, split), BEACON_HALF);
   // the wreck beached on the outside of the long sweeper after the Elbow
   const sweep = mid(SWEEPER_LEG);
   stand('wreck', beside(STRAIT, sweep, outside(sweep) * (STRAIT.width[sweep] + 25 * M)), across(STRAIT, sweep), WRECK_HALF);

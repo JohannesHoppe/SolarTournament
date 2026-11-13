@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, STRAIT_TYPES } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -27,6 +27,8 @@ import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { CRACK_TRACK, crackGroundPlacement, FINISH_MARK } from './crack';
 import { landmarkPlacements, THROAT_AIR, THROAT_FINISH, throatGroundPlacement, THROAT_PREVIEW, THROAT_TRACK } from './throat';
+import { BOUNDS as VALHALLA_BOUNDS, battlefieldPlacements, battleProbe, PAD_AT as VALHALLA_PADS, STEADFAST_MARK } from './battlefield';
+import type { Bounds } from './arena';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -96,6 +98,12 @@ export interface ArenaProfile {
   scenery?: ArenaId;
   /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
   start?: { at: [number, number, number]; toward: [number, number, number] };
+  /** An edge of its own over a world (see Bounds in world/arena): round its middle up to a ceiling; without, the sphere of ARENA_LIMIT. */
+  bounds?: Bounds;
+  /** Where a sponsor probe of a round shows up, from the numbers `h` gives (see Probes.schedule); without, anywhere in the field. */
+  probeAt?: (h: (k: number) => number, out: THREE.Vector3) => THREE.Vector3;
+  /** Over a world fought over, the pads its clones are printed on (the middles of their decks' tops, units); without, level ground at the field's edge. */
+  pads?: readonly THREE.Vector3[];
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
@@ -1274,12 +1282,36 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
 
 /**
  * The worlds a deathmatch is fought over besides the arenas of free space: tournament arenas of
- * their own, played only by deathmatches, each a place's ground under its gravity with the
- * arena's edge around its middle (the ground below, ARENA_LIMIT above): Valhalla's rings of
- * ridges on Callisto with the Navy's listening post among them, and the Lineae on Europa with the
- * Crack (200 m wide, 800 m deep) running through the middle and the science station on its floor.
+ * their own, played only by deathmatches, each a world's ground under its gravity with the
+ * arena's edge around its middle: Valhalla on Callisto, its scarps packed tight round the wreck of
+ * the battlecruiser Steadfast, low and tight under its own edge (see world/battlefield), and the
+ * Lineae on Europa with the Crack (200 m wide, 800 m deep) running through the middle and the
+ * science station on its floor, the sphere of ARENA_LIMIT round it.
  */
-export const FIGHT_WORLDS: readonly ArenaProfile[] = [fought('callisto', 'valhalla', 5100), fought('europa', 'lineae', 6100)];
+export const FIGHT_WORLDS: readonly ArenaProfile[] = [
+  {
+    id: 'valhalla',
+    name: msg('Valhalla'),
+    tagline: msg("Callisto's ring zone packed tight, scarp after scarp, and in the furrow through them the Navy's battlecruiser Steadfast, broken in two."),
+    // its ground of scarps and gorges, the cruiser's halves, the ice bridges and the clones' pads (see world/battlefield)
+    layout: { key: 'valhalla', seed: 5100, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: battlefieldPlacements(BATTLE_TYPES), fall: CALLISTO_FALL },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena, a little brighter for the ice its fights churn up
+    sun: { size: 30000, intensity: 4.4, color: 0xfff0dd },
+    mood: MOODS.valhalla,
+    // over a scarp, looking down the furrow at the cruiser's stern half
+    preview: { from: [24000, 2000, 9000], at: [6000, -2400, 0] },
+    references: [
+      { glyph: 'hull', label: msg('Steadfast'), position: STEADFAST_MARK, distance: true },
+      { glyph: 'planet', label: msg('Jupiter'), position: JUPITER_AT, distance: false },
+    ],
+    bounds: VALHALLA_BOUNDS,
+    probeAt: battleProbe,
+    pads: VALHALLA_PADS,
+  },
+  fought('europa', 'lineae', 6100),
+];
 
 /** A world fought over on a place of the campaign (`place`): its ground, gravity, sky and references, as arena `id` with a field of its own (`seed`), the arena's edge around it and the clones printed where the round finds room. */
 function fought(place: ArenaId, id: ArenaId, seed: number): ArenaProfile {

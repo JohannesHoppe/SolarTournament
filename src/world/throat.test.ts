@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARCH_CLEARANCE, ARCH_HALF, BENDS, CANYON_LINE, LANDMARKS, legStart, RIG_HALF, SIGN_HALF, STRAIT, THROAT_AIR, THROAT_GROUND_HALF, THROAT_TRACK, throatGround, throatRelief, throatSea, TOWER_HALF, TRACK_LIFT, WRECK_HALF } from './throat';
+import { ARCH_CLEARANCE, ARCH_HALF, BENDS, CANYON_LINE, LANDMARKS, legStart, RIG_HALF, SIGN_HALF, STRAIT, THROAT_AIR, THROAT_GROUND_HALF, THROAT_TRACK, throatGround, throatRelief, throatSea, BEACON_HALF, TRACK_LIFT, WRECK_HALF } from './throat';
 import { airStep, altitudeIn, densityIn, reachIn, safeSpeed, SIGHT_DEPTH } from './air';
 import { COOLING_SHADOW, MAX_HEAT } from '../ship/ship';
 import { reliefOutside } from '../test/field';
@@ -125,7 +125,7 @@ describe("Kraken Mare's Throat as a race world", () => {
   it('stands its landmarks clear of the track: the arches high over it and over its gates, the rest beside it', () => {
     const { points, branches } = THROAT_TRACK;
     const all = [...points, ...branches.flatMap((branch) => branch.points)];
-    const halves = { rig: RIG_HALF, sign: SIGN_HALF, arch: ARCH_HALF, tower: TOWER_HALF, wreck: WRECK_HALF };
+    const halves = { rig: RIG_HALF, sign: SIGN_HALF, arch: ARCH_HALF, tower: BEACON_HALF, wreck: WRECK_HALF };
     for (const mark of LANDMARKS) {
       const half = halves[mark.kind];
       const reach = Math.max(half.x, half.z);
