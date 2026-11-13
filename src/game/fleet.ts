@@ -14,6 +14,8 @@ import { Elevation, EMPHASES, machinery } from './machinery';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
 import { NOVA_RADIUS } from './items';
+import { SIEGE_DISTANCE } from '../ship/bots';
+import type { Air } from '../world/air';
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -159,10 +161,17 @@ const STEER = 0.3;
  * plane whose band around the center (where its level hull reaches on the orbit, from its entry
  * in to the orbit) the fewest pieces of the field cross on their way, each with ROCK_CLEAR to
  * spare. It follows from the field as laid out, the same on every browser: over the Rings' sheet
- * of ice, say. It comes in at that height and holds it.
+ * of ice, say; over a planet's air no lower than HOLD_OVER_DECK asks, above LANE_MAX if need be.
+ * It comes in at that height and holds it.
  */
 const LANE_MAX = 12000;
 const LANE_STEP = 500;
+/**
+ * In a planet's air its lane runs no lower than keeps the hold of a ship attacking any of its
+ * parts this far over the cloud deck (units, 50 m, see deckFloor): every part shows itself in
+ * the clear air over the deck, the batteries under its keel too.
+ */
+const HOLD_OVER_DECK = 1000;
 /** How many points along a piece's orbit the lane is checked at. */
 const LANE_SAMPLES = 120;
 /** Its hull keeps this far from every piece of the field it dodges (units, 60 m, see DODGE_MASS), the piece's whole reach counted. */
@@ -1367,11 +1376,15 @@ export class Fleet implements Obstacle {
       const at = Array.from({ length: turns ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
       return { at, reach: piece.radius + ROCK_CLEAR };
     });
-    let lane = 0;
+    // the plane first, then up and down in turn; in a planet's air only those over its floor (see
+    // deckFloor), else upwards from the floor
+    const near = Array.from({ length: (LANE_MAX / LANE_STEP) * 2 + 1 }, (_, k) => (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LANE_STEP || 0);
+    const floor = field.air ? this.deckFloor(field.air, ORBIT - flank) : -Infinity;
+    const over = near.filter((height) => height >= floor);
+    const heights = over.length ? over : near.map((_, k) => Math.ceil(floor / LANE_STEP) * LANE_STEP + k * LANE_STEP);
+    let lane = heights[0];
     let fewest = Infinity;
-    for (let k = 0; k <= (LANE_MAX / LANE_STEP) * 2; k++) {
-      // the plane first, then up and down in turn
-      const height = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LANE_STEP || 0;
+    for (const height of heights) {
       if (sheet > 0 && height + low < sheet + ROCK_CLEAR && height + high > -sheet - ROCK_CLEAR) continue;
       const inner = ORBIT - flank;
       const outer = hypot(entryRadius(height) + flank, length);
@@ -1384,6 +1397,21 @@ export class Fleet implements Obstacle {
       }
     }
     return lane;
+  }
+
+  /**
+   * The lowest lane in a planet's `air` (units) at which a ship attacking any of its parts holds
+   * over the cloud deck: a ship holds SIEGE_DISTANCE off a part, on the side it faces (see
+   * siegeFrom), so off a battery under the keel that far below it; a hold under the deck sees the
+   * part only through the deck, which no eye, laser or lock goes through (see world/air). So the
+   * lowest such hold keeps HOLD_OVER_DECK over the deck where the orbit's hull comes nearest the
+   * planet's axis, `inner` from it (the air's center lies on the arena's vertical axis).
+   */
+  private deckFloor(air: Air, inner: number): number {
+    let under = 0;
+    for (const zone of this.zones) under = Math.min(under, zone.at.y + SIEGE_DISTANCE * Math.min(0, zone.face.y));
+    const reach = air.radius + HOLD_OVER_DECK;
+    return air.center.y + Math.sqrt(Math.max(0, reach * reach - inner * inner)) - under;
   }
 
   /**
