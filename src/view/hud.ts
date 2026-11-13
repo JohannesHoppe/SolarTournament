@@ -15,6 +15,7 @@ import type { Reference } from '../world/arenas';
 import { climbOf, closure, heightOf } from '../world/reference';
 import { altitudeIn, upIn, type Air } from '../world/air';
 import { atan2 } from '../detmath';
+import { BURNOUT_HEAT } from '../ship/driveheat';
 
 /** The master caution above the alarm list names the worst level. */
 const MASTER: Record<AlarmLevel, string> = { caution: msg('CAUTION'), warning: msg('WARNING'), critical: msg('CRITICAL') };
@@ -100,6 +101,7 @@ export class Hud {
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
   private readonly overdrive = $('hud-overdrive');
+  private readonly driveHeat = $('hud-drive-heat');
   private readonly hook = $('hud-hook');
   private readonly torpedo = $('hud-torpedo');
   private readonly prograde = $('prograde');
@@ -468,6 +470,19 @@ export class Hud {
   setOverdrive(seconds: number) {
     setText(this.overdrive, seconds > 0 ? t('Overdrive {s} s', { s: Math.ceil(seconds) }) : t('Overdrive ready'));
     setClass(this.overdrive, 'ready', seconds <= 0);
+  }
+
+  /**
+   * The drive's heat gauge of a race's boost (see ship/driveheat): its level (null: no gauge, out
+   * of a race), orange while one more shove would burn the drive out (`risky`), red past its limit.
+   */
+  setDriveHeat(level: number | null, risky: boolean) {
+    const gauge = this.driveHeat.parentElement!.parentElement!;
+    if (gauge.hidden !== (level === null)) gauge.hidden = level === null;
+    if (level === null) return;
+    this.driveHeat.style.width = `${Math.min(1, level / BURNOUT_HEAT) * 100}%`;
+    setClass(this.driveHeat, 'risky', risky && level <= BURNOUT_HEAT);
+    setClass(this.driveHeat, 'burnt', level > BURNOUT_HEAT);
   }
 
   /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready; not shown at all for a ship that carries none (`carried`, see game/hangar, GEAR). */

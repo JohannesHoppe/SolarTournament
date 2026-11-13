@@ -6,6 +6,7 @@ import { arenaById } from './arenas';
 import { reliefOutside, testField } from '../test/field';
 import { Course, GATE_RADIUS } from '../game/race';
 import { SHIP_RADIUS } from '../test/pilot';
+import { bendRadius } from '../game/racingline';
 
 const crack = arenaById('crack')!;
 const course = () => {
@@ -61,6 +62,38 @@ describe("Europa's Crack as a race world", () => {
         c.startOf(passed, slot, at);
         expect(field.overlap(at, SHIP_RADIUS), `passed ${passed} slot ${slot}`).toBeFalsy();
       }
+    }
+  });
+
+  it('splits twice into two ways that join again, one shorter and riskier, every point of either over the ground', () => {
+    const { points, branches } = CRACK_TRACK;
+    expect(branches.length).toBeGreaterThanOrEqual(2);
+    const length = (way: readonly THREE.Vector3[]) => way.reduce((sum, point, i) => sum + (i ? point.distanceTo(way[i - 1]) : 0), 0);
+    for (const branch of branches) {
+      const own = points.slice(branch.split, branch.join + 1);
+      const other = [points[branch.split], ...branch.points, points[branch.join]];
+      const [risky, safe] = branch.risky ? [other, own] : [own, other];
+      console.info(`a branch: ${(length(risky) / 20000).toFixed(2)} km the risky way, ${(length(safe) / 20000).toFixed(2)} km the safe way, ${branch.gates.length} gates on each`);
+      expect(length(risky)).toBeLessThan(length(safe) - 6000);
+      expect(branch.gates.length).toBeGreaterThan(0);
+      for (const point of branch.points) {
+        expect(point.y - surfaceHeight(point.x, point.z), `${point.toArray()}`).toBeGreaterThan(400);
+        expect(Math.abs(point.x)).toBeLessThan(CRACK_GROUND_HALF.x - 4000);
+      }
+      // the other way bends nowhere tighter than its tight bend (500 m), measured over 100 m either way
+      for (let i = 1; i < other.length - 1; i++) expect(bendRadius(other[i - 1], other[i], other[i + 1]), `point ${i}`).toBeGreaterThan(9000);
+      // and its gates stand well apart from the track's own, their rings far from touching
+      const { course: c } = course();
+      for (const { gate } of branch.gates) expect(c.gatePoint(gate, 1 << branches.indexOf(branch)).distanceTo(c.points[gate]), `gate ${gate}`).toBeGreaterThan(GATE_RADIUS * 2.5);
+    }
+  });
+
+  it('stands the gates of every way through the branches 600 m apart or more, across the tight bend too', () => {
+    const { course: c } = course();
+    expect(c.branches).toBe(CRACK_TRACK.branches.length);
+    for (let ways = 0; ways < 1 << c.branches; ways++) {
+      const { points } = c.lap(ways);
+      for (let i = 1; i < points.length; i++) expect(points[i].distanceTo(points[i - 1]), `ways ${ways} gate ${i}`).toBeGreaterThan(12000);
     }
   });
 });

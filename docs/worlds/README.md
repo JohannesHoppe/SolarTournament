@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), step 2 (the first race world), the lift in air of step 3 and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), step 2 (the first race world), the lift in air of step 3, step 4 (branches and the boost) and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -43,7 +43,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 ## Race tracks
 
 - **From one place to another** (built: the Crack, 27.5 km). A track runs from a start to a finish across a world (some tens of kilometres), not around a loop in a ball of space. Its gates are laid low over the ground, through canyons, over ridges, between the things that stand on it, close past rock and wreckage; the open space above is not the track.
-- **Branches.** A track splits in places into two ways that join again: one shorter and riskier (a narrow canyon, a jump, a wall close by), one longer and safer. Either counts; the gates of both are marked. There is no single racing line: the line is drawn for the way the pilot is on.
+- **Branches** (built: the Crack's two). A track splits in places into two ways that join again: one shorter and riskier (a narrow canyon, a jump, a wall close by), one longer and safer. Either counts; the gates of both are marked. There is no single racing line: the line is drawn for the way the pilot is on. A bot takes the risky way by its daring.
 - **Crash and back** (built on the race worlds). A ship destroyed in a race is printed again at once (1 s, no sponsor break) at the last gate it passed, already flying along the track at race speed (150 m/s), so a crash costs seconds, never the race.
 - **Speed felt** (built). The view widens with speed, more low over the ground and close past anything; the motion streaks thicken there and the hover field lifts the ground's dust under the hull; the hull rushes with the field's buffeting and grinds where it glides on the ground, and in air a close pass by anything rushes too (in vacuum nothing outside is heard, so a rock passed close stays silent); the camera trembles a little in the field's buffeting.
 
@@ -51,7 +51,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 
 **One rule everywhere: the overdrive puts the ship onto the line of the crosshair.** What it flies at is, first, whatever the aim assist holds (a ship or a torpedo), else the first thing the laser would hit on the nose's line (rock, ice, junk, wreckage, the battleship, a ring), else the point 2 km ahead in empty space. The shove (200 m/s) first takes out the drift across the line to it, relative to how that moves (a rock on its orbit, empty space standing still), and puts the rest along the line; a drift across larger than the shove takes all of it. After the shove the ship flies where the crosshair shows. Rock stays deadly: an overdrive into a rock kills the clone.
 
-**In a race it is a boost with a risk.** It recharges in 8 s instead of 20, and every shove heats the drive (a gauge of its own, beside the laser's heat): 40 per shove, shedding 10 a second; past 100 the drive burns out, offline for 6 s and 20 hull points lost. Two shoves close together are safe, a third too soon is not. The clone's strain stays as it is.
+**In a race it is a boost with a risk** (built). It recharges in 8 s instead of 20, the drive burns on after it, and it never takes a ship past the limit plus one shove (450 m/s); every shove heats the drive (a gauge of its own, beside the laser's heat): 40 per shove, shedding 1 a second, so that the recharge alone never cools it; past 100 the drive burns out, offline for 6 s and 20 hull points lost. Two shoves close together are safe (40, 72), a third too soon is not (104). The clone's strain stays as it is. Bots boost on their line's straights and keep their heat under the limit.
 
 ## Modes and worlds
 
@@ -64,7 +64,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 1. **Built: the hover field, the overdrive's one rule, and torpedoes under gravity and drag.** The field over every world's ground (the campaign's places first: no clone dies of a floor), its push, damping and the glide that never hurts; the autopilot riding the ground; the overdrive at whatever the crosshair shows. Tests: a ship dropped onto every place's ground at any speed never takes damage and settles at the ride height; a ship flown low over a relief keeps within the field; the simulated Host's tests (`playability`, `hostrace`) pass; the overdrive's shove at a rock, a moving ship and empty space.
 2. **Built: a race world.** Europa's Crack as the first race arena (`RACE_WORLDS`), with the HUD's GRAVITY, AIR, HOVER and GRIP: a track from deep in the Crack down the canyon and back over the ice plain, its gates on the ground; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
 3. **Lift in air.** Built: the lift and its drag for every ship and torpedo in every air (Jupiter's deck carving, Titan's and Venus's air in the campaign), the grip and the racing line's bends reckoning with it. Still to come, on step 2's race worlds: Titan's Kraken Mare as a race world with air.
-4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.
+4. **Built: branches and the overdrive as a boost** in races, with the drive's heat gauge: the Crack's two branches, either way flown whole by a middling bot, the boost's heat and burnout, bots boosting on straights.
 5. **Deathmatches over worlds** in the rotation of rounds.
 6. **Built: speed felt:** view, streaks, lifted dust, the rush and the grind through the hull, the tremble.
 

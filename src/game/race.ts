@@ -112,6 +112,13 @@ const TRACK_SLOT = 800;
  */
 export const TRACK_RESPAWN_SECONDS = 1;
 export const TRACK_RESPAWN_SPEED = 3000;
+/**
+ * Coming up to a branch, a racer's way is the one whose first gate its flight heads for more
+ * nearly; it switches only once the other's lies nearer its flight by this much (the cosine of
+ * the angle between them, about 8° near the flight), so the line it is shown does not flicker
+ * between the two while both lie ahead.
+ */
+const WAY_SWITCH = 0.01;
 /** A track's last stretch, where the radio opens up as on a loop's last lap, starts after this share of its gates. */
 const FINAL_STRETCH = 0.75;
 /** Points for every gate passed, and for the places at the finish; a kill in a race is worth less (see Game). */
@@ -377,6 +384,21 @@ export class Course {
   private readonly fired = this.kit.coilMaterial(0xffe6bf, 4);
   /** Until when each ring glows from its coil firing (game time, s). */
   private readonly flashUntil: number[];
+  /**
+   * Where a track splits into two ways that join again (see world/crack Branch): `branches` of
+   * them; the branch each gate stands in (-1 for none), and where it stands on the other way, with
+   * the way it faces and its windings there. A racer's way through the branches is a mask of bits
+   * (`ways`, bit b set: the other way in branch b), the line it is drawn by one line of `lines`
+   * each (lines[0] is `line`, the track's own way throughout).
+   */
+  readonly branches: number = 0;
+  private readonly branchOfGate: number[];
+  private readonly otherPoints: (THREE.Vector3 | null)[];
+  private readonly otherNormals: (THREE.Vector3 | null)[];
+  private readonly otherRings: (THREE.Mesh | null)[];
+  private readonly lines: RacingLine[] = [];
+  /** For each branch, whether its other way is the shorter and riskier one (see world/crack Branch). */
+  private readonly riskyOther: boolean[] = [];
 
   constructor(field: AsteroidField, seed: number) {
     const form = field.layout?.course ?? null;
@@ -391,11 +413,22 @@ export class Course {
       this.laps = LAPS;
       this.finishGates = FINISH_GATES;
     }
+    this.branchOfGate = new Array<number>(this.count).fill(-1);
+    this.otherPoints = new Array<THREE.Vector3 | null>(this.count).fill(null);
+    this.otherNormals = new Array<THREE.Vector3 | null>(this.count).fill(null);
+    this.otherRings = new Array<THREE.Mesh | null>(this.count).fill(null);
+    this.lines.push(this.line);
+    if (form?.form === 'track') this.layBranches(form);
     this.flashUntil = new Array<number>(this.count).fill(-Infinity);
     for (let i = 0; i < this.count; i++) {
       const gate = this.kit.build(this.points[i], this.normals[i], this.faint);
       this.rings.push(gate.coil);
       this.root.add(gate.root);
+      const other = this.otherPoints[i];
+      if (!other) continue;
+      const beside = this.kit.build(other, this.otherNormals[i]!, this.faint);
+      this.otherRings[i] = beside.coil;
+      this.root.add(beside.root);
     }
   }
 
@@ -411,6 +444,127 @@ export class Course {
       this.normals.push(points[Math.min(points.length - 1, index + 1)].clone().sub(points[Math.max(0, index - 1)]).normalize());
     }
     return new RacingLine(points, false, undefined, undefined, gates);
+  }
+
+  /**
+   * A track's branches (see branches): the gates on each other way, each facing along it, and a
+   * line for every way through them all, the other ways in place of the track's own where the
+   * way's bits are set.
+   */
+  private layBranches(form: Extract<CourseForm, { form: 'track' }>) {
+    const { points, gates, branches } = form;
+    (this as { branches: number }).branches = branches.length;
+    branches.forEach((branch, b) => {
+      this.riskyOther.push(branch.risky);
+      const way = [points[branch.split], ...branch.points, points[branch.join]];
+      for (const { gate, at } of branch.gates) {
+        this.branchOfGate[gate] = b;
+        this.otherPoints[gate] = branch.points[at].clone();
+        this.otherNormals[gate] = way[at + 2].clone().sub(way[at]).normalize();
+      }
+    });
+    for (let ways = 1; ways < 1 << branches.length; ways++) {
+      const through: THREE.Vector3[] = [];
+      const ownAt = new Map<number, number>();
+      const otherAt = new Map<number, number>();
+      for (let i = 0; i < points.length; ) {
+        ownAt.set(i, through.length);
+        through.push(points[i]);
+        const b = branches.findIndex((branch, k) => branch.split === i && ways & (1 << k));
+        if (b < 0) {
+          i++;
+          continue;
+        }
+        for (const { gate, at } of branches[b].gates) otherAt.set(gate, through.length + at);
+        through.push(...branches[b].points);
+        i = branches[b].join;
+      }
+      this.lines.push(new RacingLine(through, false, undefined, undefined, gates.map((index, gate) => otherAt.get(gate) ?? ownAt.get(index)!)));
+    }
+  }
+
+  /** The line a racer flies whose way through the branches is `ways` (see branches). */
+  lineOf(ways: number): RacingLine {
+    return this.lines[ways] ?? this.line;
+  }
+
+  /** The branch gate `gate` stands in (-1 for none, see branches). */
+  branchOf(gate: number): number {
+    return this.branchOfGate[gate] ?? -1;
+  }
+
+  /** Where gate `gate` stands, and the way it faces, for a racer whose way through the branches is `ways`. */
+  gatePoint(gate: number, ways: number): THREE.Vector3 {
+    const b = this.branchOf(gate);
+    return b >= 0 && ways & (1 << b) ? this.otherPoints[gate]! : this.points[gate];
+  }
+
+  gateNormal(gate: number, ways: number): THREE.Vector3 {
+    const b = this.branchOf(gate);
+    return b >= 0 && ways & (1 << b) ? this.otherNormals[gate]! : this.normals[gate];
+  }
+
+  /** A racer's way `ways` with the way it passed gate `gate` on (`other`: the other way of its branch). */
+  passedOn(ways: number, gate: number, other: boolean): number {
+    const b = this.branchOf(gate);
+    if (b < 0) return ways;
+    return other ? ways | (1 << b) : ways & ~(1 << b);
+  }
+
+  /**
+   * The way through the branches a racer that has passed `passed` gates takes, at `position`
+   * moving with `velocity`, coming up to a branch: while its next gate is the branch's first, the
+   * way whose gate its flight heads for more nearly (by WAY_SWITCH more than the way it is on), so
+   * the line it is shown follows where it turns after the split; else `ways` as it is.
+   */
+  heading(ways: number, passed: number, position: THREE.Vector3, velocity: THREE.Vector3): number {
+    const next = this.nextGate(passed);
+    const b = this.branchOf(next);
+    if (!this.splits(next) || velocity.lengthSq() < 1) return ways;
+    const own = toGate.subVectors(this.points[next], position).normalize().dot(velocity);
+    const other = crossing.subVectors(this.otherPoints[next]!, position).normalize().dot(velocity);
+    const speed = velocity.length();
+    const on = ways & (1 << b) ? other : own;
+    if (Math.max(own, other) - on < WAY_SWITCH * speed) return ways;
+    return other > own ? ways | (1 << b) : ways & ~(1 << b);
+  }
+
+  /** Whether gate `gate` is the first of a branch: the track splits before it. */
+  splits(gate: number): boolean {
+    const b = this.branchOf(gate);
+    return b >= 0 && !(gate > 0 && this.branchOf(gate - 1) === b);
+  }
+
+  /**
+   * The way through the branches of a racer at `position` that has passed `passed` gates and
+   * chooses by its nerve: coming up to a branch (its next gate the branch's first), the shorter,
+   * riskier way when `risky`, else the longer, safer one; within a branch the way it is on; else
+   * `ways` as it is.
+   */
+  choose(ways: number, passed: number, risky: boolean, position: THREE.Vector3): number {
+    const next = this.nextGate(passed);
+    const b = this.branchOf(next);
+    if (b < 0) return ways;
+    // within a branch, the way it is on: the one whose next gate lies nearer (a bot a new lead
+    // browser adopted there knows no way of its own yet)
+    if (!this.splits(next)) return this.points[next].distanceToSquared(position) > this.otherPoints[next]!.distanceToSquared(position) ? ways | (1 << b) : ways & ~(1 << b);
+    return risky === this.riskyOther[b] ? ways | (1 << b) : ways & ~(1 << b);
+  }
+
+  /** Every gate's ring, on every way: where it stands and the way it faces (the bots keep clear of them all, see Game.rings). */
+  allRings(): { center: THREE.Vector3; facing: THREE.Vector3 }[] {
+    const rings = this.points.map((center, i) => ({ center, facing: this.normals[i] }));
+    this.otherPoints.forEach((center, i) => center && rings.push({ center, facing: this.otherNormals[i]! }));
+    return rings;
+  }
+
+  /** The index among allRings of gate `gate` on the way `ways`. */
+  ringIndex(gate: number, ways: number): number {
+    const b = this.branchOf(gate);
+    if (b < 0 || !(ways & (1 << b))) return gate;
+    let index = this.count;
+    for (let i = 0; i < gate; i++) if (this.otherPoints[i]) index++;
+    return index;
   }
 
   /** A loop's gates (see Course), and its line through them. */
@@ -571,9 +725,11 @@ export class Course {
 
   /**
    * How far from a gate's center a ship moving from `from` to `to` this frame flew through it,
-   * either way (a ring is a ring); null when it did not fly through.
+   * either way (a ring is a ring), on the track's own way or (`other`) on the other way of its
+   * branch; null when it did not fly through.
    */
-  crossing(gate: number, from: THREE.Vector3, to: THREE.Vector3): number | null {
+  crossing(gate: number, from: THREE.Vector3, to: THREE.Vector3, other = false): number | null {
+    if (other) return this.otherPoints[gate] ? ringCrossing(this.otherPoints[gate]!, this.otherNormals[gate]!, GATE_RADIUS, from, to) : null;
     return ringCrossing(this.points[gate], this.normals[gate], GATE_RADIUS, from, to);
   }
 
@@ -582,18 +738,22 @@ export class Course {
     this.flashUntil[gate] = now + BOOST_FLASH;
   }
 
-  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. The start and the finish are pink. */
+  /** Shows the own pilot's next gates, on either way of a branch: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. The start and the finish are pink. */
   highlight(next: number, now: number) {
     const after = this.track && next + 1 >= this.count ? -1 : (next + 1) % this.count;
     for (let i = 0; i < this.rings.length; i++) {
-      this.rings[i].material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === after ? this.after : i === 0 || (this.track && i === this.count - 1) ? this.finish : this.faint;
+      const material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === after ? this.after : i === 0 || (this.track && i === this.count - 1) ? this.finish : this.faint;
+      this.rings[i].material = material;
+      if (this.otherRings[i]) this.otherRings[i]!.material = material;
     }
     this.kit.blink(now);
   }
 
-  /** The gates of one lap in the order flown, each with the way it faces: round the loop and through the pink gate again, or a track from its start to its finish (`edgeless`: over a world, with no edge to turn back at). */
-  lap(): { points: THREE.Vector3[]; normals: THREE.Vector3[]; edgeless: boolean } {
-    return this.track ? { points: [...this.points], normals: [...this.normals], edgeless: true } : { points: [...this.points, this.points[0]], normals: [...this.normals, this.normals[0]], edgeless: false };
+  /** The gates of one lap in the order flown on the way `ways` (see branches), each with the way it faces: round the loop and through the pink gate again, or a track from its start to its finish (`edgeless`: over a world, with no edge to turn back at). */
+  lap(ways = 0): { points: THREE.Vector3[]; normals: THREE.Vector3[]; edgeless: boolean } {
+    const points = this.points.map((_, gate) => this.gatePoint(gate, ways));
+    const normals = this.points.map((_, gate) => this.gateNormal(gate, ways));
+    return this.track ? { points, normals, edgeless: true } : { points: [...points, points[0]], normals: [...normals, normals[0]], edgeless: false };
   }
 
   /** The gate a racer that has passed `passed` gates flies for next. */
@@ -627,16 +787,18 @@ export class Course {
    * Where a ship (re)starts that has passed `passed` gates: on the grid before the start, or
    * RESPAWN_PAST beyond the last gate passed, so the eight slots, up to 111 m from the gate's
    * axis, stay clear of its housings. On a track the slots stand two abreast along the track's
-   * line (see TRACK_SLOT), within its canyon's walls.
+   * line (see TRACK_SLOT), within its canyon's walls, on the way `ways` it passed that gate on.
    */
-  startOf(passed: number, slot: number, position: THREE.Vector3): THREE.Vector3 {
+  startOf(passed: number, slot: number, position: THREE.Vector3, ways = 0): THREE.Vector3 {
     const gate = passed === 0 ? 0 : (passed - 1) % this.count;
     const behind = passed === 0 ? GRID_BEFORE : RESPAWN_PAST;
     if (this.track) {
+      const line = this.lineOf(ways);
       const row = Math.floor(slot / 2) * TRACK_SLOT;
-      const s = this.line.gateArc(gate) + behind + (passed === 0 ? -row : row);
-      this.line.point(s, position);
-      const side = toGate.set(0, 1, 0).cross(this.line.point(s + 1, crossing).sub(position)).normalize();
+      // a racer past the finish starts again short of the line's end, never beyond it
+      const s = Math.min(line.gateArc(gate) + behind + (passed === 0 ? -row : row), line.length - 2);
+      line.point(s, position);
+      const side = toGate.set(0, 1, 0).cross(line.point(s + 1, crossing).sub(position)).normalize();
       return position.addScaledVector(side, ((slot % 2) - 0.5) * TRACK_SLOT);
     }
     // ships side by side, so a grid of eight does not start in one place
@@ -649,11 +811,12 @@ export class Course {
   }
 
   /** The way the course runs where a ship (re)starts that has passed `passed` gates (see startOf), into `out`: on a track along its line there, else the way the gate it starts by faces. */
-  startHeading(passed: number, out: THREE.Vector3): THREE.Vector3 {
+  startHeading(passed: number, out: THREE.Vector3, ways = 0): THREE.Vector3 {
     const gate = passed === 0 ? 0 : (passed - 1) % this.count;
     if (!this.track) return out.copy(this.normals[gate]);
-    const s = this.line.gateArc(gate) + (passed === 0 ? GRID_BEFORE : RESPAWN_PAST);
-    return this.line.point(s + 1, out).sub(this.line.point(s, paceFrom)).normalize();
+    const line = this.lineOf(ways);
+    const s = Math.min(line.gateArc(gate) + (passed === 0 ? GRID_BEFORE : RESPAWN_PAST), line.length - 2);
+    return line.point(s + 1, out).sub(line.point(s, paceFrom)).normalize();
   }
 
   dispose() {

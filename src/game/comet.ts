@@ -7,6 +7,7 @@ import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
 import { blowSpin, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
 import { share } from '../world/bodies';
+import { anchored } from '../world/contacts';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
@@ -478,8 +479,8 @@ const LOOK_BACK = 3;
  * everywhere); a piece of one (a fragment, broken junk) goes to dust without pieces, and so do
  * the fragments born in the head's way. `broke` hears of each. On the
  * first solid piece its own shape meets (a hull section, the junkyard's hub) the head breaks up,
- * as on the battleship's hull, and the piece takes its momentum (see strikeWall); what lies
- * beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
+ * as on the battleship's hull, and the piece takes its momentum (see strikeWall), unless it stands
+ * for good (a world's ground, see world/contacts anchored); what lies beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
  * nothing.
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
@@ -535,6 +536,11 @@ function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: numb
   // where it struck: the head moved out onto the hull, then its radius back in
   meets(comet, field, wall, at);
   piece.copy(struck).addScaledVector(struckNormal, -HEAD_RADIUS);
+  // a world's ground and what stands on it for good take no motion: the head breaks up on them
+  if (anchored(wall)) {
+    shoved(wall, piece);
+    return;
+  }
   kick.copy(course).multiplyScalar(COMET_SPEED * share(field.bodyMass(wall), HEAD_MASS));
   blowSpin(wall, stone.subVectors(piece, stone), kick, SHOVE_SPIN, axis);
   const rate = axis.length();

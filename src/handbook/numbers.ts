@@ -5,6 +5,7 @@ import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeS
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
 import { CRACK_TRACK } from '../world/crack';
+import { BOOST_HEAT, BOOST_RECHARGE, BURNOUT_DAMAGE, BURNOUT_HEAT, BURNOUT_SECONDS, DRIVE_HEAT_SHED } from '../ship/driveheat';
 import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
@@ -58,6 +59,13 @@ export const FROM_CODE: Record<string, number> = {
   trackRespawn: TRACK_RESPAWN_SECONDS,
   trackSpeed: meters(TRACK_RESPAWN_SPEED),
   trackLength: Math.round(km(CRACK_TRACK.points.reduce((sum, point, i, all) => sum + (i ? point.distanceTo(all[i - 1]) : 0), 0))),
+  boostRecharge: BOOST_RECHARGE,
+  boostHeat: BOOST_HEAT,
+  boostShed: DRIVE_HEAT_SHED,
+  burnoutHeat: BURNOUT_HEAT,
+  burnoutSeconds: BURNOUT_SECONDS,
+  burnoutDamage: BURNOUT_DAMAGE,
+  boostTop: meters(MAX_SPEED + OVERDRIVE_PUSH),
   crackWidth: meters(CRACK_WIDTH),
   crackDepth: meters(CRACK_DEPTH),
   crackGravity: Math.round((meters(EUROPA_FALL) / 9.81) * 100) / 100,

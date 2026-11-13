@@ -9,7 +9,8 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, type Ring, type Skill, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOOST_BEND, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
+import { BOOST_RECHARGE } from '../ship/driveheat';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { GradedOutputPass } from '../view/grade';
@@ -58,7 +59,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
+import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -94,7 +95,7 @@ import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
 import { knockShare, ramShare, syncShare } from '../net/plausible';
-import { RacingLine } from './racingline';
+import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
@@ -493,10 +494,21 @@ const KICK_FADE = 9;
  * course at whatever lies there (see crosshairMark, overdriveShove). It leaves the clone at the edge of
  * blacking out (OVERDRIVE_STRAIN) and the main drive glowing: no thrust for
  * OVERDRIVE_DRIVE_COOLDOWN seconds, while the thrusters still turn the ship and the laser
- * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again.
+ * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again. In a race it is a boost
+ * with a risk instead (see ship/driveheat): it recharges in BOOST_RECHARGE, the drive burns on,
+ * every shove heats it, and past its limit it burns out; and it never takes a ship faster than
+ * BOOST_CAP (units/s, the limit plus one shove, 450 m/s), as a coil's throw never does. Bots use
+ * it as Hosts do (see botBoost).
  */
 const OVERDRIVE_STRAIN = 0.9;
 const OVERDRIVE_RECHARGE = 20;
+const BOOST_CAP = MAX_SPEED + OVERDRIVE_PUSH;
+/** A racing bot's line ahead is measured for its boost over this much to either side of each point (units, 60 m), as the racing line measures its bends (see botBoost). */
+const BEND_SPAN = 1200;
+const BOOST_NOSE_COS = cos(BOOST_NOSE);
+const boostHere = new THREE.Vector3();
+const boostAhead = new THREE.Vector3();
+const boostBeyond = new THREE.Vector3();
 /** The flight ahead of a well's alarm (see wellEscape) runs again this often (s): a fifth of a second late at most. */
 const ESCAPE_EVERY = 0.2;
 /**
@@ -649,7 +661,7 @@ const STATIC_GLITCH = 0.7;
 const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -1202,8 +1214,6 @@ export class Game implements OnlineGame {
   private lastGlide = -Infinity;
   /** How near the camera's pilot flies to something, 0..1, eased (see feltNear). */
   private near = 0;
-  /** When the overdrive can fire again (game time, s). */
-  private overdriveReadyAt = 0;
   /** The brake (it beeps once at rest). */
   private readonly brake = new Brake();
   /**
@@ -2987,9 +2997,9 @@ export class Game implements OnlineGame {
     }
     this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
     if (this.flags) this.scene.add(this.flags.root);
-    // the rings the bots steer clear of: the race's gates, the bases
+    // the rings the bots steer clear of: the race's gates on every way, the bases
     const course = this.course;
-    this.rings = course ? course.points.map((center, i) => ({ center, facing: course.normals[i], radius: GATE_RADIUS })) : (this.flags?.bases.map((center) => ({ center, facing: center.clone().normalize(), radius: BASE_RADIUS })) ?? []);
+    this.rings = course ? course.allRings().map((ring) => ({ ...ring, radius: GATE_RADIUS })) : (this.flags?.bases.map((center) => ({ center, facing: center.clone().normalize(), radius: BASE_RADIUS })) ?? []);
     // and the President's battleship, which comes in from a side that follows from the arena
     if (this.fleet) {
       this.scene.remove(this.fleet.root);
@@ -3498,7 +3508,7 @@ export class Game implements OnlineGame {
     this.brakePhase = 'off';
     this.kick = 0;
     this.autopilot = false;
-    this.overdriveReadyAt = 0;
+    for (const ship of this.ships) ship.overdriveReadyAt = 0;
     this.hookReadyAt = 0;
     this.dodgeReadyAt = 0;
     // taps from the menu ask for nothing
@@ -3973,7 +3983,7 @@ export class Game implements OnlineGame {
     // the own clone too while it watches: it starts the round it flies with nothing
     for (const ship of this.ships) {
       if (ship.owner !== null) continue;
-      ship.score = ship.kills = ship.deaths = ship.gates = 0;
+      ship.score = ship.kills = ship.deaths = ship.gates = ship.ways = 0;
       ship.finish = ship.skipLap = -1;
     }
     // nothing of the round before runs on in this one (a battleship's sinking blast, the crowd)
@@ -4005,12 +4015,13 @@ export class Game implements OnlineGame {
       // a racer starts on the grid before the first gate, and a new clone takes up the race
       // where the last one died, facing the next gate; where the last one passed its last gate
       // when that spot lies in rock, in a well or its grip, or out of the arena; on a track over a
-      // world always at the last gate passed, along the track (see TRACK_RESPAWN_SPEED)
+      // world always at the last gate passed, on the way it passed it on, along the track (see
+      // TRACK_RESPAWN_SPEED)
       const spot = ship.flight.position;
       const slot = Math.max(0, this.ships.indexOf(ship)) % 8;
       if (!course.track && ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40) && !inGrip(this.field.well, spot, WELL_CAUTION)) position.copy(spot);
-      else course.startOf(ship.gates, slot, position);
-      if (course.track) candidate.copy(position).add(course.startHeading(ship.gates, scratch));
+      else course.startOf(ship.gates, slot, position, ship.ways);
+      if (course.track) candidate.copy(position).add(course.startHeading(ship.gates, scratch, ship.ways));
       else candidate.copy(course.points[course.nextGate(ship.gates)]);
       best = 0;
     }
@@ -4693,9 +4704,11 @@ export class Game implements OnlineGame {
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
         bot.rings = this.rings;
+        // at a branch of a track, the way its daring takes (see RISKY_DARING)
+        if (this.course?.branches) ship.ways = this.course.choose(ship.ways, ship.gates, bot.skills.daring >= RISKY_DARING, ship.flight.position);
         const aim = this.course && ship.finish < 0 ? this.aimGate(ship, this.course) : -1;
-        bot.through = this.course && aim >= 0 ? this.rings[aim] : null;
-        bot.waypoint = this.course && aim >= 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, aim, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
+        bot.through = this.course && aim >= 0 ? this.rings[this.course.ringIndex(aim, ship.ways)] : null;
+        bot.waypoint = this.course && aim >= 0 ? this.approach(this.course, ship, this.course.lineOf(ship.ways).target(ship.flight.position, aim, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         // a probe it sees, as a Host's eyes would, not one behind rock
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE, this.field)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, the plume of one
@@ -4743,6 +4756,7 @@ export class Game implements OnlineGame {
         }
       }
       if (bot && !clamped) this.botHook(bot, dt, now);
+      if (bot && !clamped && this.course && !this.school && this.roundMode === 'race') this.botBoost(bot, this.course, now);
       if (bot && !clamped && ship.decoys > 0) this.botDecoy(ship, dt);
       if (bot?.shove && !clamped) this.thrusterKick(ship, bot.shove);
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
@@ -4900,7 +4914,9 @@ export class Game implements OnlineGame {
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
     if (!this.bench.has('streaks')) this.hud.updateStreaks(now, this.camera, subject.flight.velocity, subject.alive, Math.round(STREAKS * Math.max(STREAKS_LEAST, this.graphics.look.particles)), this.near);
     this.hud.setAutopilot(this.autopilot);
-    this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
+    this.hud.setOverdrive(Math.max(0, me.overdriveReadyAt - now));
+    // a race's boost heats the drive: its gauge, orange where one more shove would burn it out
+    this.hud.setDriveHeat(this.roundMode === 'race' && !this.school && me.perks.overdrive ? me.driveHeat.read(now) : null, me.driveHeat.burns(now));
     const hook = this.tethers.get(me);
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), this.hookCarried(me));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova, me.decoys);
@@ -5139,7 +5155,8 @@ export class Game implements OnlineGame {
   /** Whether a racer is past its next gate's plane without having gone through it, and still moving away from it. */
   private missedGate(ship: Ship, course: Course): boolean {
     const next = course.nextGate(ship.gates);
-    return scratch.subVectors(ship.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && ship.flight.velocity.dot(course.normals[next]) > 0;
+    const normal = course.gateNormal(next, ship.ways);
+    return scratch.subVectors(ship.flight.position, course.gatePoint(next, ship.ways)).dot(normal) > GATE_RADIUS && ship.flight.velocity.dot(normal) > 0;
   }
 
   /** The gate a racer flies for: its next, or, past that one with the lap's skip still to spend (see canSkip), the one after it. */
@@ -5151,7 +5168,7 @@ export class Game implements OnlineGame {
   /** Where a racer flies for near the gate it aims at, clear of the coil's housings (see approachGate). */
   private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
     const next = this.aimGate(ship, course);
-    return approachGate(course.points[next], course.normals[next], GATE_RADIUS, ship.flight.position, ship.flight.velocity, ship.radius, waypoint);
+    return approachGate(course.gatePoint(next, ship.ways), course.gateNormal(next, ship.ways), GATE_RADIUS, ship.flight.position, ship.flight.velocity, ship.radius, waypoint);
   }
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
@@ -5608,7 +5625,7 @@ export class Game implements OnlineGame {
     if (course && subject.finish < 0) {
       const gate = this.marks[1];
       const next = this.aimGate(subject, course);
-      gate.position.copy(course.points[next]);
+      gate.position.copy(course.gatePoint(next, subject.ways));
       gate.label = t('Gate {n}', { n: next + 1 });
       list.push(gate);
     }
@@ -5665,13 +5682,23 @@ export class Game implements OnlineGame {
    */
   private passGates(ship: Ship, course: Course) {
     if (!ship.alive || ship.finish >= 0) return;
+    // a gate counts on either way of a track's branch, and the way it was passed on is the racer's
+    // from there (see Course.branches)
+    const through = (at: number) => {
+      const off = course.crossing(at, ship.previous, ship.flight.position);
+      if (off !== null) ship.ways = course.passedOn(ship.ways, at, false);
+      if (off !== null || course.branchOf(at) < 0) return off;
+      const other = course.crossing(at, ship.previous, ship.flight.position, true);
+      if (other !== null) ship.ways = course.passedOn(ship.ways, at, true);
+      return other;
+    };
     let gate = course.nextGate(ship.gates);
-    let off = course.crossing(gate, ship.previous, ship.flight.position);
+    let off = through(gate);
     // the gate after the next counts too while the lap's skip is not spent (see canSkip): the
     // next one is left out, without its points
     if (off === null && course.canSkip(ship.gates, ship.skipLap)) {
       const after = (gate + 1) % course.count;
-      off = course.crossing(after, ship.previous, ship.flight.position);
+      off = through(after);
       if (off === null) return;
       ship.skipLap = course.lapOf(ship.gates);
       if (ship === this.me) {
@@ -5868,7 +5895,7 @@ export class Game implements OnlineGame {
    */
   private boost(ship: Ship, course: Course, gate: number) {
     course.flash(gate, this.time);
-    this.coilPush(ship, course.normals[gate]);
+    this.coilPush(ship, course.gateNormal(gate, ship.ways));
   }
 
   /** A coil throws a ship on along an axis, the way it flies along it (see BOOST_PUSH); the flight school's coils too. */
@@ -5949,6 +5976,8 @@ export class Game implements OnlineGame {
       return null;
     }
     const lap = course.lapOf(me.gates);
+    // coming up to a branch, the way the flight heads for is the one the line and the marks show
+    if (me.alive) me.ways = course.heading(me.ways, me.gates, me.flight.position, me.flight.velocity);
     // past its next gate with the lap's skip still to spend, the racer flies on for the one after
     // it (see canSkip); past it with the skip spent, it has to turn back
     const next = this.aimGate(me, course);
@@ -5957,10 +5986,11 @@ export class Game implements OnlineGame {
     course.highlight(next, this.time);
     const gate = { n: next + 1, gates: course.count };
     const label = missed ? t('Missed · turn back') : course.isFinish(next, lap) ? t('Finish') : next === 0 ? (me.gates === 0 ? t('Start') : t('Lap')) : t('Gate {n}/{gates}', gate);
-    this.hud.setWaypoint(this.camera, course.points[next], label);
+    const point = course.gatePoint(next, me.ways);
+    this.hud.setWaypoint(this.camera, point, label);
     // a track's finish has no gate after it
-    this.markRings(me, course.points[next], course.normals[next], course.track && next + 1 >= course.count ? null : course.points[(next + 1) % course.count], GATE_RADIUS);
-    if (me.alive) this.showGuide(me, course.line, next, missed);
+    this.markRings(me, point, course.gateNormal(next, me.ways), course.track && next + 1 >= course.count ? null : course.gatePoint((next + 1) % course.count, me.ways), GATE_RADIUS);
+    if (me.alive) this.showGuide(me, course.lineOf(me.ways), next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
     const lapTime = this.laps?.lapTime(this.raceSeconds());
@@ -5972,9 +6002,11 @@ export class Game implements OnlineGame {
         ? course.track
           ? t('Missed gate {missed}: fly on through gate {n}, your one skip this race', { missed: course.nextGate(me.gates) + 1, n: next + 1 })
           : t('Missed gate {missed}: fly on through gate {n}, your one skip this lap', { missed: course.nextGate(me.gates) + 1, n: next + 1 })
-        : `${t('Gate {n} of {gates}', gate)}${timing}`;
+        : course.splits(next)
+          ? `${t('Gate {n} of {gates} · two ways, either counts', gate)}${timing}`
+          : `${t('Gate {n} of {gates}', gate)}${timing}`;
     this.hud.setSchool({ step: course.track ? t('Race · {place}', { place }) : t('Race · lap {lap}/{laps} · {place}', { lap, laps: course.laps, place }), text, keys: [] });
-    return course.points[next];
+    return point;
   }
 
   /** Seconds since BURN!: the race time every finish and lap is measured in. */
@@ -6369,7 +6401,7 @@ export class Game implements OnlineGame {
       keepDrift: false,
       towDrone: false,
       readyOverdrive: () => {
-        this.overdriveReadyAt = 0;
+        if (this.me) this.me.overdriveReadyAt = 0;
       },
       cockpit: false,
       device: 'keyboard',
@@ -6868,19 +6900,67 @@ export class Game implements OnlineGame {
   }
   private readonly markAhead = { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
 
-  /** E: the overdrive, a last resort; see OVERDRIVE_STRAIN. */
+  /** E: the overdrive, a last resort, at whatever the crosshair shows; see OVERDRIVE_STRAIN. */
   private overdrive() {
     const me = this.me!;
-    if (!me.alive || !me.perks.overdrive || this.time < this.overdriveReadyAt) return;
-    this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
-    me.flight.velocity.add(overdriveShove(me.flight, this.crosshairMark(), forward));
-    me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
+    if (me.alive && me.perks.overdrive && this.time >= me.overdriveReadyAt) this.shove(me, this.crosshairMark());
+  }
+
+  /**
+   * A racing bot's boost (see wantsBoost): ready, its nose on its flight and on its line ahead,
+   * the line straight for BOOST_LOOK seconds at the boost's top speed (its bends measured over
+   * BEND_SPAN either way, as the racing line's are), the drive's heat to spare; it shoves along
+   * its nose, as a Host does, and keeps the speed a while.
+   */
+  private botBoost(bot: Bot, course: Course, now: number) {
+    const ship = bot.ship;
+    const flight = ship.flight;
+    const speed = flight.velocity.length();
+    if (!ship.alive || ship.finish >= 0 || !ship.perks.overdrive || now < ship.overdriveReadyAt || speed < 1) return;
+    const line = course.lineOf(ship.ways);
+    const s = line.progress(flight.position, course.nextGate(ship.gates), 0);
+    const nose = flight.forward(forward);
+    const along = line.clear(s + BEND_SPAN, this.field, boostAhead).sub(line.clear(s, this.field, boostHere)).normalize();
+    const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
+    if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
+    let straight = true;
+    for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
+      straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;
+    }
+    if (!straight) return;
+    this.shove(ship, null);
+    bot.boostUntil = now + BOOST_KEEP;
+  }
+
+  /**
+   * A ship's overdrive fires (see OVERDRIVE_STRAIN): its shove onto the line to `mark` (null: along
+   * the nose), and in a race the boost's heat and its cap (see BOOST_CAP), and a burnout past the
+   * gauge's limit: the drive dark, the hull hurt.
+   */
+  private shove(ship: Ship, mark: { position: THREE.Vector3; velocity: THREE.Vector3 } | null) {
+    const race = this.roundMode === 'race' && !this.school;
+    ship.overdriveReadyAt = this.time + (race ? BOOST_RECHARGE : OVERDRIVE_RECHARGE);
+    const before = ship.flight.velocity.length();
+    ship.flight.velocity.add(overdriveShove(ship.flight, mark, forward));
+    if (race) {
+      const cap = Math.max(before, BOOST_CAP);
+      if (ship.flight.velocity.length() > cap) ship.flight.velocity.setLength(cap);
+    } else ship.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     // about sixty g at once: the clone is pressed to the edge of blacking out
-    me.strain = Math.max(me.strain, OVERDRIVE_STRAIN);
-    this.kick = 2;
-    this.effects.engineTrail(me.toWorld(scratch.set(0, 0, me.radius * 0.9)), me.toWorld(relative.set(0, 0, me.radius * 4)), me.flight.velocity, 1);
-    this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
-    this.hud.flashMessage(this.time, t('Overdrive'), 1.2);
+    ship.strain = Math.max(ship.strain, OVERDRIVE_STRAIN);
+    const burnt = race && ship.driveHeat.shove(this.time);
+    devlog?.add({ kind: 'act', t: this.time, ship: ship.name, act: 'overdrive', detail: race ? `heat ${Math.round(ship.driveHeat.read(this.time))}${burnt ? ' burnt out' : ''}` : '' });
+    this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), ship.toWorld(relative.set(0, 0, ship.radius * 4)), ship.flight.velocity, 1);
+    if (ship === this.me) {
+      this.kick = 2;
+      this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
+      this.hud.flashMessage(this.time, burnt ? t('Drive burned out') : t('Overdrive'), burnt ? 2 : 1.2);
+    }
+    if (!burnt) return;
+    // past the gauge's limit the drive burns out: dark for a while, the hull hurt (see Ship.burnOut)
+    this.effects.sparks(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), PLATING_COLOR, 60);
+    if (ship === this.me) this.sound.beep(220, 0.3, 0.2);
+    if (ship.burnOut(this.time) === 'destroyed') this.shipDestroyed(ship, null, 'burnout');
   }
 
   /**
@@ -7455,7 +7535,7 @@ export class Game implements OnlineGame {
         ship.torpedoes += this.probeTorpedoes();
         break;
       case 'overdrive':
-        if (ship === this.me) this.overdriveReadyAt = 0;
+        ship.overdriveReadyAt = 0;
         break;
       case 'decoys':
         ship.decoys = Math.min(DECOYS_HELD, ship.decoys + DECOYS_PER_PROBE);
@@ -8314,6 +8394,7 @@ export class Game implements OnlineGame {
         const [before, after = ''] = line.split('{name}');
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
       } else if (cause === 'self') this.deathCause = t('Self-destructed');
+      else if (cause === 'burnout') this.deathCause = t('Boosted the drive to burnout');
       else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'air') this.deathCause = t('Burned up in the clouds');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
@@ -8388,7 +8469,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' || cause === 'air' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -8402,11 +8483,13 @@ export class Game implements OnlineGame {
   private gateNote(ship: Ship): string {
     const course = this.course;
     if (!course || this.gateStruck < 0) return '';
+    // a ring of the course on any way (see Course.allRings)
     const i = this.gateStruck;
-    const offset = scratch.subVectors(ship.flight.position, course.points[i]);
-    const along = offset.dot(course.normals[i]);
+    const ring = this.rings[i];
+    const offset = scratch.subVectors(ship.flight.position, ring.center);
+    const along = offset.dot(ring.facing);
     const out = Math.sqrt(Math.max(0, offset.lengthSq() - along * along));
-    const angle = THREE.MathUtils.radToDeg(angleTo(ship.flight.velocity, course.normals[i]));
+    const angle = THREE.MathUtils.radToDeg(angleTo(ship.flight.velocity, ring.facing));
     return `gate ${i} out ${Math.round(out * METERS_PER_UNIT)} m along ${Math.round(along * METERS_PER_UNIT)} m at ${Math.round(angle)}° next ${ship.gates % course.points.length}`;
   }
 
@@ -8813,7 +8896,7 @@ export class Game implements OnlineGame {
       const nose = me.flight.forward(forward);
       // the drive burning (its flame, as the flight model keeps it) with the nose away from the well
       const burning = me.flight.throttle > 0.5 && angleTo(nose, relative.subVectors(me.flight.position, well.position)) < BURNING_AWAY;
-      this.escape = wellEscape(well, me.flight.position, me.flight.velocity, nose, drive, me.driveColdFor(this.time), burning, me.perks.overdrive && this.time >= this.overdriveReadyAt);
+      this.escape = wellEscape(well, me.flight.position, me.flight.velocity, nose, drive, me.driveColdFor(this.time), burning, me.perks.overdrive && this.time >= me.overdriveReadyAt);
     }
     const rescue = this.escape === 'overdrive';
     const lost = this.escape === 'lost';
@@ -9242,7 +9325,7 @@ export class Game implements OnlineGame {
     plane.clearDrops();
     if (shown) {
       if (!this.storming) for (const ship of this.ships) if (ship !== subject && ship.alive && this.inSight(ship)) plane.drop(ship.flight.position, this.camera);
-      if (this.course && !this.school) for (const point of this.course.points) plane.drop(point, this.camera);
+      if (this.course && !this.school) for (const ring of this.rings) plane.drop(ring.center, this.camera);
       if (waypoint) plane.drop(waypoint, this.camera);
     }
     const aim = this.me?.alive ? aimPoint : this.camera.getWorldDirection(scratch).multiplyScalar(AIM_DEPTH).add(this.camera.position);

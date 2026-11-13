@@ -105,7 +105,7 @@ async function playRounds(browser: Browser, mode: string) {
   const next = async () => {
     for (let arena = queue.shift(); arena; arena = queue.shift()) rounds.push(await playRound(browser, mode, arena));
   };
-  expect(queue.length, 'the arenas the time-out was made for').toBe(ARENA_COUNT * ROUNDS_PER_ARENA[mode]);
+  expect(queue.length, 'the arenas the time-out was made for').toBe(arenaCount(mode) * ROUNDS_PER_ARENA[mode]);
   await Promise.all(Array.from({ length: PAGES }, next));
   // the whole log of every round goes with the result; its deaths by cause into the detail of a failure
   for (const [i, round] of rounds.entries()) {
@@ -130,10 +130,12 @@ async function playRounds(browser: Browser, mode: string) {
   return { ...result, rounds, detail: JSON.stringify(detail) };
 }
 
-/** The arenas played, for the time the rounds take (checked in playRounds): all seven, or the one of BALANCE_ARENA. */
-const ARENA_COUNT = ONLY ? 1 : 7;
+/** The race worlds a race is flown over besides the seven (RACE_WORLDS in src/world/arenas: the Crack). */
+const RACE_WORLD_COUNT = 1;
+/** The arenas a mode plays, for the time the rounds take (checked in playRounds): all seven and in a race the race worlds, or the one of BALANCE_ARENA. */
+const arenaCount = (mode: string) => (ONLY ? 1 : 7 + (mode === 'race' ? RACE_WORLD_COUNT : 0));
 /** Long enough for every round of a mode, PAGES at a time. */
-const timeout = (mode: string) => Math.ceil((ARENA_COUNT * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
+const timeout = (mode: string) => Math.ceil((arenaCount(mode) * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
 
 test('a deathmatch is a fight, and a middling bot holds its own in it', async ({ browser }) => {
   test.setTimeout(timeout('deathmatch'));

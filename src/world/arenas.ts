@@ -1211,7 +1211,7 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       toughness: 800,
       placements: [crackGroundPlacement(CRACK_TYPE), stationPlacement(STATION_TYPE, POST_HALF)],
       fall: EUROPA_FALL,
-      course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates },
+      course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates, branches: CRACK_TRACK.branches },
     },
     cooling: 1,
     storms: false,

@@ -18,6 +18,8 @@ import { arenaById } from '../world/arenas';
 import type { ShovedState } from '../world/asteroids';
 import { testField } from '../test/field';
 import { honestFlight, type Roughness } from '../test/honest';
+import { Course, GATE_POINTS } from '../game/race';
+import { MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
 const dead = { p: [0, 0, 0], alive: false };
@@ -415,6 +417,29 @@ describe('the standing of another browser\'s ship', () => {
     expect(liar.take('l', at(0, 25, 200), 126, 136, 126).fi).toBe(-1);
   });
 
+  it("takes every gate of either way through a track's branches, flown at the boost's top speed", () => {
+    const crack = arenaById('crack')!;
+    const field = testField();
+    field.generate(crack.layout);
+    const course = new Course(field, crack.layout.seed);
+    expect(course.branches).toBeGreaterThan(0);
+    // the limit plus an overdrive's shove, the fastest a race's boost takes a ship (see Game.shove)
+    const fastest = MAX_SPEED + OVERDRIVE_PUSH;
+    for (let ways = 0; ways < 1 << course.branches; ways++) {
+      const line = course.lineOf(ways);
+      const standings = new Standings();
+      standings.take('s', at(0), 0, 0, 0);
+      let seen = at(0);
+      for (let gate = 0; gate < course.count; gate++) {
+        const t = (line.gateArc(gate) - line.gateArc(0)) / fastest + 0.1;
+        const finish = gate === course.count - 1 ? +t.toFixed(2) : -1;
+        seen = standings.take('s', at(GATE_POINTS * (gate + 1), gate + 1, finish), t + 0.05, 10 + t, t + 0.05, course.finishGates);
+      }
+      expect(seen.g, `ways ${ways}`).toBe(course.count);
+      expect(seen.fi, `ways ${ways}`).toBeGreaterThan(0);
+    }
+  });
+
   it('takes the finish of a ship first seen after it finished, no faster than its gates allow', () => {
     const standings = new Standings();
     expect(standings.take('s', at(1000, 25, 131.2), 200, 210, 200)).toEqual(at(1000, 25, 131.2));
@@ -501,6 +526,8 @@ describe('honest flights', () => {
       // a kilometre under Jupiter's deck, where the lift is trimmed to its most
       { blows: 2, stutter: 3, stalls: 10, wrecked: false, air: 3.2 },
       { blows: 1, stutter: 1, stalls: 4, wrecked: true, air: 1 },
+      // a racer boosting as often as a race's overdrive recharges, blows and all
+      { blows: 2, stutter: 3, stalls: 10, wrecked: false, boost: true },
     ]) {
       const { cheats, margins } = fly(rough, 6, 60);
       expect(cheats).toEqual([]);

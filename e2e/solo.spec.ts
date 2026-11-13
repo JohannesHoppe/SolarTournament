@@ -58,6 +58,50 @@ test("a solo race over Europa's Crack starts and runs without errors, its track 
   expect(errors).toEqual([]);
 });
 
+test("a race over the Crack boosts: the overdrive recharges in 8 s and heats the drive, a third shove too soon burns it out, and the bots boost too", async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'race', 'crack');
+  // past the start lights, then the boost
+  await play(page, 12);
+  const boost = async () => {
+    await page.keyboard.down('KeyE');
+    await play(page, 0.1);
+    await page.keyboard.up('KeyE');
+  };
+  await boost();
+  const first = await page.evaluate(() => {
+    const game = window.game;
+    const me = game.me;
+    return { heat: me.driveHeat.read(game.time), recharge: me.overdriveReadyAt - game.time, gauge: !document.getElementById('hud-drive-heat-gauge')!.hidden, drive: me.driveOffline(game.time) };
+  });
+  expect(first.gauge).toBe(true);
+  expect(first.heat).toBeGreaterThan(35);
+  expect(first.recharge).toBeGreaterThan(7);
+  expect(first.recharge).toBeLessThanOrEqual(8);
+  // the drive burns on after a race's boost
+  expect(first.drive).toBe(false);
+  // two more at once, the recharge cut short as a probe would: the third burns the drive out
+  for (let i = 0; i < 2; i++) {
+    await page.evaluate(() => (window.game.me.overdriveReadyAt = 0));
+    await boost();
+  }
+  const burnt = await page.evaluate(() => {
+    const game = window.game;
+    const me = game.me;
+    return { heat: me.driveHeat.read(game.time), drive: me.driveOffline(game.time), hull: me.hull, shown: document.getElementById('hud-drive-heat')!.className };
+  });
+  expect(burnt.heat).toBeGreaterThan(100);
+  expect(burnt.drive).toBe(true);
+  expect(burnt.hull).toBeLessThanOrEqual(80);
+  expect(burnt.shown).toContain('burnt');
+  // the bots race on and boost on the canyon's straights
+  await page.evaluate(() => (window.game.timeScale = 4));
+  await play(page, 60);
+  const boosted = await page.evaluate(() => window.game.log.filter('act').filter((event: { act?: string; ship?: string }) => event.act === 'overdrive' && event.ship !== window.game.me.name).length);
+  expect(boosted).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
 test('alone, the pause menu pays out the round and starts a new one at once, in the arena and mode chosen; the flight school offers none', async ({ page }) => {
   const errors = await openGame(page);
   await startSolo(page, 'deathmatch');
