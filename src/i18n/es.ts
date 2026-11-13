@@ -1393,8 +1393,7 @@ export const ES: Catalog = {
   'A rival on your cable cannot get away from you while its drive fights your winch. Reel it in and give it the laser, or a torpedo, from close range.':
     'Un rival en tu cable no puede escapar de ti mientras su motor lucha contra tu cabrestante. Recógelo y dale láser, o un torpedo, a quemarropa.',
   'The grill': 'La parrilla',
-  'A main drive burning hard throws plasma {plume} m behind it. Whoever tails you too closely gets grilled, and a clone that burns up counts as your kill. Overtake beside a plume, never through it.':
-    'Un motor principal a pleno empuje lanza plasma {plume} m por detrás. Quien te sigue demasiado pegado acaba a la parrilla, y un clon que se calcina cuenta como tu baja. Adelanta junto a un chorro, nunca a través de él.',
+  'A main drive burning hard throws its exhaust {plume} m behind it, deadly close up and fading with distance: three seconds right behind a burning drive kill. Whoever tails you too closely gets grilled, and a clone that burns up counts as your kill. Overtake beside a plume, never through it.': 'Un motor principal a pleno empuje lanza su chorro {plume} m por detrás, mortal de cerca y cada vez más débil con la distancia: tres segundos justo detrás de un motor encendido matan. Quien te sigue demasiado pegado acaba a la parrilla, y un clon que se calcina cuenta como tu baja. Adelanta junto a un chorro, nunca a través de él.',
   'Deathmatch: The Purest Show': 'Todos contra todos: el espectáculo más puro',
   'Five minutes, everyone against everyone. A kill scores {kill}, a rock {rock1}, its fragments {rock2} and theirs {rock3}, a close call past a rock {closeCall}. The best score wins.':
     'Cinco minutos, todos contra todos. Una baja da {kill}, una roca {rock1}, sus fragmentos {rock2} y los fragmentos de estos {rock3}, pasar por los pelos junto a una roca {closeCall}. Gana la mejor puntuación.',

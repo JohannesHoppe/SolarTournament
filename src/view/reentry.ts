@@ -5,9 +5,10 @@ import type { Effects } from './effects';
 import { exp, log2 } from '../detmath';
 
 /**
- * A ship flying hot through a planet's air (Jupiter's, see world/air), as everyone sees it: a
- * glowing shock layer pressed against the side it flies towards, deep orange to yellow-hot by
- * how hard the air heats it, streaming out into a plasma trail along its flight; once the hull
+ * A ship flying hot through a planet's air (Jupiter's, see world/air), as everyone sees it: where
+ * the ram heats the air white-hot (see shockGlow; no ship of the Games flies so fast), a glowing
+ * shock layer pressed against the side it flies towards, deep orange to yellow-hot by how hard
+ * the air heats it, streaming out into a plasma trail along its flight; once the hull
  * burns, its leading plates glow dull red to orange and flakes and sparks of it ablate and
  * trail away; a ship that dies burning streaks on as a fireball and breaks up into burning
  * pieces that sink into the clouds. All of it follows each ship's own heating, computed from

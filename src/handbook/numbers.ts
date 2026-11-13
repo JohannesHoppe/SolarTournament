@@ -284,7 +284,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   shoveSpeed: { value: 39, readme: 'flies off at about # m/s' },
   ramNose: { value: 30, readme: 'on the armored nose # % of the blow' },
   ramFlank: { value: 50, readme: 'on a flank # %' },
-  plume: { value: 150, readme: '# m long and spreading' },
+  plume: { value: 1000, readme: 'a hundredth at a kilometer' },
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },
   pocket: { value: 1.35, readme: '# km deep at its middle' },

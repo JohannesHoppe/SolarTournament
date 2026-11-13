@@ -789,6 +789,9 @@ const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.V
 const shadeHit = rayHit();
 const sweepHit = rayHit();
 const impactHit = rayHit();
+/** Where the impact warning looks at the ground ahead, and the ground's normal there (see groundHurts). */
+const groundAt = new THREE.Vector3();
+const groundAhead = new THREE.Vector3();
 const aimHit = rayHit();
 const laserHit = rayHit();
 /** Scratch of a claim-jumper's sight of its rig and where it starts (see Game.sawPoint, spawnJumpers). */
@@ -9171,6 +9174,13 @@ export class Game implements OnlineGame {
    * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
    * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
+  /** Whether a ship at `position` flying along `heading` at `speed` meets the world's ground `distance` ahead hard enough to hurt: faster into it than the hover field's cushion and what rock forgives (see world/hover, groundBlow). */
+  private groundHurts(position: THREE.Vector3, heading: THREE.Vector3, speed: number, distance: number): boolean {
+    const at = groundAt.copy(position).addScaledVector(heading, distance);
+    if (this.field.groundBelow(at, groundAhead) === null) return false;
+    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall) >= SAFE_IMPACT;
+  }
+
   private pilot(dt: number, now: number) {
     const me = this.me!;
     const flight = me.flight;
@@ -9181,9 +9191,9 @@ export class Game implements OnlineGame {
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
-      // a rock, the well's body or the battleship's hull; a world's ground never hurts (see world/hover)
+      // a rock, the well's body or the battleship's hull; a world's ground only where the hover field's cushion would leave a blow (see world/hover)
       const hit = this.field.raycast(flight.position, heading, speed * 20, true, impactHit);
-      if (hit && !hit.asteroid?.ground) {
+      if (hit && (!hit.asteroid?.ground || this.groundHurts(flight.position, heading, speed, hit.distance))) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
         // damaged thrusters turn the ship more slowly

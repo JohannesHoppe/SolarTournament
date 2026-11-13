@@ -640,7 +640,7 @@ Only the worst alarm sounds; a danger with a beep of its own beeps that instead 
 
 | Danger | Tier | Line |
 |---|---|---|
-| Impact ahead (see Collisions) | WARNING, CRITICAL within 1.5 s | IMPACT with the seconds, its beep faster the closer it is |
+| Impact ahead (see Collisions; a world's ground only where a dive would strike it beyond the hover field's cushion) | WARNING, CRITICAL within 1.5 s | IMPACT with the seconds, its beep faster the closer it is |
 | Laser overheated | CAUTION | LASER OVERHEATED |
 | Drive overheated | CAUTION | DRIVE OVERHEATED |
 | A nose on the own ship (see Collisions) | TRACKED a CAUTION, LOCKED and ON YOUR TAIL a WARNING | its own line with the shooter, below the list; its beep |
