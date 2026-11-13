@@ -327,7 +327,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/bloom.ts` | The bloom at a share of the picture's resolution |
 | `view/grade.ts` | The output pass with the arena's color grade in the same shader (a tint, a color in the shadows, the saturation): no pass of its own |
 | **`input/`** | **Controls** |
-| `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
+| `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls`; the radio's keys (M, and `,` `.` for the DJ's songs, so fullscreen needs no mouse for it) and the d-pad for them off the flight |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | `input/sheet.ts` | The controls sheet (F1, the pause menu's Controls): each device's rows, opened at the device steered with last, with tabs for the others |
 | **`sound/`** | **What the pilot hears besides the radio** |

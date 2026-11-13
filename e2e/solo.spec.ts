@@ -224,6 +224,77 @@ test('alone, the Host is the DJ: back and forward on the radio, title words on t
   expect(errors).toEqual([]);
 });
 
+test('the radio plays on after every control is worked: the DJ\'s buttons and keys, the switch and M, the volume, the plate\'s title words', async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch');
+  await play(page, 3);
+  // a click lets the page play sound; the radio's band loads once it plays
+  await page.locator('#radio').click({ force: true });
+  await page.locator('#radio').click({ force: true });
+  await page.waitForFunction(() => window.game.radio.band && window.game.radio.context.state === 'running', null, { timeout: 60_000 });
+  await page.evaluate(() => {
+    const radio = window.game.radio;
+    const analyser = radio.context.createAnalyser();
+    radio.output.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    (window as unknown as { loudest: () => Promise<number> }).loudest = async () => {
+      let most = 0;
+      for (let i = 0; i < 20; i++) {
+        analyser.getFloatTimeDomainData(samples);
+        for (const x of samples) most = Math.max(most, Math.abs(x));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return most;
+    };
+  });
+  // the radio after a control: its cue set, on, turned up, and sound coming out of it
+  const plays = async (control: string) => {
+    await page.waitForTimeout(1500);
+    const radio = await page.evaluate(async () => {
+      const radio = window.game.radio;
+      return { playing: radio.playing, enabled: radio.enabled, level: radio.level > 0, sound: (await (window as unknown as { loudest: () => Promise<number> }).loudest()) > 0.01 };
+    });
+    expect(radio, control).toEqual({ playing: true, enabled: true, level: true, sound: true });
+  };
+  await plays('start');
+  await page.locator('#np-next').click({ force: true });
+  await plays('next song button');
+  await page.locator('#np-back').click({ force: true });
+  await plays('previous song button');
+  // the keys work with the focus anywhere, the pointer flying the ship in fullscreen
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const title = () => page.evaluate(() => window.game.radio.song?.title as string);
+  const before = await title();
+  await page.keyboard.press('Period');
+  await plays('next song key');
+  expect(await title()).not.toBe(before);
+  await page.keyboard.press('Comma');
+  await plays('previous song key');
+  expect(await title()).toBe(before);
+  await page.keyboard.press('KeyM');
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => [window.game.radio.enabled, document.getElementById('radio')!.classList.contains('off')])).toEqual([false, true]);
+  await page.keyboard.press('KeyM');
+  await plays('M twice');
+  await page.locator('#radio').click({ force: true });
+  await page.locator('#radio').click({ force: true });
+  await plays('switch twice');
+  await page.locator('#radio-volume').fill('0');
+  await page.locator('#radio-volume').fill('80');
+  await plays('volume down and up');
+  // the plate, worked from the keyboard alone: its words typed, Enter, Escape, back to the round
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => document.getElementById('dj-open')!.click());
+  await page.keyboard.type('golden damage');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await play(page, 1);
+  expect(await title()).toBe('Golden Damage');
+  await plays('title words');
+  expect(errors).toEqual([]);
+});
+
 test('the hangar sells an upgrade for Solar Coins and keeps it, and neither the Magpie nor the Sovereign is flown before it is earned', async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('seeded')) localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 1200, ship: 'human' }));
