@@ -3,7 +3,9 @@ import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
-import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
+import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
+import { CRACK_TRACK } from '../world/crack';
+import { CRACK_DEPTH, CRACK_WIDTH, EUROPA_FALL } from '../world/europa';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
@@ -52,6 +54,13 @@ export const FROM_CODE: Record<string, number> = {
   overdrive: meters(OVERDRIVE_PUSH),
   hoverHeight: meters(HOVER_HEIGHT),
   gates: GATES,
+  trackGates: CRACK_TRACK.gates.length,
+  trackRespawn: TRACK_RESPAWN_SECONDS,
+  trackSpeed: meters(TRACK_RESPAWN_SPEED),
+  trackLength: Math.round(km(CRACK_TRACK.points.reduce((sum, point, i, all) => sum + (i ? point.distanceTo(all[i - 1]) : 0), 0))),
+  crackWidth: meters(CRACK_WIDTH),
+  crackDepth: meters(CRACK_DEPTH),
+  crackGravity: Math.round((meters(EUROPA_FALL) / 9.81) * 100) / 100,
   laps: LAPS,
   gateRadius: meters(GATE_RADIUS),
   core: meters(BOOST_RADIUS),

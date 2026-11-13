@@ -23,7 +23,7 @@ const KM = 20000;
 /** Europa's pull at its surface (units/s²): 1.31 m/s², an eighth of a g, from its mass of 4.8 × 10²² kg over its radius of 1,561 km. */
 export const EUROPA_FALL = 26.3;
 /** Europa's radius (units, 1,561 km): its ground falls away by some 30 m at 10 km. */
-const EUROPA_RADIUS = 1561 * KM;
+export const EUROPA_RADIUS = 1561 * KM;
 
 /** The ice plain under the field's middle (units, 100 m below it). */
 export const LAND = -2000;
@@ -39,7 +39,7 @@ const CRACK_WAVE = 90000;
 export const CRACK_WIDTH = 4000;
 export const CRACK_DEPTH = 16000;
 export const CRACK_EDGE = 600;
-const LIP = 1600;
+export const LIP = 1600;
 const LIP_WIDTH = 6000;
 /** Rubble on the Crack's floor: blocks fallen from its walls, up to 20 m. */
 const RUBBLE = 400;

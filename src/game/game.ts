@@ -41,6 +41,8 @@ const BOT_DECOY_AT = 0.6;
 /** A hull gliding over a world's ground faster than this (units/s, 20 m/s) throws sparks, about GLIDE_SPARK_RATE bursts a second (see glideOver). */
 const GLIDE_SPARKS = 400;
 const GLIDE_SPARK_RATE = 6;
+/** The HOVER readout stays orange this long after the own hull last touched the ground (s, see showWorld). */
+const GLIDE_SHOWN = 0.2;
 /** A decoy dropped jolts the camera by this much (see kick): the clamp letting go is felt, far less than a hit. */
 const DECOY_KICK = 0.4;
 /** Rivals' torpedoes are marked on screen within this range (units, 3 km: as far as a torpedo locks), in sight. */
@@ -55,8 +57,8 @@ import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaig
 import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
-import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
+import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
+import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -75,7 +77,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
+import { arenaById, arenasFor, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, RACE_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { JET_WELDS } from '../world/derelict';
 import { animateHull, setHullFrost } from '../world/worldship';
@@ -95,7 +97,7 @@ import { knockShare, ramShare, syncShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
-import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, canSkip, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
@@ -627,7 +629,7 @@ function loadSolo(): SoloChoice {
     return {
       mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
       // null is a choice of its own: by chance
-      arena: kept.arena === null ? null : ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
+      arena: kept.arena === null ? null : RACE_ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
   } catch {
@@ -708,6 +710,9 @@ const modeName = (id: string) => $(id).querySelector<HTMLElement>('.mode-label')
 /** One of several lines, at random; only the local voice says it. */
 const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 const scratch = new THREE.Vector3();
+/** The pull and the ground's normal the world's readouts take (see showWorld). */
+const worldPull = new THREE.Vector3();
+const worldNormal = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const upward = new THREE.Vector3();
 /** Up from a planet's center, through the camera or a ship (see airWeather, airAlarm). */
@@ -2179,7 +2184,7 @@ export class Game implements OnlineGame {
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
     $('solo-arenas').append(
       button(t('By chance'), () => (this.solo.arena = null)),
-      ...ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
+      ...RACE_ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
@@ -2200,7 +2205,11 @@ export class Game implements OnlineGame {
     const { mode, arena, rivals } = this.solo;
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) button.classList.toggle('selected', button.dataset.value === mode);
     $('solo-mode-note').textContent = t(SOLO_NOTES[mode], { clones: CLONES });
-    [...$('solo-arenas').children].forEach((b, i) => b.classList.toggle('selected', i === 0 ? arena === null : ARENAS[i - 1].id === arena));
+    // a race world is flown by races alone
+    [...$('solo-arenas').children].forEach((b, i) => {
+      b.classList.toggle('selected', i === 0 ? arena === null : RACE_ARENAS[i - 1].id === arena);
+      if (i > 0) (b as HTMLElement).hidden = !arenasFor(mode === 'race').includes(RACE_ARENAS[i - 1]);
+    });
     [...$('solo-bots').children].forEach((b, i) => {
       const chosen = rivals.includes(BOT_NAMES[i]);
       b.classList.toggle('selected', chosen);
@@ -2334,7 +2343,7 @@ export class Game implements OnlineGame {
     const bots = this.roomBots ? t("Bots fill the {places} places; every Host who joins takes a bot's place.", { places: TOURNAMENT_SIZE }) : t('No bots: only Hosts fly.');
     const rounds = {
       deathmatch: () => t('Every round a deathmatch.'),
-      race: () => t('Every round a race: {laps} laps through {gates} gates, lasers on.', { laps: LAPS, gates: GATES }),
+      race: () => t('Every round a race, lasers on: {laps} laps through {gates} gates in free space, or over a world from the start to the finish.', { laps: LAPS, gates: GATES }),
       survival: () => t('Every round Last Clone Standing: {clones} clones each, a solar flare sweeping in from the sun.', { clones: CLONES }),
       flag: () => t('Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.'),
       fleet: () => t("Every round the President's Fleet: every Host and bot together against one of his battleships."),
@@ -2615,7 +2624,7 @@ export class Game implements OnlineGame {
       if (distance < LOCK_RANGE && ship.flight.noseAngleTo(line) < 0.2) threat += 1;
       if (distance < LOCK_RANGE && other.flight.noseAngleTo(line.negate()) < 0.2) threat += ship.tailToward(line) ? 2 : 1;
     }
-    return 20000 / (nearest + 2000) + threat + (1 - ship.hull / 100) + (this.course ? ship.gates / GATES : 0);
+    return 20000 / (nearest + 2000) + threat + (1 - ship.hull / 100) + (this.course ? ship.gates / this.course.count : 0);
   }
 
   /**
@@ -2716,7 +2725,8 @@ export class Game implements OnlineGame {
       if (this.leader) this.announce(pick(ANNOUNCER_LEAD), leader);
       this.leader = leader;
     }
-    if (leader && !this.lastLapCalled && leader.finish < 0 && lapOf(leader.gates) === LAPS) {
+    // a track over a world is one run: no last lap to call
+    if (leader && !this.lastLapCalled && leader.finish < 0 && this.course && !this.course.track && lapOf(leader.gates) === LAPS) {
       this.lastLapCalled = true;
       this.announce(pick(ANNOUNCER_LAST_LAP), leader, true);
     }
@@ -2999,7 +3009,7 @@ export class Game implements OnlineGame {
     // what parseLaps reads back of the kept laps
     const kept = this.course ? parseLaps(storageGet(LAPS_KEY)) : null;
     if (kept) storageSet(LAPS_KEY, JSON.stringify(kept));
-    this.laps = kept ? new LapTimer(kept[arena.id] ?? null) : null;
+    this.laps = kept && this.course ? new LapTimer(kept[arena.id] ?? null, this.course.count, this.course.track) : null;
     this.leader = null;
     this.lastLapCalled = this.winCalled = false;
     this.flareCalled = this.survivorCalled = false;
@@ -3042,7 +3052,7 @@ export class Game implements OnlineGame {
   private roundArena(): ArenaProfile {
     const round = Math.max(0, this.roundId);
     const picked = this.pickedArena?.round === round ? arenaById(this.pickedArena.arena) : undefined;
-    return picked ?? arenaOfRound(this.online!.session.room, round);
+    return picked ?? arenaOfRound(this.online!.session.room, round, modeOfRound(this.room?.mode ?? 'deathmatch', round) === 'race');
   }
 
   /** This browser's Host decides what is played: online the Host of the lead browser, alone the Host itself; the flight school has its own course. */
@@ -3053,7 +3063,7 @@ export class Game implements OnlineGame {
   /** The plate of a new round: the arenas and the modes to choose from. */
   private buildNewRound() {
     $('new-round-arenas').append(
-      ...ARENAS.map((arena) => {
+      ...RACE_ARENAS.map((arena) => {
         const button = Object.assign(document.createElement('button'), { type: 'button', innerHTML: `${t(arena.name)}<small>${t(arena.tagline)}</small>` });
         button.dataset.value = arena.id;
         button.addEventListener('click', () => {
@@ -3076,8 +3086,14 @@ export class Game implements OnlineGame {
 
   /** Marks the choices on the plate of a new round. */
   private renderNewRound() {
+    // a race world is flown by races alone: for another mode its choice goes back to the first arena of free space
+    const offered = arenasFor(this.roundChoice.mode === 'race');
+    if (!offered.some((a) => a.id === this.roundChoice.arena)) this.roundChoice.arena = offered[0].id;
     const { arena, mode } = this.roundChoice;
-    [...$('new-round-arenas').children].forEach((b, i) => b.classList.toggle('selected', ARENAS[i].id === arena));
+    [...$('new-round-arenas').children].forEach((b, i) => {
+      b.classList.toggle('selected', RACE_ARENAS[i].id === arena);
+      (b as HTMLElement).hidden = !offered.includes(RACE_ARENAS[i]);
+    });
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="new-round-mode"] button[data-value]')) {
       button.classList.toggle('selected', button.dataset.value === mode);
       // every mode in turn is a rule of a tournament's rounds
@@ -3134,8 +3150,10 @@ export class Game implements OnlineGame {
   /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special; the opening's intro card says it while it runs. */
   private announceArena() {
     if (this.introOpen || (!this.school && Number.isFinite(this.roundEndsAt) && this.roundSeconds() < START_AT)) return;
-    const venue = { arena: t(this.venue.name), tagline: t(this.venue.tagline), laps: LAPS, gates: GATES };
-    this.hud.flashMessage(this.time, this.roundMode === 'race' ? t('{arena} · Race: {laps} laps through {gates} gates · {tagline}', venue) : `${venue.arena} · ${venue.tagline}`, 5);
+    const course = this.course;
+    const venue = { arena: t(this.venue.name), tagline: t(this.venue.tagline), laps: course?.laps ?? LAPS, gates: course?.count ?? GATES };
+    const race = course?.track ? t('{arena} · Race: {gates} gates from the start to the finish · {tagline}', venue) : t('{arena} · Race: {laps} laps through {gates} gates · {tagline}', venue);
+    this.hud.flashMessage(this.time, this.roundMode === 'race' ? race : `${venue.arena} · ${venue.tagline}`, 5);
   }
 
   /** What an online round is, by the room's rule and the round number. */
@@ -3439,10 +3457,10 @@ export class Game implements OnlineGame {
     $('hud-room').classList.remove('game-master');
     // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
-    if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
+    if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0, this.roundMode === 'race'));
     // a mission of the campaign starts at the place of the drill it goes on from
     else if (mode === 'school' && this.mission) this.enterArena(arenaById(this.mission.drills[Math.min(this.missionStep(), this.mission.drills.length - 1)].arena ?? '') ?? DEFAULT_ARENA);
-    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
+    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (arenasFor(this.solo.mode === 'race').find((a) => a.id === this.solo.arena) ?? pick(arenasFor(this.solo.mode === 'race'))));
     this.hud.reset();
     this.resetOpening();
     $('hud-room').textContent = '';
@@ -3986,11 +4004,14 @@ export class Game implements OnlineGame {
     if (course) {
       // a racer starts on the grid before the first gate, and a new clone takes up the race
       // where the last one died, facing the next gate; where the last one passed its last gate
-      // when that spot lies in rock, in a well or its grip, or out of the arena
+      // when that spot lies in rock, in a well or its grip, or out of the arena; on a track over a
+      // world always at the last gate passed, along the track (see TRACK_RESPAWN_SPEED)
       const spot = ship.flight.position;
-      if (ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40) && !inGrip(this.field.well, spot, WELL_CAUTION)) position.copy(spot);
-      else course.startOf(ship.gates, Math.max(0, this.ships.indexOf(ship)) % 8, position);
-      candidate.copy(course.points[ship.gates % GATES]);
+      const slot = Math.max(0, this.ships.indexOf(ship)) % 8;
+      if (!course.track && ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40) && !inGrip(this.field.well, spot, WELL_CAUTION)) position.copy(spot);
+      else course.startOf(ship.gates, slot, position);
+      if (course.track) candidate.copy(position).add(course.startHeading(ship.gates, scratch));
+      else candidate.copy(course.points[course.nextGate(ship.gates)]);
       best = 0;
     }
     // a place of the campaign prints the own clone where its story starts, facing on (see ArenaProfile.start)
@@ -4039,6 +4060,8 @@ export class Game implements OnlineGame {
     if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
     else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
     ship.spawn(position, lookingAt(position, course || start ? candidate : spawnMiddle, UP), this.time);
+    // back in the race on a track: already flying along it at race speed
+    if (course?.track && ship.gates > 0) ship.flight.velocity.subVectors(candidate, position).setLength(TRACK_RESPAWN_SPEED);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
@@ -4345,7 +4368,7 @@ export class Game implements OnlineGame {
       name.append(swatch(shownTint(ship), ship.trophy?.glow ?? null));
       if (online && isLeadHost(ship.id, online.session.leadId)) name.append(markLead());
       name.append(...markedName(ship.kind, ship.name));
-      if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
+      if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : this.course?.track ? t('Gate {n}/{gates}', { n: ship.gates, gates: this.course.count }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
       if (survival) row.insertCell().textContent = isOut(ship) ? t('Out') : t('{n} left', { n: clonesLeft(ship) });
       if (flags) {
         const side = row.insertCell();
@@ -4658,7 +4681,8 @@ export class Game implements OnlineGame {
           $('no-clone').hidden = true;
         }
         // training clones are free; tournament clones cost an ad
-        if (ship !== me || this.school) this.respawn(ship);
+        // on a track over a world a crash costs seconds: back at once, no sponsor break (see TRACK_RESPAWN_SECONDS)
+        if (ship !== me || this.school || this.course?.track) this.respawn(ship);
         else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();
         continue;
       }
@@ -4682,8 +4706,8 @@ export class Game implements OnlineGame {
         bot.flee = danger ?? this.cometDanger(ship);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
-        // to a solar flare's safe pocket
-        bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
+        // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
+        bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         // a mission's raiders keep to the place they raid (it has no edge, see keepInArena)
         if (this.jumpers?.bots.includes(bot)) bot.homeAt = this.jumpers.rig;
@@ -4782,7 +4806,7 @@ export class Game implements OnlineGame {
     else if (this.survival) this.callSurvival(me);
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
-    this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
+    this.pushRadio(racing && !this.spectating && me.finish < 0 && this.course!.finalStretch(me.gates));
     // the trigger pulled with the nose on a ship of the own side: Nicole warns
     if (me.alive && this.onTarget === 'friend' && myControls.fire) this.warnFriend(COMPUTER.friend);
 
@@ -5114,14 +5138,14 @@ export class Game implements OnlineGame {
 
   /** Whether a racer is past its next gate's plane without having gone through it, and still moving away from it. */
   private missedGate(ship: Ship, course: Course): boolean {
-    const next = ship.gates % GATES;
+    const next = course.nextGate(ship.gates);
     return scratch.subVectors(ship.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && ship.flight.velocity.dot(course.normals[next]) > 0;
   }
 
   /** The gate a racer flies for: its next, or, past that one with the lap's skip still to spend (see canSkip), the one after it. */
   private aimGate(ship: Ship, course: Course): number {
-    const next = ship.gates % GATES;
-    return canSkip(ship.gates, ship.skipLap) && this.missedGate(ship, course) ? (next + 1) % GATES : next;
+    const next = course.nextGate(ship.gates);
+    return course.canSkip(ship.gates, ship.skipLap) && this.missedGate(ship, course) ? (next + 1) % course.count : next;
   }
 
   /** Where a racer flies for near the gate it aims at, clear of the coil's housings (see approachGate). */
@@ -5641,18 +5665,18 @@ export class Game implements OnlineGame {
    */
   private passGates(ship: Ship, course: Course) {
     if (!ship.alive || ship.finish >= 0) return;
-    let gate = ship.gates % GATES;
+    let gate = course.nextGate(ship.gates);
     let off = course.crossing(gate, ship.previous, ship.flight.position);
     // the gate after the next counts too while the lap's skip is not spent (see canSkip): the
     // next one is left out, without its points
-    if (off === null && canSkip(ship.gates, ship.skipLap)) {
-      const after = (gate + 1) % GATES;
+    if (off === null && course.canSkip(ship.gates, ship.skipLap)) {
+      const after = (gate + 1) % course.count;
       off = course.crossing(after, ship.previous, ship.flight.position);
       if (off === null) return;
-      ship.skipLap = lapOf(ship.gates);
+      ship.skipLap = course.lapOf(ship.gates);
       if (ship === this.me) {
         this.timeLap(gate);
-        this.hud.flashMessage(this.time, t('Gate {n} skipped · your one skip this lap', { n: gate + 1 }), 2);
+        this.hud.flashMessage(this.time, course.track ? t('Gate {n} skipped · your one skip this race', { n: gate + 1 }) : t('Gate {n} skipped · your one skip this lap', { n: gate + 1 }), 2);
       }
       ship.gates++;
       gate = after;
@@ -5662,7 +5686,7 @@ export class Game implements OnlineGame {
     ship.gates++;
     ship.score += GATE_POINTS;
     if (ship === this.me) this.timeLap(gate);
-    if (ship.gates >= FINISH_GATES) {
+    if (ship.gates >= course.finishGates) {
       ship.finish = +this.raceSeconds().toFixed(2);
       // the standings with this finish in them
       this.rankedAt = -1;
@@ -5676,8 +5700,8 @@ export class Game implements OnlineGame {
     }
     if (ship !== this.me) return;
     this.sound.beep(1180, 0.06, 0.12);
-    // through the pink gate: a new lap begins
-    if (ship.gates > 1 && ship.gates % GATES === 1) {
+    // through the pink gate: a new lap begins (a track is one run)
+    if (!course.track && ship.gates > 1 && ship.gates % GATES === 1) {
       const last = lapOf(ship.gates) === LAPS;
       this.hud.flashMessage(this.time, last ? t('Last lap') : t('Lap {lap} of {laps}', { lap: lapOf(ship.gates), laps: LAPS }), 2);
       if (last) this.speaker.say(COMPUTER.finalLap, 'urgent');
@@ -5924,17 +5948,18 @@ export class Game implements OnlineGame {
       this.hud.setSchool({ step: t('Finished · {place}', { place }), text: t('{time} s. Now hunt the others.', { time: me.finish.toFixed(1) }), keys: [] });
       return null;
     }
-    const lap = lapOf(me.gates);
+    const lap = course.lapOf(me.gates);
     // past its next gate with the lap's skip still to spend, the racer flies on for the one after
     // it (see canSkip); past it with the skip spent, it has to turn back
     const next = this.aimGate(me, course);
-    const skipping = next !== me.gates % GATES;
+    const skipping = next !== course.nextGate(me.gates);
     const missed = !skipping && this.missedGate(me, course);
     course.highlight(next, this.time);
-    const gate = { n: next + 1, gates: GATES };
-    const label = missed ? t('Missed · turn back') : next === 0 ? (me.gates === 0 ? t('Start') : lap === LAPS ? t('Finish') : t('Lap')) : t('Gate {n}/{gates}', gate);
+    const gate = { n: next + 1, gates: course.count };
+    const label = missed ? t('Missed · turn back') : course.isFinish(next, lap) ? t('Finish') : next === 0 ? (me.gates === 0 ? t('Start') : t('Lap')) : t('Gate {n}/{gates}', gate);
     this.hud.setWaypoint(this.camera, course.points[next], label);
-    this.markRings(me, course.points[next], course.normals[next], course.points[(next + 1) % GATES], GATE_RADIUS);
+    // a track's finish has no gate after it
+    this.markRings(me, course.points[next], course.normals[next], course.track && next + 1 >= course.count ? null : course.points[(next + 1) % course.count], GATE_RADIUS);
     if (me.alive) this.showGuide(me, course.line, next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
@@ -5944,15 +5969,22 @@ export class Game implements OnlineGame {
     const text = missed
       ? t('Missed gate {n}: turn back and fly through it', gate)
       : skipping
-        ? t('Missed gate {missed}: fly on through gate {n}, your one skip this lap', { missed: (me.gates % GATES) + 1, n: next + 1 })
+        ? course.track
+          ? t('Missed gate {missed}: fly on through gate {n}, your one skip this race', { missed: course.nextGate(me.gates) + 1, n: next + 1 })
+          : t('Missed gate {missed}: fly on through gate {n}, your one skip this lap', { missed: course.nextGate(me.gates) + 1, n: next + 1 })
         : `${t('Gate {n} of {gates}', gate)}${timing}`;
-    this.hud.setSchool({ step: t('Race · lap {lap}/{laps} · {place}', { lap, laps: LAPS, place }), text, keys: [] });
+    this.hud.setSchool({ step: course.track ? t('Race · {place}', { place }) : t('Race · lap {lap}/{laps} · {place}', { lap, laps: course.laps, place }), text, keys: [] });
     return course.points[next];
   }
 
   /** Seconds since BURN!: the race time every finish and lap is measured in. */
   raceSeconds() {
     return this.roundSeconds() - START_AT;
+  }
+
+  /** The gates a racer passes from its first crossing of the start to the finish in the running round's race (see Course.finishGates); a loop's when no race runs. */
+  get finishGates(): number {
+    return this.course?.finishGates ?? FINISH_GATES;
   }
 
   /**
@@ -5967,7 +5999,7 @@ export class Game implements OnlineGame {
       this.hud.split(this.time, `${t('Gate {n}', { n: event.gate + 1 })} · ${lapClock(event.split)}${delta}`, event.delta === null ? null : event.delta < 0);
       return;
     }
-    const lap = t('Lap {time}', { time: lapClock(event.time) });
+    const lap = this.course?.track ? t('Run {time}', { time: lapClock(event.time) }) : t('Lap {time}', { time: lapClock(event.time) });
     this.hud.split(this.time, event.best ? t('{lap} · new best', { lap }) : `${lap}${delta}`, event.best || (event.delta === null ? null : false), 4);
     if (!event.best) return;
     const laps = parseLaps(storageGet(LAPS_KEY));
@@ -7847,6 +7879,25 @@ export class Game implements OnlineGame {
     this.hoverGround = ground ? copyGround(ground, this.hoverUnder) : null;
     return target;
   }
+  /**
+   * The flight computer's readouts of a world for the ship the camera follows, only where they
+   * act: GRAV while a world or a massive body pulls, AIR while there is air (its density as a
+   * share of the density under the cloud deck), HOVER while the hover field carries the ship
+   * (orange while the hull scrapes the ground), and GRIP with any of them, the hardest turn the
+   * ship flies now (see gripAt).
+   */
+  private showWorld(ship: Ship) {
+    const flight = ship.flight;
+    const pulled = this.field.fall > 0 || !!this.field.well || this.field.columns.length > 0;
+    const gravity = pulled ? this.field.gravity(flight.position, worldPull).length() / G : null;
+    const air = airAround(this.field.air, flight.position);
+    const share = air ? density(altitudeIn(air, flight.position)) : null;
+    const height = this.field.fall > 0 ? this.field.groundBelow(flight.position, worldNormal) : null;
+    const hover = height !== null && height - ship.radius < HOVER_HEIGHT * HOVER_REACH ? height - ship.radius : null;
+    const grip = gravity !== null || share !== null ? gripAt(flight.velocity.length(), flight, ship !== this.me || this.autopilot) / G : null;
+    this.hud.setWorld(gravity, share, hover, ship === this.me && this.time - this.lastGlide < GLIDE_SHOWN, grip);
+  }
+
   /** The ground under the ship `outside` last reckoned, while it rides it (see world/hover). */
   private hoverGround: Ground | null = null;
   private readonly hoverUnder: Ground = { normal: new THREE.Vector3(), gap: 0 };
@@ -8232,12 +8283,12 @@ export class Game implements OnlineGame {
     });
     const fleetDeath = cause && FLEET_DEATHS[cause];
     const cometDeath = cause && COMET_DEATHS[cause];
-    victim.respawnAt = this.time + (victim === this.me ? RESPAWN_SECONDS : BOT_RESPAWN_SECONDS);
+    victim.respawnAt = this.time + (this.course?.track ? TRACK_RESPAWN_SECONDS : victim === this.me ? RESPAWN_SECONDS : BOT_RESPAWN_SECONDS);
     if (victim.engineLight) victim.engineLight.intensity = 0;
     if (victim === this.me && killer && killer !== victim) {
       this.ease = Math.min(1, this.ease + DEATH_EASE);
-      // the moments before the kill, again, in slow motion, from behind the shooter
-      if (!this.school && this.state === 'playing') {
+      // the moments before the kill, again, in slow motion, from behind the shooter; not on a track, where the next clone is back at once
+      if (!this.school && this.state === 'playing' && !this.course?.track) {
         this.killcam.start(killer, victim, this.time);
         this.hud.flashMessage(this.time, t('Kill cam · {name} · Enter skips', { name: killer.name }), 3);
       }
@@ -9199,6 +9250,7 @@ export class Game implements OnlineGame {
     plane.update(shown && !this.cinema, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
     if (!hud) return;
     this.hud.setAltitude(subject, airAround(this.field.air, subject.flight.position));
+    this.showWorld(subject);
     const references = this.shownReferences;
     references.length = 0;
     for (const reference of this.arenaReferences) references.push(reference);

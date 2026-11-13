@@ -142,6 +142,15 @@ export class Hud {
   private readonly altitude = $('hud-altitude');
   private readonly height = $('hud-height');
   private readonly climb = $('hud-climb');
+  /** The flight computer's readouts of a world: its pull, its air, the hover field's height and the grip (see setWorld). */
+  private readonly grav = $('hud-grav');
+  private readonly gravValue = $('hud-grav-value');
+  private readonly air = $('hud-air');
+  private readonly airValue = $('hud-air-value');
+  private readonly hover = $('hud-hover');
+  private readonly hoverValue = $('hud-hover-value');
+  private readonly grip = $('hud-grip');
+  private readonly gripValue = $('hud-grip-value');
   private readonly markers = new Map<string, Marker>();
   /** The triangles over torpedoes, one element each, reused from frame to frame (see updateTorpedoMarks). */
   private readonly torpedoMarks: HTMLElement[] = [];
@@ -587,6 +596,24 @@ export class Hud {
     const text = !air ? `${climb > 0 ? '▲' : climb < 0 ? '▼' : '◆'} ${t('{speed} m/s', { speed })}` : climb > 0 ? t('Climbing ▲ {speed} m/s', { speed }) : climb < 0 ? t('Sinking ▼ {speed} m/s', { speed }) : `◆ ${t('{speed} m/s', { speed })}`;
     setText(this.climb, text);
     setClass(this.climb, 'sinking', !!air && climb < 0 && height < 0);
+  }
+
+  /**
+   * What decides how hard the ship can turn, shown only where it acts, nothing of it in free
+   * space: the pull it is in (`gravity`, in g), the air's density as a share of its density under
+   * the cloud deck (`air`), the hover field's height over the ground (`hover`, units; orange while
+   * the hull `scraping` touches it), and the hardest turn the ship flies now (`grip`, in g).
+   */
+  setWorld(gravity: number | null, air: number | null, hover: number | null, scraping: boolean, grip: number | null) {
+    setHidden(this.grav, gravity === null);
+    if (gravity !== null) setText(this.gravValue, t('{g} g', { g: gravity.toFixed(gravity < 1 ? 2 : 1) }));
+    setHidden(this.air, air === null);
+    if (air !== null) setText(this.airValue, `${Math.round(air * 100)} %`);
+    setHidden(this.hover, hover === null);
+    if (hover !== null) setText(this.hoverValue, `${meters(Math.max(0, hover))}`);
+    setClass(this.hover, 'scraping', hover !== null && scraping);
+    setHidden(this.grip, grip === null);
+    if (grip !== null) setText(this.gripValue, t('{g} g', { g: Math.round(grip) }));
   }
 
   /**

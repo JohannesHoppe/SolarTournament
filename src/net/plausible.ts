@@ -762,13 +762,13 @@ const SCORE_BURST = 10000;
 const GATE_RATE = 1;
 const GATE_BURST = 2;
 /**
- * A finish counts once all FINISH_GATES are, at a time on the race clock no later than
+ * A finish counts once all the race's gates are (`finish`: FINISH_GATES round a loop, a track's own, see Course.finishGates), at a time on the race clock no later than
  * FINISH_SLACK (s, the clocks' offset, lag and the slow part's second) after this browser's own,
  * and no earlier than FINISH_SLACK before the last state that showed the ship still racing, nor
  * than the gates could have been passed at GATE_RATE.
  */
 const FINISH_SLACK = 3;
-const FASTEST_RACE = (FINISH_GATES - 1) / GATE_RATE;
+const fastestRace = (finish: number) => (finish - 1) / GATE_RATE;
 
 /** What a ship's state says of its standing: score, gates passed in a race, and its finish on the race clock (-1 while racing). */
 export interface Standing {
@@ -808,10 +808,10 @@ export class Standings {
    * link, or while this browser stood still, counts from when it was sent): the standing this
    * browser takes.
    */
-  take(id: string, claimed: Standing, now: number, round: number, race: number): Standing {
+  take(id: string, claimed: Standing, now: number, round: number, race: number, finish = FINISH_GATES): Standing {
     let ship = this.ships.get(id);
     if (!ship) {
-      ship = { at: now, s: Math.min(0, claimed.s), g: 0, fi: -1, points: SCORE_BURST + SCORE_RATE * Math.max(0, round), passes: GATE_BURST + GATE_RATE * Math.max(0, round), racing: FASTEST_RACE };
+      ship = { at: now, s: Math.min(0, claimed.s), g: 0, fi: -1, points: SCORE_BURST + SCORE_RATE * Math.max(0, round), passes: GATE_BURST + GATE_RATE * Math.max(0, round), racing: fastestRace(finish) };
       this.ships.set(id, ship);
     }
     const dt = Math.max(0, now - ship.at);
@@ -819,11 +819,11 @@ export class Standings {
     ship.points = Math.min(Math.max(ship.points, SCORE_BURST), ship.points + SCORE_RATE * dt);
     ship.passes = Math.min(Math.max(ship.passes, GATE_BURST), ship.passes + GATE_RATE * dt);
     [ship.s, ship.points] = rise(ship.s, claimed.s, ship.points);
-    [ship.g, ship.passes] = rise(ship.g, Math.min(claimed.g, FINISH_GATES), ship.passes);
+    [ship.g, ship.passes] = rise(ship.g, Math.min(claimed.g, finish), ship.passes);
     if (claimed.fi < 0) {
       ship.fi = -1;
       ship.racing = Math.max(ship.racing, race);
-    } else if (ship.fi < 0 && ship.g >= FINISH_GATES && claimed.fi <= race + FINISH_SLACK && claimed.fi >= Math.max(FASTEST_RACE, ship.racing - FINISH_SLACK)) {
+    } else if (ship.fi < 0 && ship.g >= finish && claimed.fi <= race + FINISH_SLACK && claimed.fi >= Math.max(fastestRace(finish), ship.racing - FINISH_SLACK)) {
       ship.fi = claimed.fi;
     }
     return { s: ship.s, g: ship.g, fi: ship.fi };

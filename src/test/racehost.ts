@@ -1,5 +1,4 @@
 import { expect, it } from 'vitest';
-import { GATES } from '../game/race';
 import type { ArenaProfile } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from './field';
@@ -28,13 +27,13 @@ function raceLap(arena: ArenaProfile, autopilot: boolean) {
   it(
     `a lap in ${arena.id} ${autopilot ? 'with the autopilot' : 'in free drift'}, hands from quick to slow: never lost, at most one gate missed nearly every time, an ordinary Host about as fast as a middling bot`,
     () => {
-      const { laps, bot } = raceLaps(testField(DETAIL), arena, SKILL, autopilot);
-      const lines = laps.map(({ hands, seed, flight }) => `reaction ${hands.reaction} s, seed ${seed}: ${flight.crashed ? 'LOST' : `${flight.passed}/${GATES + 1} gates in ${flight.seconds.toFixed(0)} s, ${flight.missed} missed`}`);
+      const { laps, gates, bot } = raceLaps(testField(DETAIL), arena, SKILL, autopilot);
+      const lines = laps.map(({ hands, seed, flight }) => `reaction ${hands.reaction} s, seed ${seed}: ${flight.crashed ? 'LOST' : `${flight.passed}/${gates} gates in ${flight.seconds.toFixed(0)} s, ${flight.missed} missed`}`);
       const summary = `${arena.id}: middling bot ${bot.seconds.toFixed(0)} s; ${lines.join('; ')}`;
       console.info(`Host laps in ${summary}`);
       for (const { flight } of laps) expect(flight.crashed, summary).toBe(false);
-      expect(laps.filter(({ flight }) => flight.passed < GATES + 1 || flight.missed > 1).length, summary).toBeLessThanOrEqual(SLIPS);
-      const ordinary = Math.min(...laps.filter(({ hands, flight }) => hands === ORDINARY && flight.passed === GATES + 1 && flight.missed <= 1).map(({ flight }) => flight.seconds));
+      expect(laps.filter(({ flight }) => flight.passed < gates || flight.missed > 1).length, summary).toBeLessThanOrEqual(SLIPS);
+      const ordinary = Math.min(...laps.filter(({ hands, flight }) => hands === ORDINARY && flight.passed === gates && flight.missed <= 1).map(({ flight }) => flight.seconds));
       expect(ordinary, summary).toBeLessThan(bot.seconds * LAP_MARGIN);
     },
     RACE_TIMEOUT,

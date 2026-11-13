@@ -24,6 +24,8 @@ export interface Rings {
   radius: number;
   core: number;
   line: RacingLine;
+  /** A race world's track (see Course.track): no edge for a racing bot to turn back at (see Bot.home). */
+  edgeless?: boolean;
   /** Markers without a coil's housings (the curve drill's spheres): the racer flies the line alone, with no approach to a ring's center. */
   open?: boolean;
 }
@@ -67,6 +69,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
+  if (rings.edgeless) bot.home = Infinity;
   const goal = new THREE.Vector3();
   return flyCourse(field, rings, flight, (flight, next, seconds) => {
     // as the game's racers do: along the line, and near a ring for its center where the way would clip the rim

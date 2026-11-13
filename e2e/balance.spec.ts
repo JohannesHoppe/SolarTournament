@@ -85,12 +85,12 @@ async function playRound(browser: Browser, mode: string, arena: string): Promise
   }
 }
 
-/** Every arena (as the game has them: src/world/arenas.ts, served by the dev server). */
-async function arenas(browser: Browser): Promise<string[]> {
+/** Every arena a mode is played in (as the game has them: src/world/arenas.ts, served by the dev server): a race's with the race worlds. */
+async function arenas(browser: Browser, mode: string): Promise<string[]> {
   const page = await browser.newPage();
   try {
     await page.goto('/');
-    const ids: string[] = await page.evaluate(async (path) => (await import(path)).ARENAS.map((arena: { id: string }) => arena.id), '/src/world/arenas.ts');
+    const ids: string[] = await page.evaluate(async ([path, race]) => (await import(path)).arenasFor(race).map((arena: { id: string }) => arena.id), ['/src/world/arenas.ts', mode === 'race'] as const);
     if (ONLY && !ids.includes(ONLY)) throw new Error(`no arena ${ONLY}`);
     return ONLY ? [ONLY] : ids;
   } finally {
@@ -100,7 +100,7 @@ async function arenas(browser: Browser): Promise<string[]> {
 
 /** Every round of a mode, PAGES at a time, and what they come to on average for the middling bot. */
 async function playRounds(browser: Browser, mode: string) {
-  const queue = (await arenas(browser)).flatMap((arena) => Array.from({ length: ROUNDS_PER_ARENA[mode] }, () => arena));
+  const queue = (await arenas(browser, mode)).flatMap((arena) => Array.from({ length: ROUNDS_PER_ARENA[mode] }, () => arena));
   const rounds: Round[] = [];
   const next = async () => {
     for (let arena = queue.shift(); arena; arena = queue.shift()) rounds.push(await playRound(browser, mode, arena));

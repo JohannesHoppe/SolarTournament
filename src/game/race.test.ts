@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BOOST_RADIUS, canSkip, Course, GATE_RADIUS, GATES, lapOf, modeOfRound, ROUND_MODES, takesStart } from './race';
-import { ARENAS } from '../world/arenas';
+import { ARENAS, RACE_ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
 import { bendRadius } from './racingline';
@@ -18,7 +18,7 @@ const course = (arena = ARENAS[0]) => {
 function hashPerArena(read: (field: ReturnType<typeof testField>, course: Course, v: THREE.Vector3) => number[]): Record<string, string> {
   const hashes: Record<string, string> = {};
   const v = new THREE.Vector3();
-  for (const arena of ARENAS) {
+  for (const arena of RACE_ARENAS) {
     const field = testField();
     field.generate(arena.layout);
     hashes[arena.id] = createHash('sha256').update(Float64Array.from(read(field, new Course(field, arena.layout.seed), v))).digest('hex').slice(0, 16);
@@ -48,6 +48,7 @@ describe('the race course', () => {
       corona: 'c73c88573b697805',
       hole: '5f892889362a4630',
       derelict: 'b85ad9dcd96b2eef',
+      crack: 'dfc4e91cc54b558a',
     });
   });
 
@@ -68,6 +69,7 @@ describe('the race course', () => {
       corona: '0fedea7cced59e0c',
       hole: '38320122bb46bfbb',
       derelict: '777d0a716818840b',
+      crack: '32a8354ce654d2a3',
     });
   });
 
@@ -129,7 +131,7 @@ describe('the race course', () => {
     // a quarter more room than the tightest turn at the limit, for a pilot who is not perfect
     const tightest = turnRadius(MAX_SPEED) * 1.25;
     const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-    for (const arena of ARENAS) {
+    for (const arena of RACE_ARENAS) {
       // the line bots fly and the HUD shows: the loop bowed around the field's rock
       const field = testField();
       field.generate(arena.layout);

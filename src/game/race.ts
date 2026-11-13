@@ -103,6 +103,17 @@ const LINE_TRIES = 32;
  */
 const GRID_BEFORE = -6000;
 const RESPAWN_PAST = GATE_RADIUS;
+/** On a track the slots stand two abreast this far apart, and the rows as far apart along the track (units, 40 m): eight ships in a canyon 140 m wide at its floor. */
+const TRACK_SLOT = 800;
+/**
+ * On a track a clone destroyed is printed again after TRACK_RESPAWN_SECONDS (s), without a
+ * sponsor break, at the last gate it passed, flying along the track at TRACK_RESPAWN_SPEED
+ * (units/s, 150 m/s): a crash costs seconds, never the race.
+ */
+export const TRACK_RESPAWN_SECONDS = 1;
+export const TRACK_RESPAWN_SPEED = 3000;
+/** A track's last stretch, where the radio opens up as on a loop's last lap, starts after this share of its gates. */
+const FINAL_STRETCH = 0.75;
 /** Points for every gate passed, and for the places at the finish; a kill in a race is worth less (see Game). */
 export const GATE_POINTS = 20;
 export const PLACE_POINTS = [1000, 800, 650, 500, 400, 300, 200, 100];
@@ -229,7 +240,9 @@ export function pathCrossing(position: THREE.Vector3, velocity: THREE.Vector3, p
  * where the racing line bows around rock in one (see RacingLine.clear), the two together still
  * bend no tighter than BOW_RADIUS, so the whole lap is flown at the speed limit.
  */
-type CircuitPiece = { straight: number } | { bend: number; turn: number } | { free: true };
+/** The forms of a loop (see formPoint): every form but a track. */
+type LoopForm = Exclude<CourseForm, { form: 'track' }>;
+type CircuitPiece ={ straight: number } | { bend: number; turn: number } | { free: true };
 const CIRCUITS: Record<CircuitName, readonly CircuitPiece[]> = {
   // a long main straight into a hairpin of two bends, a fast S, the back straight, a last long bend
   grand: [{ free: true }, { bend: 1.2, turn: 90 }, { straight: 0.1 }, { bend: 1.2, turn: 90 }, { straight: 0.2 }, { bend: 1.4, turn: -40 }, { bend: 1.4, turn: 40 }, { straight: 0.3 }, { bend: 1.2, turn: 70 }, { free: true }, { bend: 1.3, turn: 110 }],
@@ -312,7 +325,7 @@ export function circuitPoints(name: CircuitName): THREE.Vector3[] {
  *   its farthest (units): a course that dives towards a massive body there and swings out again,
  *   its gates closer together where it passes nearest.
  */
-function formPoint(course: CourseForm, angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
+function formPoint(course: LoopForm, angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
   if (course.form === 'circuit') {
     // the circuit's points spread along it by the share of a lap, between its points linearly
     const points = circuitPoints(course.layout);
@@ -328,24 +341,31 @@ function formPoint(course: CourseForm, angle: number, scale: number, out: THREE.
 }
 
 /** How far a form reaches from the field's center at scale 1 (units). */
-function formReach(course: CourseForm): number {
+function formReach(course: LoopForm): number {
   if (course.form === 'ellipse') return course.far;
   return Math.max(...circuitPoints(course.layout).map((point) => point.length()));
 }
 
 /**
  * A race course: GATES rings in a loop around the field's center (or in the arena's own form, see
- * CourseForm), rising and falling, each facing the way from the gate before. It is built from the
- * arena's freshly generated field and the arena's seed, so every browser builds the same course;
- * gates keep clear of rock as the field starts out (rocks that circle may cross the course later:
- * mind them).
+ * CourseForm), rising and falling, each facing the way from the gate before, flown LAPS times. It
+ * is built from the arena's freshly generated field and the arena's seed, so every browser builds
+ * the same course; gates keep clear of rock as the field starts out (rocks that circle may cross
+ * the course later: mind them). Over a race world (a track, see CourseForm 'track') it is the
+ * track's gates instead, flown once from the start to the finish.
  */
 export class Course {
   readonly root = new THREE.Group();
   readonly points: THREE.Vector3[] = [];
   readonly normals: THREE.Vector3[] = [];
-  /** The ideal line through the centers of the gates, around the loop (bowing around rock as it lies, see RacingLine.clear). */
+  /** The ideal line through the centers of the gates, around the loop or along the track (bowing around rock as it lies, see RacingLine.clear). */
   readonly line: RacingLine;
+  /** A track from a start to a finish over a world (see CourseForm 'track'), not a loop. */
+  readonly track: boolean;
+  /** Its gates, the laps a race flies through them, and the gates a racer passes from its first crossing of the start to the finish. */
+  readonly count: number;
+  readonly laps: number;
+  readonly finishGates: number;
   /** The windings of each gate (see GateKit): their glow tells the pilot which gate is which. */
   private readonly rings: THREE.Mesh[] = [];
   private readonly kit = new GateKit(GATE_RADIUS);
@@ -356,9 +376,45 @@ export class Course {
   private readonly finish = this.kit.coilMaterial(0xff4da6, 2.4);
   private readonly fired = this.kit.coilMaterial(0xffe6bf, 4);
   /** Until when each ring glows from its coil firing (game time, s). */
-  private readonly flashUntil: number[] = new Array<number>(GATES).fill(-Infinity);
+  private readonly flashUntil: number[];
 
   constructor(field: AsteroidField, seed: number) {
+    const form = field.layout?.course ?? null;
+    this.track = form?.form === 'track';
+    if (form?.form === 'track') {
+      this.line = this.layTrack(form);
+      this.count = this.finishGates = form.gates.length;
+      this.laps = 1;
+    } else {
+      this.line = this.layLoop(field, seed, form);
+      this.count = GATES;
+      this.laps = LAPS;
+      this.finishGates = FINISH_GATES;
+    }
+    this.flashUntil = new Array<number>(this.count).fill(-Infinity);
+    for (let i = 0; i < this.count; i++) {
+      const gate = this.kit.build(this.points[i], this.normals[i], this.faint);
+      this.rings.push(gate.coil);
+      this.root.add(gate.root);
+    }
+  }
+
+  /**
+   * A track's gates where it lays them (see CourseForm 'track'), each facing along it, and its
+   * line through all its points, open at both ends: the start's gate the first, the finish's the
+   * last.
+   */
+  private layTrack(form: Extract<CourseForm, { form: 'track' }>): RacingLine {
+    const { points, gates } = form;
+    for (const index of gates) {
+      this.points.push(points[index].clone());
+      this.normals.push(points[Math.min(points.length - 1, index + 1)].clone().sub(points[Math.max(0, index - 1)]).normalize());
+    }
+    return new RacingLine(points, false, undefined, undefined, gates);
+  }
+
+  /** A loop's gates (see Course), and its line through them. */
+  private layLoop(field: AsteroidField, seed: number, form: LoopForm | null): RacingLine {
     const r = new Randomizer(seed * 7 + 3);
     const start = r.range(0, Math.PI * 2);
     const jitter = Array.from({ length: GATES }, () => r.range(-COURSE_JITTER, COURSE_JITTER));
@@ -366,7 +422,6 @@ export class Course {
     // through a ring's layer, diving up and down through it (see COURSE_DIVE)
     const dives = !!field.layout?.open;
     const rise = dives ? COURSE_DIVE : COURSE_RISE;
-    const form = field.layout?.course ?? null;
     const loop = (angle: number, out: THREE.Vector3) => {
       if (form) {
         formPoint(form, angle, shape.radius / COURSE_RADIUS, out);
@@ -418,12 +473,7 @@ export class Course {
       this.points.push(point);
       this.normals.push(loop(angle + 1e-4, new THREE.Vector3()).sub(point).normalize());
     }
-    for (let i = 0; i < GATES; i++) {
-      const gate = this.kit.build(this.points[i], this.normals[i], this.faint);
-      this.rings.push(gate.coil);
-      this.root.add(gate.root);
-    }
-    this.line = chosen!.line;
+    return chosen!.line;
   }
 
   /** The line along the loop through every gate at `angles`: the loop's points between the gates. */
@@ -532,22 +582,63 @@ export class Course {
     this.flashUntil[gate] = now + BOOST_FLASH;
   }
 
-  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. */
+  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. The start and the finish are pink. */
   highlight(next: number, now: number) {
+    const after = this.track && next + 1 >= this.count ? -1 : (next + 1) % this.count;
     for (let i = 0; i < this.rings.length; i++) {
-      this.rings[i].material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
+      this.rings[i].material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === after ? this.after : i === 0 || (this.track && i === this.count - 1) ? this.finish : this.faint;
     }
     this.kit.blink(now);
+  }
+
+  /** The gates of one lap in the order flown, each with the way it faces: round the loop and through the pink gate again, or a track from its start to its finish (`edgeless`: over a world, with no edge to turn back at). */
+  lap(): { points: THREE.Vector3[]; normals: THREE.Vector3[]; edgeless: boolean } {
+    return this.track ? { points: [...this.points], normals: [...this.normals], edgeless: true } : { points: [...this.points, this.points[0]], normals: [...this.normals, this.normals[0]], edgeless: false };
+  }
+
+  /** The gate a racer that has passed `passed` gates flies for next. */
+  nextGate(passed: number): number {
+    return passed % this.count;
+  }
+
+  /** The lap a racer flies after passing `passed` gates (see lapOf; a track is one run). */
+  lapOf(passed: number): number {
+    return this.track ? 1 : lapOf(passed);
+  }
+
+  /** Whether a racer that has passed `passed` gates may leave its next one out (see canSkip): on a track never the start nor the finish, once a race. */
+  canSkip(passed: number, skipLap: number): boolean {
+    if (!this.track) return canSkip(passed, skipLap);
+    const next = this.nextGate(passed);
+    return next !== 0 && next !== this.count - 1 && skipLap !== 1;
+  }
+
+  /** Whether a racer that has passed `passed` gates is on the race's last stretch: its last lap, or a track's last quarter of gates. */
+  finalStretch(passed: number): boolean {
+    return this.track ? passed >= this.count * FINAL_STRETCH : lapOf(passed) === this.laps;
+  }
+
+  /** Whether passing gate `gate` ends a race's last stretch: the pink gate of the last lap, or a track's finish. */
+  isFinish(gate: number, lap: number): boolean {
+    return this.track ? gate === this.count - 1 : gate === 0 && lap === this.laps;
   }
 
   /**
    * Where a ship (re)starts that has passed `passed` gates: on the grid before the start, or
    * RESPAWN_PAST beyond the last gate passed, so the eight slots, up to 111 m from the gate's
-   * axis, stay clear of its housings.
+   * axis, stay clear of its housings. On a track the slots stand two abreast along the track's
+   * line (see TRACK_SLOT), within its canyon's walls.
    */
   startOf(passed: number, slot: number, position: THREE.Vector3): THREE.Vector3 {
-    const gate = passed === 0 ? 0 : (passed - 1) % GATES;
+    const gate = passed === 0 ? 0 : (passed - 1) % this.count;
     const behind = passed === 0 ? GRID_BEFORE : RESPAWN_PAST;
+    if (this.track) {
+      const row = Math.floor(slot / 2) * TRACK_SLOT;
+      const s = this.line.gateArc(gate) + behind + (passed === 0 ? -row : row);
+      this.line.point(s, position);
+      const side = toGate.set(0, 1, 0).cross(this.line.point(s + 1, crossing).sub(position)).normalize();
+      return position.addScaledVector(side, ((slot % 2) - 0.5) * TRACK_SLOT);
+    }
     // ships side by side, so a grid of eight does not start in one place
     const side = toGate.set(0, 1, 0).cross(this.normals[gate]).normalize();
     return position
@@ -555,6 +646,14 @@ export class Course {
       .addScaledVector(this.normals[gate], behind)
       .addScaledVector(side, ((slot % 4) - 1.5) * 1400)
       .addScaledVector(crossing.set(0, 1, 0), (Math.floor(slot / 4) - 0.5) * 1400);
+  }
+
+  /** The way the course runs where a ship (re)starts that has passed `passed` gates (see startOf), into `out`: on a track along its line there, else the way the gate it starts by faces. */
+  startHeading(passed: number, out: THREE.Vector3): THREE.Vector3 {
+    const gate = passed === 0 ? 0 : (passed - 1) % this.count;
+    if (!this.track) return out.copy(this.normals[gate]);
+    const s = this.line.gateArc(gate) + (passed === 0 ? GRID_BEFORE : RESPAWN_PAST);
+    return this.line.point(s + 1, out).sub(this.line.point(s, paceFrom)).normalize();
   }
 
   dispose() {

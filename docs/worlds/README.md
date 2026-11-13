@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), the lift in air of step 3 and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), step 2 (the first race world), the lift in air of step 3 and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -33,18 +33,18 @@ Torpedoes obey the same physics as ships: a world's gravity, a well's pull and t
 
 ## What the HUD shows
 
-Gravity and air decide how hard a ship can turn, so the flight computer shows them wherever they act, and nothing of them in free space:
+Gravity and air decide how hard a ship can turn, so the flight computer shows them wherever they act, and nothing of them in free space (built: README, What the HUD shows of a world, under the names GRAVITY, AIR, HOVER and GRIP):
 
 - **GRAV** the world's pull (`0.13 g`), while one pulls.
-- **AIR** the air's density as a share of its density at the world's ground (`62 %`), while there is air.
+- **AIR** the air's density as a share of its density under the cloud deck (`62 %`), while there is air.
 - **HOVER** the height over the ground (`5 m`), while the hover field carries; orange while the hull scrapes the ground.
 - **GRIP** the hardest turn the ship can fly now, in g: thrusters, drive and lift at its speed, in the air where it is (`32 g`). The racing line's orange stretches, where a bend is too tight for the ship's speed, reckon with the same grip.
 
 ## Race tracks
 
-- **From one place to another.** A track runs from a start to a finish across a world (some tens of kilometres), not around a loop in a ball of space. Its gates are laid low over the ground, through canyons, over ridges, between the things that stand on it, close past rock and wreckage; the open space above is not the track.
+- **From one place to another** (built: the Crack, 27.5 km). A track runs from a start to a finish across a world (some tens of kilometres), not around a loop in a ball of space. Its gates are laid low over the ground, through canyons, over ridges, between the things that stand on it, close past rock and wreckage; the open space above is not the track.
 - **Branches.** A track splits in places into two ways that join again: one shorter and riskier (a narrow canyon, a jump, a wall close by), one longer and safer. Either counts; the gates of both are marked. There is no single racing line: the line is drawn for the way the pilot is on.
-- **Crash and back.** A ship destroyed in a race is printed again at once (1 s, no sponsor break) at the last gate it passed, already flying along the track at race speed (150 m/s), so a crash costs seconds, never the race.
+- **Crash and back** (built on the race worlds). A ship destroyed in a race is printed again at once (1 s, no sponsor break) at the last gate it passed, already flying along the track at race speed (150 m/s), so a crash costs seconds, never the race.
 - **Speed felt** (built). The view widens with speed, more low over the ground and close past anything; the motion streaks thicken there and the hover field lifts the ground's dust under the hull; the hull rushes with the field's buffeting and grinds where it glides on the ground, and in air a close pass by anything rushes too (in vacuum nothing outside is heard, so a rock passed close stays silent); the camera trembles a little in the field's buffeting.
 
 ## The overdrive
@@ -55,14 +55,14 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 
 ## Modes and worlds
 
-- **Races** are flown over worlds only. The first worlds come from the campaign's places, whose grounds are built: Europa's Lineae and the Crack (200 m wide, 800 m deep), Callisto's rings of ridges at Valhalla, Phobos's grooves at Stickney, Titan's Kraken Mare with its air. A world for races is a tournament arena (in `ARENAS`) of its own, with its track and gravity; the campaign's place stays the campaign's.
+- **Races** are flown over worlds only. The first worlds come from the campaign's places, whose grounds are built: Europa's Lineae and the Crack (200 m wide, 800 m deep), Callisto's rings of ridges at Valhalla, Phobos's grooves at Stickney, Titan's Kraken Mare with its air. A world for races is a tournament arena of its own (in `RACE_WORLDS`, built: the Crack), with its track and gravity; the campaign's place stays the campaign's. Until every race has its world, races are flown in the seven arenas of free space too.
 - **Deathmatches** are fought in the seven arenas of free space and, as often, over worlds (the round's arena chosen alike on every browser, `arenaOfRound`).
 - Capture the Flag, Last Clone Standing and the President's Fleet stay in free space until a world suits them.
 
 ## Steps
 
 1. **Built: the hover field, the overdrive's one rule, and torpedoes under gravity and drag.** The field over every world's ground (the campaign's places first: no clone dies of a floor), its push, damping and the glide that never hurts; the autopilot riding the ground; the overdrive at whatever the crosshair shows. Tests: a ship dropped onto every place's ground at any speed never takes damage and settles at the ride height; a ship flown low over a relief keeps within the field; the simulated Host's tests (`playability`, `hostrace`) pass; the overdrive's shove at a rock, a moving ship and empty space.
-2. **A race world.** Europa's Crack as the first race arena, with the HUD's GRAV, AIR, HOVER and GRIP: a track from one end of the Crack to the other and out over the ice plain, its gates low in the canyon; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
+2. **Built: a race world.** Europa's Crack as the first race arena (`RACE_WORLDS`), with the HUD's GRAVITY, AIR, HOVER and GRIP: a track from deep in the Crack down the canyon and back over the ice plain, its gates on the ground; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
 3. **Lift in air.** Built: the lift and its drag for every ship and torpedo in every air (Jupiter's deck carving, Titan's and Venus's air in the campaign), the grip and the racing line's bends reckoning with it. Still to come, on step 2's race worlds: Titan's Kraken Mare as a race world with air.
 4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.
 5. **Deathmatches over worlds** in the rotation of rounds.

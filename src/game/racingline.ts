@@ -156,6 +156,11 @@ export class RacingLine {
     return this.gates.length;
   }
 
+  /** Where along the line gate `i` lies (units). */
+  gateArc(i: number): number {
+    return this.gates[i];
+  }
+
   /** The point at distance `s` along the line: around the loop for a closed one, held at the ends for an open one. */
   point(s: number, out: THREE.Vector3): THREE.Vector3 {
     const at = this.closed ? ((s % this.length) + this.length) % this.length : THREE.MathUtils.clamp(s, 0, this.length);

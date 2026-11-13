@@ -2,13 +2,13 @@ import * as THREE from 'three';
 import { atan2, cos, sin } from '../detmath';
 import { angleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
-import { BOOST_PUSH, BOOST_RADIUS, Course, COURSE_ROOM, GATE_RADIUS, GATES } from './race';
+import { BOOST_PUSH, BOOST_RADIUS, Course, COURSE_ROOM, GATE_RADIUS } from './race';
 import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
 import { cornerSpeed, MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove, turnRadius } from '../ship/flight';
 import { wellEscape } from './alarms';
 import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RESCUE_DRIVE, RESCUE_START, rescueFree, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
-import { arenaById, ARENAS, DEFAULT_ARENA } from '../world/arenas';
+import { arenaById, DEFAULT_ARENA, RACE_ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { flyCourse, flyRings, SHIP_RADIUS, startFlight } from '../test/pilot';
 import { type Orbit, type OrbitState, readOrbit, wellMu } from './orbit';
@@ -27,26 +27,27 @@ const scratch = new THREE.Vector3();
  * a tournament race. What such a bot cannot fly, a Host will not fly either.
  */
 const SKILL = 0.5;
+/** A track from a start to a finish over a world (some 26 km) is given this long (s): flown at a race's pace with its bends, climbs and the time to get up to speed. */
+const TRACK_TIME = 160;
 
 describe('every race course', () => {
-  for (const arena of ARENAS) {
+  for (const arena of RACE_ARENAS) {
     it(`is flown by a middling bot in ${arena.id}: a lap through every gate without a crash, in time`, () => {
       const field = gameField();
       field.generate(arena.layout);
       const course = new Course(field, arena.layout.seed);
-      // a lap: every gate in turn, and the pink one again
-      const lap = [...course.points, course.points[0]];
-      const normals = [...course.normals, course.normals[0]];
+      // a lap: every gate in turn, and the pink one again; on a track from the start to the finish
+      const lap = course.lap();
       const start = course.startOf(0, 0, new THREE.Vector3());
-      const flight = flyRings(field, { points: lap, normals, radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.line }, start, course.normals[0], SKILL, RACE_SPEED, 90);
+      const flight = flyRings(field, { ...lap, radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.line }, start, course.startHeading(0, new THREE.Vector3()), SKILL, RACE_SPEED, course.track ? TRACK_TIME : 90);
       expect(flight.crashed, `crashed after gate ${flight.passed}`).toBe(false);
-      expect(flight.passed, `${flight.passed} of ${GATES + 1} gates in ${flight.seconds.toFixed(0)} s`).toBe(GATES + 1);
+      expect(flight.passed, `${flight.passed} of ${lap.points.length} gates in ${flight.seconds.toFixed(0)} s`).toBe(lap.points.length);
     });
   }
 });
 
 describe("every race course's racing line", () => {
-  for (const arena of ARENAS) {
+  for (const arena of RACE_ARENAS) {
     it(`runs without stray points in ${arena.id}: two points 10 m apart along it lie within 100 m`, () => {
       const field = gameField();
       field.generate(arena.layout);
@@ -62,7 +63,8 @@ describe("every race course's racing line", () => {
       expect(strays, 'meters along the line').toEqual([]);
     });
 
-    it(`stays inside the arena in ${arena.id}: within COURSE_ROOM of its edge`, () => {
+    // a race world has no edge: its track keeps over its ground (see world/crack.test)
+    if (!arena.open) it(`stays inside the arena in ${arena.id}: within COURSE_ROOM of its edge`, () => {
       const field = gameField();
       field.generate(arena.layout);
       const course = new Course(field, arena.layout.seed);

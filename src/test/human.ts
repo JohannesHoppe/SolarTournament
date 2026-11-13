@@ -280,8 +280,8 @@ export const LAP_LIMIT = 160;
 export function lapOf(field: AsteroidField, arena: ArenaProfile) {
   field.generate(arena.layout);
   const course = new Course(field, arena.layout.seed);
-  const rings: Rings = { points: [...course.points, course.points[0]], normals: [...course.normals, course.normals[0]], radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.line };
-  return { start: course.startOf(0, 0, new THREE.Vector3()), facing: course.normals[0], rings };
+  const rings: Rings = { ...course.lap(), radius: GATE_RADIUS, core: BOOST_RADIUS, line: course.line };
+  return { start: course.startOf(0, 0, new THREE.Vector3()), facing: course.startHeading(0, new THREE.Vector3()), rings };
 }
 
 /** A lap of an arena's race by every hand of SPREAD with every seed of SEEDS, and by a racing bot of `skill`, each in the field as it starts. */
@@ -295,5 +295,5 @@ export function raceLaps(field: AsteroidField, arena: ArenaProfile, skill: numbe
     }
   }
   const { start, facing, rings } = lapOf(field, arena);
-  return { laps, bot: flyRings(field, rings, start, facing, skill, RACE_SPEED, LAP_LIMIT) };
+  return { laps, gates: rings.points.length, bot: flyRings(field, rings, start, facing, skill, RACE_SPEED, LAP_LIMIT) };
 }

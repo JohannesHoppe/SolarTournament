@@ -60,7 +60,13 @@
     <div id="gate-cross" hidden></div>
     <div id="waypoint" hidden><span id="waypoint-label" class="hud-label"></span></div>
     <div id="references"></div>
-    <div id="hud-altitude" hidden><span data-i18n>Height</span><b id="hud-height"></b><span id="hud-climb"></span></div>
+    <div id="hud-altitude" hidden>
+      <span data-i18n>Height</span><b id="hud-height"></b><span id="hud-climb"></span>
+      <div class="hud-world" id="hud-grav" hidden><span data-i18n>Gravity</span><b id="hud-grav-value"></b></div>
+      <div class="hud-world" id="hud-air" hidden><span data-i18n>Air</span><b id="hud-air-value"></b></div>
+      <div class="hud-world" id="hud-hover" hidden><span>Hover</span><b id="hud-hover-value"></b></div>
+      <div class="hud-world" id="hud-grip" hidden><span data-i18n>Grip</span><b id="hud-grip-value"></b></div>
+    </div>
     <ol id="killfeed"></ol>
     <canvas id="radar" aria-hidden="true"></canvas>
     <div class="hud-bottom">

@@ -43,6 +43,21 @@ for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   });
 }
 
+test("a solo race over Europa's Crack starts and runs without errors, its track from the start to the finish, the world's readouts under the height", async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'race', 'crack');
+  await play(page, 12);
+  const state = await page.evaluate(() => {
+    const game = window.game;
+    const shown = (id: string) => !document.getElementById(id)!.hidden;
+    return { state: game.state, arena: game.venue.id, alive: game.me.alive, finish: game.finishGates, gravity: shown('hud-grav'), grip: shown('hud-grip'), air: shown('hud-air'), value: document.getElementById('hud-grav-value')!.textContent };
+  });
+  expect(state).toMatchObject({ state: 'playing', arena: 'crack', alive: true, gravity: true, grip: true, air: false });
+  expect(state.finish).toBeGreaterThan(15);
+  expect(state.value).toMatch(/0[.,]13/);
+  expect(errors).toEqual([]);
+});
+
 test('alone, the pause menu pays out the round and starts a new one at once, in the arena and mode chosen; the flight school offers none', async ({ page }) => {
   const errors = await openGame(page);
   await startSolo(page, 'deathmatch');

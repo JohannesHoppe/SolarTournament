@@ -101,6 +101,8 @@ export interface OnlineGame {
   /** Seconds since the running round started (0 while it is not known), and on the race clock (since BURN!). */
   roundSeconds(): number;
   raceSeconds(): number;
+  /** The gates a racer passes from the start to the finish in the running round's race (see Course.finishGates). */
+  readonly finishGates: number;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -603,7 +605,7 @@ export class Online {
       // of when the state was sent
       if (state.n !== undefined) {
         const race = this.game.raceSeconds() - (clock === null ? 0 : this.clock.age(peer, sent, now));
-        ({ s: state.s, g: state.g, fi: state.fi } = this.standings.take(state.id, { s: state.s!, g: state.g!, fi: state.fi! }, now, this.game.roundSeconds(), race));
+        ({ s: state.s, g: state.g, fi: state.fi } = this.standings.take(state.id, { s: state.s!, g: state.g!, fi: state.fi! }, now, this.game.roundSeconds(), race, this.game.finishGates));
       }
       const ship = known ?? this.game.addRemoteShip(state, peer);
       if (ship.owner !== peer || ownerOf(ship.id) !== peer) continue;

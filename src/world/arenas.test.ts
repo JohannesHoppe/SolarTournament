@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARENAS, arenaByKey, arenaOfRound } from './arenas';
+import { ARENAS, arenaByKey, arenaOfRound, RACE_ARENAS, RACE_WORLDS } from './arenas';
 
 describe('the arena of a tournament round', () => {
   it('is the same on every browser for the same room and round', () => {
@@ -19,7 +19,17 @@ describe('the arena of a tournament round', () => {
   });
 
   it('is found by its layout key, as a snapshot names it', () => {
-    for (const arena of ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
+    for (const arena of RACE_ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
+  });
+
+  it('of a race walks through the arenas of free space and the race worlds; every other mode stays in free space', () => {
+    const races = new Set(Array.from({ length: RACE_ARENAS.length }, (_, round) => arenaOfRound('a-room-abcdef', round, true).id));
+    expect(races.size).toBe(RACE_ARENAS.length);
+    for (const world of RACE_WORLDS) expect(races.has(world.id)).toBe(true);
+    for (let round = 0; round < 40; round++) expect(ARENAS).toContain(arenaOfRound('a-room-abcdef', round));
+    // a room playing every mode in turn meets every race arena in its races, every fifth round
+    const mixed = new Set(Array.from({ length: RACE_ARENAS.length }, (_, k) => arenaOfRound('a-room-abcdef', 1 + 5 * k, true).id));
+    expect(mixed.size).toBe(RACE_ARENAS.length);
   });
 });
 

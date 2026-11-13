@@ -3,6 +3,7 @@ import { reliefGround } from './boneyard';
 import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { GROUND_CELL, GROUND_HALF, groundRelief, inCrack, surfaceHeight } from './europa';
+import { CRACK_GROUND_HALF, crackRelief } from './crack';
 import { listeningPost } from './valhalla';
 
 /**
@@ -19,6 +20,9 @@ const EUROPA_GLOW = 0x1c2026;
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/europa gives, on its fine grid (see reliefGround). */
 export const europaGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, EUROPA_TINT, EUROPA_GLOW, GROUND_CELL);
 
+/** The race world's ground on the Crack (see world/crack): the same ice on the same fine grid, along its longer box. */
+export const crackGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, crackRelief, EUROPA_TINT, EUROPA_GLOW, GROUND_CELL);
+
 /** The science station's plating: an outfit's white, its stencils, worn by the cold. */
 const STATION_PAINT = { key: 'europa-station', seed: 6101, tint: 0xd8d6cc, texts: ['EUROPA SCIENCE', 'OCEAN PROBE 4', 'LIFE?', 'KEEP OUT', 'DEEP STATION'] };
 
@@ -30,8 +34,15 @@ const ICE = new THREE.Color(0.55, 0.58, 0.62);
 const STREAK = new THREE.Color(0.32, 0.2, 0.13);
 const streaks = new Noise(6008);
 
+/** The Crack's rim and long ridged bands stained brown, the ice between white. */
+const paintShell = (x: number, z: number, color: THREE.Color) => color.copy(ICE).lerp(STREAK, Math.max(inCrack(x, z), Math.max(0, streaks.fractal(x / 200000, 0.3, z / 15000, 3) - 0.2) * 1.5));
+
 /** The shell beyond the field's ground, from 3.4 km out to its horizon some 25 km away, drawn behind everything. */
 export function europa(): THREE.Group {
-  // the Crack's rim and long ridged bands stained brown, the ice between white
-  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, (x, z, color) => color.copy(ICE).lerp(STREAK, Math.max(inCrack(x, z), Math.max(0, streaks.fractal(x / 200000, 0.3, z / 15000, 3) - 0.2) * 1.5)), EUROPA_GLOW);
+  return moonBeyond(GROUND_HALF.x, 25 * 20000, surfaceHeight, paintShell, EUROPA_GLOW);
+}
+
+/** The shell around the race world's ground (see world/crack), from 1.7 km out to some 35 km away, beyond the ends of its 20 km of ground. */
+export function crackBeyond(): THREE.Group {
+  return moonBeyond(CRACK_GROUND_HALF.x, 35 * 20000, surfaceHeight, paintShell, EUROPA_GLOW);
 }

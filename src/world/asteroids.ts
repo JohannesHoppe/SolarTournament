@@ -128,8 +128,12 @@ export interface Placement {
   ground?: boolean;
 }
 
-/** A race course's own shape (see formPoint in game/race): a circuit laid as a race track, or an ellipse about the field's center (units). */
-export type CourseForm = { form: 'ellipse'; near: number; far: number } | { form: 'circuit'; layout: CircuitName };
+/**
+ * A race course's own shape (see formPoint in game/race): a circuit laid as a race track, or an
+ * ellipse about the field's center (units); or a track over a world's ground from a start to a
+ * finish, its points along it and the indices among them where its gates stand (see world/crack).
+ */
+export type CourseForm = { form: 'ellipse'; near: number; far: number } | { form: 'circuit'; layout: CircuitName } | { form: 'track'; points: readonly THREE.Vector3[]; gates: readonly number[] };
 /** The circuits of game/race a course may be laid as. */
 export type CircuitName = 'grand' | 'hairpin' | 'sweep';
 
@@ -1687,9 +1691,27 @@ export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief:
     }
   }
   if (deepest <= 0) return null;
+  // a wall beside the sphere that rises over its center (a canyon's, a cliff's): the ground met is
+  // where the wall crosses the center's height between the center and that sample, so the sphere
+  // is pushed off the wall, never lifted up it to the ground's height there
+  if (closest.y > local.y && ground(local.x, local.z) < local.y) {
+    const toX = closest.x;
+    const toZ = closest.z;
+    let low = 0;
+    let high = 1;
+    for (let k = 0; k < RELIEF_WALL_STEPS; k++) {
+      const middle = (low + high) / 2;
+      if (ground(local.x + (toX - local.x) * middle, local.z + (toZ - local.z) * middle) > local.y) high = middle;
+      else low = middle;
+    }
+    closest.set(local.x + (toX - local.x) * high, local.y, local.z + (toZ - local.z) * high);
+  }
   normal.set(ground(closest.x - RELIEF_STEP, closest.z) - ground(closest.x + RELIEF_STEP, closest.z), 2 * RELIEF_STEP, ground(closest.x, closest.z - RELIEF_STEP) - ground(closest.x, closest.z + RELIEF_STEP)).normalize();
   return closest;
 }
+
+/** Halvings of the way to a wall that rises over a sphere's center (see reliefContact): to within a 16,000th of its radius. */
+const RELIEF_WALL_STEPS = 14;
 
 /** How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. */
 const RELIEF_MARCH = 200;

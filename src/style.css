@@ -2631,7 +2631,8 @@ body.touch #school-panel {
   pointer-events: none;
 }
 
-#hud-altitude > span:first-child {
+#hud-altitude > span:first-child,
+.hud-world > span {
   font-family: system-ui, sans-serif;
   font-size: 0.6rem;
   letter-spacing: 0.1em;
@@ -2646,6 +2647,23 @@ body.touch #school-panel {
 
 /* in a planet's air the climb is named, and sinking under its cloud deck is the pilot's to act on */
 #hud-climb.sinking {
+  color: var(--accent);
+}
+
+/* what a world does to the flight, under the height: its pull, its air, the hover field, the grip */
+.hud-world {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-world > b {
+  font-weight: 400;
+  color: var(--hud);
+}
+
+/* the hull scraping the ground is the pilot's to act on */
+.hud-world.scraping > b {
   color: var(--accent);
 }
 

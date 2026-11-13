@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { testField } from './test/field';
 import { DISTANT_DETAIL } from './world/rocks';
 import { HULL_BOXES } from './world/shapes';
-import { ARENAS } from './world/arenas';
+import { RACE_ARENAS } from './world/arenas';
 import { FieldContacts } from './world/contacts';
 import { Randomizer } from './random';
 import { cometEnd, cometStart, headAt, roundComets, runDown } from './game/comet';
@@ -30,7 +30,7 @@ function digest(values: number[]): string {
 }
 
 function arenaWorld(index: number): string {
-  const arena = ARENAS[index];
+  const arena = RACE_ARENAS[index];
   const field = testField(DISTANT_DETAIL, HULL_BOXES);
   field.generate(arena.layout);
   const values: number[] = [];
@@ -88,7 +88,7 @@ function flown(): string {
 describe('the shared world on every machine', () => {
   it('plays every arena to the pinned bits', { timeout: 120_000 }, () => {
     const hashes: Record<string, string> = {};
-    for (let i = 0; i < ARENAS.length; i++) hashes[ARENAS[i].id] = arenaWorld(i);
+    for (let i = 0; i < RACE_ARENAS.length; i++) hashes[RACE_ARENAS[i].id] = arenaWorld(i);
     expect(hashes).toEqual({
       belt: 'e33c6d365f254b52',
       rings: '5d2d46f48b1ba934',
@@ -97,6 +97,7 @@ describe('the shared world on every machine', () => {
       corona: '6516e9385e83983b',
       hole: '394e88bdcb9fbc9a',
       derelict: 'd51dc8297fd357f6',
+      crack: 'c6e20772cfbd35af',
     });
   });
 

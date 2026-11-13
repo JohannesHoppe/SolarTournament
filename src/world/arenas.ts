@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -25,6 +25,7 @@ import { ENCELADUS_FALL, groundPlacement as enceladusGround, SATURN_AT as ENCELA
 import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
+import { CRACK_TRACK, crackGroundPlacement, FINISH_MARK } from './crack';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -61,7 +62,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io' | 'ganymede' | 'titan' | 'enceladus' | 'iapetus' | 'miranda' | 'triton' | 'pluto' | 'haumea' | 'eris' | 'lantern' | 'granary' | 'ballroom' | 'mercury' | 'venus' | 'crack';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -202,6 +203,22 @@ function derelict(): Placement[] {
  * second, made-up one.
  */
 /** The Long Ladder's rungs (Haumea, Eris, Lantern, Granary): ice in the dark, a body's white below, the sun a star among the others. */
+/** The Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice itself, a grade cooler than Callisto's. */
+const EUROPA_MOOD: Mood = {
+  space: 0x020203,
+  sky: 0x9aa4b0,
+  ground: 0x3a4048,
+  ambient: 1.35,
+  nebulae: [
+    { at: [-0.6, 0.5, -0.5], color: [0.055, 0.04, 0.03], size: 540000, shape: 2, turn: 1.3 },
+    { at: [0.6, 0.3, 0.6], color: [0.03, 0.04, 0.055], size: 460000, shape: 0, turn: 0.4 },
+  ],
+  stars: 0.9,
+  starmap: true,
+  dust: [0.66, 0.7, 0.76],
+  grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
+};
+
 const LADDER_MOOD: Mood = {
   space: 0x010102,
   sky: 0x80848c,
@@ -428,22 +445,9 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.64, 0.6, 0.54],
     grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
   },
-  // the Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice
-  // itself, a grade cooler than Callisto's
-  europa: {
-    space: 0x020203,
-    sky: 0x9aa4b0,
-    ground: 0x3a4048,
-    ambient: 1.35,
-    nebulae: [
-      { at: [-0.6, 0.5, -0.5], color: [0.055, 0.04, 0.03], size: 540000, shape: 2, turn: 1.3 },
-      { at: [0.6, 0.3, 0.6], color: [0.03, 0.04, 0.055], size: 460000, shape: 0, turn: 0.4 },
-    ],
-    stars: 0.9,
-    starmap: true,
-    dust: [0.66, 0.7, 0.76],
-    grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
-  },
+  europa: EUROPA_MOOD,
+  // the Crack as a race world: the Lineae's ice and sky
+  crack: EUROPA_MOOD,
   // Flux on Io: sulfur yellow under Jupiter's cream, the lava's orange from below, a warm grade
   io: {
     space: 0x030202,
@@ -1025,7 +1029,7 @@ export const PLACES: readonly ArenaProfile[] = [
   },
 ];
 
-/** Every arena. A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
+/** The arenas of free space, where every mode is played (a race also over the worlds of RACE_WORLDS). A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
 export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'belt',
@@ -1183,20 +1187,68 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
 ];
 
-export const arenaById = (id: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
+/**
+ * The worlds a race is flown over besides the arenas of free space: tournament arenas of their
+ * own, played only by races, each with its ground, its gravity and a track from a start to a
+ * finish (see CourseForm 'track').
+ */
+export const RACE_WORLDS: readonly ArenaProfile[] = [
+  {
+    id: 'crack',
+    name: msg('The Crack'),
+    tagline: msg("Down the canyon in Europa's ice, 800 m deep and 200 m wide, and back over the plain under Jupiter."),
+    // the Lineae's ice along 20 km of the Crack, the science station on its floor, and the track
+    layout: {
+      key: 'crack',
+      seed: 6500,
+      kind: 'rock',
+      count: 0,
+      minScale: 1,
+      maxScale: 1,
+      radius: FIELD_RADIUS,
+      inner: 0,
+      spin: 0,
+      toughness: 800,
+      placements: [crackGroundPlacement(CRACK_TYPE), stationPlacement(STATION_TYPE, POST_HALF)],
+      fall: EUROPA_FALL,
+      course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates },
+    },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    mood: MOODS.crack,
+    // in the canyon, looking down it
+    preview: { from: [-5200, -15000, 150000], at: [3900, -17000, 100000] },
+    references: [
+      { glyph: 'planet', label: msg('Finish'), position: FINISH_MARK, distance: true },
+      { glyph: 'planet', label: msg('Jupiter'), position: EUROPA_JUPITER, distance: false },
+    ],
+    open: true,
+  },
+];
+
+/** The arenas a race may be flown in: those of free space and the race worlds. */
+export const RACE_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS];
+
+/** The arenas a round of a mode may be played in: a race's (`race`), or those of free space. */
+export const arenasFor = (race: boolean): readonly ArenaProfile[] => (race ? RACE_ARENAS : ARENAS);
+
+export const arenaById = (id: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
 
 /** The arena the game shows unless something else is chosen: the menu's backdrop, the flight school's home and the solo round's first choice. */
 export const DEFAULT_ARENA: ArenaProfile = arenaById('rings')!;
 
 /** The arena whose field has this layout key (see FieldState). */
-export const arenaByKey = (key: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
+export const arenaByKey = (key: string): ArenaProfile | undefined => RACE_ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
 
 /**
- * The arena of a tournament round: the room's code shuffles the arenas into an order of its
- * own, and the rounds walk through it, so no arena comes twice before all others have come.
- * Every browser works it out alike from code and round.
+ * The arena of a tournament round: the room's code shuffles the arenas of its mode (a race's,
+ * `race`, or those of free space) into an order of its own, and the rounds walk through it, so
+ * no arena comes twice before all others have come. Every browser works it out alike from code
+ * and round.
  */
-export function arenaOfRound(room: string, round: number): ArenaProfile {
-  const order = ARENAS.map((arena, i) => ({ arena, key: hash(textSeed(room), i, 13) })).sort((a, b) => a.key - b.key);
+export function arenaOfRound(room: string, round: number, race = false): ArenaProfile {
+  const order = arenasFor(race).map((arena, i) => ({ arena, key: hash(textSeed(room), i, 13) })).sort((a, b) => a.key - b.key);
   return order[round % order.length].arena;
 }

@@ -7,7 +7,7 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, RACK_RELIEFS } from './yard';
 import { bottle, colliderOnly, hall, platform } from './highball';
 import { seaPiece } from './kraken';
 import { mercuryGround, minersCamp } from './caloris';
@@ -19,7 +19,7 @@ import { plutoGround } from './heart';
 import { ballroom, moonGround } from './ballroom';
 import { ganymedeGround } from './yards';
 import { ioGround } from './flux';
-import { europaGround, scienceStation } from './lineae';
+import { crackGround, europaGround, scienceStation } from './lineae';
 import { phobosGround } from './stickney';
 import { callistoGround, listeningPost } from './valhalla';
 import { wallPiece } from './solarwall';
@@ -104,6 +104,7 @@ export function rackSet(): TemplateSet {
     if (type === CITY_TYPES.hall) return hall(half);
     if (type === CITY_TYPES.bottle) return bottle(half);
     if (type === CITY_TYPES.neck) return colliderOnly(half);
+    if (type === CRACK_TYPE) return crackGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -854,10 +855,9 @@ export function groundUv(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return macroUv(geometry, 0.5, DUST_TILE);
 }
 
-/** A square grid lying flat (in x and z) over a box's footprint (`half` its half extents), in cells of `cell` (units). */
+/** A grid of square cells lying flat (in x and z) over a box's footprint (`half` its half extents), in cells of `cell` (units). */
 export function flatGrid(half: THREE.Vector3, cell: number): THREE.PlaneGeometry {
-  const cells = Math.round((half.x * 2) / cell);
-  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, cells, cells);
+  const geometry = new THREE.PlaneGeometry(half.x * 2, half.z * 2, Math.round((half.x * 2) / cell), Math.round((half.z * 2) / cell));
   // laid flat: the plane's y into -z
   geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
   return geometry;

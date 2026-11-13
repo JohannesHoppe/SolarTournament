@@ -654,7 +654,7 @@ export class Bot {
     let danger = falling || hot;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
-      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
+      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4, racing);
       if (hit) {
         danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
         const away = local.subVectors(me.position, hit.center);
@@ -809,7 +809,7 @@ export class Bot {
    * In one of the battleship's hangars the tube is wider than the tunnel: there a line along the
    * wall that starts inside the hull is left out, and the way on is what the tunnel leaves open.
    */
-  private wayAhead(field: AsteroidField, direction: THREE.Vector3, length: number): { distance: number; center: THREE.Vector3 } | null {
+  private wayAhead(field: AsteroidField, direction: THREE.Vector3, length: number, overGround = false): { distance: number; center: THREE.Vector3 } | null {
     const position = this.ship.flight.position;
     const wall = this.ship.radius * AVOID_TUBE;
     // two directions across the flight
@@ -822,7 +822,8 @@ export class Bot {
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
-      if (hit && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
+      // a racer takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
+      if (hit && !(overGround && hit.asteroid?.ground) && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
     }
     return best;
   }
