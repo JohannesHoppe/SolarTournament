@@ -20,7 +20,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'decoy' | 'watch';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'songBack' | 'songNext' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'decoy' | 'watch';
 type ActionHandler = (action: Action) => void;
 
 /** What the Host flies with. */
@@ -118,7 +118,13 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.rb, 'overdrive'],
   [PAD.up, 'torpedo'],
   [PAD.right, 'decoy'],
+  // off the flight (the pause menu, the scoreboard) the d-pad works the radio: on, off and the DJ's songs
+  [PAD.down, 'radio'],
+  [PAD.left, 'songBack'],
+  [PAD.right, 'songNext'],
 ];
+/** Each button of PAD_ACTIONS once: a button with two actions is read once a frame. */
+const PAD_BUTTONS = [...new Set(PAD_ACTIONS.map(([index]) => index))];
 /** The keys that act at a press rather than fly while held. */
 const KEY_ACTIONS: Record<string, Action | undefined> = {
   Enter: 'confirm',
@@ -127,6 +133,9 @@ const KEY_ACTIONS: Record<string, Action | undefined> = {
   KeyQ: 'quit',
   KeyC: 'camera',
   KeyM: 'radio',
+  // beside M: the radio's keys in a row, far from the flight's
+  Comma: 'songBack',
+  Period: 'songNext',
   F1: 'help',
   KeyT: 'autopilot',
   KeyE: 'overdrive',
@@ -153,6 +162,8 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
+  /** Which of PAD_BUTTONS went down this frame (see poll), by button. */
+  private readonly padFresh: boolean[] = [];
   /** The gamepad read this frame (see readPads): navigator.getGamepads() makes new objects on every call. */
   private pad: Gamepad | null = null;
   /** A held since a screen changed (see holdFire). */
@@ -356,7 +367,8 @@ export class Input {
       const y = -Math.sign(deadzone(pad.axes[3] ?? 0));
       this.dodge = x || y ? { x, y } : { x: 1, y: 0 };
     }
-    for (const [index, action] of PAD_ACTIONS) if (this.padPress(pad, index)) this.handler(action);
+    for (const index of PAD_BUTTONS) this.padFresh[index] = this.padPress(pad, index);
+    for (const [index, action] of PAD_ACTIONS) if (this.padFresh[index]) this.handler(action);
   }
 
   /** Whether a button just went down: it counts once, not while it is held. */

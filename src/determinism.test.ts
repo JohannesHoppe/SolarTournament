@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { testField } from './test/field';
 import { DISTANT_DETAIL } from './world/rocks';
 import { HULL_BOXES } from './world/shapes';
-import { FIGHT_WORLDS, TOURNAMENT_ARENAS } from './world/arenas';
+import { FIGHT_WORLDS, RACE_ARENAS, TOURNAMENT_ARENAS } from './world/arenas';
 import { FieldContacts } from './world/contacts';
 import { Randomizer } from './random';
 import { cometEnd, cometStart, headAt, roundComets, runDown } from './game/comet';
@@ -37,8 +37,8 @@ function arenaWorld(index: number): string {
   // a world fought over sees no race and no comet
   const fought = FIGHT_WORLDS.includes(arena);
 
-  // the course and its racing line as the round starts
-  const course = fought ? null : new Course(field, arena.layout.seed);
+  // the course and its racing line as a race starts, in the arenas a race is flown in
+  const course = RACE_ARENAS.includes(arena) ? new Course(field, arena.layout.seed) : null;
   const v = new THREE.Vector3();
   if (course) for (const p of course.points) values.push(p.x, p.y, p.z);
   if (course) for (let s = 0; s < course.line.length; s += 250) values.push(...course.line.clear(s, field, v).toArray());
@@ -96,8 +96,8 @@ describe('the shared world on every machine', () => {
       rings: '5d2d46f48b1ba934',
       junkyard: 'e0237d8600e351f0',
       giant: '75ea76a17a11f810',
-      corona: '6516e9385e83983b',
-      hole: '394e88bdcb9fbc9a',
+      corona: 'b23a7893ecbc3520',
+      hole: '2f956ee569996204',
       derelict: 'd51dc8297fd357f6',
       crack: 'c6e20772cfbd35af',
       throat: '61c4e0677419b614',
