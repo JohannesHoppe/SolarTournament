@@ -27,6 +27,30 @@ export const OVERDRIVE_DRIVE_COOLDOWN = 4;
 export const MAX_TURN_RATE = 3;
 export const MAX_ROLL_RATE = 3.2;
 export const TURN_ACCELERATION = 24;
+/**
+ * Lift in a planet's air (see world/air): a ship's fins and hull, met by the air at an angle, push
+ * it across its flight towards where the nose points. At most LIFT (units/s², 15 g) at the air's
+ * density right under the cloud deck (world/air's density 1) at the tournament's limit, by the
+ * density and the speed squared: `LIFT · density · (v / 250 m/s)²`, so in air a ship turns far
+ * tighter the faster it flies, as a fighter aircraft does. By the slip α (the nose off the flight)
+ * it grows as a plate's lift does, sin 2α, all of it from 15° to 75° (where sin 2α reaches
+ * LIFT_SINE), none with the nose square to the flight or behind it.
+ */
+export const LIFT = 2943;
+/** The sine of twice the slip (15°) from which the air gives all of its lift (see LIFT). */
+const LIFT_SINE = 0.5;
+/**
+ * The flight computer trims the fins to no more lift than this (units/s², 20 g, twice the
+ * thrusters): deep in a dense air the air would give far more, which no fin's hinge and no clone
+ * bears; there the lift costs ever less drag for it (see INDUCED).
+ */
+export const LIFT_MOST = 3924;
+/**
+ * The drag the lift costs (induced drag), along against the flight: INDUCED of the lift taken at
+ * all of it, by the share taken squared (a fifth: 3 g of braking for 15 g of lift), so a carve in
+ * air brakes the ship and the drive pays for it.
+ */
+export const INDUCED = 0.2;
 /** How fast the visible drive output follows the thrust command (1/s): the flame is there at once and dies a little slower. */
 const THROTTLE_RISE = 40;
 const THROTTLE_FALL = 12;
@@ -63,6 +87,10 @@ export class FlightModel {
   /** Health of the main drive and the maneuvering thrusters, 0..1. */
   driveFactor = 1;
   thrusterFactor = 1;
+  /** The density of the air at the ship (world/air's density, 1 right under a cloud deck; 0 out of any air), set by whoever flies it each step: its lift (see LIFT). */
+  airDensity = 0;
+  /** The air's push on the ship in the last update (units/s², world space): its lift and the drag that costs (see aero). */
+  readonly aero = new THREE.Vector3();
 
   reset(position: THREE.Vector3, orientation: THREE.Quaternion) {
     this.position.copy(position);
@@ -115,6 +143,9 @@ export class FlightModel {
       drive = thrust * (1 - Math.max(0, -course.z));
     }
     this.limited = speed >= MAX_SPEED;
+    // the air's lift and its drag: a push on the hull the clone feels, never along the flight forwards
+    if (this.airDensity > 0) acceleration.add(this.toLocalDirection(aero(this, this.aero), local));
+    else this.aero.set(0, 0, 0);
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
     acceleration.applyQuaternion(this.orientation);
@@ -233,6 +264,43 @@ const FLIP_LEVEL = 0.45;
 /** A goal more than this angle (rad, 45°) above or below the ship's level is steered to at once. */
 const FLIP_STEEP = Math.PI / 4;
 
+/** The most lift the air gives at a density (world/air's) and speed (units/s), in units/s² (see LIFT), before the flight computer's trim (LIFT_MOST). */
+export const liftAt = (density: number, speed: number) => (LIFT * density * speed * speed) / (MAX_SPEED * MAX_SPEED);
+
+/** The drag (units/s²) a lift of `lift` costs where the air gives at most `most` (see INDUCED): by the lift squared, over the air's dynamic pressure. */
+export const induced = (lift: number, most: number) => (most > 0 ? (INDUCED * lift * lift) / most : 0);
+
+/**
+ * The share of the most lift a slip gives (see LIFT), from the nose's cosine to the flight
+ * (`along`) and its sine (`side`): sin 2α over sin 2·LIFT_ANGLE, at most all of it; none with
+ * the nose square to the flight or behind it.
+ */
+const liftShare = (along: number, side: number) => (along > 0 ? Math.min(1, (2 * side * along) / LIFT_SINE) : 0);
+
+const aeroNose = new THREE.Vector3();
+const aeroAcross = new THREE.Vector3();
+
+/**
+ * The air's push on a ship (units/s², world space) into `out`: the lift of its fins and hull
+ * across its flight towards the nose (see LIFT), by its air's density (`flight.airDensity`), its
+ * speed and its slip, and the induced drag that costs (see INDUCED), against its flight. The
+ * parasitic drag of the air is world/air's (dragOn), an outside pull like gravity.
+ */
+export function aero(flight: FlightModel, out: THREE.Vector3): THREE.Vector3 {
+  out.set(0, 0, 0);
+  const speed = flight.velocity.length();
+  const most = liftAt(flight.airDensity, speed);
+  if (most < 1e-6) return out;
+  flight.forward(aeroNose);
+  const along = aeroNose.dot(flight.velocity) / speed;
+  aeroAcross.copy(flight.velocity).multiplyScalar(-along / speed).add(aeroNose);
+  const side = aeroAcross.length();
+  const lift = Math.min(LIFT_MOST, most * liftShare(along, side));
+  if (lift <= 0 || side < 1e-9) return out;
+  out.copy(aeroAcross).multiplyScalar(lift / side);
+  return out.addScaledVector(flight.velocity, -induced(lift, most) / speed);
+}
+
 /** The flight counts as on the nose within this angle (rad, 15°). */
 export const ON_NOSE = (15 * Math.PI) / 180;
 /**
@@ -271,11 +339,12 @@ const nose = new THREE.Vector3();
 const across = new THREE.Vector3();
 const demand = new THREE.Vector3();
 const want = new THREE.Vector3();
-/** What the autopilot holds off of the pull from outside (see bend). */
+/** What the autopilot holds off of the pull from outside (see bend), and the air's lift among it. */
 const held = new THREE.Vector3();
+const lifted = new THREE.Vector3();
 
-/** The health of drive and thrusters a reckoning takes (see FlightModel.driveFactor). */
-export type Health = Pick<FlightModel, 'driveFactor' | 'thrusterFactor'>;
+/** The health of drive and thrusters a reckoning takes (see FlightModel.driveFactor), and the air's density where it flies (see FlightModel.airDensity; none if left out). */
+export type Health = Pick<FlightModel, 'driveFactor' | 'thrusterFactor'> & { readonly airDensity?: number };
 const HEALTHY: Health = { driveFactor: 1, thrusterFactor: 1 };
 
 /** The hover field's ride height: the hull's underside this far over a world's ground (units, 5 m; see world/hover). */
@@ -433,9 +502,12 @@ function bend(flight: FlightModel, speed: number, moving: number, pilot: number,
   const thrusters = RCS_THRUST * flight.thrusterFactor;
   // the velocity wanted: the speed along the nose as it is (at rest, none); gravity is held off
   // across the flight, along it it changes the speed as ever (at rest, it is held off altogether).
-  // The kept speed has no share of `moving`, which would brake a slow coast to rest by itself
+  // The kept speed has no share of `moving`, which would brake a slow coast to rest by itself.
+  // In air the lift bends the flight towards the nose as the drift is taken out: it counts as a
+  // pull from outside, so drive and thrusters give only what it leaves (see aero)
   want.copy(nose).multiplyScalar(flight.velocity.dot(nose) * THREE.MathUtils.smoothstep(speed, AUTO_REST / 2, AUTO_REST));
   held.copy(gravity);
+  if (flight.airDensity > 0) held.add(aero(flight, lifted));
   if (ground) {
     // riding a world's ground: the nose's way along it, the hull brought to the ride height; along
     // the ground's normal the world's pull and the hover field carry the ship, not held off
@@ -519,15 +591,33 @@ export function leadLimit(speed: number, driving = true): number {
   return THREE.MathUtils.lerp(leadAt(i, driving), leadAt(i + 1, driving), at - i);
 }
 
+/** The cosine of 75°, the slip past which the air's lift falls off (see LIFT). */
+const LIFT_FALLS = 0.25881904510252074;
+
 /**
- * How hard a flight at `speed` bends at most (units/s² across it). With the autopilot, the Host's
- * drive held or at the speed limit: the drive at the lead's limit (all of it from 90° on) and the
- * thrusters. In free drift (`autopilot` false) the Host turns the nose across the flight and burns:
- * the drive alone, all of it.
+ * The grip: how hard a flight at `speed` bends at most (units/s² across it), the hardest turn a
+ * ship flies there. With the autopilot, the Host's drive held or at the speed limit: the drive at
+ * the lead's limit (all of it from 90° on), the thrusters, and in air the lift at that slip. In
+ * free drift (`autopilot` false) the Host turns the nose across the flight and burns: the drive,
+ * and in air the lift, at the slip where the two together bend hardest (the nose square to the
+ * flight in vacuum, short of it in air, where the lift falls off; with the lift trimmed, at
+ * least that hard). `health` carries the air's density where the ship flies (see Health); the
+ * HUD's GRIP reads it, in g.
  */
 export function gripAt(speed: number, health: Health = HEALTHY, autopilot = true): number {
-  if (!autopilot) return MAIN_THRUST * health.driveFactor;
-  return MAIN_THRUST * health.driveFactor * sin(Math.min(leadLimit(speed), Math.PI / 2)) + RCS_THRUST * health.thrusterFactor;
+  const drive = MAIN_THRUST * health.driveFactor;
+  const most = liftAt(health.airDensity ?? 0, speed);
+  // past the trim (LIFT_MOST) the lift is reckoned at the trim: the turn is at least this hard
+  const lift = Math.min(most, LIFT_MOST);
+  if (!autopilot) {
+    if (lift <= 0) return drive;
+    // drive·sin s + lift·sin 2s / LIFT_SINE past 75°, at its top where its derivative in x = cos s vanishes
+    const x = Math.min(LIFT_FALLS, (-drive + Math.sqrt(drive * drive + 128 * lift * lift)) / (16 * lift));
+    return Math.sqrt(1 - x * x) * (drive + 4 * lift * x);
+  }
+  const lead = Math.min(leadLimit(speed), Math.PI / 2);
+  const side = sin(lead);
+  return drive * side + RCS_THRUST * health.thrusterFactor + Math.min(LIFT_MOST, most * liftShare(cos(lead), side));
 }
 
 /** The tightest turn flown at a speed (units, radius), with the autopilot or in free drift. */

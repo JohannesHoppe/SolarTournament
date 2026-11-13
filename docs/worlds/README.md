@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity) and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity), the lift in air of step 3 and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -25,7 +25,7 @@ A world pulls straight down with its own gravity (the field's `fall`, already th
 
 ## Lift in air
 
-In a world's air (Titan's, Venus's clouds, Jupiter's deck, and the race worlds that have one) a ship's fins and hull give it **lift**: a push across its flight, as much as the flight computer asks for to turn, up to `LIFT · density · (v / 250 m/s)²` (at sea level of the race world's air at the speed limit about 15 g, on top of the thrusters' 10 g). So in air a ship turns far tighter the faster it flies, as a fighter aircraft does, and the drag it pays rises with the lift it takes (induced drag). Jupiter's deck becomes the arena where a ship carves; its haze and heat stay as they are. The numbers are set by flying it.
+In a world's air (Titan's, Venus's clouds, Jupiter's deck, and the race worlds that have one) a ship's fins and hull give it **lift** (built: README, Jupiter's air, Lift): a push across its flight towards the nose, by its slip as a flat plate's lift grows (all of it from 15° to 75°), up to `LIFT · density · (v / 250 m/s)²` (15 g right under a deck at the speed limit, on top of the thrusters' 10 g), trimmed by the flight computer to 20 g. So in air a ship turns far tighter the faster it flies, as a fighter aircraft does, and the drag it pays rises with the lift it takes (induced drag, a fifth of the lift at all of it). The autopilot counts the lift as a pull from outside, and the clone feels it. Jupiter's deck becomes the arena where a ship carves; its haze and heat stay as they are. A race world with an air (Titan's Kraken Mare) waits for the race worlds of step 2.
 
 ## Torpedoes
 
@@ -63,7 +63,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 
 1. **Built: the hover field, the overdrive's one rule, and torpedoes under gravity and drag.** The field over every world's ground (the campaign's places first: no clone dies of a floor), its push, damping and the glide that never hurts; the autopilot riding the ground; the overdrive at whatever the crosshair shows. Tests: a ship dropped onto every place's ground at any speed never takes damage and settles at the ride height; a ship flown low over a relief keeps within the field; the simulated Host's tests (`playability`, `hostrace`) pass; the overdrive's shove at a rock, a moving ship and empty space.
 2. **A race world.** Europa's Crack as the first race arena, with the HUD's GRAV, AIR, HOVER and GRIP: a track from one end of the Crack to the other and out over the ice plain, its gates low in the canyon; the start and the crash-and-back respawn; `courses.test.ts` and the simulated Host fly it.
-3. **Lift in air.** Titan's Kraken Mare as a race world with air; Jupiter's deck carving.
+3. **Lift in air.** Built: the lift and its drag for every ship and torpedo in every air (Jupiter's deck carving, Titan's and Venus's air in the campaign), the grip and the racing line's bends reckoning with it. Still to come, on step 2's race worlds: Titan's Kraken Mare as a race world with air.
 4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.
 5. **Deathmatches over worlds** in the rotation of rounds.
 6. **Built: speed felt:** view, streaks, lifted dust, the rush and the grind through the hull, the tremble.
