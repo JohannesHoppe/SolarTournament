@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { testField } from '../test/field';
+import { junkField, testField } from '../test/field';
 import { DISTANT_DETAIL } from './rocks';
 import { HULL_BOXES } from './shapes';
 import { ARENAS, arenaById, type ArenaProfile } from './arenas';
@@ -282,6 +282,33 @@ describe('a contact', () => {
     field.setClock(0);
     return { field, a, b };
   }
+
+  it('meets junk with junk by what each is built of: a stage driven into a stack of satellites bounces off it, the stack barely moved, the momentum kept', () => {
+    const field = junkField();
+    const place = (type: number, x: number) => ({ kind: 'debris' as const, type, scale: 1, position: new THREE.Vector3(x, 0, 0), orientation: new THREE.Quaternion(), solid: false });
+    field.generate({ key: 'junk-pair', seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: [place(1, 0), place(3, 4000)] });
+    const [stage, stack] = [...field.asteroids.values()];
+    stage.velocity.set(400, 0, 0);
+    stage.spinRate = stack.spinRate = 0;
+    field.setClock(0);
+    const ms = massOf(stage);
+    const mk = massOf(stack);
+    // a stage weighs a few times an interceptor, a stack of satellites tens of times the stage
+    expect(mk / ms).toBeGreaterThan(10);
+    const before = stage.velocity.clone().multiplyScalar(ms);
+    const contacts = new FieldContacts();
+    let moved = 0;
+    while (field.clock < 30) {
+      field.update(1 / 60);
+      moved += contacts.run(field).length;
+    }
+    expect(moved).toBeGreaterThanOrEqual(2);
+    const vs = field.surfaceVelocity(stage, stage.object.position);
+    const vk = field.surfaceVelocity(stack, stack.object.position);
+    expect(vs.clone().multiplyScalar(ms).addScaledVector(vk, mk).distanceTo(before) / before.length()).toBeLessThan(1e-3);
+    expect(vs.x).toBeLessThan(0);
+    expect(vk.length()).toBeLessThan(400 * (ms / mk) * 2);
+  });
 
   it('never knocks a piece loose that stands where its place set it: what strikes it bounces off', () => {
     const { field, a, b } = pair(400, 1, 1);

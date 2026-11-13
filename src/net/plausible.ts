@@ -596,6 +596,28 @@ export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: n
 }
 
 /**
+ * The fastest a ship strikes a piece of junk with (units/s, 500 m/s): a ship at the speed limit
+ * with an overdrive's shove on top, into a piece crossing towards it at its fastest.
+ */
+const STRIKE_CLOSING = 10000;
+/** A ship's restitution off what it strikes (see ship/impact): the most a blow sends a piece off with is the closing speed this much over again. */
+const STRIKE_BOUNCE = 1.3;
+
+/**
+ * How close a strike of the Satellite Junkyard's junk another browser tells of (see
+ * Game.meetJunk) comes to a lie (above 1: one this browser does not take): dated `age` (s) off
+ * this browser's field clock, no more than BLOW_AGE; the striking ship, as this browser has it,
+ * no farther than AIM_SLACK from the piece's reach (`gap`); the piece, from where this browser
+ * has it at the strike's field time (`before`), pushed to `after` no farther than KNOCK_PUSH; and
+ * its velocity changed by `change` (units/s) no more than a ship's blow gives a piece of its
+ * mass: STRIKE_CLOSING over again by the restitution, times `share`, the piece's share of the
+ * blow against an interceptor (see world/bodies, share).
+ */
+export function strikeShare(before: THREE.Vector3, after: THREE.Vector3, change: number, share: number, gap: number, age: number): number {
+  return Math.max(Math.abs(age) / BLOW_AGE, gap / AIM_SLACK, before.distanceTo(after) / KNOCK_PUSH, change / (STRIKE_CLOSING * STRIKE_BOUNCE * share));
+}
+
+/**
  * A piece's motion in the lead browser's sync of the field (see world/fieldsync) may lie far
  * from where this browser has it (that is what the sync sets right: a ram this browser missed
  * sends a piece kilometers off within a cycle), but it drifts no faster than RAM_SPEED (the

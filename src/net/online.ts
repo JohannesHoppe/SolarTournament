@@ -46,6 +46,7 @@ export interface OnlineGame {
   remoteRam(state: ShovedState, round: number): void;
   /** A piece of the field struck another or a ring in a round, as the lead browser decided: the piece's motion since. */
   remoteKnock(state: ShovedState, round: number): void;
+  remoteStrike(state: ShovedState, round: number, ship: Ship): void;
   /** A slice of the lead browser's field in a round, and when its comets' heads broke up (see world/fieldsync). */
   syncField(slice: FieldSlice, round: number, heads: (number | null)[]): void;
   /** A part of the President's battleship as a torpedo homes on it, by its id. */
@@ -253,6 +254,10 @@ export class Online {
     };
     session.onRam = (state, round) => game.remoteRam(state, round);
     session.onKnock = (state, round) => game.remoteKnock(state, round);
+    session.onStrike = (state, round, shooter) => {
+      const ship = this.find(shooter);
+      if (ship) game.remoteStrike(state, round, ship);
+    };
     session.onFieldSync = (slice, round, heads) => game.syncField(slice, round, heads);
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
@@ -491,6 +496,10 @@ export class Online {
 
   sendKnock(state: ShovedState, round: number) {
     this.session.sendKnock(state, round);
+  }
+
+  sendStrike(state: ShovedState, round: number, ship: Ship) {
+    this.session.sendStrike(state, round, ship.id);
   }
 
   sendFieldSync(slice: FieldSlice, round: number, heads: (number | null)[]) {

@@ -9,6 +9,7 @@ import { opticalDepth, SIGHT_DEPTH, type Air } from './air';
 import type { FractureSet } from './fracture';
 import type { Branch } from './crack';
 import { massOf } from './bodies';
+import type { JunkBuild } from './junk';
 import { cbrt, cos, hypot, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 
@@ -250,6 +251,8 @@ export interface Asteroid {
   weld: number | null;
   /** A world's ground (see Placement.ground). */
   ground?: boolean;
+  /** What a piece of junk is built of and how far it is grown from its template (see world/junk): a hull punches through its sheets and strikes its core; null for every other piece. */
+  junk: { build: JunkBuild; scale: number } | null;
   /** The field's revision when it last appeared or jumped (see AsteroidField.revision). */
   appeared: number;
   /**
@@ -424,6 +427,8 @@ interface Template {
   centroid: THREE.Vector3;
   /** Boxes of the shape that reach beyond its ellipsoid (a satellite's wing, see world/shapes), in its object's own frame; collide as what stands on a piece does (see AsteroidField.attach). */
   parts: Attachment[];
+  /** What a piece of the Satellite Junkyard's junk is built of (see world/junk); null for every other shape. */
+  junk: JunkBuild | null;
 }
 
 /** The path of a piece in its shape's fracture tree from its id (`12.2.0`: piece 0 of piece 2 of rock 12), [] for a whole rock. */
@@ -523,6 +528,7 @@ export class AsteroidField {
           mean: 0,
           centroid: new THREE.Vector3(),
           parts: ((object.userData.parts ?? []) as { center: THREE.Vector3; half: THREE.Vector3 }[]).map((part) => attachment(new THREE.Matrix4().makeTranslation(part.center), part.half)),
+          junk: (object.userData.junk as JunkBuild | undefined) ?? null,
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull), rack: templates(sets.rack) };
@@ -555,6 +561,7 @@ export class AsteroidField {
       mean: whole.mean * cbrt(piece.share),
       centroid: piece.centroid,
       parts: [],
+      junk: null,
     };
     this.pieces.set(key, template);
     return template;
@@ -822,6 +829,7 @@ export class AsteroidField {
       inverse: new THREE.Matrix4(),
       shovedBy: null,
       weld: null,
+      junk: template.junk ? { build: template.junk, scale: s } : null,
       appeared: ++this.revision,
       ease: null,
     };
