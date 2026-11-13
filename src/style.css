@@ -482,6 +482,26 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   hyphens: auto;
 }
 
+/* a race world (shown only while a race is chosen) stands at the top, after "By chance", under its neon mark */
+#solo-arenas > :first-child {
+  order: -2;
+}
+
+.choice-grid button.raced {
+  order: -1;
+}
+
+.race-world {
+  display: block;
+  margin-bottom: 3px;
+  font-family: Michroma, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff3e0;
+  text-shadow: var(--neon-orange);
+}
+
 /* a bot's skills under its name: a label and five pips each, filled as far as it can */
 .skills {
   display: grid;
@@ -3044,7 +3064,8 @@ body.glitching #now-playing {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100vw - 32px);
+  /* clear of the clock and score in the middle of the HUD's top (about 80 px either side of it, more with a high score): a long title ends in an ellipsis */
+  max-width: calc(50vw - 140px);
   padding: 4px 6px 4px 4px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -3078,6 +3099,11 @@ body.glitching #now-playing {
 
 #now-playing.dj .np-dj {
   display: inline-block;
+}
+
+/* the DJ's buttons say what the box is: its label makes room for them */
+#now-playing.dj .np-label {
+  display: none;
 }
 
 /* the DJ's plate: the song on air in the radio's orange, back and forward side by side */
@@ -3264,11 +3290,6 @@ body.glitching #now-playing {
 .share-targets a:hover {
   border-color: var(--accent);
   color: var(--tube-orange);
-}
-
-/* on touch devices the radio keeps the top right corner, clear of the clock in the middle */
-body.touch #now-playing {
-  max-width: calc(50vw - 120px);
 }
 
 @media (max-width: 640px) {
@@ -3607,13 +3628,19 @@ body.touch #transmission {
     width: 44px;
   }
 
-  /* the radio keeps clear of the clock in the middle */
-  body:not(.touch) #now-playing {
-    max-width: calc(50vw - 120px);
+  /* the radio, narrower, keeps its title: the track's style gives way, and on a small screen the volume slider (M and the ♪ button still switch it) */
+  body:not(.touch) #radio-style {
+    display: none;
   }
 
   body:not(.touch) .readout {
     min-width: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  body:not(.touch) #now-playing .volume {
+    display: none;
   }
 }
 

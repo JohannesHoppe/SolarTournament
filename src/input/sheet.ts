@@ -25,6 +25,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('B (hold)'), msg('Self-destruct: takes every rival close by along')],
     ['C', msg('Cockpit / chase camera')],
     ['M', msg('Radio on / off')],
+    [', / .', msg('Previous / next song (the game master as DJ)')],
     [msg('Esc / P'), msg('Pause; Q there quits the round')],
     [msg('Tab (hold)'), msg('Standings: kills, deaths, score, in a race the lap')],
     ['F1', msg('This sheet')],
@@ -47,6 +48,8 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('D-pad left (hold)'), msg('Self-destruct: takes every rival close by along')],
     [msg('View'), msg('Cockpit / chase camera')],
     [msg('Menu'), msg('Pause')],
+    [msg('D-pad down (paused)'), msg('Radio on / off')],
+    [msg('D-pad left / right (paused)'), msg('Previous / next song (the game master as DJ)')],
   ],
   touch: [
     [msg('Left stick'), msg('Steer (drag up: nose up)')],

@@ -253,8 +253,6 @@ type CircuitPiece ={ straight: number } | { bend: number; turn: number } | { fre
 const CIRCUITS: Record<CircuitName, readonly CircuitPiece[]> = {
   // a long main straight into a hairpin of two bends, a fast S, the back straight, a last long bend
   grand: [{ free: true }, { bend: 1.2, turn: 90 }, { straight: 0.1 }, { bend: 1.2, turn: 90 }, { straight: 0.2 }, { bend: 1.4, turn: -40 }, { bend: 1.4, turn: 40 }, { straight: 0.3 }, { bend: 1.2, turn: 70 }, { free: true }, { bend: 1.3, turn: 110 }],
-  // two long straights, a wide double bend at one end, a gentle S into a hairpin at the other
-  hairpin: [{ free: true }, { bend: 1.2, turn: 90 }, { straight: 0.5 }, { bend: 1.2, turn: 110 }, { free: true }, { bend: 1.3, turn: -30 }, { bend: 1.3, turn: 30 }, { straight: 0.2 }, { bend: 1.2, turn: 160 }],
   // fast sweeping bends and one chicane
   sweep: [{ free: true }, { bend: 1.3, turn: 60 }, { straight: 0.1 }, { bend: 1.2, turn: -25 }, { bend: 1.2, turn: 25 }, { straight: 0.1 }, { bend: 1.3, turn: 140 }, { free: true }, { bend: 1.45, turn: 160 }],
 };
@@ -327,29 +325,18 @@ export function circuitPoints(name: CircuitName): THREE.Vector3[] {
  * The shapes a course may take instead of the loop round the center (FieldLayout.course), each
  * flat (the course's rise comes on top), its points spread along it by `angle` (a whole turn, a
  * lap), scaled by `scale` (the loop's distances tried, see LOOP_RADII):
- * - a circuit (see CIRCUITS), laid as a race track is: long straights, hairpins, fast bends, S-bends;
- * - an ellipse with the field's center at one focus, `near` from it at its nearest and `far` at
- *   its farthest (units): a course that dives towards a massive body there and swings out again,
- *   its gates closer together where it passes nearest.
+ * a circuit (see CIRCUITS), laid as a race track is: long straights, hairpins, fast bends, S-bends.
  */
 function formPoint(course: LoopForm, angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
-  if (course.form === 'circuit') {
-    // the circuit's points spread along it by the share of a lap, between its points linearly
-    const points = circuitPoints(course.layout);
-    const s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * points.length;
-    const i = Math.floor(s);
-    return out.lerpVectors(points[i % points.length], points[(i + 1) % points.length], s - i).multiplyScalar(scale);
-  }
-  const near = course.near * scale;
-  const far = course.far * scale;
-  const e = (far - near) / (far + near);
-  const r = (near * (1 + e)) / (1 + e * cos(angle));
-  return out.set(r * cos(angle), 0, r * sin(angle));
+  // the circuit's points spread along it by the share of a lap, between its points linearly
+  const points = circuitPoints(course.layout);
+  const s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * points.length;
+  const i = Math.floor(s);
+  return out.lerpVectors(points[i % points.length], points[(i + 1) % points.length], s - i).multiplyScalar(scale);
 }
 
 /** How far a form reaches from the field's center at scale 1 (units). */
 function formReach(course: LoopForm): number {
-  if (course.form === 'ellipse') return course.far;
   return Math.max(...circuitPoints(course.layout).map((point) => point.length()));
 }
 
