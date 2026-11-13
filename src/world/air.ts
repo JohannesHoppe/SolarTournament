@@ -145,6 +145,9 @@ export function density(altitude: number): number {
   return share * exp(-Math.max(altitude, -DEEPEST * SCALE_HEIGHT) / height);
 }
 
+/** The air's density at a point (see density), or 0 out of any air: a ship's lift there (see ship/flight, LIFT). */
+export const densityIn = (air: Air | null, position: THREE.Vector3) => (air ? density(altitudeIn(air, position)) : 0);
+
 /** The density summed from the deck to an altitude (units of length times the density under the deck; negative below the deck). */
 function column(altitude: number): number {
   const { height, share } = layer(altitude);

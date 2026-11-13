@@ -106,7 +106,7 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
   const result = (crashed: boolean): Flight => ({ passed: offs.length, offs, missed, seconds, hull, crashed });
   while (offs.length < rings.points.length && seconds < limit) {
     const next = offs.length;
-    outside(field, flight.position, flight.velocity, SHIP_RADIUS, STEP, gravity);
+    outside(field, flight.position, flight.velocity, SHIP_RADIUS, STEP, gravity, flight);
     const controls = driver(flight, next, seconds, gravity);
     before.copy(flight.position);
     flight.update(STEP, controls, gravity);

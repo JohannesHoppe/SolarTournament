@@ -7,7 +7,8 @@ import type { Effects } from '../view/effects';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
-import { dragOn, LOCK_DEPTH } from '../world/air';
+import { densityIn, dragOn, LOCK_DEPTH } from '../world/air';
+import { induced, LIFT_MOST, liftAt } from '../ship/flight';
 import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
 /** Torpedoes a fresh clone carries: enough for a salvo that a ship's decoys (one torpedo each, see game/decoys) cannot all draw. */
@@ -80,6 +81,16 @@ export const FLING_CREDIT = 3;
  * ship's).
  */
 export const TORPEDO_DRAG = 1 / 3;
+/**
+ * In air its fins give it lift (see ship/flight, LIFT) as a ship's do: this share of a ship's
+ * per tonne, the same third as its drag (small fins on a slender body: a ship's lift for its drag),
+ * on top of its thrusters across its flight, so it too turns tighter the faster it flies there;
+ * its computer trims the fins for the turn it wants, no further than a ship's (LIFT_MOST), and the
+ * lift it takes costs it drag as a ship's does (see ship/flight, induced).
+ */
+export const TORPEDO_LIFT = 1 / 3;
+/** The lift its fins give in the step flown (units/s², see TORPEDO_LIFT); 0 out of any air. */
+let finLift = 0;
 /** Its own radius, for the laser that shoots it down and for the rock it strikes (units, 6 m). It goes off at a ship's hull (see strikes). */
 export const TORPEDO_RADIUS = 120;
 /** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
@@ -184,11 +195,11 @@ const exhaust = new THREE.Vector3();
 /**
  * Bounds a push to what a torpedo can give, in place: along its flight (`course`, unit length)
  * up to TORPEDO_THRUST forwards and TORPEDO_LATERAL backwards, never more than stops it within
- * `dt`; across it up to TORPEDO_LATERAL. Its main drive only pushes it on, nose first.
+ * `dt`; across it up to TORPEDO_LATERAL and, in air, its fins' lift. Its main drive only pushes it on, nose first.
  */
 function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
   const along = push.dot(course);
-  across.copy(push).addScaledVector(course, -along).clampLength(0, TORPEDO_LATERAL);
+  across.copy(push).addScaledVector(course, -along).clampLength(0, TORPEDO_LATERAL + finLift);
   return push.copy(across).addScaledVector(course, THREE.MathUtils.clamp(along, -Math.min(TORPEDO_LATERAL, speed / dt), TORPEDO_THRUST));
 }
 
@@ -206,9 +217,11 @@ function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
  * steering, so it flies straight lines (one fired at the horizon without a lock does not sink) where its drive
  * and thrusters are strong enough, and is bent only where they are not (a strong well up close).
  */
-export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL) {
+export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL, density = 0) {
   const { position, velocity, push, seen } = torpedo;
   const speed = velocity.length();
+  const most = TORPEDO_LIFT * liftAt(density, speed);
+  finLift = Math.min(most, LIFT_MOST);
   if (target) {
     seen.lerp(target.velocity, 1 - exp(-dt / SEEKER_LAG));
     aim.subVectors(target.position, position);
@@ -225,7 +238,14 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   push.lerp(bound(command, speed, dt), 1 - exp(-dt / STEER_LAG));
   bound(push, speed, dt);
   // the outside's pull countered at once, within what drive and thrusters give besides the steering
-  velocity.addScaledVector(bound(countered.subVectors(push, outside), speed, dt).add(outside), dt);
+  bound(countered.subVectors(push, outside), speed, dt);
+  // the lift its fins take across the flight (before its thrusters) costs it drag against it
+  if (finLift > 0 && speed > 1) {
+    const along = countered.dot(course);
+    const lift = Math.min(finLift, Math.sqrt(Math.max(0, countered.lengthSq() - along * along)));
+    countered.addScaledVector(course, -induced(lift, most));
+  }
+  velocity.addScaledVector(countered.add(outside), dt);
   const limit = Math.max(speed, TORPEDO_TOP_SPEED);
   if (velocity.lengthSq() > limit * limit) velocity.setLength(limit);
   position.addScaledVector(velocity, dt);
@@ -404,7 +424,7 @@ export class Torpedoes {
       // a world's gravity, a well's pull, a column's push and an air's drag act on it as on a ship; it has no hover field
       field.gravity(torpedo.position, pulled);
       if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled, TORPEDO_DRAG);
-      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled);
+      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled, densityIn(field.air, torpedo.position));
       else torpedo.position.addScaledVector(torpedo.velocity.addScaledVector(pulled, dt), dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it

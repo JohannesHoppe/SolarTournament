@@ -7807,7 +7807,7 @@ export class Game implements OnlineGame {
    * `hoverGround` the ground while the ship rides it.
    */
   private outside(ship: Ship, dt: number, target: THREE.Vector3): THREE.Vector3 {
-    const ground = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, dt, target);
+    const ground = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, dt, target, ship.flight);
     this.hoverGround = ground ? copyGround(ground, this.hoverUnder) : null;
     return target;
   }

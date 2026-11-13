@@ -1,4 +1,4 @@
-import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
+import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
@@ -142,6 +142,11 @@ export const FROM_CODE: Record<string, number> = {
   seeKm: Math.round(meters(reachAt(-20000, SIGHT_DEPTH)) / 10) * 10,
   seeTwoKm: Math.round(meters(reachAt(-40000, SIGHT_DEPTH)) / 10) * 10,
   dragDeck: Math.round((dragAt(-1, MAX_SPEED) / G) * 10) / 10,
+  // the lift of the fins at the deck at the limit, the flight computer's trim, and the autopilot's
+  // hardest turn at the deck at the limit (to 5 m, as the README gives it)
+  liftDeck: g(LIFT),
+  liftMost: g(LIFT_MOST),
+  carveDeck: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: 1 })) / 5) * 5,
   hotDepth: Math.round(hotDepth() / 100) * 100,
   safeKm: Math.round(meters(safeSpeed(-20000, COOLING_SHADOW))),
   safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),

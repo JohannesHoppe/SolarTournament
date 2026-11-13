@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AsteroidField } from './asteroids';
-import { dragOn } from './air';
+import { densityIn, dragOn } from './air';
 import { exp } from '../detmath';
 import { HOVER_HEIGHT, HOVER_REACH, HOVER_RIDE, type Ground } from '../ship/flight';
 
@@ -59,9 +59,11 @@ export function hover(field: AsteroidField, position: THREE.Vector3, velocity: T
 /**
  * What pulls and brakes a ship from outside over a step of `dt` (units/s²) into `target`: the
  * field's gravity, the hover field over a world's ground, and the drag of an arena's air (see
- * world/air). Returns the ground while the ship rides it (see hover).
+ * world/air); the air's density at the ship goes into its `flight` (for its lift, see
+ * ship/flight's LIFT). Returns the ground while the ship rides it (see hover).
  */
-export function outside(field: AsteroidField, position: THREE.Vector3, velocity: THREE.Vector3, radius: number, dt: number, target: THREE.Vector3): Ground | null {
+export function outside(field: AsteroidField, position: THREE.Vector3, velocity: THREE.Vector3, radius: number, dt: number, target: THREE.Vector3, flight?: { airDensity: number }): Ground | null {
+  if (flight) flight.airDensity = densityIn(field.air, position);
   field.gravity(position, target);
   const ground = hover(field, position, velocity, radius, target);
   if (field.air) dragOn(field.air, position, velocity, dt, target);

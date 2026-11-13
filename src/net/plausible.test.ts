@@ -493,11 +493,14 @@ describe('honest flights', () => {
     return { cheats, margins };
   }
 
-  it('never look like cheats: slammed sticks, flips, the autopilot, beams, blows, stutters and stalls', () => {
+  it('never look like cheats: slammed sticks, flips, the autopilot, beams, blows, stutters and stalls, in vacuum and carving in dense air', () => {
     for (const rough of [
       { blows: 1000, stutter: 1000, stalls: 1000, wrecked: false },
       { blows: 2, stutter: 3, stalls: 10, wrecked: false },
       { blows: 1, stutter: 1, stalls: 4, wrecked: true },
+      // a kilometre under Jupiter's deck, where the lift is trimmed to its most
+      { blows: 2, stutter: 3, stalls: 10, wrecked: false, air: 3.2 },
+      { blows: 1, stutter: 1, stalls: 4, wrecked: true, air: 1 },
     ]) {
       const { cheats, margins } = fly(rough, 6, 60);
       expect(cheats).toEqual([]);

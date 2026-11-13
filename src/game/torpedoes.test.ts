@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { sin } from '../detmath';
+import { atan2, sin } from '../detmath';
 import { describe, expect, it } from 'vitest';
 import { gripAt, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from '../ship/flight';
 import type { Ship as GameShip } from '../ship/ship';
@@ -335,6 +335,23 @@ describe('a torpedo under gravity', () => {
       hit = strikes(before, torpedo.position, target, HULL, DT);
     }
     expect(hit).toBe(true);
+  });
+
+  it("turns tighter in air with its fins' lift, the more the denser, and pays for it in speed", () => {
+    // a ship 1.5 km out to the side, at rest: how far round the torpedo has come in a second
+    const turned = (density: number) => {
+      const target = { position: new THREE.Vector3(30000, 0, -10000), velocity: new THREE.Vector3() };
+      const torpedo = launch();
+      for (let t = 0; t < 1; t += DT) flyTorpedo(torpedo, target, DT, new THREE.Vector3(), density);
+      return { angle: atan2(torpedo.velocity.x, -torpedo.velocity.z), speed: torpedo.velocity.length() };
+    };
+    const vacuum = turned(0);
+    const deck = turned(1);
+    const deep = turned(3);
+    expect(deck.angle).toBeGreaterThan(vacuum.angle * 1.15);
+    expect(deep.angle).toBeGreaterThan(deck.angle);
+    // the lift's drag: no faster than in vacuum, where its drive alone holds the speed
+    expect(deck.speed).toBeLessThan(vacuum.speed);
   });
 
   it('is bent where the pull outdoes its thrusters', () => {

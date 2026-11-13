@@ -351,7 +351,7 @@ export class JobWorld implements SchoolContext {
 
   /** What pulls and brakes a ship: the field's gravity, the hover field over a world's ground and an air's drag (see Game.outside); `ground` the ground while the ship rides it. */
   private outside(ship: Ship, target: THREE.Vector3) {
-    const under = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, JOB_STEP, target);
+    const under = outsideOn(this.field, ship.flight.position, ship.flight.velocity, ship.radius, JOB_STEP, target, ship.flight);
     this.ground = under ? copyGround(under, this.under) : null;
     return target;
   }

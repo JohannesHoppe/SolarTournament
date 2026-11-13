@@ -7,7 +7,7 @@ import { approachGate } from '../game/race';
 import { PIPE_BORE, RING_RADIUS } from '../game/school';
 import { RacingLine } from '../game/racingline';
 import { exp } from '../detmath';
-import { altitudeIn, dragOn, heatSpeed, REACTOR_WASTE } from '../world/air';
+import { altitudeIn, densityIn, dragOn, heatSpeed, REACTOR_WASTE } from '../world/air';
 import type { RayHit } from '../world/asteroids';
 import type { Hands, Host, JobWorld } from './jobs';
 
@@ -263,7 +263,8 @@ export class Pilot {
     want.add(this.goalVelocity);
     error.subVectors(want, flight.velocity);
     world.field.gravity(flight.position, gravity);
-    // the air's drag pulls as gravity does (see Game.outside)
+    // the air's drag pulls as gravity does, and its lift bends the flight (see Game.outside)
+    flight.airDensity = densityIn(air, flight.position);
     if (air) dragOn(air, flight.position, flight.velocity, world.dt, gravity);
     // the push it wants: the difference taken out within a second or two, gravity held against
     accel.copy(error).multiplyScalar(0.8).sub(gravity);

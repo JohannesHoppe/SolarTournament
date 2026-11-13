@@ -25,6 +25,8 @@ export interface Roughness {
   stalls: number;
   /** Thrusters shot to pieces: they turn the ship with a quarter of their power, and escaping air spins it. */
   wrecked: boolean;
+  /** The density of a planet's air the ship flies in (world/air's; 0 or left out: none): its lift bends the flight (see ship/flight, LIFT). */
+  air?: number;
 }
 
 const random = (r: Randomizer, length = 1) => new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(length);
@@ -96,6 +98,7 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
       flight.velocity.clampLength(0, TOP_SPEED);
     }
     flight.thrusterFactor = rough.wrecked ? 0.25 : 1.08;
+    flight.airDensity = rough.air ?? 0;
     let command: Controls = controls;
     if (mode === 'flip') command = Object.assign(steered, IDLE, flight.flip(goal, 2.5, { yaw: 0, pitch: 0, roll: 0 }), { thrust: 0 });
     else if (mode === 'autopilot') {
