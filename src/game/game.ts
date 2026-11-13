@@ -70,8 +70,8 @@ import { MAX_FROM, snoozeUntil } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { copyGround, glide, outside as outsideOn } from '../world/hover';
-import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { copyGround, glide, groundBlow, outside as outsideOn } from '../world/hover';
+import { airAround, airBurn, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT, outsideArena } from '../world/arena';
@@ -98,6 +98,7 @@ import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlar
 import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
+import { PLUME_BURN, PLUME_HEAT, plumeStrength } from '../ship/plume';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
@@ -290,18 +291,6 @@ const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
 const PLATING_CHARGES = 2;
 /**
- * A drive plume: a burning main drive (throttle above PLUME_THROTTLE) throws hot plasma out
- * behind it, PLUME_REACH far (units, 150 m), spreading by PLUME_SPREAD per unit of its length
- * (about 7°). A ship inside takes PLUME_HEAT heat and PLUME_BURN hull per second at the nozzle
- * of a full burn, less with the throttle and fading to nothing at the plume's end. Nothing
- * like a slipstream in vacuum: to overtake, a ship has to get out of the line of the one ahead.
- */
-const PLUME_THROTTLE = 0.3;
-const PLUME_REACH = 3000;
-const PLUME_SPREAD = 0.12;
-const PLUME_HEAT = 60;
-const PLUME_BURN = 8;
-/**
  * Let go by its hook, the own ship flies off along its swing, across its nose. For
  * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
  * leaves the drift alone, unless the pilot steers more than FLING_STEER (stick deflection).
@@ -408,7 +397,7 @@ const KILL_EASE = 0.1;
 const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
-const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'flare', 'comet']);
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'sun', 'flare', 'comet']);
 /** A shove sets the hull spinning by this much per unit of closing speed (rad/s per units/s; 3.2 rad/s at 40 m/s), up to SHOVE_SPIN_MAX; the flight computer catches it within a fraction of a second. */
 const SHOVE_SPIN = 0.004;
 const SHOVE_SPIN_MAX = 6;
@@ -682,7 +671,7 @@ const STATIC_GLITCH = 0.7;
 const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -5032,7 +5021,7 @@ export class Game implements OnlineGame {
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
       ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
-      ship.sunCooling = this.venue.cooling;
+      ship.sunlight = this.venue.sunlight;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       this.friction(ship, dt, now);
       if (this.course && !this.roundOver) this.passGates(ship, this.course);
@@ -6414,13 +6403,15 @@ export class Game implements OnlineGame {
     this.clogAlarm(me, up);
     // what the radiators shed beyond the reactor's waste heat a clog holds in is left for the air
     const cooling = Math.max(0, me.cooling - REACTOR_WASTE * me.clog);
-    if (heatInto(altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
+    if (heatInto(air, altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
       if (me.heat < AIR_COOL) this.airSaid = 0;
       return;
     }
     const level = me.heat >= MAX_HEAT ? 'critical' : me.heat >= AIR_HOT ? 'warning' : 'caution';
-    const safe = Math.round(safeSpeed(altitude, cooling) * METERS_PER_UNIT);
-    this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up });
+    const safe = Math.round(safeSpeed(air, altitude, cooling) * METERS_PER_UNIT);
+    // where the air is hot enough to heat a hull at any speed, only climbing out cools it
+    const text = safe < 1 ? t('HULL HEAT · CLIMB OUT') : t('HULL HEAT · SAFE {speed} m/s', { speed: safe });
+    this.alarms.raise({ id: 'air', level, text, direction: up });
     this.airGlow = AIR_GLOW[level];
     const said = level === 'critical' ? 2 : 1;
     // a line Nicole could not say yet (she was speaking) is tried again the next frame
@@ -8281,6 +8272,12 @@ export class Game implements OnlineGame {
    * as a knockout of whoever shoved it last (see KNOCKOUTS).
    */
   private friction(ship: Ship, dt: number, now: number) {
+    // sunlight its radiators cannot shed (the Corona's, out of a shadow) fills them and burns the hull as the air's heat does
+    const sun = ship.alive ? ship.sunExcess * dt : 0;
+    if (sun > 0 && ship.structural(airBurn(ship, sun, dt, MAX_HEAT), now) === 'destroyed') {
+      this.shipDestroyed(ship, null, 'sun');
+      return;
+    }
     const air = this.field.air;
     if (!air || !ship.alive) {
       ship.finSpin.set(0, 0, 0);
@@ -8300,16 +8297,9 @@ export class Game implements OnlineGame {
     let hottest = 0;
     let burner: Ship | null = null;
     for (const other of this.ships) {
-      const throttle = other.flight.throttle;
-      if (other === ship || !other.alive || throttle < PLUME_THROTTLE) continue;
-      // behind the other's drive, along its axis, and inside the cone the plume spreads to
-      const back = other.flight.forward(forward).negate();
-      const away = relative.subVectors(ship.flight.position, other.flight.position);
-      const along = away.dot(back);
-      if (along <= 0 || along > PLUME_REACH) continue;
-      const across = away.addScaledVector(back, -along).length();
-      if (across > ship.radius * 0.6 + along * PLUME_SPREAD) continue;
-      const strength = throttle * (1 - along / PLUME_REACH);
+      if (other === ship || !other.alive) continue;
+      // behind the other's drive, along its axis, inside the cone the plume spreads to (see ship/plume)
+      const strength = plumeStrength(other.flight.position, other.flight.forward(forward).negate(), other.flight.throttle, ship.flight.position, ship.radius);
       if (strength > hottest) {
         hottest = strength;
         burner = other;
@@ -8683,6 +8673,7 @@ export class Game implements OnlineGame {
       else if (cause === 'burnout') this.deathCause = t('Boosted the drive to burnout');
       else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'air') this.deathCause = t('Burned up in the clouds');
+      else if (cause === 'sun') this.deathCause = t('Burned up in the sunlight');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
       else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
@@ -8755,7 +8746,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' || cause === 'air' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -9005,12 +8996,18 @@ export class Game implements OnlineGame {
 
   /**
    * A ship touched a world's ground (the outward `normal` of this frame): it glides over it, never
-   * bounced and never hurt (see world/hover, glide); fast along it, the hull's underside throws
-   * sparks and grinds through the hull.
+   * bounced (see world/hover, glide); what the hover field left of its speed into the ground hurts
+   * as an impact on rock does, so a graze glides unharmed and a dive at speed crashes; fast along
+   * it, the hull's underside throws sparks and grinds through the hull.
    */
   private glideOver(ship: Ship, dt: number, now: number) {
-    glide(ship.flight.velocity, normal, dt);
+    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
+    if (into >= SAFE_IMPACT * 0.4) {
+      ship.syncTransform();
+      this.bounceHurts(ship, into, now, 'ground');
+      if (!ship.alive) return;
+    }
     ship.syncTransform();
     const speed = ship.flight.velocity.length();
     if (speed < GLIDE_SPARKS || Math.random() > dt * GLIDE_SPARK_RATE) return;
@@ -9028,7 +9025,7 @@ export class Game implements OnlineGame {
   }
 
   /** What a blow `approach` hard (units/s; against a body that gives way, the ship's own share of it) does to a ship struck on `what`, with the outward `normal` of this frame: sparks, a crash through the hull, and the impact's damage. */
-  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk') {
+  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk' | 'ground') {
     if (approach < SAFE_IMPACT * 0.4) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 40 + approach * 0.05);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, approach / 800), rate: 1.9 });

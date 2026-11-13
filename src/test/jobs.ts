@@ -21,7 +21,7 @@ import { arenaById, DEFAULT_ARENA, type ArenaProfile } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { FIELD_RADIUS, raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
 import { airStep, reachIn, SIGHT_DEPTH } from '../world/air';
-import { copyGround, glide, outside as outsideOn } from '../world/hover';
+import { copyGround, glide, groundBlow, outside as outsideOn } from '../world/hover';
 import { IMMOVABLE, massOf, MASS, type Body } from '../world/bodies';
 import type { Claim } from '../world/mining';
 import { DETAIL } from '../world/rocks';
@@ -268,7 +268,7 @@ export class JobWorld implements SchoolContext {
       const holds = steered.fire && ((this.spares(ship) && !this.onDrive(ship)) || (this.harpooner(ship) && this.onDrive(ship)));
       const controls = holds ? { ...steered, fire: false } : steered;
       this.outside(ship, gravity);
-      ship.sunCooling = this.venue.cooling;
+      ship.sunlight = this.venue.sunlight;
       if (ship.update(JOB_STEP, now, controls, gravity)) this.fireLaser(ship);
       if (bot && bot !== this.sparring?.bot && (bot.target || bot.siege) && ship.torpedoes > 0 && Math.random() < JOB_STEP * BOT_TORPEDO_RATE) this.fireTorpedo(ship);
       this.friction(ship);
@@ -393,9 +393,10 @@ export class JobWorld implements SchoolContext {
     }
     const rock = this.field.overlap(flight.position, ship.radius);
     if (rock && this.field.resolve(rock, flight.position, ship.radius, normal)) {
-      // a world's ground: the hull glides over it, never hurt (see Game.glideOver)
+      // a world's ground: the hull glides over it, and what the hover field left of its speed into it hurts as on rock (see Game.glideOver)
       if (rock.ground) {
-        glide(flight.velocity, normal, JOB_STEP);
+        const into = groundBlow(glide(flight.velocity, normal, JOB_STEP), this.field.fall);
+        if (into >= SAFE_IMPACT && ship.structural(impactDamage(into), this.now) === 'destroyed') this.destroyed(ship, null, 'rock');
         return;
       }
       this.field.surfaceVelocity(rock, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);

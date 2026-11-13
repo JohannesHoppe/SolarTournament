@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { airHeat, altitudeIn, type Air } from '../world/air';
-import { COOLING_SHADOW, MAX_HEAT, type Ship } from '../ship/ship';
+import { airHeat, airKelvin, altitudeIn, stagnation, type Air } from '../world/air';
+import { MAX_HEAT, RADIATE, type Ship } from '../ship/ship';
 import type { Effects } from './effects';
 import { exp, log2 } from '../detmath';
 
@@ -31,7 +31,22 @@ export function plasmaOf(load: number): number {
 
 /** How hard the air heats a ship at `position` flying at `velocity` against its radiators in the clouds (see plasmaOf). */
 export function loadOf(air: Air, position: THREE.Vector3, velocity: THREE.Vector3, cooling: number): number {
-  return airHeat(altitudeIn(air, position), velocity.length()) / cooling;
+  return airHeat(air, altitudeIn(air, position), velocity.length()) / cooling;
+}
+
+/**
+ * Air glows in a shock layer only once the ram heats it white-hot: from GLOW_KELVIN on, fully
+ * GLOW_SPAN later, as a reentry at several km/s does. No ship of the Games flies that fast (the ram
+ * warms Jupiter's air 8 K at the overdrive's 450 m/s, Titan's 97 K), so no shock layer, trail or
+ * licks show: a hull overheated by hot deep air glows and sheds flakes instead (see scorch).
+ */
+const GLOW_KELVIN = 1500;
+const GLOW_SPAN = 1500;
+
+/** How much of a shock layer glows around a ship at `position` flying at `velocity` (0..1, see GLOW_KELVIN). */
+export function shockGlow(air: Air, position: THREE.Vector3, velocity: THREE.Vector3): number {
+  const rammed = airKelvin(air, altitudeIn(air, position)) + stagnation(air, velocity.length());
+  return THREE.MathUtils.clamp((rammed - GLOW_KELVIN) / GLOW_SPAN, 0, 1);
 }
 
 /** The plasma follows the heating with this time constant (s), so a jolt in a remote ship's speed does not flicker it. */
@@ -447,7 +462,7 @@ export class Reentry {
 
   private heat(ship: Ship, air: Air, dt: number, rider: boolean) {
     let burn = this.burns.get(ship);
-    const cooling = COOLING_SHADOW * ship.perks.cooling;
+    const cooling = RADIATE * ship.perks.cooling;
     const load = ship.alive ? loadOf(air, ship.flight.position, ship.flight.velocity, cooling) : 0;
     if (!burn) {
       if (load < 0.5) return;
@@ -462,8 +477,9 @@ export class Reentry {
     // a ship whose browser only went quiet is gone from the screen, not burnt up
     if (burn.wasAlive && ship.died && wasBurning) this.ignite(ship);
     burn.wasAlive = ship.alive;
-    burn.plasma += (plasmaOf(load) - burn.plasma) * (1 - exp(-dt / PLASMA_EASE));
-    const scorch = burn.burning ? 1 : SCORCH_HEATING * burn.plasma;
+    const heating = plasmaOf(load);
+    burn.plasma += (heating * shockGlow(air, ship.flight.position, ship.flight.velocity) - burn.plasma) * (1 - exp(-dt / PLASMA_EASE));
+    const scorch = burn.burning ? 1 : SCORCH_HEATING * heating;
     burn.scorch = scorch > burn.scorch ? Math.min(scorch, burn.scorch + dt / SCORCH_RISE) : Math.max(scorch, burn.scorch - dt / SCORCH_FADE);
     if (!ship.alive) {
       burn.plasma = burn.scorch = burn.fill = 0;

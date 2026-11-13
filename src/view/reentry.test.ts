@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { loadOf, plasmaOf } from './reentry';
+import { loadOf, plasmaOf, shockGlow } from './reentry';
 import { safeSpeed } from '../world/air';
 import { arenaById } from '../world/arenas';
+import { TITAN_AIR } from '../world/titan';
 import { MAX_SPEED } from '../ship/flight';
-import { COOLING_SHADOW } from '../ship/ship';
+import { RADIATE } from '../ship/ship';
 
 const air = arenaById('giant')!.layout.air!;
 /** Meters to units (1 unit = 5 cm). */
@@ -13,7 +14,7 @@ const m = (meters: number) => meters * 20;
 const at = (altitude: number) => new THREE.Vector3(0, altitude, 0);
 const ahead = (speed: number) => new THREE.Vector3(0, 0, -speed);
 
-describe('the plasma of a ship flying hot through the air', () => {
+describe('the heat of a ship flying through the air', () => {
   it('follows the heating against the radiators: a quarter where they just keep up, full at eight times', () => {
     expect(plasmaOf(0)).toBe(0);
     expect(plasmaOf(0.5)).toBe(0);
@@ -23,19 +24,25 @@ describe('the plasma of a ship flying hot through the air', () => {
     expect(plasmaOf(100)).toBe(1);
   });
 
-  it('shows from the safe speed on, as the heat alarm does, and nowhere over the clouds', () => {
-    for (const depth of [-800, -1500, -2500]) {
-      const safe = safeSpeed(m(depth), COOLING_SHADOW);
-      expect(loadOf(air, at(m(depth)), ahead(safe), COOLING_SHADOW)).toBeCloseTo(1, 5);
-      expect(plasmaOf(loadOf(air, at(m(depth)), ahead(safe * 0.79), COOLING_SHADOW))).toBe(0);
+  it('shows from the safe speed on, as the heat alarm does, and nowhere in the cold air near the deck or over it', () => {
+    for (const depth of [-2000, -2250]) {
+      const safe = safeSpeed(air, m(depth), RADIATE);
+      expect(loadOf(air, at(m(depth)), ahead(safe), RADIATE)).toBeCloseTo(1, 5);
+      expect(plasmaOf(loadOf(air, at(m(depth)), ahead(safe * 0.4), RADIATE))).toBe(0);
     }
-    expect(plasmaOf(loadOf(air, at(m(10)), ahead(MAX_SPEED), COOLING_SHADOW))).toBe(0);
-    expect(plasmaOf(loadOf(air, at(m(-2000)), ahead(MAX_SPEED), COOLING_SHADOW))).toBeGreaterThan(0.6);
+    expect(plasmaOf(loadOf(air, at(m(10)), ahead(MAX_SPEED), RADIATE))).toBe(0);
+    expect(plasmaOf(loadOf(air, at(m(-800)), ahead(MAX_SPEED), RADIATE))).toBe(0);
+    expect(plasmaOf(loadOf(air, at(m(-2500)), ahead(MAX_SPEED), RADIATE))).toBeGreaterThan(0.6);
+  });
+
+  it('never lights a shock layer: no ship of the Games rams any air hot enough to glow, at the overdrive or the arena’s bottom', () => {
+    expect(shockGlow(air, at(m(-3400)), ahead(m(450)))).toBe(0);
+    expect(shockGlow(TITAN_AIR, at(-6000), ahead(m(450)))).toBe(0);
   });
 
   it('takes the flight alone: the same for every ship, wherever it is drawn', () => {
-    const a = loadOf(air, at(m(-1200)), new THREE.Vector3(3000, -1000, 2000), COOLING_SHADOW);
-    const b = loadOf(air, at(m(-1200)), new THREE.Vector3(-2000, 3000, -1000), COOLING_SHADOW);
+    const a = loadOf(air, at(m(-2200)), new THREE.Vector3(3000, -1000, 2000), RADIATE);
+    const b = loadOf(air, at(m(-2200)), new THREE.Vector3(-2000, 3000, -1000), RADIATE);
     expect(a).toBeCloseTo(b, 10);
   });
 });

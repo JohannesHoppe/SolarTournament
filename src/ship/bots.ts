@@ -11,6 +11,7 @@ import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
 import { sheetDamage } from './impact';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { plumeStrength } from './plume';
 import { exp, hypot } from '../detmath';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
@@ -220,6 +221,9 @@ const AIR_CLOG_DARING = 0.4;
 const KEEP_CLEAR = 5;
 const KEEP_CLEAR_AHEAD = 1;
 const KEEP_CLEAR_PUSH = 800;
+/** A bot in a burning drive's plume stronger than this (see ship/plume, plumeStrength: a twentieth of its full heat, some 450 m behind a full burn) steers sideways out of it. */
+const PLUME_SHRUG = 0.05;
+const plumeBack = new THREE.Vector3();
 /**
  * Bots do not fly into a ring's housings (a race's gate, a base of Capture the Flag). Where
  * their way would cross a ring's plane within RING_HORIZON seconds on its housings or struts,
@@ -820,15 +824,15 @@ export class Bot {
       if (altitude < AIR_ABOVE) desired.addScaledVector(up, AIR_RISE * Math.min(1, (AIR_ABOVE - altitude) / AIR_RISE_SPAN));
     }
     // what the radiators shed beyond the reactor's waste heat a clog holds in is what the air may add
-    const safe = heatSpeed(altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
+    const safe = heatSpeed(air, altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
     // until the hull has cooled again; and choking under the deck, it climbs out at once
-    if (this.ship.heat > AIR_HOT && heatInto(altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
+    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
     else if (this.ship.heat < AIR_COOL) this.climbing = false;
     const out = this.climbing || (choking && altitude < 0);
     // on the way out the waste heat comes whatever the speed, so the quicker out the better: as
     // fast as the air alone allows (AIR_RISE at least), not the speed that would stay cool
-    const escape = Math.max(heatSpeed(altitude, cooling) * AIR_MARGIN, AIR_RISE);
+    const escape = Math.max(heatSpeed(air, altitude, cooling) * AIR_MARGIN, AIR_RISE);
     this.airLimit = out ? escape : Math.max(safe, AIR_RISE);
     if (out) desired.copy(up).multiplyScalar(Math.min(escape, CRUISE_SPEED));
     return out;
@@ -901,6 +905,15 @@ export class Bot {
     const clear = this.ship.radius * KEEP_CLEAR;
     for (const ship of ships) {
       if (ship === this.ship || !ship.alive) continue;
+      // out of a burning drive's plume it sits in (its flame is plain to see): sideways off its axis
+      const backward = ship.flight.forward(plumeBack).negate();
+      const grill = plumeStrength(ship.flight.position, backward, ship.flight.throttle, me.position, this.ship.radius);
+      if (grill > PLUME_SHRUG) {
+        local.subVectors(me.position, ship.flight.position);
+        local.addScaledVector(backward, -local.dot(backward));
+        if (local.lengthSq() < 1) local.set(0, 1, 0).addScaledVector(backward, -backward.y);
+        desired.addScaledVector(local.normalize(), CRUISE_SPEED);
+      }
       // where the other ship is, and how fast the two close, as the bot sees it
       local.subVectors(me.position, ship.flight.position);
       line.subVectors(me.velocity, ship.flight.velocity);

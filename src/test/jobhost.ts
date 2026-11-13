@@ -248,7 +248,7 @@ export class Pilot {
     if (air) {
       const shed = Math.max(0, this.me.cooling - REACTOR_WASTE * this.me.clog);
       const deeper = Math.min(altitudeIn(air, flight.position), altitudeIn(air, local.copy(flight.position).addScaledVector(flight.velocity, AIR_AHEAD)));
-      cruise = Math.min(cruise, Math.max(AIR_CRAWL, heatSpeed(deeper, shed) * AIR_MARGIN));
+      cruise = Math.min(cruise, Math.max(AIR_CRAWL, heatSpeed(air, deeper, shed) * AIR_MARGIN));
       // a hull short of a fin (the Magpie) holds its course in the clouds only slowly (see world/air, finSpin)
       if (this.me.perks.fins < 2 && deeper < AIR_DECK) cruise = Math.min(cruise, AIR_FINLESS);
     }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { airAround, airBurn, airStep, FINS, finSpin, airHeat, altitudeIn, CLOG_LOSS, clogging, density, densityIn, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { AIR_BURN, airAround, airBurn, airKelvin, airStep, FINS, finSpin, airHeat, altitudeIn, stagnation, CLOG_LOSS, clogging, density, densityIn, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
 import { TITAN_AIR } from './titan';
 import { THROAT_AIR } from './throat';
 import { footOf, skyPointer } from './reference';
@@ -19,8 +19,8 @@ const m = (meters: number) => meters * 20;
 /** A point at an altitude (units) over the deck, `x` (units) off the field's center. */
 const at = (altitude: number, x = 0) => new THREE.Vector3(x, Math.sqrt(pow(air.radius + altitude, 2) - x * x) - air.radius, 0);
 const SIDEWAYS = new THREE.Vector3(1, 0, 0);
-/** The radiators' cooling in the air (heat units/s; see ship/ship, in the shade). */
-const COOLING = 50;
+/** What the radiators shed (heat units/s; see ship/ship, RADIATE). */
+const COOLING = 20;
 
 describe("Jupiter's air", () => {
   it('lies with its cloud deck in the reference plane, at the field\'s center', () => {
@@ -132,34 +132,48 @@ describe("Jupiter's air", () => {
     expect(MAIN_THRUST / G).toBeCloseTo(13, 0);
   });
 
-  it('heats a hull faster than it cools only below 600 m at the speed limit, and lets it fly slower deeper', () => {
-    expect(airHeat(m(-500), MAX_SPEED)).toBeLessThan(COOLING);
-    expect(airHeat(m(-700), MAX_SPEED)).toBeGreaterThan(COOLING);
-    expect(safeSpeed(m(-500), COOLING)).toBe(MAX_SPEED);
-    expect(safeSpeed(m(-1000), COOLING) / 20).toBeCloseTo(215, -1);
-    expect(safeSpeed(m(-2000), COOLING) / 20).toBeCloseTo(146, -1);
-    expect(safeSpeed(-ARENA_LIMIT, COOLING) / 20).toBeCloseTo(86, -1);
+  it('is cold at the deck and hot deep down: it cools a hull above 1.3 km and heats it below, the limit safe down to 1.7 km, nothing safe from 2.8 km', () => {
+    expect(airKelvin(air, 0)).toBe(165);
+    expect(airKelvin(air, m(-2700))).toBeCloseTo(424, -1);
+    // near the deck the cold air carries heat off, the more the faster
+    expect(airHeat(air, m(-300), MAX_SPEED)).toBeLessThan(-10);
+    expect(airHeat(air, m(-300), MAX_SPEED)).toBeLessThan(airHeat(air, m(-300), 0));
+    expect(airHeat(air, m(-1200), MAX_SPEED)).toBeLessThan(0);
+    expect(airHeat(air, m(-1400), MAX_SPEED)).toBeGreaterThan(0);
+    expect(safeSpeed(air, m(-1700), COOLING)).toBe(MAX_SPEED);
+    expect(safeSpeed(air, m(-2000), COOLING) / 20).toBeCloseTo(104, -1);
+    expect(safeSpeed(air, m(-2500), COOLING) / 20).toBeCloseTo(30, -1);
+    // deep down even a crawl heats the hull: only climbing helps
+    expect(safeSpeed(air, m(-2800), COOLING)).toBe(0);
+    expect(safeSpeed(air, -ARENA_LIMIT, COOLING)).toBe(0);
     // at the safe speed the air puts in what the radiators shed
-    expect(airHeat(m(-2000), safeSpeed(m(-2000), COOLING))).toBeCloseTo(COOLING);
+    expect(airHeat(air, m(-2000), safeSpeed(air, m(-2000), COOLING))).toBeCloseTo(COOLING);
   });
 
-  it('burns the hull only with what full radiators cannot shed, about 15 points a second at the limit 2 km down', () => {
+  it('warms by ramming only a few kelvin, at the overdrive too: no shock, no glow', () => {
+    expect(stagnation(air, MAX_SPEED)).toBeCloseTo(2.6, 1);
+    expect(stagnation(air, m(450))).toBeCloseTo(8.4, 1);
+    expect(stagnation(TITAN_AIR, MAX_SPEED)).toBeCloseTo(30, 0);
+    expect(stagnation(TITAN_AIR, m(450))).toBeCloseTo(97, 0);
+  });
+
+  it('burns the hull only with what full radiators cannot shed, about 3 points a second at the limit 2.5 km down', () => {
     const step = 1 / 30;
     const radiators = { heat: 0, overheated: false, cooling: COOLING };
     let burnt = 0;
     for (let t = 0; t < 10; t += step) {
       radiators.heat = Math.max(0, radiators.heat - COOLING * step);
-      burnt += airBurn(radiators, airHeat(m(-2000), MAX_SPEED) * step, step, 100);
+      burnt += airBurn(radiators, airHeat(air, m(-2500), MAX_SPEED) * step, step, 100);
     }
     expect(radiators.overheated).toBe(true);
     // a burning hull has full radiators after the air's step: the alarm's CRITICAL, Nicole's line and the burning on screen read them
     expect(radiators.heat).toBe(100);
-    // full after half a second, then burning
-    expect(burnt / 9.5).toBeCloseTo(15, 0);
+    // full after a second, then burning by what the air adds beyond what they shed
+    expect(burnt / 9).toBeCloseTo((airHeat(air, m(-2500), MAX_SPEED) - COOLING) * AIR_BURN, 0);
     // radiators full of the laser's heat while the air heats less than they shed: nothing burns, they cool
     const laser = { heat: 110, overheated: true, cooling: COOLING };
     laser.heat -= COOLING * step;
-    expect(airBurn(laser, airHeat(m(-200), MAX_SPEED) * step, step, 100)).toBe(0);
+    expect(airBurn(laser, airHeat(air, m(-1500), MAX_SPEED) * step, step, 100)).toBe(0);
     expect(laser.heat).toBeLessThan(110);
   });
 
@@ -188,29 +202,40 @@ describe("Jupiter's air", () => {
     for (let t = 0; t < 90; t += step) {
       ship.clog = clogging(ship.clog, m(-200), step);
       ship.heat = Math.max(0, ship.heat - ship.cooling * step);
-      burnt += airBurn(ship, heatInto(m(-200), 0, ship.clog) * step, step, 100);
+      const heat = heatInto(air, m(-200), 0, ship.clog) * step;
+      if (heat < 0) ship.heat = Math.max(0, ship.heat + heat);
+      else burnt += airBurn(ship, heat, step, 100);
       if (ship.overheated) locked = Math.min(locked, t);
     }
-    expect(locked).toBeLessThan(30);
+    expect(locked).toBeLessThan(40);
     expect(burnt).toBeGreaterThan(30);
-    // clean radiators shed the reactor's waste heat without a trace
-    expect(heatInto(m(-200), 0, 0)).toBe(0);
-    expect(REACTOR_WASTE).toBeLessThan(COOLING);
+    // clean radiators: the cold air near the deck carries heat off, no waste heat held in
+    expect(heatInto(air, m(-200), 0, 0)).toBeLessThan(0);
+    expect(REACTOR_WASTE).toBeLessThanOrEqual(COOLING);
   });
 });
 
 describe("Titan's air", () => {
-  const hull = () => ({ flight: { position: new THREE.Vector3(0, -6000, 0), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) }, perks: { fins: FINS }, finSpin: new THREE.Vector3(), clog: 0, heat: 0, overheated: false, cooling: 50 });
+  const hull = (heat = 0) => ({ flight: { position: new THREE.Vector3(0, -6000, 0), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) }, perks: { fins: FINS }, finSpin: new THREE.Vector3(), clog: 0, heat, overheated: false, cooling: COOLING });
 
   it('clogs no radiators, however long a ship stays under its deck, where Jupiter’s clog them through', () => {
     const titan = hull();
     const jupiter = hull();
     for (let t = 0; t < 60; t += 0.1) {
       airStep(titan, TITAN_AIR, 0.1, 100);
-      airStep(jupiter, { center: TITAN_AIR.center, radius: TITAN_AIR.radius }, 0.1, 100);
+      airStep(jupiter, { ...air, center: TITAN_AIR.center, radius: TITAN_AIR.radius }, 0.1, 100);
     }
     expect(titan.clog).toBe(0);
     expect(jupiter.clog).toBe(1);
+  });
+
+  it('carries heat off a hull at any speed, its 94 K nitrogen colder than any radiator, at the overdrive too', () => {
+    expect(airHeat(TITAN_AIR, -6000, 0)).toBeLessThan(0);
+    for (const speed of [MAX_SPEED, m(450)]) expect(airHeat(TITAN_AIR, -6000, speed)).toBeLessThan(-10);
+    // a hot laser cools faster in it than in space
+    const titan = hull(80);
+    for (let t = 0; t < 1; t += 0.1) airStep(titan, TITAN_AIR, 0.1, 100);
+    expect(titan.heat).toBeLessThan(80 - 10);
   });
 
   it('drawn clearer, lets the eye reach as much farther as its haze is thinner, its density, drag and heat the same', () => {
@@ -226,7 +251,7 @@ describe("Titan's air", () => {
 
 describe('up in a planet’s air', () => {
   // a planet lying off to the side of the arena's axes, its air's deck 40 km from its center
-  const tilted = { center: new THREE.Vector3(-30000, -20000, 50000).setLength(800000), radius: 800000 - 1 };
+  const tilted = { ...air, center: new THREE.Vector3(-30000, -20000, 50000).setLength(800000), radius: 800000 - 1 };
   const at = (altitude: number, along: THREE.Vector3) => tilted.center.clone().addScaledVector(along.clone().normalize(), tilted.radius + altitude);
 
   it('points away from the planet’s center, wherever the arena’s axes point', () => {

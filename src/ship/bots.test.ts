@@ -19,7 +19,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -347,9 +347,11 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
       me.flight.update(STEP, bot.think(t, [me], f), outside);
       // the air's heat alone, with clean radiators: their clogging has a test of its own
       me.heat = Math.max(0, me.heat - me.cooling * STEP);
-      burnt += airBurn(me, heatInto(altitudeIn(f.air!, me.flight.position), me.flight.velocity.length(), 0) * STEP, STEP, MAX_HEAT);
+      const heat = heatInto(f.air!, altitudeIn(f.air!, me.flight.position), me.flight.velocity.length(), 0) * STEP;
+      if (heat < 0) me.heat = Math.max(0, me.heat + heat);
+      else burnt += airBurn(me, heat, STEP, MAX_HEAT);
       hottest = Math.max(hottest, me.heat);
-      fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling));
+      fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling));
     }
     expect(hottest).toBeLessThan(MAX_HEAT);
     expect(burnt).toBe(0);
@@ -420,9 +422,9 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     const bot = new Bot(me, evenSkills(0.5));
     bot.raceSpeed = MAX_SPEED;
     bot.waypoint = deep(depth, 3000);
-    me.flight.velocity.set(0.85 * safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling), 0, 0);
+    me.flight.velocity.set(0.85 * safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling), 0, 0);
     let fastest = 0;
-    fly(f, me, bot, 5, () => (fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling))));
+    fly(f, me, bot, 5, () => (fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling))));
     expect(fastest).toBeLessThan(1);
   });
 

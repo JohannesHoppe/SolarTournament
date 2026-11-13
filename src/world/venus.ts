@@ -27,8 +27,12 @@ const VENUS_RADIUS = 6052 * KM;
 
 /** The cloud tops under the field's middle (units, 1 km under it). */
 export const DECK = -1 * KM;
-/** Venus's air: its deck DECK under the field's middle, a sphere of Venus's radius (see Air). */
-export const VENUS_AIR: Air = { center: new THREE.Vector3(0, DECK - VENUS_RADIUS, 0), radius: VENUS_RADIUS };
+/**
+ * Venus's air: its deck DECK under the field's middle, a sphere of Venus's radius (see Air); carbon
+ * dioxide (850 J/(kg·K)) at 300 K at the cloud tops, warming by 155 K a kilometer downwards (the
+ * real ~9 K a kilometer squeezed as the density is): under the acid clouds the air heats a hull.
+ */
+export const VENUS_AIR: Air = { center: new THREE.Vector3(0, DECK - VENUS_RADIUS, 0), radius: VENUS_RADIUS, kelvin: 300, lapse: 155 / 20000, heatCapacity: 850 };
 
 /**
  * The city's platform: a square PLATFORM_HALF_SIDE from its middle to each flank (units, 550 m)

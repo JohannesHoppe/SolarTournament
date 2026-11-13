@@ -1,6 +1,6 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
+import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
@@ -197,8 +197,8 @@ export const FROM_CODE: Record<string, number> = {
   liftMost: g(LIFT_MOST),
   carveDeck: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: 1 })) / 5) * 5,
   hotDepth: Math.round(hotDepth() / 100) * 100,
-  safeKm: Math.round(meters(safeSpeed(-20000, COOLING_SHADOW))),
-  safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),
+  climbDepth: Math.round(climbDepth() / 100) * 100,
+  safeTwoKm: Math.round(meters(safeSpeed(jupiterAir(), -40000, RADIATE)) / 5) * 5,
   // how far over the deck the flight computer takes its horizon from the planet
   airTop: meters(IN_AIR_TOP),
   // the nanobots: how long after the last blow they begin, and how long they take from nothing
@@ -231,10 +231,22 @@ function circularAt(distance: number): number {
   return Math.sqrt(wellMu(hole()) / distance);
 }
 
-/** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
+/** Jupiter's air (see world/air). */
+function jupiterAir() {
+  return arenaById('giant')!.layout.air!;
+}
+
+/** How deep under Jupiter's deck the speed limit starts to heat a hull (m). */
 function hotDepth(): number {
   let depth = 0;
-  while (safeSpeed(-depth / METERS_PER_UNIT, COOLING_SHADOW) >= MAX_SPEED) depth += 1;
+  while (safeSpeed(jupiterAir(), -depth / METERS_PER_UNIT, RADIATE) >= MAX_SPEED) depth += 1;
+  return depth;
+}
+
+/** How deep under Jupiter's deck the air heats a hull even at a crawl, where only climbing helps (m). */
+function climbDepth(): number {
+  let depth = 0;
+  while (safeSpeed(jupiterAir(), -depth / METERS_PER_UNIT, RADIATE) > 0) depth += 1;
   return depth;
 }
 

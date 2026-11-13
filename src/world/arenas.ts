@@ -5,6 +5,7 @@ import { textSeed } from '../random';
 import { msg } from '../i18n/i18n';
 import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
+import { HYDROGEN_HEAT, JUPITER_KELVIN, JUPITER_LAPSE } from './air';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
 import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES } from './yard';
@@ -74,8 +75,8 @@ export interface ArenaProfile {
   name: string;
   tagline: string;
   layout: FieldLayout;
-  /** The laser's radiators shed heat this many times as fast as in the belt (the sun's glare: less). */
-  cooling: number;
+  /** The sunlight at the arena (W/m²), by its distance from the sun: 1,361 at Earth's, 50 at Jupiter's, 15 at Saturn's, 4.2 million at the Corona's 3.9 solar radii; a sunlit hull takes in a sliver of it (see ship/ship, SUN_ABSORB). */
+  sunlight: number;
   /** Solar storms blind the sensors now and then (see Game.storm). */
   storms: boolean;
   /** The sun: how large it shows, how bright it shines, its color, and where it stands if not in SUN_DIRECTION (a place's own, Caloris's on its horizon). */
@@ -647,7 +648,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Forty thousand dead fighters in their racks, on a world of metal.'),
     // the yard's spoil: boulders of Psyche's metal pushed out to the yard's edge, lying just over the crater floor, still
     layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.2, maxScale: 0.35, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.85, flat: 30, lift: GROUND + 700, spin: 0, toughness: 800, placements: boneyardRacks(), fall: PSYCHE_FALL },
-    cooling: 1,
+    sunlight: 162,
     storms: false,
     sun: { size: 30000, intensity: 3, color: 0xfff0dc },
     mood: MOODS.boneyard,
@@ -663,7 +664,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Claims on the flank of a mountain twice as high as Everest, in a crater nearly as wide as Vesta.'),
     // the claims: boulders of the peak's basalt lying on its flank (see world/vesta), set down on the slope
     layout: { key: 'rheasilvia', seed: 2002, kind: 'rock', count: 22, minScale: 1.6, maxScale: 3.2, radius: FIELD_RADIUS, inner: 0, flat: 30, lift: VESTA_GROUND, rest: { height: VESTA_GROUND, rise: RISE }, spin: 0, toughness: 800, placements: [slopeGround(VESTA_GROUND_TYPE)], fall: VESTA_FALL },
-    cooling: 1,
+    sunlight: 236,
     storms: false,
     // 2.4 AU from the sun, nearer than Psyche's 2.9: a little larger and brighter
     sun: { size: 36000, intensity: 3.4, color: 0xfff2e0 },
@@ -680,7 +681,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The Rockborn capital, cut into the wall of a crater whose salt shines like two lamps left on.'),
     // a few boulders fallen from the wall, lying on the market terrace
     layout: { key: 'occator', seed: 3003, kind: 'rock', count: 8, minScale: 0.25, maxScale: 0.5, radius: FIELD_RADIUS, inner: 0, flat: 30, lift: TERRACE, rest: { height: TERRACE, rise: 0 }, spin: 0, toughness: 800, placements: occatorPlacements(OCCATOR_TYPE), fall: CERES_FALL },
-    cooling: 1,
+    sunlight: 174,
     storms: false,
     // 2.8 AU from the sun, a little nearer than Psyche
     sun: { size: 31000, intensity: 3.1, color: 0xfff0dc },
@@ -700,7 +701,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The biggest wall in the history of walls, and Mars is going to pay for it.'),
     // a few pieces of rubble drifting by the wall, all else open space
     layout: { key: 'wall', seed: 3500, kind: 'rock', count: 6, minScale: 0.2, maxScale: 0.45, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.5, flat: 20, spin: SPIN_RATE, toughness: 800, placements: [wallPlacement(WALL_TYPE)] },
-    cooling: 1,
+    sunlight: 420,
     storms: false,
     // 1.8 AU from the sun, on the lane from the Belt to Mars
     sun: { size: 40000, intensity: 3.6, color: 0xfff4e6 },
@@ -716,7 +717,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The great crater of Phobos, and Mars filling half the sky.'),
     // nothing loose on the ground: its relief alone
     layout: { key: 'phobos', seed: 4000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [groundPlacement(PHOBOS_TYPE)], fall: PHOBOS_FALL },
-    cooling: 1,
+    sunlight: 605,
     storms: false,
     // 1.5 AU from the sun
     sun: { size: 46000, intensity: 3.8, color: 0xfff4e6 },
@@ -736,7 +737,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The great basin of Callisto, its rings frozen like ripples in a pond, and Jupiter standing still over it.'),
     // nothing loose on the ground: its relief alone
     layout: { key: 'callisto', seed: 5000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [callistoGround(CALLISTO_TYPE), postPlacement(POST_TYPE)], fall: CALLISTO_FALL },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
@@ -756,7 +757,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The cracked ice shell of Europa over its hidden ocean, and Jupiter hanging huge in its sky.'),
     // nothing loose on the ice: its relief, and the science station in the Crack
     layout: { key: 'europa', seed: 6000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [europaGround(EUROPA_TYPE), stationPlacement(STATION_TYPE, POST_HALF)], fall: EUROPA_FALL },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
@@ -776,7 +777,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The sulfur plains of Io, a lava lake in its pit, and the flux tube crackling up to Jupiter.'),
     // nothing loose on the plain: its relief alone
     layout: { key: 'io', seed: 7000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [ioGround(IO_TYPE)], fall: IO_FALL },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
@@ -796,7 +797,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Blocks of ice the tugs hauled in, parked over the grooves of Ganymede, where the Loose hide.'),
     // the yard's blocks of ice, floating in a layer 400 m thick over the ground far below
     layout: { key: 'ganymede', seed: 8000, kind: 'ice', count: 28, minScale: 0.3, maxScale: 0.9, radius: FIELD_RADIUS, inner: 6000, flat: 4000, spin: SPIN_RATE, toughness: 600, placements: [ganymedeGround(GANYMEDE_TYPE)], fall: GANYMEDE_FALL },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
@@ -813,7 +814,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Titan’s methane sea under its orange haze, and Saturn over the haze, its ring a thin line.'),
     // nothing loose: the haze, and the sea under it
     layout: { key: 'titan', seed: 9000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [titanSea(TITAN_TYPE)], fall: TITAN_FALL, air: TITAN_AIR },
-    cooling: 1,
+    sunlight: 15,
     storms: false,
     // 9.5 AU from the sun, a small cold disk
     sun: { size: 16000, intensity: 3, color: 0xfff0dd },
@@ -831,7 +832,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Enceladus’s south pole: four tiger stripes in the white ice, jets of ice rising from them, and Saturn filling the sky.'),
     // nothing loose: the ground, its stripes and their plumes
     layout: { key: 'enceladus', seed: 10000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [enceladusGround(ENCELADUS_TYPE)], fall: ENCELADUS_FALL },
-    cooling: 1,
+    sunlight: 15,
     storms: false,
     // 9.5 AU from the sun, as Titan's
     sun: { size: 16000, intensity: 3, color: 0xfff0dd },
@@ -848,7 +849,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Iapetus’s great ridge along its equator, soot-dark on one side and snow-bright on the other, Saturn’s ring opened in the sky.'),
     // nothing loose: the plain and its ridge
     layout: { key: 'iapetus', seed: 11000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [iapetusGround(IAPETUS_TYPE)], fall: IAPETUS_FALL },
-    cooling: 1,
+    sunlight: 15,
     storms: false,
     // 9.5 AU from the sun, as Titan's
     sun: { size: 16000, intensity: 3, color: 0xfff0dd },
@@ -865,7 +866,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Verona Rupes on Miranda, the tallest cliff in the solar system, the Loose’s hideout in its face, and Uranus lying on its side in the sky.'),
     // nothing loose: the upland, the cliff and its foot
     layout: { key: 'miranda', seed: 13000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [mirandaGround(MIRANDA_TYPE)], fall: MIRANDA_FALL },
-    cooling: 1,
+    sunlight: 3.8,
     storms: false,
     // 19 AU from the sun, a small, cold disk
     sun: { size: 10000, intensity: 2.6, color: 0xfff0dd },
@@ -885,7 +886,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Triton’s pinkish plain, its geysers throwing dark dust and anything that flies into them, the Navy’s oldest station, and Neptune in the sky.'),
     // nothing loose: the plain, its geysers and the station
     layout: { key: 'triton', seed: 14000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [tritonGround(TRITON_TYPE), memorialPlacement(MEMORIAL_TYPE, POST_HALF)], fall: TRITON_FALL, columns: GEYSER_COLUMNS },
-    cooling: 1,
+    sunlight: 1.5,
     storms: false,
     // 30 AU from the sun, a bright star more than a disk
     sun: { size: 7000, intensity: 2.4, color: 0xfff0dd },
@@ -905,7 +906,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The edge of Pluto’s heart, a plain of nitrogen ice in slowly overturning cells, its mountains of water ice, and Charon fixed in the sky.'),
     // nothing loose: the heart's plain and its mountains
     layout: { key: 'pluto', seed: 15000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [plutoGround(PLUTO_TYPE)], fall: PLUTO_FALL },
-    cooling: 1,
+    sunlight: 0.57,
     storms: false,
     // 49 AU from the sun in 2584: a bright star, noon as dim as dusk on Earth
     sun: { size: 5000, intensity: 2, color: 0xfff0dd },
@@ -922,7 +923,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Blocks of water ice in a thin ring round Haumea, the stretched dwarf planet spinning below it once in four hours.'),
     // the ring's ice: a thin layer of blocks, 200 m thick, across the field
     layout: { key: 'haumea', seed: 16000, kind: 'ice', count: 34, minScale: 0.3, maxScale: 1, radius: FIELD_RADIUS, inner: 8000, flat: 2000, spin: SPIN_RATE, toughness: 600 },
-    cooling: 1,
+    sunlight: 0.54,
     storms: false,
     // 50 AU from the sun: a bright star
     sun: { size: 5000, intensity: 2, color: 0xfff0dd },
@@ -939,7 +940,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The Ministry’s fuel depot over Eris, one of the brightest bodies known, its moon Dysnomia beside it, loose ice drifting round both.'),
     // loose ice round the depot
     layout: { key: 'eris', seed: 16100, kind: 'ice', count: 20, minScale: 0.3, maxScale: 0.8, radius: FIELD_RADIUS, inner: 10000, spin: SPIN_RATE, toughness: 600 },
-    cooling: 1,
+    sunlight: 0.15,
     storms: false,
     // 95 AU from the sun: a star, brighter than the rest
     sun: { size: 3000, intensity: 1.8, color: 0xfff0dd },
@@ -959,7 +960,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The settlers’ beacons over Lantern, a black world as big as Mars, warm under its thick air, its night lit by lightning and heat wells.'),
     // nothing loose: the settlers' beacons over the black world
     layout: { key: 'lantern', seed: 17000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800 },
-    cooling: 1,
+    sunlight: 0.034,
     storms: false,
     // 200 AU from the sun: a star among the others
     sun: { size: 2000, intensity: 1.6, color: 0xfff0dd },
@@ -978,7 +979,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The Feeders’ store of comets, thousands parked in a ring round a small ice world, the Feeders’ tugs sweeping it with their sensors.'),
     // the parked comets: a layer of ice 300 m thick across the field
     layout: { key: 'granary', seed: 17100, kind: 'ice', count: 40, minScale: 0.5, maxScale: 1.3, radius: FIELD_RADIUS, inner: 6000, flat: 3000, spin: SPIN_RATE, toughness: 600 },
-    cooling: 1,
+    sunlight: 0.011,
     storms: false,
     // 350 AU from the sun: a star among the others
     sun: { size: 1500, intensity: 1.5, color: 0xfff0dd },
@@ -998,7 +999,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The President’s ballroom on the Moon, a dome of gold and glass on the grey plain, and Earth hanging over it.'),
     // nothing loose: the plain, its craters and the dome
     layout: { key: 'ballroom', seed: 19000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [moonGround(MOON_TYPE), domePlacement(BALLROOM_TYPE)], fall: MOON_FALL },
-    cooling: 1,
+    sunlight: 1361,
     storms: false,
     // at Earth's distance from the sun
     sun: { size: 30000, intensity: 3.4, color: 0xfff4e6 },
@@ -1015,8 +1016,8 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('The floor of Mercury’s greatest basin, the sun miners’ camp on it, their solar fields beyond, and a morning sun three times as wide as at Earth.'),
     // nothing loose: the plain, its ridges and craters, the camp
     layout: { key: 'mercury', seed: 20000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [mercuryGround(MERCURY_TYPE), campPlacement(CAMP_TYPE, POST_HALF)], fall: MERCURY_FALL },
-    // the sun's glare: the laser's radiators shed heat slower
-    cooling: 0.7,
+    // a third of an astronomical unit from the sun: nine times Earth's sunlight, still a sliver for the radiators
+    sunlight: 12000,
     storms: true,
     // 0.39 AU from the sun: 2.6 times as wide as at Earth, seven times as bright; on the horizon, the camp on the terminator
     sun: { size: 78000, intensity: 4.4, color: 0xfff8ee, direction: MERCURY_SUN },
@@ -1033,7 +1034,7 @@ export const PLACES: readonly ArenaProfile[] = [
     tagline: msg('Victory Cola’s floating city over Venus: a platform of red and gold on the air, gardens under glass, a bottle for a tower, and the acid clouds below.'),
     // nothing loose: the city, on the air over the acid clouds
     layout: { key: 'venus', seed: 21000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: cityPlacements(CITY_TYPES), fall: VENUS_FALL, air: VENUS_AIR },
-    cooling: 0.8,
+    sunlight: 2600,
     storms: false,
     // 0.72 AU from the sun: 1.4 times as wide as at Earth, softened by the thick air over the city
     sun: { size: 42000, intensity: 3.6, color: 0xfff2d6 },
@@ -1054,7 +1055,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     name: msg('The Belt'),
     tagline: msg('Forty rocks, ten ships long each. Cover is everywhere.'),
     layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'grand' } },
-    cooling: 1,
+    sunlight: 187,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xffe4bf },
     mood: MOODS.belt,
@@ -1084,7 +1085,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     },
     grains: RING_LAYER,
     sheet: RING_SHEET,
-    cooling: 1.2,
+    sunlight: 15,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },
     mood: MOODS.rings,
@@ -1115,7 +1116,7 @@ export const ARENAS: readonly ArenaProfile[] = [
         { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: setFromAxisAngle(new THREE.Quaternion(), new THREE.Vector3(0, 0, 1), Math.PI / 2), solid: true, weld: 0 },
       ],
     },
-    cooling: 1,
+    sunlight: 1361,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
     mood: MOODS.junkyard,
@@ -1139,9 +1140,9 @@ export const ARENAS: readonly ArenaProfile[] = [
       spin: SPIN_RATE,
       toughness: 800,
       well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow(JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR), 2) },
-      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS },
+      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT },
     },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
     mood: MOODS.giant,
@@ -1151,9 +1152,9 @@ export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'corona',
     name: msg('Corona'),
-    tagline: msg('Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.'),
+    tagline: msg('Close to the sun. Its light burns any hull out of the shadows, and its storms blind the sensors.'),
     layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
-    cooling: 0.6,
+    sunlight: 4.2e6,
     storms: true,
     sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
     mood: MOODS.corona,
@@ -1178,7 +1179,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       toughness: 800,
       well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (HOLE_PULL * HOLE_PULL_AT * HOLE_PULL_AT) / (HOLE_RADIUS * HOLE_RADIUS) },
     },
-    cooling: 1,
+    sunlight: 0.005,
     storms: false,
     sun: { size: 20000, intensity: 2.6, color: 0xffe6cc },
     mood: MOODS.hole,
@@ -1191,7 +1192,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     name: msg('The Derelict'),
     tagline: msg('A world ship, broken in two. Nothing else out here: only its hull to hide behind.'),
     layout: { key: 'derelict', seed: 71, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, course: { form: 'circuit', layout: 'sweep' }, placements: derelict() },
-    cooling: 1,
+    sunlight: 3,
     storms: false,
     sun: { size: 30000, intensity: 2.7, color: 0xe6edf7 },
     mood: MOODS.derelict,
@@ -1230,7 +1231,7 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       fall: EUROPA_FALL,
       course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates, branches: CRACK_TRACK.branches },
     },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
@@ -1264,7 +1265,7 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       air: THROAT_AIR,
       course: { form: 'track', points: THROAT_TRACK.points, gates: THROAT_TRACK.gates, branches: THROAT_TRACK.branches },
     },
-    cooling: 1,
+    sunlight: 15,
     storms: false,
     // 9.5 AU from the sun, a small cold disk
     sun: { size: 16000, intensity: 3, color: 0xfff0dd },
@@ -1295,7 +1296,7 @@ export const FIGHT_WORLDS: readonly ArenaProfile[] = [
     tagline: msg("Callisto's ring zone packed tight, scarp after scarp, and in the furrow through them the Navy's battlecruiser Steadfast, broken in two."),
     // its ground of scarps and gorges, the cruiser's halves, the ice bridges and the clones' pads (see world/battlefield)
     layout: { key: 'valhalla', seed: 5100, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: battlefieldPlacements(BATTLE_TYPES), fall: CALLISTO_FALL },
-    cooling: 1,
+    sunlight: 50,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena, a little brighter for the ice its fights churn up
     sun: { size: 30000, intensity: 4.4, color: 0xfff0dd },

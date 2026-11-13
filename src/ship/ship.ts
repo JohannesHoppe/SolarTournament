@@ -64,11 +64,19 @@ const NOVA_PULSE = 2;
 /** Freshly spawned ships cannot be damaged for this long (s), long enough to get the bearings; firing ends it early. */
 const SPAWN_PROTECTION = 5;
 
-/** The laser heats the ship; radiators shed the heat, much better in the shadow of an asteroid. */
+/** The laser heats the ship; the radiators shed the heat into the cold of space. */
 export const MAX_HEAT = 100;
 const HEAT_PER_SHOT = 20;
-export const COOLING_SUN = 20;
-export const COOLING_SHADOW = 50;
+/** What the radiators shed into space (heat units per second, MAX_HEAT the laser's limit), whatever stands around: a shot a second. */
+export const RADIATE = 20;
+/**
+ * The heat sunlight puts into a hull (heat units per second per W/m² of sunlight at the arena,
+ * see ArenaProfile.sunlight): its sun paint lets in a sliver, so near the Corona's sun (4.2 MW/m²)
+ * 30 a second, more than the radiators shed (a shadow is life there), and at Earth's distance
+ * (1,361 W/m²) one hundredth a second, out at Jupiter and Saturn nothing a radiator notices. The
+ * paint is the Games' own: a real hull at the Corona's distance would melt.
+ */
+export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
 const OVERHEAT_RESUME = 30;
 /**
@@ -370,8 +378,8 @@ export class Ship {
   private slowSentAt = -Infinity;
   /** Set by the game: an asteroid blocks the sun, or the clouds above it in a planet's air. */
   inShadow = false;
-  /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
-  sunCooling = 1;
+  /** Set by the game: the sunlight at the arena (W/m², see ArenaProfile.sunlight). */
+  sunlight = 0;
   /** Whether the nanobots are mending the drive and the thrusters now (see nanobots); when they were last hurt, and what they were last step. */
   mending = false;
   private hurtAt = -Infinity;
@@ -380,9 +388,24 @@ export class Ship {
   /** How far a planet's clouds have clogged the radiators, 0 clean to 1 through (see world/air, clogging); kept by the browser that runs the ship. */
   clog = 0;
 
-  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit), less as far as they are clogged. */
+  /** The heat sunlight puts into the hull per second where the ship is now (heat units/s): none in a shadow (see SUN_ABSORB). */
+  get sunHeat() {
+    return this.inShadow ? 0 : this.sunlight * SUN_ABSORB;
+  }
+
+  /** The heat the radiators could shed per second into space (heat units/s), less as far as they are clogged. */
+  private get radiating() {
+    return RADIATE * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+  }
+
+  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit): what they radiate less the sunlight they take in, less as far as they are clogged. */
   get cooling() {
-    return (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+    return Math.max(0, this.radiating - this.sunHeat);
+  }
+
+  /** The sunlight's heat the radiators cannot shed (heat units/s, see sunHeat): it fills them and, once they are full, burns the hull (see world/air, airBurn); the Corona's sun only. */
+  get sunExcess() {
+    return Math.max(0, this.sunHeat - this.radiating);
   }
   alive = true;
   score = 0;

@@ -118,8 +118,9 @@ export const BATTERY_AIM = 0.7;
 /** A battery's beam is heavier than a ship's laser: on top of what a laser does where it strikes, it takes this much hull. */
 export const BATTERY_DAMAGE = 10;
 const BATTERY_DODGE_SPEED = 5000;
-/** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second at the nozzles, fading to nothing at its end. */
+/** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second within PLUME_CORE (units, 300 m) of the nozzles, then falling off with the square of the distance, a twenty-fifth at its end. */
 export const PLUME_REACH = 30000;
+const PLUME_CORE = 6000;
 const PLUME_SPREAD = 0.12;
 export const PLUME_HEAT = 150;
 export const PLUME_BURN = 40;
@@ -1857,11 +1858,11 @@ export class Fleet implements Obstacle {
     return this.resolve(center, radius, this.clock, normal);
   }
 
-  /** How strongly a point lies in the drive plume, 0..1 (1 at the nozzles), while the drives burn. */
+  /** How strongly a point lies in the drive plume, 0..1 (1 within PLUME_CORE of the nozzles, falling off with the square of the distance past it as the cone widens, as a ship's does: see ship/plume), while the drives burn. */
   plumeAt(point: THREE.Vector3, radius: number): number {
     if (!this.burning) return 0;
     const along = this.plume(point, radius);
-    return along < 0 ? 0 : 1 - along / PLUME_REACH;
+    return along < 0 ? 0 : along <= PLUME_CORE ? 1 : (PLUME_CORE / along) * (PLUME_CORE / along);
   }
 
   /**

@@ -22,11 +22,30 @@ import { HOVER_HEIGHT, HOVER_REACH, HOVER_RIDE, type Ground } from '../ship/flig
 /** Closer than this share of the ride height the push grows no more: 64 times the weight. */
 const HOVER_CLOSEST = 1 / 8;
 /**
- * A hull on a world's ground glides: the field cushions it at contact, so it never bounces and
- * never takes damage; its speed across the ground bleeds off at this rate while it touches
- * (1/s: a tenth a second), the scrape of the hull on the ground.
+ * A hull on a world's ground glides: it never bounces, and its speed across the ground bleeds off
+ * at this rate while it touches (1/s: a tenth a second), the scrape of the hull on the ground.
  */
 export const GROUND_SCRAPE = 0.1;
+
+/**
+ * The speed into a world's ground (units/s) the hover field takes out of a hull before it meets
+ * the ground, on a world of `fall` (units/s²), reckoned from the field's own numbers: its damping
+ * (critical at the ride height, 2√(2·fall/H) a second) takes that much speed per unit of height
+ * over its reach of HOVER_REACH ride heights, and its push of fall·(H/h)² (HOVER_CLOSEST's 64
+ * times the weight closest in) stores √(2·work) more. Europa's 0.13 g cushions 43 m/s, Psyche's
+ * 0.015 g 14 m/s, Phobos's 0.0006 g 3 m/s. It holds alike against the ground's slopes and the
+ * walls of its canyons, whichever way the ground's normal points.
+ */
+export function cushion(fall: number): number {
+  const reach = HOVER_HEIGHT * HOVER_REACH;
+  const damping = 2 * Math.sqrt((2 * fall) / HOVER_HEIGHT) * reach;
+  const closest = HOVER_HEIGHT * HOVER_CLOSEST;
+  const work = fall * HOVER_HEIGHT * HOVER_HEIGHT * (1 / closest - 1 / reach) + fall * (HOVER_HEIGHT / closest) * (HOVER_HEIGHT / closest) * closest;
+  return damping + Math.sqrt(2 * work);
+}
+
+/** The blow (units/s) a hull meeting a world's ground `into` fast (units/s, along the ground's normal) takes, on a world of `fall`: what the field's cushion leaves, struck as on rock (see ship/impact, impactDamage). */
+export const groundBlow = (into: number, fall: number) => Math.max(0, into - cushion(fall));
 
 /** The ground under the ship last reckoned (see hover). */
 const under: Ground = { normal: new THREE.Vector3(), gap: 0 };
