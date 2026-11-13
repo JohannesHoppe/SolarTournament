@@ -56,7 +56,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
+import { flyByNose, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, overdriveShove, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -522,6 +522,31 @@ const CLOSE_CALL_POINTS = 25;
 /** The camera hangs back by this share of the ship radius at a full burn, and the view widens by SPEED_FOV degrees at the speed limit: speed is felt. */
 const DRIVE_LAG = 0.6;
 const SPEED_FOV = 10;
+/**
+ * Speed felt low over things (see feltNear): the nearness is full within NEAR_FULL of a world's
+ * ground (units, 5 m: the ride height) and gone beyond NEAR_REACH (units, 100 m), and full within
+ * CLOSE_CALL_REACH ship radii of anything of the field; it eases in and out at NEAR_EASE (1/s).
+ * Near, the view widens by NEAR_FOV more degrees at the speed limit and the motion streaks thicken
+ * (see view/streaks). Riding the hover field the camera trembles in its buffeting by HOVER_SHAKE
+ * of the ship radius at the speed limit, by SCRAPE_SHAKE more while the hull glides on the ground.
+ */
+const NEAR_FULL = 100;
+const NEAR_REACH = 2000;
+const NEAR_EASE = 4;
+const NEAR_FOV = 6;
+const HOVER_SHAKE = 0.012;
+const SCRAPE_SHAKE = 0.03;
+/**
+ * The hover field lifts the ground's dust under a hull riding it faster than GLIDE_SPARKS: up to
+ * LIFT_DUST puffs a second from LIFT_FULL on (units/s, 50 m/s) at the ride height, fewer higher up,
+ * rising at LIFT_RISE (units/s, 10 to 40 m/s) and left behind the ship, for ships within LIFT_SEEN of
+ * the camera (units, 4 km), in LIFT_COLOR (looks only).
+ */
+const LIFT_DUST = 60;
+const LIFT_FULL = 1000;
+const LIFT_RISE = 200;
+const LIFT_SEEN = 80000;
+const LIFT_COLOR = new THREE.Color(0.32, 0.3, 0.27);
 /** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s), and presses the clone into the seat (BOOST_STRAIN in race.ts). */
 const BOOST_FOV = 9;
 const BOOST_FADE = 2.5;
@@ -700,6 +725,10 @@ const aim = new THREE.Quaternion();
 const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
+/** The ground's normal under a ship for the looks and sound of flying low (see feltNear, liftDust), and a dust puff's spread and motion. */
+const feltNormal = new THREE.Vector3();
+const dustSpread = new THREE.Vector3();
+const dustVelocity = new THREE.Vector3();
 const relative = new THREE.Vector3();
 const closingVelocity = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
@@ -1164,6 +1193,10 @@ export class Game implements OnlineGame {
   private closePass: { id: string; touched: boolean } | null = null;
   /** When the own ship last touched a rock (game time, s). */
   private lastScrape = -Infinity;
+  /** When the own hull last glided on a world's ground (see glideOver, feltNear). */
+  private lastGlide = -Infinity;
+  /** How near the camera's pilot flies to something, 0..1, eased (see feltNear). */
+  private near = 0;
   /** When the overdrive can fire again (game time, s). */
   private overdriveReadyAt = 0;
   /** The brake (it beeps once at rest). */
@@ -1513,6 +1546,7 @@ export class Game implements OnlineGame {
       // plasma or the stadium down: an online round runs on without the picture, and they fall
       // silent until the tab is back (the next frame sounds them again)
       this.sound.setEngine(0, 0);
+      this.sound.setGround(0, 0, 0);
       this.quietAir();
       this.crowd.air(false);
       if (this.state === 'playing' && !this.online) this.pause();
@@ -2903,6 +2937,7 @@ export class Game implements OnlineGame {
     this.input.steerWithMouse(state === 'playing' && !this.gulletOpen);
     if (state !== 'playing') {
       this.sound.setEngine(0, 0);
+      this.sound.setGround(0, 0, 0);
       // the look of a nova core belongs to the round; the next frame of play brings it back
       document.body.classList.remove('nova-held', 'alarm-critical');
     }
@@ -4736,6 +4771,7 @@ export class Game implements OnlineGame {
     }
 
     this.updateCamera(dt);
+    this.liftDust(dt);
     me.root.visible = me.alive && !this.cockpit;
     // a watching Host sees the tournament through the pilot it follows
     const subject = this.subject();
@@ -4838,7 +4874,7 @@ export class Game implements OnlineGame {
     const air = airAround(this.field.air, subject.flight.position);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive, air ? upIn(air, subject.flight.position, skyUp) : null);
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
-    if (!this.bench.has('streaks')) this.hud.updateStreaks(now, this.camera, subject.flight.velocity, subject.alive, Math.round(STREAKS * Math.max(STREAKS_LEAST, this.graphics.look.particles)));
+    if (!this.bench.has('streaks')) this.hud.updateStreaks(now, this.camera, subject.flight.velocity, subject.alive, Math.round(STREAKS * Math.max(STREAKS_LEAST, this.graphics.look.particles)), this.near);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
@@ -8479,7 +8515,7 @@ export class Game implements OnlineGame {
    */
   private glideOver(ship: Ship, dt: number, now: number) {
     glide(ship.flight.velocity, normal, dt);
-    if (ship === this.me) this.lastScrape = now;
+    if (ship === this.me) this.lastScrape = this.lastGlide = now;
     ship.syncTransform();
     const speed = ship.flight.velocity.length();
     if (speed < GLIDE_SPARKS || Math.random() > dt * GLIDE_SPARK_RATE) return;
@@ -9289,11 +9325,14 @@ export class Game implements OnlineGame {
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
     const burn = me.alive ? flight.throttle : 0;
     const fast = me.alive ? Math.min(1, flight.velocity.length() / MAX_SPEED) : 0;
-    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast + BOOST_FOV * this.boostKick - this.camera.fov) * (1 - exp(-6 * dt));
+    const buffet = this.feltNear(me, dt) * fast;
+    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + (SPEED_FOV + NEAR_FOV * this.near) * fast + BOOST_FOV * this.boostKick - this.camera.fov) * (1 - exp(-6 * dt));
     this.boostKick *= exp(-BOOST_FADE * dt);
     if (Math.abs(fov - this.camera.fov) > 0.01) this.setFov(fov);
     if (!this.cockpit && !reducedMotion.matches) {
       if (burn > 0.05) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
+      // the hover field's buffeting over the ground, harder while the hull glides on it
+      if (buffet > 0.01) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * buffet));
       // a jolt for every hit the own laser lands, bigger for a kill; it fades in a fraction of a second
       if (this.kick > 0.01) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * KICK_SHAKE * this.kick));
     }
@@ -9331,6 +9370,59 @@ export class Game implements OnlineGame {
     const target = at.lerp(scratch.copy(cameraGoal).addScaledVector(flight.forward(forward), me.radius * 10), sweep);
     look.lookAt(this.camera.position, target, flight.up(introUp).multiplyScalar(sweep).addScaledVector(UP, 1 - sweep));
     this.camera.quaternion.setFromRotationMatrix(look);
+  }
+
+  /**
+   * How near the camera's pilot `me` flies to something, eased into `near` over `dt` (see
+   * NEAR_FULL): a world's ground under it, or anything of the field within CLOSE_CALL_REACH ship
+   * radii. The own hull hears it (see Sound.setGround): the hover field's rush while it rides the
+   * field, in air the squeeze of a close pass by anything, the grind while the hull glides on the
+   * ground; in vacuum a rock passed close is not heard. Returns the camera's tremble in the hover
+   * field's buffeting as a share of the ship radius at the speed limit (see HOVER_SHAKE).
+   */
+  private feltNear(me: Ship, dt: number): number {
+    const flight = me.flight;
+    const height = me.alive && this.field.fall > 0 ? this.field.groundBelow(flight.position, feltNormal) : null;
+    const gap = height === null ? Infinity : height - me.radius;
+    const ground = 1 - THREE.MathUtils.smoothstep(gap, NEAR_FULL, NEAR_REACH);
+    const close = me.alive && !!this.field.overlap(flight.position, me.radius * CLOSE_CALL_REACH);
+    this.near += ((close ? 1 : ground) - this.near) * (1 - exp(-NEAR_EASE * dt));
+    // the hover field carries within its reach (see world/hover)
+    const riding = 1 - THREE.MathUtils.smoothstep(gap, HOVER_HEIGHT * (HOVER_REACH - 1), HOVER_HEIGHT * HOVER_REACH);
+    const gliding = me.alive && this.time - this.lastGlide < 0.1 ? 1 : 0;
+    const fast = Math.min(1, flight.velocity.length() / MAX_SPEED);
+    if (me === this.me && this.state === 'playing') {
+      const squeeze = close && this.field.air && altitudeIn(this.field.air, flight.position) < 0 ? 1 : 0;
+      this.sound.setGround(Math.max(riding, squeeze) * fast, fast, gliding * Math.min(1, fast * 2));
+    } else this.sound.setGround(0, 0, 0);
+    return HOVER_SHAKE * riding + SCRAPE_SHAKE * gliding;
+  }
+
+  /**
+   * The hover field lifts the ground's dust under every hull riding it fast (see LIFT_DUST), for
+   * the ships within LIFT_SEEN of the camera: a cloud swept up behind the ship, settling slowly.
+   */
+  private liftDust(dt: number) {
+    if (this.field.fall <= 0) return;
+    const reach = HOVER_HEIGHT * HOVER_REACH;
+    for (const ship of this.ships) {
+      if (!ship.alive) continue;
+      const flight = ship.flight;
+      const speed = flight.velocity.length();
+      if (speed < GLIDE_SPARKS || flight.position.distanceToSquared(this.camera.position) > LIFT_SEEN * LIFT_SEEN) continue;
+      const height = this.field.groundBelow(flight.position, feltNormal);
+      if (height === null) continue;
+      const gap = Math.max(0, height - ship.radius);
+      if (gap >= reach) continue;
+      const rate = LIFT_DUST * (1 - gap / reach) * Math.min(1, speed / LIFT_FULL);
+      for (let left = rate * dt; left > 0; left--) {
+        if (left < 1 && Math.random() >= left) break;
+        scratch.copy(flight.position).addScaledVector(feltNormal, -(gap + ship.radius));
+        scratch.addScaledVector(dustSpread.randomDirection(), ship.radius * 0.5);
+        dustVelocity.copy(flight.velocity).multiplyScalar(0.1).addScaledVector(feltNormal, LIFT_RISE * (1 + Math.random() * 3)).addScaledVector(dustSpread.randomDirection(), LIFT_RISE * 2);
+        this.effects.soot(scratch, dustVelocity, 2 + Math.random(), ship.radius * 0.5, ship.radius * 3, LIFT_COLOR);
+      }
+    }
   }
 
   /** A new field of view: the particles keep their size in the world with it. */

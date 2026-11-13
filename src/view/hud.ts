@@ -240,8 +240,8 @@ export class Hud {
    * The motion streaks (see Streaks) for the ship moving at `velocity`, `count` of them, while
    * `show`; standing still where the Host asked for reduced motion.
    */
-  updateStreaks(now: number, camera: THREE.PerspectiveCamera, velocity: THREE.Vector3, show: boolean, count: number) {
-    this.streaks.update(now, camera, velocity, show, count, reducedMotion.matches);
+  updateStreaks(now: number, camera: THREE.PerspectiveCamera, velocity: THREE.Vector3, show: boolean, count: number, near: number) {
+    this.streaks.update(now, camera, velocity, show, count, reducedMotion.matches, near);
   }
 
   /** The horizon, the pitch ladder and the heading tape (see Attitude), while a clone flies; a phone leaves out the tape. */

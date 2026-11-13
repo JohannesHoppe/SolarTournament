@@ -16,8 +16,15 @@ import { hypot } from '../detmath';
  * the picture's quality (see Game.presentRound).
  */
 
-/** The most dashes on screen at once. */
+/** The dashes on screen at once, on the full picture, away from anything. */
 export const STREAKS = 20;
+/**
+ * Low over a world's ground or close past anything (`near` 1, see Game.feltNear), the world
+ * streams past near the window: up to NEAR_MORE times as many dashes, flowing up to NEAR_FLOW
+ * times as fast.
+ */
+const NEAR_MORE = 2;
+const NEAR_FLOW = 1.8;
 /** The flow's rate (1/s) is RATE_MAX × speed / (speed + RATE_HALF): 0.6/s at 150 m/s, 0.75/s at 250 m/s, about 0.9/s at 400 m/s (speed in units/s). */
 const RATE_MAX = 1.2;
 const RATE_HALF = 3000;
@@ -79,10 +86,10 @@ export function stillStale(drawn: StillDrawn, count: number, direction: THREE.Ve
 }
 
 export class Streaks extends Overlay {
-  private readonly x = new Float32Array(STREAKS);
-  private readonly y = new Float32Array(STREAKS);
-  private readonly age = new Float32Array(STREAKS);
-  private readonly life = new Float32Array(STREAKS);
+  private readonly x = new Float32Array(STREAKS * NEAR_MORE);
+  private readonly y = new Float32Array(STREAKS * NEAR_MORE);
+  private readonly age = new Float32Array(STREAKS * NEAR_MORE);
+  private readonly life = new Float32Array(STREAKS * NEAR_MORE);
   /** The box drawn last (px), cleared before the next picture; empty while left > right. */
   private readonly drawn = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   private last = NaN;
@@ -99,15 +106,16 @@ export class Streaks extends Overlay {
     this.drawn.left = Infinity;
     this.drawn.right = -Infinity;
     this.stillDrawn.count = -1;
-    for (let i = 0; i < STREAKS; i++) this.spawn(i, Math.random());
+    for (let i = 0; i < this.x.length; i++) this.spawn(i, Math.random());
   }
 
   /**
    * Draws the streaks for the ship moving at `velocity` (units/s) as `camera` sees it at round
-   * time `now` (s), `count` of them; `show` false clears them. `still` stands them still (reduced
-   * motion).
+   * time `now` (s), `count` of them away from anything, more and faster the nearer the ship flies
+   * to something (`near` 0..1, see NEAR_MORE); `show` false clears them. `still` stands them still
+   * (reduced motion).
    */
-  update(now: number, camera: THREE.PerspectiveCamera, velocity: THREE.Vector3, show: boolean, count: number, still: boolean) {
+  update(now: number, camera: THREE.PerspectiveCamera, velocity: THREE.Vector3, show: boolean, count: number, still: boolean, near = 0) {
     const dt = Number.isFinite(this.last) ? Math.min(Math.max(now - this.last, 0), 0.1) : 0;
     this.last = now;
     const speed = velocity.length();
@@ -118,8 +126,9 @@ export class Streaks extends Overlay {
       return;
     }
     seen.copy(velocity).divideScalar(speed).applyQuaternion(unturn.copy(camera.quaternion).invert());
-    const n = still ? Math.round(count * STILL_SHARE) : count;
-    const rate = flowRate(speed);
+    const nearCount = Math.round(count * (1 + (NEAR_MORE - 1) * near));
+    const n = still ? Math.round(nearCount * STILL_SHARE) : nearCount;
+    const rate = flowRate(speed) * (1 + (NEAR_FLOW - 1) * near);
     // standing dashes are drawn anew only as the flow turns or the speed changes
     if (still && !stillStale(this.stillDrawn, n, seen, fade, rate)) return;
     this.stillDrawn.direction.copy(seen);

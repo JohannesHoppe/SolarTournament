@@ -5,6 +5,9 @@
  * Inside a planet's air (Jupiter, see world/air) sound carries outside too: the wind roaring
  * past the hull, the roar of the plasma around a hull flying hot through it, and thunder after
  * lightning, through the hull like the rest.
+ * Low over a world's ground the hover field pushes on the hull against the ground's every bump,
+ * and the hull rings with it: a rush rising with the speed (see setGround); a hull gliding on the
+ * ground grinds. In air a close pass by anything rushes too, the air between them squeezed.
  */
 
 /**
@@ -28,6 +31,9 @@ export class Sound {
   private readonly windFilter = this.context.createBiquadFilter();
   private readonly plasmaGain = this.context.createGain();
   private readonly plasmaFilter = this.context.createBiquadFilter();
+  private readonly rushGain = this.context.createGain();
+  private readonly rushFilter = this.context.createBiquadFilter();
+  private readonly grindGain = this.context.createGain();
   private buffers: Record<string, AudioBuffer | null> = {};
   private loopsStarted = false;
   private whiteNoise: AudioBuffer | null = null;
@@ -45,6 +51,8 @@ export class Sound {
     this.thrusterGain.gain.value = 0;
     this.windGain.gain.value = 0;
     this.plasmaGain.gain.value = 0;
+    this.rushGain.gain.value = 0;
+    this.grindGain.gain.value = 0;
     // Browsers only start audio after a user gesture; for a finger that is its lifting
     // (pointerup, touchend), for a mouse or a key already the press.
     const unlock = () => {
@@ -156,6 +164,19 @@ export class Sound {
   }
 
   /**
+   * The hull low over a world's ground (see Game.feltNear): `rush` 0..1, the hover field's
+   * buffeting rung through the plates (and in air the squeeze of a close pass), `pitch` 0..1 the
+   * speed (a deep drone slow, a hiss at the speed limit); `grind` 0..1 the hull gliding on the
+   * ground, its plates scraping over it, louder the faster.
+   */
+  setGround(rush: number, pitch: number, grind: number) {
+    const now = this.context.currentTime;
+    this.rushGain.gain.setTargetAtTime(rush * 0.55, now, 0.1);
+    this.rushFilter.frequency.setTargetAtTime(90 + 700 * pitch, now, 0.15);
+    this.grindGain.gain.setTargetAtTime(grind * 0.6, now, 0.04);
+  }
+
+  /**
    * The plasma around a hull flying hot through a planet's air (see view/reentry), 0..1: a roar
    * that swells and brightens with the heating, the hiss of the shock layer over it; `burning`
    * adds the crackle of the hull's plates ablating, some fifteen ticks a second over a frame of
@@ -248,6 +269,38 @@ export class Sound {
     this.plasmaFilter.connect(this.plasmaGain).connect(this.hull);
     roar.start();
     sheet.start(0, 1);
+
+    // the hover field's rush: brown noise through a band rising with the speed
+    const rush = this.context.createBufferSource();
+    rush.buffer = noise;
+    rush.loop = true;
+    rush.playbackRate.value = 2.4;
+    this.rushFilter.type = 'bandpass';
+    this.rushFilter.frequency.value = 90;
+    this.rushFilter.Q.value = 0.9;
+    rush.connect(this.rushFilter).connect(this.rushGain).connect(this.hull);
+    rush.start(0, 0.5);
+
+    // the grind of plates on the ground: white noise in a gritty band, chopped by a fast flutter
+    const grind = this.context.createBufferSource();
+    grind.buffer = this.whiteNoise;
+    grind.loop = true;
+    grind.playbackRate.value = 0.6;
+    const grit = this.context.createBiquadFilter();
+    grit.type = 'bandpass';
+    grit.frequency.value = 520;
+    grit.Q.value = 2.2;
+    const flutter = this.context.createGain();
+    flutter.gain.value = 0.6;
+    const chop = this.context.createOscillator();
+    chop.type = 'square';
+    chop.frequency.value = 23;
+    const depth = this.context.createGain();
+    depth.gain.value = 0.4;
+    chop.connect(depth).connect(flutter.gain);
+    grind.connect(grit).connect(flutter).connect(this.grindGain).connect(this.hull);
+    grind.start(0, 1.3);
+    chop.start();
   }
 
   private createWhiteNoise(): AudioBuffer {

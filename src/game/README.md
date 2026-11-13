@@ -1,6 +1,6 @@
 # src/game
 
-The round and its rules. `game.ts` holds the `Game` class: states (menu, playing, paused, results), the round's flow, lasers, collisions, the camera and the clone's body; it hands the other parts of this folder what they need each frame.
+The round and its rules. `game.ts` holds the `Game` class: states (menu, playing, paused, results), the round's flow, lasers, collisions, the camera (with the speed felt low over a world's ground: the view, the tremble, the dust the hover field lifts, the rush and grind through the hull) and the clone's body; it hands the other parts of this folder what they need each frame.
 
 | File | What it does |
 |---|---|

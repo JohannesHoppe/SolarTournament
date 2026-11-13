@@ -1,6 +1,6 @@
 # Flying over worlds
 
-Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity) is built, its rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
+Design of races and fights flown over the ground of a world: its gravity, the hover field that keeps a ship gliding over its ground, lift in its air, race tracks from one place to another, and the overdrive that rams whatever lies under the crosshair. Step 1 (the hover field, the overdrive's one rule, torpedoes under gravity) and step 6 (speed felt) are built, their rules in the README; the rest is planned. What is built moves into the repository's `README.md` with its numbers, in the same commit. The rules keep to the game's physics (README, "Realistic physics"): where they bend it, they say so.
 
 ## Why
 
@@ -45,7 +45,7 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 - **From one place to another.** A track runs from a start to a finish across a world (some tens of kilometres), not around a loop in a ball of space. Its gates are laid low over the ground, through canyons, over ridges, between the things that stand on it, close past rock and wreckage; the open space above is not the track.
 - **Branches.** A track splits in places into two ways that join again: one shorter and riskier (a narrow canyon, a jump, a wall close by), one longer and safer. Either counts; the gates of both are marked. There is no single racing line: the line is drawn for the way the pilot is on.
 - **Crash and back.** A ship destroyed in a race is printed again at once (1 s, no sponsor break) at the last gate it passed, already flying along the track at race speed (150 m/s), so a crash costs seconds, never the race.
-- **Speed felt.** The view widens with speed (more at the ground), the dust and streaks thicken low over the ground, a rush through the hull as the ship passes close to anything, and the camera trembles a little in the field's buffeting.
+- **Speed felt** (built). The view widens with speed, more low over the ground and close past anything; the motion streaks thicken there and the hover field lifts the ground's dust under the hull; the hull rushes with the field's buffeting and grinds where it glides on the ground, and in air a close pass by anything rushes too (in vacuum nothing outside is heard, so a rock passed close stays silent); the camera trembles a little in the field's buffeting.
 
 ## The overdrive
 
@@ -66,6 +66,6 @@ Gravity and air decide how hard a ship can turn, so the flight computer shows th
 3. **Lift in air.** Titan's Kraken Mare as a race world with air; Jupiter's deck carving.
 4. **Branches and the overdrive as a boost** in races, with the drive's heat gauge.
 5. **Deathmatches over worlds** in the rotation of rounds.
-6. **Speed felt:** view, streaks, the rush past things.
+6. **Built: speed felt:** view, streaks, lifted dust, the rush and the grind through the hull, the tremble.
 
 Every step changes the README, the Pilot's Handbook and their translations in the same commit, and the network's `PROTOCOL` where what other browsers read changes.
