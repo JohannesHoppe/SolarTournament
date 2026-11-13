@@ -64,6 +64,30 @@ for (const { world, title, air, pull } of [
   });
 }
 
+test("the solo plate's race puts the race worlds first under their mark and leaves the Corona and the Event Horizon to the fights; a world with air shown behind it leaves no haze on the title screen", async ({ page }) => {
+  const errors = await openGame(page);
+  await page.evaluate(() => {
+    document.getElementById('start')!.click();
+    document.querySelector<HTMLElement>('[data-choice="solo-mode"] button[data-value="race"]')!.click();
+  });
+  // the arenas offered, in the order the plate shows them (by the grid's order, then the page's)
+  const offered = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll<HTMLElement>('#solo-arenas > button')].filter((b) => !b.hidden);
+    const ranked = buttons.map((b, i) => ({ b, order: Number(getComputedStyle(b).order), i })).sort((x, y) => x.order - y.order || x.i - y.i);
+    return ranked.map(({ b }) => ({ marked: !!b.querySelector('.race-world'), name: b.textContent }));
+  });
+  expect(offered.slice(1, 3).every((arena) => arena.marked)).toBe(true);
+  expect(offered.filter((arena) => arena.marked)).toHaveLength(2);
+  expect(offered.map((arena) => arena.name).join()).not.toMatch(/Corona|Event Horizon/);
+  // the Throat behind the plate: Titan's haze over the arena; back on the title screen, none
+  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('#solo-arenas > button')].find((b) => /Throat/.test(b.textContent!))!.click());
+  await page.waitForFunction(() => window.game.venue.id === 'throat' && !!window.game.scene.fog);
+  await page.evaluate(() => document.getElementById('solo-back')!.click());
+  await page.waitForFunction(() => window.game.venue.id === 'rings');
+  expect(await page.evaluate(() => ({ state: window.game.state, fog: !!window.game.scene.fog, air: !!window.game.field.air }))).toEqual({ state: 'menu', fog: false, air: false });
+  expect(errors).toEqual([]);
+});
+
 for (const arena of ['valhalla', 'lineae']) {
   test(`a solo deathmatch over the world ${arena} starts and runs without errors, every clone printed over its ground and none hurt by it`, async ({ page }) => {
     const errors = await openGame(page);
