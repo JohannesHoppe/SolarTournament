@@ -33,7 +33,7 @@ const TRACK_TIME = 160;
 describe('every race course', () => {
   for (const arena of RACE_ARENAS) {
     // a track's every way through its branches (see Course.branches), each flown whole
-    const branches = arena.layout.course?.form === 'track' ? arena.layout.course.branches.length : 0;
+    const branches = arena.layout.course?.form === 'track' ? (arena.layout.course.branches?.length ?? 0) : 0;
     for (let ways = 0; ways < 1 << branches; ways++) {
       const way = branches ? ` on the ways ${ways.toString(2).padStart(branches, '0')} through its branches` : '';
       it(`is flown by a middling bot in ${arena.id}${way}: a lap through every gate without a crash, in time`, () => {

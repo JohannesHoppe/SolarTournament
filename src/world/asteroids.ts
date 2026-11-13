@@ -135,7 +135,7 @@ export interface Placement {
  * finish, its points along it, the indices among them where its gates stand and where it splits
  * into two ways (see world/crack).
  */
-export type CourseForm = { form: 'ellipse'; near: number; far: number } | { form: 'circuit'; layout: CircuitName } | { form: 'track'; points: readonly THREE.Vector3[]; gates: readonly number[]; branches: readonly Branch[] };
+export type CourseForm = { form: 'ellipse'; near: number; far: number } | { form: 'circuit'; layout: CircuitName } | { form: 'track'; points: readonly THREE.Vector3[]; gates: readonly number[]; branches?: readonly Branch[] };
 /** The circuits of game/race a course may be laid as. */
 export type CircuitName = 'grand' | 'hairpin' | 'sweep';
 

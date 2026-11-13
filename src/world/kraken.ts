@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, sin } from '../detmath';
-import { flatGrid, withCollider } from './boneyard';
+import { flatGrid, reliefGround, withCollider } from './boneyard';
+import { throatLandRelief, throatSeaRelief } from './throat';
 import { pixelTexture } from '../view/textures';
 import { Noise } from './noise';
 import { SEA, seaHeight, TITAN_AIR } from './titan';
@@ -8,7 +9,8 @@ import type { Air } from './air';
 
 /**
  * How Kraken Mare on Titan looks (where things are in world/titan): the sea of liquid methane,
- * dark and glassy, still but for a slow swell of ripples, the field's piece it collides as; the
+ * dark and glassy, still but for a slow swell of ripples, the field's piece it collides as (and
+ * the Throat's, the race world in world/throat, over its banks and bluffs of dark sand); the
  * top of the orange haze as a sheet at the deck, curving away as Titan does; the haze's light.
  */
 
@@ -22,18 +24,34 @@ const RIPPLE_TILE = 800;
 
 /** The sea of the field in its box's frame (`half` its half extents): dark, glossy liquid methane, rippled a little by the slow wind. */
 export function seaPiece(half: THREE.Vector3): THREE.Group {
+  return withCollider(new THREE.Group().add(seaSheet(half, (x, z) => half.y + seaHeight(x, z) - SEA)), half);
+}
+
+/** A sheet of the sea over a box `half` its half extents, its surface at `surface` (the box's coordinates). */
+function seaSheet(half: THREE.Vector3, surface: (x: number, z: number) => number): THREE.Mesh {
   const geometry = flatGrid(half, SEA_CELL);
   const position = geometry.getAttribute('position');
   const uv = geometry.getAttribute('uv');
   for (let i = 0; i < position.count; i++) {
-    position.setY(i, half.y + seaHeight(position.getX(i), position.getZ(i)) - SEA);
+    position.setY(i, surface(position.getX(i), position.getZ(i)));
     uv.setXY(i, position.getX(i) / RIPPLE_TILE, position.getZ(i) / RIPPLE_TILE);
   }
   geometry.computeVertexNormals();
   const material = new THREE.MeshStandardMaterial({ color: 0x241a10, roughness: 0.12, metalness: 0.7, normalMap: rippleTexture(), normalScale: new THREE.Vector2(0.25, 0.25) });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.receiveShadow = true;
-  return withCollider(new THREE.Group().add(mesh), half);
+  return mesh;
+}
+
+/** Titan's dark shores (tholin sand, organic dust settled out of the haze): their tint, and the glow of the haze's own orange light that keeps them from going black under it. */
+const SHORE_TINT = 0xb08a62;
+const SHORE_GLOW = 0x5a3a1c;
+/** The shores' grid (units, 25 m): fine enough to draw the banks' slopes. */
+const SHORE_CELL = 500;
+
+/** The race world's ground in the Throat (see world/throat): its banks, bluffs and the bed under the water on the shores' grid, and the sea's sheet over the water. */
+export function throatGround(half: THREE.Vector3): THREE.Group {
+  return reliefGround(half, throatLandRelief, SHORE_TINT, SHORE_GLOW, SHORE_CELL).add(seaSheet(half, throatSeaRelief));
 }
 
 /** The ripples of the sea as a normal map: soft swells from a tiling noise. */

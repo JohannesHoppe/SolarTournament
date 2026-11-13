@@ -342,11 +342,12 @@ export function cometsOf(seed: number, round: number, well: Well | null = null):
 }
 
 /**
- * The comets a venue brings: in a round (`round` 0 or more) those of cometsOf; none in the
- * flight school and none outside a round, so nothing there ever warns of one.
+ * The comets a venue brings: in a round (`round` 0 or more) those of cometsOf; none where it is
+ * `calm` (the flight school, and a world raced or fought over, whose ground a head's route would plough
+ * through) and none outside a round, so nothing there ever warns of one.
  */
-export function roundComets(seed: number, round: number, well: Well | null, school: boolean): Comet[] {
-  return school || round < 0 ? [] : cometsOf(seed, round, well);
+export function roundComets(seed: number, round: number, well: Well | null, calm: boolean): Comet[] {
+  return calm || round < 0 ? [] : cometsOf(seed, round, well);
 }
 
 /** The comet a browser follows at field time `clock`: the last of `comets` from COMET_WARNING before it starts out to its shower's end; null between them. */

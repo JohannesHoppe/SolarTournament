@@ -1,19 +1,11 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { CRACK_GROUND_HALF, CRACK_TRACK, crackRelief, TRACK_LIFT } from './crack';
 import { CRACK_WIDTH, crackMiddle, inCrack, surfaceHeight } from './europa';
-import { arenaById } from './arenas';
-import { reliefOutside, testField } from '../test/field';
-import { Course, GATE_RADIUS } from '../game/race';
-import { SHIP_RADIUS } from '../test/pilot';
+import { reliefOutside } from '../test/field';
+import { GATE_RADIUS } from '../game/race';
 import { bendRadius } from '../game/racingline';
-
-const crack = arenaById('crack')!;
-const course = () => {
-  const field = testField();
-  field.generate(crack.layout);
-  return { field, course: new Course(field, crack.layout.seed) };
-};
+import { expectGatesApart, expectStartsClear, raceWorld } from '../test/track';
 
 describe("Europa's Crack as a race world", () => {
   it('keeps its relief inside its box over the whole of its 20 km', () => {
@@ -44,32 +36,21 @@ describe("Europa's Crack as a race world", () => {
   });
 
   it('stands its gates 1 km apart or more, the first the start and the last the finish', () => {
-    const { course: c } = course();
-    expect(c.track).toBe(true);
-    expect(c.laps).toBe(1);
-    expect(c.finishGates).toBe(c.count);
-    for (let i = 1; i < c.count; i++) expect(c.points[i].distanceTo(c.points[i - 1]), `gate ${i}`).toBeGreaterThan(20000);
+    const { course: c } = raceWorld('crack');
+    expectGatesApart(c);
     // a gate stands on the ground, its opening down to it; only the climb out of the Crack and the bend over its lips are flown higher
     const aloft = c.points.filter((point) => point.y - surfaceHeight(point.x, point.z) >= GATE_RADIUS);
     expect(aloft.length).toBeLessThanOrEqual(3);
   });
 
-  it('prints a grid and new clones clear of the ground, the walls and the station, along the track', () => {
-    const { field, course: c } = course();
-    const at = new THREE.Vector3();
-    for (let passed = 0; passed < c.count; passed++) {
-      for (let slot = 0; slot < 8; slot++) {
-        c.startOf(passed, slot, at);
-        expect(field.overlap(at, SHIP_RADIUS), `passed ${passed} slot ${slot}`).toBeFalsy();
-      }
-    }
-  });
+  it('prints a grid and new clones clear of the ground, the walls and the station, along the track', () => expectStartsClear('crack'));
 
   it('splits twice into two ways that join again, one shorter and riskier, every point of either over the ground', () => {
     const { points, branches } = CRACK_TRACK;
+    const { course } = raceWorld('crack');
     expect(branches.length).toBeGreaterThanOrEqual(2);
     const length = (way: readonly THREE.Vector3[]) => way.reduce((sum, point, i) => sum + (i ? point.distanceTo(way[i - 1]) : 0), 0);
-    for (const branch of branches) {
+    branches.forEach((branch, b) => {
       const own = points.slice(branch.split, branch.join + 1);
       const other = [points[branch.split], ...branch.points, points[branch.join]];
       const [risky, safe] = branch.risky ? [other, own] : [own, other];
@@ -83,16 +64,15 @@ describe("Europa's Crack as a race world", () => {
       // the other way bends nowhere tighter than its tight bend (500 m), measured over 100 m either way
       for (let i = 1; i < other.length - 1; i++) expect(bendRadius(other[i - 1], other[i], other[i + 1]), `point ${i}`).toBeGreaterThan(9000);
       // and its gates stand well apart from the track's own, their rings far from touching
-      const { course: c } = course();
-      for (const { gate } of branch.gates) expect(c.gatePoint(gate, 1 << branches.indexOf(branch)).distanceTo(c.points[gate]), `gate ${gate}`).toBeGreaterThan(GATE_RADIUS * 2.5);
-    }
+      for (const { gate } of branch.gates) expect(course.gatePoint(gate, 1 << b).distanceTo(course.points[gate]), `gate ${gate}`).toBeGreaterThan(GATE_RADIUS * 2.5);
+    });
   });
 
   it('stands the gates of every way through the branches 600 m apart or more, across the tight bend too', () => {
-    const { course: c } = course();
-    expect(c.branches).toBe(CRACK_TRACK.branches.length);
-    for (let ways = 0; ways < 1 << c.branches; ways++) {
-      const { points } = c.lap(ways);
+    const { course } = raceWorld('crack');
+    expect(course.branches).toBe(CRACK_TRACK.branches.length);
+    for (let ways = 0; ways < 1 << course.branches; ways++) {
+      const { points } = course.lap(ways);
       for (let i = 1; i < points.length; i++) expect(points[i].distanceTo(points[i - 1]), `ways ${ways} gate ${i}`).toBeGreaterThan(12000);
     }
   });

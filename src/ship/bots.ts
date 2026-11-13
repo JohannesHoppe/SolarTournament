@@ -449,6 +449,8 @@ export class Bot {
   homeAt: THREE.Vector3 | null = null;
   /** Set by the game: the bot keeps the speed its boost gave it until then (s, see BOOST_KEEP). */
   boostUntil = 0;
+  /** Set by the game: over a world fought over, the bot takes its ground for no danger, as a racer does (the hover field and its glide carry the hull over it and along its walls), and dives into its hollows and over its ridges with its target. */
+  glide = false;
   /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
   hookUntil = 0;
   hookReadyAt = 0;
@@ -681,7 +683,7 @@ export class Bot {
     let danger = falling || hot;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
-      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4, racing);
+      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4, racing || this.glide);
       if (hit) {
         danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
         const away = local.subVectors(me.position, hit.center);
@@ -849,7 +851,7 @@ export class Bot {
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
-      // a racer takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
+      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
       if (hit && !(overGround && hit.asteroid?.ground) && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
     }
     return best;

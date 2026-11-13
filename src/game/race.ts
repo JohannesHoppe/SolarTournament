@@ -452,7 +452,7 @@ export class Course {
    * way's bits are set.
    */
   private layBranches(form: Extract<CourseForm, { form: 'track' }>) {
-    const { points, gates, branches } = form;
+    const { points, gates, branches = [] } = form;
     (this as { branches: number }).branches = branches.length;
     branches.forEach((branch, b) => {
       this.riskyOther.push(branch.risky);

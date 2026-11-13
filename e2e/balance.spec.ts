@@ -85,12 +85,12 @@ async function playRound(browser: Browser, mode: string, arena: string): Promise
   }
 }
 
-/** Every arena a mode is played in (as the game has them: src/world/arenas.ts, served by the dev server): a race's with the race worlds. */
+/** Every arena a mode is played in (as the game has them: src/world/arenas.ts, served by the dev server): a race's with the race worlds, a deathmatch's with the worlds fought over. */
 async function arenas(browser: Browser, mode: string): Promise<string[]> {
   const page = await browser.newPage();
   try {
     await page.goto('/');
-    const ids: string[] = await page.evaluate(async ([path, race]) => (await import(path)).arenasFor(race).map((arena: { id: string }) => arena.id), ['/src/world/arenas.ts', mode === 'race'] as const);
+    const ids: string[] = await page.evaluate(async ([path, of]) => (await import(path)).arenasFor(of).map((arena: { id: string }) => arena.id), ['/src/world/arenas.ts', mode] as const);
     if (ONLY && !ids.includes(ONLY)) throw new Error(`no arena ${ONLY}`);
     return ONLY ? [ONLY] : ids;
   } finally {
@@ -130,10 +130,8 @@ async function playRounds(browser: Browser, mode: string) {
   return { ...result, rounds, detail: JSON.stringify(detail) };
 }
 
-/** The race worlds a race is flown over besides the seven (RACE_WORLDS in src/world/arenas: the Crack). */
-const RACE_WORLD_COUNT = 1;
-/** The arenas a mode plays, for the time the rounds take (checked in playRounds): all seven and in a race the race worlds, or the one of BALANCE_ARENA. */
-const arenaCount = (mode: string) => (ONLY ? 1 : 7 + (mode === 'race' ? RACE_WORLD_COUNT : 0));
+/** The arenas a mode is played in, for the time the rounds take (checked in playRounds): the seven of free space, a race's with the one race world, a deathmatch's with the two worlds fought over; or the one of BALANCE_ARENA. */
+const arenaCount = (mode: string) => (ONLY ? 1 : mode === 'race' ? 8 : mode === 'deathmatch' ? 9 : 7);
 /** Long enough for every round of a mode, PAGES at a time. */
 const timeout = (mode: string) => Math.ceil((arenaCount(mode) * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
 
