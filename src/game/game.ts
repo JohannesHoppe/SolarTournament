@@ -9051,7 +9051,7 @@ export class Game implements OnlineGame {
    * it, the hull's underside throws sparks and grinds through the hull.
    */
   private glideOver(ship: Ship, dt: number, now: number) {
-    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
+    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall, normal);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
     if (into >= SAFE_IMPACT * 0.4) {
       ship.syncTransform();
@@ -9219,7 +9219,7 @@ export class Game implements OnlineGame {
   private groundHurts(position: THREE.Vector3, heading: THREE.Vector3, speed: number, distance: number): boolean {
     const at = groundAt.copy(position).addScaledVector(heading, distance);
     if (this.field.groundBelow(at, groundAhead) === null) return false;
-    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall) >= SAFE_IMPACT;
+    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall, groundAhead) >= SAFE_IMPACT;
   }
 
   private pilot(dt: number, now: number) {

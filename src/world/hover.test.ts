@@ -54,7 +54,7 @@ function fly(field: AsteroidField, flight: FlightModel, seconds: number, steer?:
     const piece = field.overlap(flight.position, RADIUS);
     if (piece && field.resolve(piece, flight.position, RADIUS, normal)) {
       if (piece.ground) {
-        blow = Math.max(blow, groundBlow(glide(flight.velocity, normal, STEP), field.fall));
+        blow = Math.max(blow, groundBlow(glide(flight.velocity, normal, STEP), field.fall, normal));
         touched++;
       } else struck = true;
     }
