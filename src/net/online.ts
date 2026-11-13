@@ -80,7 +80,7 @@ export interface OnlineGame {
   /** Whether a ship is close enough to a probe to take it, as this browser sees them (true for a probe it does not have). */
   probeWithin(id: string, ship: Ship): boolean;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
-  novaBlast(holder: Ship, position: THREE.Vector3): void;
+  novaBlast(holder: Ship, position: THREE.Vector3, at: number): void;
   selfDestruct(holder: Ship, position: THREE.Vector3): void;
   remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
@@ -338,13 +338,13 @@ export class Online {
       game.remoteHook(owner, hold.rock, hold.local ? from.fromArray(hold.local) : null, target, length);
     };
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
-    session.onNova = (ship, p) => {
+    session.onNova = (ship, p, at) => {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       this.novas.set(ship, wall());
       // the evidence for the hits it counts on the battleship's parts
       this.evidence.nova(ship, from.fromArray(p), wall());
-      game.novaBlast(holder, from);
+      game.novaBlast(holder, from, at);
     };
     // a self-destruct only from a living ship, where it is; it is gear bought, which no other browser can see
     session.onSelfDestruct = (ship, p) => {
@@ -518,8 +518,8 @@ export class Online {
     this.session.sendSelfDestruct(ship.id, round(position));
   }
 
-  sendNova(ship: Ship, position: THREE.Vector3) {
-    this.session.sendNova(ship.id, round(position));
+  sendNova(ship: Ship, position: THREE.Vector3, at: number) {
+    this.session.sendNova(ship.id, round(position), at);
   }
 
   /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) a torpedo (by id: this browser decides where it goes off from now on) or a sponsor probe (by id: every browser reels it in on that cable), or let go (null). */

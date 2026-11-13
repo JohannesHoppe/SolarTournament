@@ -20,7 +20,7 @@ export const SPIN_RATE = 0.04;
 /** The fragments of a piece that breaks into smaller copies of whole shapes (the junk of the Satellite Junkyard) are this much smaller than their parent; rock and ice split into pieces of themselves instead (see world/fracture). */
 const FRAGMENT_SCALE = 0.55;
 /** A rock breaks twice at most: rock, fragments, and their fragments, which are gone when they break. */
-const MAX_GENERATION = 2;
+export const MAX_GENERATION = 2;
 /**
  * The smallest pieces (MAX_GENERATION) crumble to dust this long after they broke off (s of
  * field time): rubble does not pile up over a round, so the field keeps track of few pieces,
@@ -1015,7 +1015,7 @@ export class AsteroidField {
   }
 
   /**
-   * A comet (seeded `by`) shoves a solid piece at a field time: from where it stands then, it
+   * A comet (seeded `by`) shoves a piece at a field time: from where it stands then, it
    * drifts on with `kick` (units/s) added to its drift, keeps circling with its orbit, and turns
    * about `axis` at `rate` (rad/s) from its orientation then. A welded piece takes its whole
    * structure along with the same kick, without a turn: the pieces of a body turning about its
@@ -1023,7 +1023,7 @@ export class AsteroidField {
    */
   shove(id: string, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number): Asteroid | undefined {
     const struck = this.asteroids.get(id);
-    if (!struck?.solid) return undefined;
+    if (!struck) return undefined;
     for (const a of this.welded(struck)) this.push(a, at, kick, struck.weld === null ? axis : a.spinAxis, struck.weld === null ? rate : a.spinRate, by);
     return struck;
   }

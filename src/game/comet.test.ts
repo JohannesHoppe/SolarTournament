@@ -147,22 +147,27 @@ describe("a comet's head", () => {
     const [a, b] = [testField(), testField()];
     a.generate(belt);
     b.generate(belt);
-    // a comet straight through the first rock of the field
+    // a comet straight through the first rock of the field, as each browser makes it for itself
     const target = [...a.asteroids.values()][0];
     const at = 40;
-    const comet = makeComet(at, new THREE.Vector3(1, 0.1, 0.3).normalize(), a.positionOf(target, at, new THREE.Vector3()), 5);
-    fly(a, comet, 1 / 60, 30, 50);
-    fly(b, comet, 1 / 23, 30, 50);
+    const comet = () => makeComet(at, new THREE.Vector3(1, 0.1, 0.3).normalize(), a.positionOf(target, at, new THREE.Vector3()), 5);
+    const [one, two] = [comet(), comet()];
+    fly(a, one, 1 / 60, 30, 50);
+    fly(b, two, 1 / 23, 30, 50);
     expect(a.snapshot().x.length).toBeGreaterThan(0);
     expect(b.snapshot().x).toEqual(a.snapshot().x);
+    // the head broke up on the same rock at the same field time, and its fragments fly alike
+    expect(two.broken).toBe(one.broken);
+    expect(b.snapshot().m).toEqual(a.snapshot().m);
     // two Belt fields generated and flown for 20 seconds: a few seconds on a busy machine
   });
 
   it('grinds a fragment in its way to dust, and the fragments of a rock it breaks with it: no piece of a piece is ever born', () => {
-    const belt = layoutOf('belt');
+    const belt = layoutOf('rings');
     const field = testField();
     field.generate(belt);
-    const [first, second] = [...field.asteroids.values()].filter((a) => !a.solid);
+    // pieces of ice lighter than the head, which it runs down instead of breaking up on them
+    const [first, second] = [...field.asteroids.values()].filter((a) => !a.solid && field.bodyMass(a) < HEAD_MASS / 4);
     // a fragment of a rock broken before the comet comes
     field.setClock(10);
     field.shatter(second.id, 10);
@@ -192,6 +197,45 @@ describe("a comet's head", () => {
     const newcomer = testField();
     newcomer.restore(JSON.parse(JSON.stringify(state)), belt);
     expect([...newcomer.asteroids.keys()].sort()).toEqual([...field.asteroids.keys()].sort());
+  });
+
+  it('breaks up on a rock heavier than itself: the rock breaks and its fragments carry the head\'s momentum on along its course', () => {
+    const belt = layoutOf('belt');
+    const field = testField();
+    field.generate(belt);
+    const target = [...field.asteroids.values()].find((a) => !a.solid && field.bodyMass(a) > HEAD_MASS)!;
+    const mass = field.bodyMass(target);
+    const at = 40;
+    const course = new THREE.Vector3(1, 0.1, 0.3).normalize();
+    const comet = makeComet(at, course, field.positionOf(target, at, new THREE.Vector3()), 5);
+    // the field's motion of the rock before, to tell the head's push from it
+    const before = target.velocity.clone();
+    const broken: string[] = [];
+    for (let time = at - 12; time < at + 2; time += 1 / 60) {
+      field.setClock(time);
+      runDown(comet, field, time, (rock) => broken.push(rock.id));
+    }
+    // it met the rock, or another as heavy on its way, and went no farther
+    expect(comet.broken).toBeLessThan(at + 1);
+    const struck = broken[broken.length - 1];
+    expect(field.asteroids.has(struck)).toBe(false);
+    const fragments = [...field.asteroids.values()].filter((a) => a.id.startsWith(`${struck}.`));
+    expect(fragments.length).toBeGreaterThan(1);
+    // each fragment took the head's momentum by the rock's share: 600 m/s times the head's share of both masses
+    if (struck === target.id) {
+      const kick = COMET_SPEED * (HEAD_MASS / (HEAD_MASS + mass));
+      for (const fragment of fragments) {
+        expect(fragment.shovedBy).toBe(comet.seed);
+        expect(fragment.velocity.clone().sub(before).dot(course)).toBeGreaterThan(kick * 0.5);
+      }
+    }
+    // the head breaks up nowhere twice, and runs down nothing more
+    const count = broken.length;
+    for (let time = at + 2; time < at + 10; time += 1 / 60) {
+      field.setClock(time);
+      runDown(comet, field, time, (rock) => broken.push(rock.id));
+    }
+    expect(broken.length).toBe(count);
   });
 
   it("breaks up on the wreck's hull, which takes its momentum the same way on every browser, and a newcomer's snapshot carries it", () => {

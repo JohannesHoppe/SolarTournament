@@ -208,7 +208,7 @@ export class Session {
   /** A ship of another browser took a probe, in the third of a race its browser names (see placeBucket). */
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
-  onNova: (ship: string, position: Vec) => void = () => {};
+  onNova: (ship: string, position: Vec, at: number) => void = () => {};
   onSelfDestruct: (ship: string, position: Vec) => void = () => {};
   /** A ship of another browser dropped a decoy, here, flying so (see game/decoys). */
   onDecoy: (ship: string, position: Vec, velocity: Vec) => void = () => {};
@@ -426,7 +426,8 @@ export class Session {
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
       const position = vec(d?.p, 3, MAX_COORDINATE);
-      if (ship && position && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position));
+      const at = num(d?.t, 0, MAX_FIELD_TIME);
+      if (ship && position && at !== null && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position, at));
     });
     transport.on('dc', (d, from) => {
       const ship = id(d?.s);
@@ -713,8 +714,9 @@ export class Session {
     else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 
-  sendNova(ship: string, position: Vec) {
-    this.transport.send('nv', { s: ship, p: position });
+  /** A nova core went off at `position` at field time `at` (s): every browser breaks a comet's head in its blast at that field time (see comet.ts, breakHead). */
+  sendNova(ship: string, position: Vec, at: number) {
+    this.transport.send('nv', { s: ship, p: position, t: +at.toFixed(3) });
   }
 
   /** Tells everyone that a ship this browser runs dropped a decoy (see Game.dropDecoy). */
