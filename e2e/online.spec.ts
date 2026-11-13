@@ -107,6 +107,10 @@ test('the game master is the DJ: it skips the song and types a title, and the ot
   const next = (await onAir(a)).title;
   expect(next).not.toBe(programme);
   await b.waitForFunction((title) => window.game.musicCue().title === title, next, { timeout: 10_000 });
+  // the other tab's song keys step nothing: it is told who picks the music
+  await b.keyboard.press('Period');
+  await b.waitForFunction(() => document.getElementById('hud-message')!.textContent!.includes('Only the game master picks the music'));
+  expect((await onAir(a)).title).toBe(next);
   // title words on the DJ's plate; the other tab offers no plate
   await b.evaluate(() => window.game.pause());
   expect(await b.evaluate(() => document.getElementById('dj-open')!.hidden)).toBe(true);

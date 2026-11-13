@@ -22,10 +22,13 @@ describe('the arena of a tournament round', () => {
     for (const arena of TOURNAMENT_ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
   });
 
-  it('of a race walks through the arenas of free space and the race worlds; every other mode stays in free space', () => {
+  it('of a race walks through the race worlds and the arenas of free space but the Corona and the Event Horizon; every other mode stays in free space', () => {
     const races = new Set(Array.from({ length: RACE_ARENAS.length }, (_, round) => arenaOfRound('a-room-abcdef', round, 'race').id));
     expect(races.size).toBe(RACE_ARENAS.length);
     for (const world of RACE_WORLDS) expect(races.has(world.id)).toBe(true);
+    // the Corona and the Event Horizon are fights: never a race, in any round
+    for (let round = 0; round < 40; round++) expect(['corona', 'hole']).not.toContain(arenaOfRound('a-room-abcdef', round, 'race').id);
+    expect(RACE_ARENAS.map((arena) => arena.id)).toEqual(['crack', 'throat', 'belt', 'rings', 'junkyard', 'giant', 'derelict']);
     for (let round = 0; round < 40; round++) expect(ARENAS).toContain(arenaOfRound('a-room-abcdef', round));
     // a room playing every mode in turn meets every race arena in its races, every fifth round
     const mixed = new Set(Array.from({ length: RACE_ARENAS.length }, (_, k) => arenaOfRound('a-room-abcdef', 1 + 5 * k, 'race').id));

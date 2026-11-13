@@ -1039,7 +1039,7 @@ export const PLACES: readonly ArenaProfile[] = [
   },
 ];
 
-/** The arenas of free space, where every mode is played (a race also over the worlds of RACE_WORLDS). A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
+/** The arenas of free space, where every mode is played but a race in the Corona and at the Event Horizon (see RACE_ARENAS; a race is also flown over the worlds of RACE_WORLDS). A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
 export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'belt',
@@ -1144,7 +1144,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'corona',
     name: msg('Corona'),
     tagline: msg('Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.'),
-    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'hairpin' } },
+    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
     cooling: 0.6,
     storms: true,
     sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
@@ -1158,7 +1158,6 @@ export const ARENAS: readonly ArenaProfile[] = [
     layout: {
       key: 'hole',
       seed: 61,
-      course: { form: 'ellipse', near: 32000, far: 52000 },
       kind: 'rock',
       count: 20,
       minScale: 1.5,
@@ -1288,8 +1287,10 @@ function fought(place: ArenaId, id: ArenaId, seed: number): ArenaProfile {
   return { ...profile, id, layout: { ...profile.layout, key: id, seed }, mood: MOODS[id], scenery: place };
 }
 
-/** The arenas a race may be flown in: those of free space and the race worlds. */
-export const RACE_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...RACE_WORLDS];
+/** The arenas of free space that are fights, never races: the Corona (its storms blind the course) and the Event Horizon (the hole's pull is the fight). */
+const FIGHT_ONLY: readonly ArenaId[] = ['corona', 'hole'];
+/** The arenas a race may be flown in: the race worlds first, then those of free space that are no fights alone. */
+export const RACE_ARENAS: readonly ArenaProfile[] = [...RACE_WORLDS, ...ARENAS.filter((arena) => !FIGHT_ONLY.includes(arena.id))];
 /** The arenas a deathmatch may be fought in: those of free space and the worlds fought over. */
 export const FIGHT_ARENAS: readonly ArenaProfile[] = [...ARENAS, ...FIGHT_WORLDS];
 /** Every arena of a tournament: free space, the race worlds and the worlds fought over. */
@@ -1309,8 +1310,8 @@ export const arenaByKey = (key: string): ArenaProfile | undefined => TOURNAMENT_
 /**
  * The arena of a tournament round: the room's code shuffles the arenas of the round's mode into an
  * order of its own, and the rounds walk through it, so no arena comes twice before all others
- * have come. A race walks through the arenas of free space and the race worlds together (see
- * RACE_ARENAS); a deathmatch is fought every other time in free space and over a world, each in
+ * have come. A race walks through the race worlds and the arenas of free space together, the
+ * Corona and the Event Horizon left to the fights (see RACE_ARENAS); a deathmatch is fought every other time in free space and over a world, each in
  * an order of its own (`nth` the round's place among the room's deathmatches: every round of a
  * room of deathmatches, every fifth of a mixed one); every other mode stays in free space. Every
  * browser works it out alike from code and round.
