@@ -126,5 +126,93 @@ const JUPITER_UP = 0.52;
 export const JUPITER_AT = new THREE.Vector3(cos(JUPITER_UP) * 0.8, sin(JUPITER_UP), cos(JUPITER_UP) * 0.6).normalize().multiplyScalar(JUPITER_DISTANCE);
 export const JUPITER_SIZE = JUPITER_DISTANCE * sin(JUPITER_ANGLE);
 
+/**
+ * Chaos terrain: where Europa's shell broke into rafts of ice that drifted, tilted and froze in
+ * again (Conamara Chaos is the real one), a field of them on a jittered grid of CHAOS_CELL (units,
+ * 140 m). A cell holds one raft or stays open (one in five: the lanes between them): a block
+ * CHAOS_SIZE across (60–110 m), CHAOS_RISE high over the frozen matrix around it (20–55 m),
+ * turned any way and tilted up to CHAOS_TILT, its sides falling over CHAOS_EDGE (12 m); the
+ * matrix itself lies CHAOS_SINK under the plain (8 m).
+ */
+const CHAOS_CELL = 2800;
+const CHAOS_SIZE = [1200, 2200] as const;
+const CHAOS_RISE = [400, 1100] as const;
+const CHAOS_TILT = 0.22;
+const CHAOS_EDGE = 240;
+export const CHAOS_SINK = 160;
+/** An integer hash of a cell and a channel, as a number in [0, 1). */
+function cellHash(i: number, j: number, channel: number, seed: number): number {
+  let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(channel + 1, 2147483647) ^ seed;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h & 0xffff) / 65536;
+}
+
+/**
+ * The chaos terrain's height over the plain at (x, z) (units; -CHAOS_SINK on the matrix between
+ * the rafts), from the field of rafts of `seed`: the highest raft whose footprint holds the point.
+ */
+export function chaosAt(x: number, z: number, seed: number): number {
+  const ci = Math.floor(x / CHAOS_CELL);
+  const cj = Math.floor(z / CHAOS_CELL);
+  let height = -CHAOS_SINK;
+  for (let i = ci - 1; i <= ci + 1; i++) {
+    for (let j = cj - 1; j <= cj + 1; j++) {
+      if (cellHash(i, j, 0, seed) < 0.2) continue;
+      const cx = (i + 0.3 + 0.4 * cellHash(i, j, 1, seed)) * CHAOS_CELL;
+      const cz = (j + 0.3 + 0.4 * cellHash(i, j, 2, seed)) * CHAOS_CELL;
+      // turned by a unit vector drawn from the hash (no trigonometry: the same bits everywhere)
+      const c = 2 * cellHash(i, j, 3, seed) - 1;
+      const s = Math.sqrt(1 - c * c);
+      const du = (x - cx) * c + (z - cz) * s;
+      const dv = (z - cz) * c - (x - cx) * s;
+      const hu = (CHAOS_SIZE[0] + (CHAOS_SIZE[1] - CHAOS_SIZE[0]) * cellHash(i, j, 4, seed)) / 2;
+      const hv = (CHAOS_SIZE[0] + (CHAOS_SIZE[1] - CHAOS_SIZE[0]) * cellHash(i, j, 5, seed)) / 2;
+      const inside = Math.min(hu - Math.abs(du), hv - Math.abs(dv));
+      if (inside <= 0) continue;
+      const rise = CHAOS_RISE[0] + (CHAOS_RISE[1] - CHAOS_RISE[0]) * cellHash(i, j, 6, seed);
+      const top = rise + CHAOS_TILT * ((2 * cellHash(i, j, 7, seed) - 1) * du + (2 * cellHash(i, j, 8, seed) - 1) * dv);
+      height = Math.max(height, -CHAOS_SINK + (top + CHAOS_SINK) * smooth(inside / CHAOS_EDGE));
+    }
+  }
+  return height;
+}
+
+/**
+ * The Lineae as a world fought over (see FIGHT_WORLDS in world/arenas): the place's ground, and
+ * east of the Crack a field of chaos terrain on the plain, its rafts rising from CHAOS_FROM
+ * (units, 800 m from the field's middle) and standing whole CHAOS_RAMP further (200 m): cover to
+ * fight among, and slopes to ride; the campaign's place keeps its open plain.
+ */
+const CHAOS_FROM = 16000;
+const CHAOS_RAMP = 4000;
+const FIGHT_CHAOS = 6113;
+export const fightHeight = (x: number, z: number) => surfaceHeight(x, z) + chaosAt(x, z, FIGHT_CHAOS) * smooth((x - CHAOS_FROM) / CHAOS_RAMP);
+/** How far a raft can stand over the ground under it (units): its highest rise, tilted. */
+export const CHAOS_TOP = CHAOS_RISE[1] + CHAOS_TILT * CHAOS_SIZE[1];
+const fightPiece = reliefPiece(fightHeight, GROUND_HALF, GROUND_TOP + CHAOS_TOP);
+export const fightRelief = fightPiece.relief;
+export const fightGroundPlacement = fightPiece.placement;
+
+/**
+ * How the ice looks at (x, z), for its scenery (world/lineae): `stain` how much of the reddish
+ * brown it carries (the double ridges' crests, the Crack's lips, the frozen matrix between the
+ * chaos's rafts where the ground is `fought` over), `fresh` how deep in the Crack it lies (broken
+ * open late, the cleanest and bluest ice).
+ */
+export function lineaeTones(x: number, z: number, fought: boolean, out: { stain: number; fresh: number }) {
+  const d = Math.abs(x - crackMiddle(z));
+  let stain = 0.8 * bump(d - CRACK_WIDTH / 2 - LIP_WIDTH / 2, LIP_WIDTH / 2);
+  for (const { through, angle } of RIDGES) {
+    const across = (x - through[0]) * cos(angle) + (z - through[1]) * sin(angle);
+    stain = Math.max(stain, 0.9 * bump(across - RIDGE_SPAN / 2, RIDGE_WIDTH / 3), 0.9 * bump(across + RIDGE_SPAN / 2, RIDGE_WIDTH / 3));
+  }
+  const field = fought ? smooth((x - CHAOS_FROM) / CHAOS_RAMP) : 0;
+  if (field > 0 && chaosAt(x, z, FIGHT_CHAOS) < 0) stain = Math.max(stain, 0.6 * field);
+  out.stain = stain;
+  out.fresh = inCrack(x, z);
+  return out;
+}
+
 /** How far below the plain a point lies in the Crack (units; 0 outside it or above the plain). */
 export const depthInCrack = (x: number, y: number, z: number) => (inCrack(x, z) > 0.5 ? Math.max(0, LAND - y) : 0);

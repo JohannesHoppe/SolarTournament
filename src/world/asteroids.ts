@@ -127,6 +127,8 @@ export interface Placement {
   weld?: number;
   /** A world's ground under a place (see world/vesta): ships fly over it, and a racing line keeps over it without bowing round it as round a rock. */
   ground?: boolean;
+  /** A piece spanning a race's track overhead (a slab of ice across the Crack's rift, see world/crack): its racing line runs under it without bowing round it as round a rock. */
+  spanned?: boolean;
 }
 
 /**
@@ -249,6 +251,8 @@ export interface Asteroid {
   weld: number | null;
   /** A world's ground (see Placement.ground). */
   ground?: boolean;
+  /** Spanning a track overhead (see Placement.spanned). */
+  spanned?: boolean;
   /** The field's revision when it last appeared or jumped (see AsteroidField.revision). */
   appeared: number;
   /**
@@ -602,6 +606,7 @@ export class AsteroidField {
       const asteroid = this.asteroids.get(id)!;
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
+      if (piece.spanned) asteroid.spanned = true;
       if (piece.ground) {
         asteroid.ground = true;
         this.grounds.push(asteroid);

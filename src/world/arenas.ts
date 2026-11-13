@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BRIDGE_TYPE, LINEAE_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
 import { CAMP_AT, campPlacement, groundPlacement as mercuryGround, MERCURY_FALL, MERCURY_SUN } from './mercury';
@@ -24,8 +24,8 @@ import { groundPlacement as iapetusGround, IAPETUS_FALL, SATURN_AT as IAPETUS_SA
 import { ENCELADUS_FALL, groundPlacement as enceladusGround, SATURN_AT as ENCELADUS_SATURN } from './enceladus';
 import { GANYMEDE_FALL, groundPlacement as ganymedeGround, JUPITER_AT as GANYMEDE_JUPITER } from './ganymede';
 import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
-import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
-import { CRACK_TRACK, crackGroundPlacement, FINISH_MARK } from './crack';
+import { CRACK_MARK, EUROPA_FALL, fightGroundPlacement as lineaeGround, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
+import { bridgePlacements, CRACK_JUPITER, CRACK_SUN, CRACK_TRACK, crackGroundPlacement, FINISH_MARK, stationPlacements as crackStations } from './crack';
 import { THROAT_FINISH, throatGroundPlacement, THROAT_TRACK } from './throat';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
@@ -221,12 +221,12 @@ const TITAN_MOOD: Mood = {
   dust: [0.8, 0.6, 0.38],
   grade: { gain: [1.05, 1, 0.9], lift: [0.002, 0.0012, 0.0005], saturation: 0.95 },
 };
-/** The Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice itself, a grade cooler than Callisto's. */
+/** The Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice itself, bright (the ice throws back two thirds of what falls on it) and warmed from below by Jupiter's glow, so no shadow on it goes black; a grade cooler than Callisto's. */
 const EUROPA_MOOD: Mood = {
   space: 0x020203,
-  sky: 0x9aa4b0,
-  ground: 0x3a4048,
-  ambient: 1.35,
+  sky: 0xaebccc,
+  ground: 0x9c8470,
+  ambient: 2.1,
   nebulae: [
     { at: [-0.6, 0.5, -0.5], color: [0.055, 0.04, 0.03], size: 540000, shape: 2, turn: 1.3 },
     { at: [0.6, 0.3, 0.6], color: [0.03, 0.04, 0.055], size: 460000, shape: 0, turn: 0.4 },
@@ -1205,8 +1205,8 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
   {
     id: 'crack',
     name: msg('The Crack'),
-    tagline: msg("Down the canyon in Europa's ice, 800 m deep and 200 m wide, and back over the plain under Jupiter."),
-    // the Lineae's ice along 20 km of the Crack, the science station on its floor, and the track
+    tagline: msg("Down a rift in Europa's ice and through its gorge, over its chaos and its ridges, Jupiter low ahead."),
+    // a rift in Europa's ice along 23 km, the slabs fallen across it, the science station on its floor, the outposts on its rims, and the track
     layout: {
       key: 'crack',
       seed: 6500,
@@ -1218,20 +1218,20 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
       inner: 0,
       spin: 0,
       toughness: 800,
-      placements: [crackGroundPlacement(CRACK_TYPE), stationPlacement(STATION_TYPE, POST_HALF)],
+      placements: [crackGroundPlacement(CRACK_TYPE), ...crackStations(STATION_TYPE, POST_HALF), ...bridgePlacements(BRIDGE_TYPE)],
       fall: EUROPA_FALL,
       course: { form: 'track', points: CRACK_TRACK.points, gates: CRACK_TRACK.gates, branches: CRACK_TRACK.branches },
     },
     cooling: 1,
     storms: false,
-    // 5.2 AU from the sun, as Jupiter's arena
-    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    // 5.2 AU from the sun, as Jupiter's arena, low behind a racer heading for Jupiter
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd, direction: CRACK_SUN },
     mood: MOODS.crack,
-    // in the canyon, looking down it
-    preview: { from: [-5200, -15000, 150000], at: [3900, -17000, 100000] },
+    // over the rift's second segment, looking down it at Jupiter
+    preview: { from: [9000, 2000, 60000], at: [0, -5000, 10000] },
     references: [
       { glyph: 'planet', label: msg('Finish'), position: FINISH_MARK, distance: true },
-      { glyph: 'planet', label: msg('Jupiter'), position: EUROPA_JUPITER, distance: false },
+      { glyph: 'planet', label: msg('Jupiter'), position: CRACK_JUPITER, distance: false },
     ],
     open: true,
   },
@@ -1277,14 +1277,16 @@ export const RACE_WORLDS: readonly ArenaProfile[] = [
  * their own, played only by deathmatches, each a place's ground under its gravity with the
  * arena's edge around its middle (the ground below, ARENA_LIMIT above): Valhalla's rings of
  * ridges on Callisto with the Navy's listening post among them, and the Lineae on Europa with the
- * Crack (200 m wide, 800 m deep) running through the middle and the science station on its floor.
+ * Crack (200 m wide, 800 m deep) running through the middle, the science station on its floor and
+ * a field of chaos terrain on the plain east of it (see world/europa, fightHeight).
  */
-export const FIGHT_WORLDS: readonly ArenaProfile[] = [fought('callisto', 'valhalla', 5100), fought('europa', 'lineae', 6100)];
+export const FIGHT_WORLDS: readonly ArenaProfile[] = [fought('callisto', 'valhalla', 5100), fought('europa', 'lineae', 6100, lineaeGround(LINEAE_TYPE))];
 
-/** A world fought over on a place of the campaign (`place`): its ground, gravity, sky and references, as arena `id` with a field of its own (`seed`), the arena's edge around it and the clones printed where the round finds room. */
-function fought(place: ArenaId, id: ArenaId, seed: number): ArenaProfile {
+/** A world fought over on a place of the campaign (`place`): its ground (or a `ground` of its own in the place's first piece's stead), gravity, sky and references, as arena `id` with a field of its own (`seed`), the arena's edge around it and the clones printed where the round finds room. */
+function fought(place: ArenaId, id: ArenaId, seed: number, ground?: Placement): ArenaProfile {
   const { open: _open, start: _start, ...profile } = PLACES.find((p) => p.id === place)!;
-  return { ...profile, id, layout: { ...profile.layout, key: id, seed }, mood: MOODS[id], scenery: place };
+  const placements = ground ? [ground, ...(profile.layout.placements ?? []).slice(1)] : profile.layout.placements;
+  return { ...profile, id, layout: { ...profile.layout, key: id, seed, placements }, mood: MOODS[id], scenery: place };
 }
 
 /** The arenas of free space that are fights, never races: the Corona (its storms blind the course) and the Event Horizon (the hole's pull is the fight). */

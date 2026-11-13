@@ -19,6 +19,7 @@ import { MARS_AT, MARS_SIZE } from './phobos';
 import { callisto } from './valhalla';
 import { JUPITER_AT, JUPITER_SIZE } from './callisto';
 import { crackBeyond, europa } from './lineae';
+import { CRACK_JUPITER } from './crack';
 import { io } from './flux';
 import { ganymede } from './yards';
 import { hazeBackdrop, hazeDeck } from './kraken';
@@ -861,7 +862,7 @@ export class Landmarks {
     this.scenes.set('phobos', this.mars());
     this.scenes.set('callisto', this.underJupiter(callisto(), JUPITER_AT, JUPITER_SIZE));
     this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
-    this.scenes.set('crack', this.underJupiter(crackBeyond(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
+    this.scenes.set('crack', this.underJupiter(crackBeyond(), CRACK_JUPITER, EUROPA_JUPITER_SIZE));
     this.scenes.set('io', this.underJupiter(io(), IO_JUPITER_AT, IO_JUPITER_SIZE));
     this.scenes.set('ganymede', this.underJupiter(ganymede(), GANYMEDE_JUPITER_AT, GANYMEDE_JUPITER_SIZE));
     this.scenes.set('titan', this.titan());

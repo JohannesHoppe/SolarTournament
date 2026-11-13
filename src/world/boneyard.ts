@@ -7,7 +7,7 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BRIDGE_TYPE, LINEAE_TYPE, RACK_RELIEFS } from './yard';
 import { bottle, colliderOnly, hall, platform } from './highball';
 import { seaPiece, throatGround } from './kraken';
 import { mercuryGround, minersCamp } from './caloris';
@@ -19,7 +19,7 @@ import { plutoGround } from './heart';
 import { ballroom, moonGround } from './ballroom';
 import { ganymedeGround } from './yards';
 import { ioGround } from './flux';
-import { crackGround, europaGround, scienceStation } from './lineae';
+import { crackGround, europaGround, iceSlab, lineaeGround, scienceStation } from './lineae';
 import { phobosGround } from './stickney';
 import { callistoGround, listeningPost } from './valhalla';
 import { wallPiece } from './solarwall';
@@ -106,6 +106,8 @@ export function rackSet(): TemplateSet {
     if (type === CITY_TYPES.neck) return colliderOnly(half);
     if (type === CRACK_TYPE) return crackGround(half);
     if (type === THROAT_TYPE) return throatGround(half);
+    if (type === BRIDGE_TYPE) return iceSlab(half);
+    if (type === LINEAE_TYPE) return lineaeGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -741,7 +743,7 @@ function groundPhoto(): THREE.Texture {
 }
 
 /** The ground's fine detail (dust, grit and pebbles): one tile every DUST_TILE units (20 m). */
-const DUST_TILE = 400;
+export const DUST_TILE = 400;
 
 /** The dust of the crater floor up close: grains of metal dust in many greys, grit, pebbles with their shadows on the side away from the sun's usual side. */
 function dustTexture(): THREE.Texture {

@@ -99,10 +99,10 @@ describe('the shared world on every machine', () => {
       corona: 'b23a7893ecbc3520',
       hole: '2f956ee569996204',
       derelict: 'd51dc8297fd357f6',
-      crack: 'c6e20772cfbd35af',
+      crack: '12c20ea39716a1e4',
       throat: '61c4e0677419b614',
       valhalla: '1f76cc3193c365f5',
-      lineae: 'b98c15645df93d25',
+      lineae: '8ceda99699816829',
     });
   });
 
