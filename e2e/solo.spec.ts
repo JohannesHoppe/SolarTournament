@@ -13,6 +13,37 @@ test('the title screen stands on two legs: the story Lot 7731, in the making and
   expect(errors).toEqual([]);
 });
 
+test("the Derelict's dead are MakeHuman's figures: all eight load, near and far, and draw without a GL error", async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('console', (message) => {
+    if (/Shader Error|WebGLProgram|Frozen figure failed/.test(message.text())) errors.push(message.text());
+  });
+  await page.addInitScript(() => localStorage.setItem('solartournament.quality', JSON.stringify({ choice: 'low' })));
+  await page.goto('/');
+  await page.waitForFunction(() => window.game?.playSolo, null, { timeout: 60_000 });
+  await page.evaluate(() => window.game.playSolo('deathmatch', 'derelict'));
+  await page.waitForFunction(() => window.game.landmarks.wreck.distant.filter(Boolean).length === 8, null, { timeout: 60_000 });
+  // the camera held before one of the dead, then far off, so both levels are drawn
+  for (const distance of [100, 4000]) {
+    await page.evaluate(
+      (distance) =>
+        new Promise<void>((resolve) => {
+          const game = window.game;
+          game.updateCamera = () => {};
+          const at = game.landmarks.wreck.deadAt(0, game.camera.position.clone());
+          game.camera.position.copy(at).add(game.camera.up.clone().multiplyScalar(distance));
+          game.camera.lookAt(at);
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+      distance,
+    );
+  }
+  const kinds = await page.evaluate(() => window.game.landmarks.wreck.meshes.map((mesh: { geometry: { getAttribute(name: string): { count: number } } }) => mesh.geometry.getAttribute('position').count));
+  expect(kinds.every((count: number) => count > 1000)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test('a solo round starts and runs without errors', async ({ page }) => {
   const errors = await openGame(page);
   // the solo plate opens with the default choice: a race against a full grid of seven rivals
