@@ -7,7 +7,7 @@ import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import type { Assets, ShipType } from '../assets';
-import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
+import { ASTEROID_POINTS, AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
 import { allyInLine, Bot, BOOST_BEND, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
 import { BOOST_RECHARGE } from '../ship/driveheat';
@@ -95,16 +95,17 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare, syncShare } from '../net/plausible';
+import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
-import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
+import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
 import { fieldSlice, SYNC_EVERY, SYNC_GRACE, SYNC_SLICES, syncField, type FieldSlice } from '../world/fieldsync';
-import { IMMOVABLE, MASS, massOf, type Body } from '../world/bodies';
+import { IMMOVABLE, MASS, massOf, share, type Body } from '../world/bodies';
+import { onCore } from '../world/junk';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
@@ -833,6 +834,20 @@ const HEAD_PACE = 0.05;
 const headBefore = new THREE.Vector3();
 /** Where the lead's battleship pushed a piece it rammed (see remoteRam). */
 const rammedTo = new THREE.Vector3();
+/** A ship striking a piece of junk (see meetJunk): where it stands out of it, the point struck (in the world and in the piece's frame), the piece's velocity there before, the closing velocity, the piece as a body, its center's velocity after, the arm of the blow and the spin it leaves. */
+const junkAt = new THREE.Vector3();
+const junkPoint = new THREE.Vector3();
+/** Where a ship's path this frame first met a piece (see collide). */
+const sweepAt = new THREE.Vector3();
+const junkLocal = new THREE.Vector3();
+const junkBefore = new THREE.Vector3();
+const junkRelative = new THREE.Vector3();
+const junkBody = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
+const junkCenter = new THREE.Vector3();
+const junkArm = new THREE.Vector3();
+const junkSpin = new THREE.Vector3();
+/** The most a ship's strike sets a piece of junk tumbling (rad/s on top of its spin): a slow, visible turn, as a comet's shower or the battleship's ram leaves it. */
+const JUNK_TUMBLE = 0.6;
 /** The velocity of what does not move: a ring of the tournament holds its place. */
 const STILL = new THREE.Vector3();
 /** Two ships in contact: the way from the first to the second, and where they touch. */
@@ -5548,6 +5563,21 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * Another browser's `ship` struck a piece of junk (see meetJunk): the piece takes the motion
+   * that browser gave it, if a ship of that mass could have given it there (see strikeShare); a
+   * blow beyond is not taken, and the lead's sync of the field keeps the piece where the lead has it.
+   */
+  remoteStrike(state: ShovedState, round: number, ship: Ship) {
+    const piece = this.field.asteroids.get(state.id);
+    if (!piece?.junk || !this.fieldMotion(piece, state, round)) return;
+    const before = this.field.positionOf(piece, state.b, scratch);
+    const gap = Math.max(0, ship.flight.position.distanceTo(before) - piece.radius - ship.radius);
+    const change = Math.max(0, hypot(state.v[0] - piece.velocity.x, state.v[1] - piece.velocity.y, state.v[2] - piece.velocity.z));
+    if (strikeShare(before, rammedTo.fromArray(state.p), change, share(this.field.bodyMass(piece), ship.body.mass), gap, state.b - this.field.clock) > 1) return;
+    this.field.move(state);
+  }
+
+  /**
    * Whether a motion the lead gave a piece belongs to this browser's field: of its round (a
    * newcomer that does not know the round yet takes it for the field it has, as a rock's break),
    * and no older than the motion the piece has (a knock and a ram arriving out of order, or
@@ -7408,12 +7438,13 @@ export class Game implements OnlineGame {
       // a ship hooked to a ship: one rope between two bodies of the same mass, each end pulled
       // on the browser that runs it (both at once where one browser runs both); a torpedo or a
       // probe, which every browser has, pulled everywhere (another browser's ship as it last
-      // told of it); hooked to a rock, the rock is the anchor, far too heavy to move. Each end
-      // pulls along its own stretch, the winch keeping it clear of the piece it lies on.
+      // told of it); hooked to a rock, the rock is the anchor, far too heavy to move, and so is a
+      // piece of junk, which no browser moves for a cable (its sheets would tear before it came).
+      // Each end pulls along its own stretch, the winch keeping it clear of the piece it lies on.
       const target = tether.anchor.ship;
       let length: number | null = tether.length;
       const rock = tether.anchor.rock;
-      const anchor = target ? target.body : held ? held : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
+      const anchor = target ? target.body : held ? held : rockBody(rock && !rock.junk ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
       const runsAnchor = held ? true : target?.owner === null;
       const path = owns || runsAnchor ? tether.cable.path(owns) : null;
       const farFloor = path ? clearOf(owner, path.farRock) : 0;
@@ -8723,10 +8754,15 @@ export class Game implements OnlineGame {
     if (moved > ship.radius) {
       sweep.subVectors(flight.position, ship.previous).divideScalar(moved);
       const hit = this.field.raycast(ship.previous, sweep, moved, false, sweepHit);
-      if (hit) flight.position.copy(ship.previous).addScaledVector(sweep, Math.max(0, hit.distance - 1));
+      const at = hit && sweepAt.copy(ship.previous).addScaledVector(sweep, hit.distance);
+      // a sheet of junk the hull punches through stops nothing: it tears the plug out where it passed (see meetJunk)
+      if (hit && hit.asteroid?.junk && !this.junkCore(hit.asteroid, at!)) this.meetJunk(ship, hit.asteroid, now, at);
+      else if (hit) flight.position.copy(ship.previous).addScaledVector(sweep, Math.max(0, hit.distance - 1));
     }
     const asteroid = this.field.overlap(flight.position, ship.radius);
-    if (asteroid && this.field.resolve(asteroid, flight.position, ship.radius, normal)) {
+    if (asteroid !== this.piercing.get(ship)) this.piercing.delete(ship);
+    if (asteroid?.junk) this.meetJunk(ship, asteroid, now);
+    else if (asteroid && this.field.resolve(asteroid, flight.position, ship.radius, normal)) {
       // a world's ground: the hover field cushions the hull, which glides over it (see world/hover)
       if (asteroid.ground) return this.glideOver(ship, dt, now);
       // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
@@ -8736,6 +8772,64 @@ export class Game implements OnlineGame {
     else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
     // a hull a drill moored (Patience in the campaign): a hull as the battleship's is
     else if (this.school?.touchesHull(flight.position, ship.radius, normal)) this.bounce(ship, STILL, now, 'hull');
+  }
+
+  /** The piece of junk each ship is punching through now (see meetJunk): its plug is torn out once as the hull enters, not again every frame inside. */
+  private readonly piercing = new Map<Ship, Asteroid>();
+
+  /** Whether a point on a piece of junk (in the world) lies on its core, which a hull strikes, rather than a sheet it punches through (see world/junk). */
+  private junkCore(piece: Asteroid, at: THREE.Vector3): boolean {
+    return onCore(piece.junk!.build, junkLocal.copy(at).applyMatrix4(piece.inverse));
+  }
+
+  /**
+   * A ship meets a piece of the Satellite Junkyard's junk (README, "The Satellite Junkyard"),
+   * this browser deciding for the ships it runs and telling the others the piece's motion since
+   * (message `fj`). On a sheet (a wing's panels, a fairing's shell, a stage's tank) the hull
+   * punches through: the plug it tears out takes the hull's speed, the ship losing its share and
+   * flying on, the piece taking the plug's momentum and a tumble from where it was struck, once
+   * as the hull enters. On a core (a satellite's bus, a stage's thrust frame, a stack) the two
+   * bump as bodies of their masses: the ship bounces and takes the blow its own share of the
+   * closing speed deals (a light satellite knocked away hurts little, a stack as rock does), and
+   * the piece flies off with its share.
+   */
+  private meetJunk(ship: Ship, piece: Asteroid, now: number, swept: THREE.Vector3 | null = null) {
+    const flight = ship.flight;
+    // where its path this frame crossed a sheet (`swept`: a ship faster than its radius a frame
+    // may pass a sheet between two frames), else where the hull touches the piece now
+    if (swept) junkPoint.copy(swept);
+    else {
+      junkAt.copy(flight.position);
+      if (!this.field.resolve(piece, junkAt, ship.radius, normal)) return;
+      junkPoint.copy(junkAt).addScaledVector(normal, -ship.radius);
+    }
+    const before = this.field.surfaceVelocity(piece, junkPoint, junkBefore);
+    junkBody.position.copy(junkPoint);
+    junkBody.velocity.copy(before);
+    junkBody.mass = this.field.bodyMass(piece);
+    const closing = junkRelative.subVectors(flight.velocity, before).length();
+    const core = this.junkCore(piece, junkPoint) && !swept;
+    if (core) flight.position.copy(junkAt);
+    const struck = strikeJunk(piece.junk!.build, junkLocal, ship.body, junkBody, normal, this.piercing.get(ship) === piece);
+    if (!struck) return;
+    if (!core) {
+      // through a sheet, once as the hull enters: torn panels flying, a crunch through the hull
+      this.piercing.set(ship, piece);
+      this.effects.sparks(junkPoint, SCRAPE_COLOR, 30 + closing * 0.03);
+      if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(0.8, closing / 4000), rate: 2.6 });
+    }
+    const felt = struck.felt;
+    // the piece's motion since: its center taking the change, a tumble from where it was struck
+    const change = junkBefore.subVectors(junkBody.velocity, before);
+    const center = piece.object.position;
+    this.field.surfaceVelocity(piece, center, junkCenter).add(change);
+    blowSpin(piece, junkArm.subVectors(junkPoint, center), change, JUNK_TUMBLE, junkSpin);
+    const state = blowState(piece, this.field.clock, center, junkCenter, junkSpin, KNOCKED);
+    this.field.move(state);
+    this.online?.sendStrike(state, this.roundId, ship);
+    ship.syncTransform();
+    if (ship === this.me) this.lastScrape = now;
+    this.bounceHurts(ship, felt, now, 'junk');
   }
 
   /** The solids besides the field and the battleship (see game/solids): every use below is taken from this one table. */
@@ -8863,7 +8957,11 @@ export class Game implements OnlineGame {
     if (approach <= 0) return;
     if (ship === this.me) this.lastScrape = now;
     ship.syncTransform();
+    this.bounceHurts(ship, approach, now, what);
+  }
 
+  /** What a blow `approach` hard (units/s; against a body that gives way, the ship's own share of it) does to a ship struck on `what`, with the outward `normal` of this frame: sparks, a crash through the hull, and the impact's damage. */
+  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk') {
     if (approach < SAFE_IMPACT * 0.4) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 40 + approach * 0.05);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, approach / 800), rate: 1.9 });

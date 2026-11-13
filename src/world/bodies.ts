@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Asteroid, TemplateKind } from './asteroids';
+import { junkMass } from './junk';
 
 /**
  * Bodies: everything a rope pulls or a bump shoves has a position, a velocity and a mass (kg).
@@ -42,8 +43,9 @@ export const MASS = {
 
 /**
  * Density of the field's pieces (kg/m³) over the volume of their mean radius: rock about
- * 2,000, ice 900, a satellite network's junk (thin panels, empty tanks and shells) 300, the world ship's
- * hull sections (armor around empty holds) 500. A rock of 100 m is some 10 million tonnes,
+ * 2,000, ice 900, the world ship's hull sections (armor around empty holds) 500; junk 300 only
+ * for a piece of it without a build (its pieces weigh what they are built of, see massOf). A
+ * rock of 100 m is some 10 million tonnes,
  * millions of times a ship: on a rope or in a bump it does not move, and the field keeps its
  * motion (shared by every browser) as it is.
  */
@@ -51,8 +53,13 @@ const DENSITY: Record<TemplateKind, number> = { rock: 2000, ice: 900, debris: 30
 /** Meters per world unit. */
 const METERS = 0.05;
 
-/** The mass of a piece of the field (kg), from its mean radius and its kind's density. */
-export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'>): number {
+/**
+ * The mass of a piece of the field (kg), from its mean radius and its kind's density; a piece of
+ * the Satellite Junkyard's junk from what it is built of (see world/junk: thin sheets and a
+ * dense core, far lighter than a body of the debris density as large).
+ */
+export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'> & { junk?: Asteroid['junk'] }): number {
+  if (piece.junk) return junkMass(piece.junk.build, piece.junk.scale);
   const radius = piece.meanRadius * METERS;
   return ((4 / 3) * Math.PI * radius * radius * radius) * DENSITY[piece.kind];
 }

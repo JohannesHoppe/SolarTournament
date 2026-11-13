@@ -618,7 +618,7 @@ export class JobWorld implements SchoolContext {
     const target = tether.anchor.ship;
     const rock = tether.anchor.rock;
     if (!target) {
-      this.rockBody.mass = rock ? massOf(rock) : IMMOVABLE;
+      this.rockBody.mass = rock && !rock.junk ? massOf(rock) : IMMOVABLE;
       this.rockBody.position.copy(at);
       if (rock) this.field.surfaceVelocity(rock, at, this.rockBody.velocity);
       else this.rockBody.velocity.set(0, 0, 0);

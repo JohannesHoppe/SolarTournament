@@ -5,6 +5,7 @@ import { RACK_BOXES, RACK_RELIEFS } from '../world/yard';
 import { createRocks, DETAIL, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
 import { claimsOf, planMining, standClaims, type Claim, type Plan } from '../world/mining';
 import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
+import { debrisSet } from '../world/shapes';
 
 /** The rock shapes of each detail, built once for all tests (a field only clones them). */
 const built = new Map<number, THREE.Mesh[]>();
@@ -50,6 +51,21 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
     standClaims(field, claims.get(key) ?? claims.set(key, planMining(field)).get(key)!);
   };
   return field;
+}
+
+/** The Satellite Junkyard's real junk (see world/shapes, debrisSet), built once when first asked for. */
+let junkTemplates: TemplateSet | null = null;
+
+/**
+ * A field as `testField`, its junk the Satellite Junkyard's own shapes with what they are built
+ * of (see world/junk), where testField stands rock in for them: for the tests of a ship meeting
+ * junk and of junk meeting junk by their real masses.
+ */
+export function junkField(): AsteroidField {
+  junkTemplates ??= debrisSet();
+  const fracture = fractureSet({ collision: DISTANT_DETAIL, near: DISTANT_DETAIL, far: FAR_DETAIL }, () => undrawn);
+  const rocks: TemplateSet = { near: shapes(DISTANT_DETAIL), far: [], fracture };
+  return new AsteroidField({ rock: rocks, ice: rocks, debris: junkTemplates, hull: { near: PLAIN_HULLS.map(box), far: [], box: true }, rack: { near: RACKS, far: [], box: true, reliefs: RACK_RELIEFS } });
 }
 
 /** The layouts the game dresses with the Rockborn's mining (see Game.enterArena). */

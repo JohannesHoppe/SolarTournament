@@ -83,6 +83,12 @@ const MAX_RAMS_PER_SECOND = 60;
  * contact every few seconds, a rock's fragments meeting its neighbours at once.
  */
 const MAX_KNOCKS_PER_SECOND = 40;
+/**
+ * The strikes of the Satellite Junkyard's junk a browser tells of (message `fj`): one as a hull
+ * punches into a piece's sheet or strikes its core, a few a second for the ships it runs even
+ * when a pack of bots ploughs through a cloud of junk.
+ */
+const MAX_STRIKES_PER_SECOND = 20;
 /** The lead sends a slice of its field every SYNC_EVERY seconds (see world/fieldsync): twice that rate with room for a burst. */
 const MAX_SYNCS_PER_SECOND = 2 / SYNC_EVERY;
 /** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit, a torpedo's or a nova core's. */
@@ -185,6 +191,8 @@ export class Session {
   onRam: (state: ShovedState, round: number) => void = () => {};
   /** A piece of the field struck another or a ring in a round, as the lead browser decided: its motion since (see world/contacts). */
   onKnock: (state: ShovedState, round: number) => void = () => {};
+  /** A ship of another browser struck a piece of the Satellite Junkyard's junk in a round, as its browser decided: the piece's motion since (see Game.meetJunk). */
+  onStrike: (state: ShovedState, round: number, ship: string) => void = () => {};
   /** A slice of the lead browser's field in a round, with the field times its comets' heads broke up (null for one still whole, see world/fieldsync). */
   onFieldSync: (slice: FieldSlice, round: number, heads: (number | null)[]) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
@@ -276,6 +284,7 @@ export class Session {
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
   private readonly ramBudget = new Budget(MAX_RAMS_PER_SECOND);
   private readonly knockBudget = new Budget(MAX_KNOCKS_PER_SECOND);
+  private readonly strikeBudget = new Budget(MAX_STRIKES_PER_SECOND);
   private readonly syncBudget = new Budget(MAX_SYNCS_PER_SECOND);
   private readonly stateBudget = new Budget(STATE_RATE * 3);
   private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
@@ -348,6 +357,14 @@ export class Session {
       const round = int(d?.n, 0, MAX_COUNT);
       if (!state || round === null || from !== this.leadId || !this.knockBudget.spend(from)) return;
       this.guard(() => this.onKnock(state, round));
+    });
+    transport.on('fj', (d, from) => {
+      // the browser that runs a ship decides what it strikes, so only that browser tells of it
+      const state = shovedState(d?.m);
+      const round = int(d?.n, 0, MAX_COUNT);
+      const ship = id(d?.s);
+      if (!state || round === null || !ship || ownerOf(ship) !== from || !this.strikeBudget.spend(from)) return;
+      this.guard(() => this.onStrike(state, round, ship));
     });
     transport.on('fs', (d, from) => {
       // the lead's field is the one every browser sets its own to, so only the lead sends it
@@ -751,6 +768,11 @@ export class Session {
   /** A piece of the field struck another or a ring in `round`, as the lead decided: its motion since (see world/contacts). */
   sendKnock(state: ShovedState, round: number) {
     this.transport.send('fk', { m: state, n: round });
+  }
+
+  /** The own `ship` struck a piece of junk in `round`: the piece's motion since (see Game.meetJunk). */
+  sendStrike(state: ShovedState, round: number, ship: string) {
+    this.transport.send('fj', { m: state, n: round, s: ship });
   }
 
   /** A slice of the own field in `round` (the lead's, see world/fieldsync), with the field times the round's comets' heads broke up (null while whole). */
