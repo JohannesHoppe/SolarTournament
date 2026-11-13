@@ -130,8 +130,8 @@ async function playRounds(browser: Browser, mode: string) {
   return { ...result, rounds, detail: JSON.stringify(detail) };
 }
 
-/** The arenas a mode is played in, for the time the rounds take (checked in playRounds): the seven of free space, a race's with the one race world, a deathmatch's with the two worlds fought over; or the one of BALANCE_ARENA. */
-const arenaCount = (mode: string) => (ONLY ? 1 : mode === 'race' ? 8 : mode === 'deathmatch' ? 9 : 7);
+/** The arenas a mode is played in, for the time the rounds take (checked in playRounds): the seven of free space, a race's with the two race worlds (the Crack, the Throat), a deathmatch's with the two worlds fought over; or the one of BALANCE_ARENA. */
+const arenaCount = (mode: string) => (ONLY ? 1 : mode === 'race' || mode === 'deathmatch' ? 9 : 7);
 /** Long enough for every round of a mode, PAGES at a time. */
 const timeout = (mode: string) => Math.ceil((arenaCount(mode) * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
 
