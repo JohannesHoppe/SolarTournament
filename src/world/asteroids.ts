@@ -35,19 +35,18 @@ export const CRUMBLE_SECONDS = 2;
  * and its spin: the energy a break puts into a rock is about the same whatever its size, so its
  * pieces part slower the heavier it was, by the inverse square root of its mass. A piece of
  * FRAGMENT_REFERENCE (20 m) flies apart at FRAGMENT_SPEED (7.5 m/s), a smaller one no faster, a
- * 30 m one at 4 m/s; none slower than FRAGMENT_SLOWEST (3 m/s), which every rock from about 38 m
- * up gets. The floor is the game's: a real pile of a hundred meters would part at centimeters a
- * second, and pieces that slow lie in each other while their orbits carry them about (see
- * world/contacts), where 3 m/s takes them clear within seconds.
+ * 30 m one at 4 m/s, a 100 m one at 0.7 m/s, the belt's largest (350 m) at 10 cm/s: a big rock
+ * cracks and its pieces drift apart slowly, still cover where it stood. Siblings of one break
+ * part through each other however slowly (see world/contacts), and they keep circling with
+ * their rock's orbit together, so nothing needs them faster.
  */
 const FRAGMENT_SPEED = 150;
 const FRAGMENT_REFERENCE = 400;
-const FRAGMENT_SLOWEST = 60;
 
 /** How fast the pieces of a rock of `meanRadius` (units) fly apart (see FRAGMENT_SPEED). */
 export function fragmentSpeed(meanRadius: number): number {
   const ratio = FRAGMENT_REFERENCE / Math.max(meanRadius, FRAGMENT_REFERENCE);
-  return Math.max(FRAGMENT_SLOWEST, FRAGMENT_SPEED * ratio * Math.sqrt(ratio));
+  return FRAGMENT_SPEED * ratio * Math.sqrt(ratio);
 }
 /** How fast a piece of a broken rock tumbles besides its parent's spin: up to this share of the layout's spin, about an axis of its own. */
 const FRAGMENT_TUMBLE = 1;

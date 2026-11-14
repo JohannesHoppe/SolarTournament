@@ -352,13 +352,14 @@ describe('collision with a box piece', () => {
 });
 
 describe('the speed a rock breaks apart at', () => {
-  it("falls with the rock's size by the same energy a break puts in: 7.5 m/s for the small, never under 3 m/s", () => {
+  it("falls with the rock's size by the same energy a break puts in: 7.5 m/s for the small, centimeters a second for the largest", () => {
     expect(fragmentSpeed(400)).toBe(150);
     expect(fragmentSpeed(100)).toBe(150);
     // half again the size: (3/2)³ the mass, the speed by its square root
     expect(fragmentSpeed(600)).toBeCloseTo(150 / Math.sqrt(3.375), 6);
-    expect(fragmentSpeed(2200)).toBe(60);
-    expect(fragmentSpeed(7000)).toBe(60);
+    // a 100 m rock at 0.7 m/s, the belt's largest (350 m) at 10 cm/s: no floor
+    expect(fragmentSpeed(2000) * 0.05).toBeCloseTo(0.67, 2);
+    expect(fragmentSpeed(7000) * 0.05).toBeCloseTo(0.1, 2);
   });
 });
 
