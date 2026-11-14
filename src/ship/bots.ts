@@ -50,6 +50,36 @@ const STRAIN_AIM = 0.5;
 const STRAIN_REACTION = 0.15;
 /** How hard g costs a clone its aim and reflexes (0..1): only extreme g, past what a seasoned clone flies through (see ship/strainhand, extremeAfter), the same onset a Host's hands have. */
 const strainPenalty = (ship: Ship) => ship.extreme;
+/**
+ * A bot flies its clone's strain as a pilot does: it spends it where it matters (out of danger,
+ * away from a nova, jinking under attack, the moment it fires, on a race's line) and otherwise eases off once the
+ * strain reaches its hold, STRAIN_HOLD at daring 0 and STRAIN_HOLD_DARING more at daring 1 (the
+ * daring push it further): then it lets the drive rest and the thrusters push at most
+ * EASY_PUSH of their strength (about 2.5 g, under the 3 g a clone recovers below), until the
+ * strain has fallen STRAIN_RECOVER below the hold (a second and a bit at the clone's recovery).
+ */
+const STRAIN_HOLD = 0.45;
+const STRAIN_HOLD_DARING = 0.35;
+const STRAIN_RECOVER = 0.35;
+const EASY_PUSH = 0.25;
+/** The strain at which a bot of this daring eases off (see STRAIN_HOLD). */
+export const strainHold = (daring: number) => STRAIN_HOLD + STRAIN_HOLD_DARING * daring;
+/** Whether a bot flies gently now: at or past its hold it does, until the strain has fallen STRAIN_RECOVER below it (see STRAIN_HOLD). */
+export function easesOff(recovering: boolean, strain: number, daring: number): boolean {
+  const hold = strainHold(daring);
+  return strain >= hold || (recovering && strain > hold - STRAIN_RECOVER);
+}
+/** Eases the drive and the thrusters of `controls` so the clone recovers (see STRAIN_HOLD). */
+export function flyGently(controls: Controls) {
+  controls.thrust = 0;
+  const push = hypot(controls.strafeX, controls.strafeY, controls.strafeZ);
+  if (push > EASY_PUSH) {
+    const share = EASY_PUSH / push;
+    controls.strafeX *= share;
+    controls.strafeY *= share;
+    controls.strafeZ *= share;
+  }
+}
 /** A bot sees another ship hunting a third (see huntersOf) when its nose lies within HUNT_ANGLE (rad, about 17°) of it, within FIRE_RANGE. */
 const HUNT_ANGLE = 0.3;
 /**
@@ -490,6 +520,8 @@ export class Bot {
   /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
   private lookBackUntil = 0;
   private nextLookBack = 0;
+  /** The clone's strain reached the bot's hold (see strainHold): it flies gently until the strain has fallen STRAIN_RECOVER below it. */
+  private recovering = false;
   /**
    * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
@@ -787,6 +819,12 @@ export class Bot {
     }
     this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
+    // the clone's strain: spent out of danger, away from a nova, jinking under attack, on the shot
+    // and on a race's line, where the gates' housings punish a slack hand; else the bot eases off
+    // at its hold until it has recovered (see STRAIN_HOLD)
+    this.recovering = easesOff(this.recovering, this.ship.strain, this.skills.daring);
+    const spending = danger || !!this.flee || defending || controls.fire || racing;
+    if (this.recovering && !spending) flyGently(controls);
     if (devlog) {
       // what the bot does, the first that holds: running from danger, then its task
       const doing = this.flee ? 'flee' : falling ? 'escape well' : hot ? 'climb out of the heat' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
