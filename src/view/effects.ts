@@ -243,10 +243,10 @@ const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
 /** At most this many exhaust puffs per frame and ship, even at extreme speed. */
 const TRAIL_MAX_PUFFS = 12;
-/** A laser's muzzle flash: its size (units, 4 m), how long it glows (s) and how bright (times its color). */
-const MUZZLE_SIZE = 80;
-const MUZZLE_LIFE = 0.09;
-const MUZZLE_GLOW = 1.6;
+/** A laser's muzzle flash: its size (units, 8 m), how long it glows (s) and how bright (times its color). */
+const MUZZLE_SIZE = 160;
+const MUZZLE_LIFE = 0.12;
+const MUZZLE_GLOW = 2.5;
 const muzzleColor = new THREE.Color();
 const zero = new THREE.Vector3();
 const scratch = new THREE.Vector3();
