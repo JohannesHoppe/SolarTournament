@@ -5661,13 +5661,9 @@ export class Game implements OnlineGame {
     this.trackJinks(fleet, dt);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
     if (devlog && fleet.held > held) devlog.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: 'held', part: 'battery', zone: -1, weapon: null, count: fleet.held - held });
-    // what the sun burnt into its parts (the lead's count, which the others take from its state)
-    for (let i = 0; i < fleet.burns.length; i += 2) {
-      const zone = fleet.burns[i];
-      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon: 'sun', count: fleet.burns[i + 1] });
-      this.fleetEvents(fleet.hit(zone, fleet.burns[i + 1]), null);
-    }
-    fleet.burns.length = 0;
+    // what the sun burnt into its parts and its rams broke of them (the lead's count, which the others take from its state)
+    this.unshot(fleet, fleet.burns, 'sun');
+    this.unshot(fleet, fleet.rammed, 'ram');
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
@@ -5687,6 +5683,16 @@ export class Game implements OnlineGame {
       this.radio.announce(fleet.phase === 2 ? ANNOUNCER_FLEET.plume : ANNOUNCER_FLEET.open, null);
       this.speaker.say(fleet.phase === 2 ? COMPUTER.fleetPlume : COMPUTER.reactorOpen, 'urgent');
     }
+  }
+
+  /** Hits on the battleship's parts without a shooter (pairs of part and hits: the sun's burns, its rams), counted and the list emptied. */
+  private unshot(fleet: Fleet, hits: number[], weapon: 'sun' | 'ram') {
+    for (let i = 0; i < hits.length; i += 2) {
+      const zone = hits[i];
+      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon, count: hits[i + 1] });
+      this.fleetEvents(fleet.hit(zone, hits[i + 1]), null);
+    }
+    hits.length = 0;
   }
 
   /**

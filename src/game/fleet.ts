@@ -15,7 +15,7 @@ import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS,
 import { msg, t } from '../i18n/i18n';
 import { NOVA_RADIUS } from './items';
 import { JINK_SCATTER, JINK_SCATTER_MAX, SIEGE_DISTANCE } from '../ship/bots';
-import { RCS_THRUST } from '../ship/flight';
+import { METERS_PER_UNIT, RCS_THRUST } from '../ship/flight';
 import { AIR_BURN, type Air } from '../world/air';
 import { MAX_HEAT, OVERHEAT_RESUME, RADIATE, SUN_ABSORB } from '../ship/ship';
 import { PlumeLook } from '../view/plume';
@@ -247,6 +247,25 @@ const RAM_SPIN = 0.3;
  */
 const RAM_RESTING = 20;
 const RAM_GAP = 1;
+/**
+ * A ram costs a part it strikes (a battery, a drive, the reactor, within TORPEDO_REACH of where
+ * the piece meets the hull) hits by its energy: the energy the two lose meeting (½ μ v² (1 − e²),
+ * μ the reduced mass, v the speed they close at, e RAM_RESTITUTION), of which the softer rock,
+ * ice or junk takes the most, crushing; RAM_ARMOR of it goes into the armor, a hit for every
+ * RAM_HIT_JOULES (J), what a torpedo's warhead puts into a part for each of its TORPEDO_HITS (its
+ * 42 MJ, see game/torpedoes). Less than a hit the armor takes without harm. A chunk of ice of 20 m
+ * met at the cruising 30 m/s frees some 1.6 GJ, 38 hits: nearly as much as four torpedoes. The hull
+ * itself, between its parts, the Games keep whole (see README).
+ */
+const RAM_ARMOR = 0.1;
+const RAM_HIT_JOULES = 4.2e6;
+
+/** The hits a part takes from a piece of `mass` (kg) meeting the hull there closing at `approach` (units/s; see RAM_ARMOR). */
+export function ramHits(mass: number, approach: number): number {
+  const speed = approach * METERS_PER_UNIT;
+  const reduced = (mass * MASS.battleship) / (mass + MASS.battleship);
+  return Math.floor((0.5 * reduced * speed * speed * (1 - RAM_RESTITUTION * RAM_RESTITUTION) * RAM_ARMOR) / RAM_HIT_JOULES);
+}
 /** A piece that reaches into the hull is pushed out again at most this many times a frame, for the colliders a push moves it into. */
 const RAM_PASSES = 3;
 /** Two crossed boxes hold a round body (see Fleet's `round`): each its full width one way and this share of it the other. */
@@ -1635,6 +1654,7 @@ export class Fleet implements Obstacle {
     ramHull.velocity.crossVectors(this.spin, sweep.subVectors(point, this.position)).add(this.velocity);
     sweep.copy(ramHull.velocity);
     const approach = ramHull.velocity.dot(normal) - ramVelocity.dot(normal);
+    if (approach > 0) this.bruise(point, ramPiece.mass, approach);
     if (approach <= 0 || (toPiece < 0.5 && approach * (1 + RAM_RESTITUTION) * toPiece < RAM_RESTING)) {
       // parting already, or bouncing gently off a piece heavier than itself: the hull alone gives way
       if (approach > 0) this.velocity.addScaledVector(normal, -approach * (1 + RAM_RESTITUTION));
@@ -1660,6 +1680,20 @@ export class Fleet implements Obstacle {
     if (piece.weld === null) this.budge(field, piece, clock, change, push, normal, point, RAM_SPIN);
     else for (const member of field.welded(piece)) this.budge(field, member, clock, change, push, normal, point, 0);
   }
+
+  /**
+   * A piece of `mass` (kg) met the hull at `point` closing at `approach` (units/s): the parts it
+   * strikes take hits by the energy their armor takes (see RAM_ARMOR), kept in `rammed` for the
+   * game to count; the lead's state tells the other browsers.
+   */
+  private bruise(point: THREE.Vector3, mass: number, approach: number) {
+    const hits = ramHits(mass, approach);
+    if (hits <= 0) return;
+    for (const zone of this.blast(point)) this.rammed.push(zone, hits);
+  }
+
+  /** The hits rams dealt the parts since last asked (pairs of part and hits; see bruise), for the game to count as hits without a shooter (see Game.playFleet). */
+  readonly rammed: number[] = [];
 
   /** A piece takes a blow of the hull (see shove): its center's velocity changes by `change`, it is pushed `push` along `normal`, and it tumbles from `point` by at most `tumble` (rad/s); the lead tells the other browsers. */
   private budge(field: AsteroidField, piece: Asteroid, clock: number, change: THREE.Vector3, push: number, normal: THREE.Vector3, point: THREE.Vector3, tumble: number) {
