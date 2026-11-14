@@ -84,7 +84,7 @@ export const RADIATE = 20;
  */
 export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
-const OVERHEAT_RESUME = 30;
+export const OVERHEAT_RESUME = 30;
 /**
  * The radiators glow with the heat they shed (see models' radiator): from RADIATOR_GLOW of the
  * laser's limit on, dull red, deepening to orange-red at the limit, as hot metal does. The metal

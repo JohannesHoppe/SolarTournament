@@ -38,6 +38,66 @@ const breakAll = (fleet: Fleet, zones: number[]) => zones.flatMap((zone) => Arra
 const down = new THREE.Vector3(0, -1, 0);
 
 describe("the President's fleet", () => {
+  it('heats its parts in a burning sun as a fighter: a sunlit battery falls silent and burns, one in the hull\'s shade cools and fires again', () => {
+    const fleet = new Fleet(7, testField());
+    fleet.arrivesAt = 0;
+    const batteries = zonesOf(fleet, 'battery');
+    // the Corona's sun straight above the deck: the batteries on it in its light
+    const sun = new THREE.Vector3(0, 1, 0);
+    fleet.setSun(4.2e6, sun);
+    let clock = 0;
+    let shots = 0;
+    const run = (seconds: number) => {
+      for (const end = clock + seconds; clock < end; clock += 0.05) {
+        fleet.lead(0.05, clock, []);
+        for (const { zone } of fleet.firing(clock)) {
+          fleet.shotHeat(zone);
+          shots++;
+        }
+      }
+    };
+    run(30);
+    const lit = batteries.filter((zone) => fleet.sunlit[zone]);
+    expect(lit.length).toBeGreaterThan(0);
+    for (const zone of lit) expect(fleet.overheated[zone]).toBe(true);
+    // full in the sun, the parts burn into hits
+    expect(fleet.burns.length).toBeGreaterThan(0);
+    fleet.burns.length = 0;
+    // silent: a sunlit battery lets its turns go by
+    shots = 0;
+    const held = fleet.held;
+    run(10);
+    expect(fleet.held - held).toBeGreaterThan(0);
+    // the sun beneath the hull: the deck in its shade, the batteries cool and fire again
+    sun.set(0, -1, 0);
+    run(20);
+    for (const zone of lit) {
+      expect(fleet.sunlit[zone]).toBe(false);
+      expect(fleet.overheated[zone]).toBe(false);
+    }
+    shots = 0;
+    run(10);
+    expect(shots).toBeGreaterThan(0);
+    // the other browsers take the heat from the lead's state
+    const other = new Fleet(7);
+    fleet.overheated[lit[0]] = true;
+    other.follow(JSON.parse(JSON.stringify(fleet.toState())));
+    expect(other.overheated[lit[0]]).toBe(true);
+    expect(other.heat).toEqual(fleet.heat.map(Math.round));
+  });
+
+  it('stays cool where the sun is weak: its batteries fire on in the Rings of Saturn', () => {
+    const fleet = new Fleet(7, testField());
+    fleet.arrivesAt = 0;
+    fleet.setSun(15, new THREE.Vector3(0, 1, 0));
+    for (let clock = 0; clock < 60; clock += 0.05) {
+      fleet.lead(0.05, clock, []);
+      for (const { zone } of fleet.firing(clock)) fleet.shotHeat(zone);
+    }
+    expect(fleet.overheated.some(Boolean)).toBe(false);
+    expect(fleet.held).toBe(0);
+  });
+
   it('takes a beam on its armor, its batteries, and its reactor only once the dome is open', () => {
     const fleet = battleship();
     const reactor = zonesOf(fleet, 'reactor')[0];
@@ -377,7 +437,7 @@ describe("the battleship and the field's rock", () => {
    */
   const sail = (arena: ArenaProfile, hunted: boolean) => {
     field.generate(arena.layout);
-    const fleet = new Fleet(arena.layout.seed, field, arena.sheet);
+    const fleet = new Fleet(arena.layout.seed, field, arena.sheet, arena.lane);
     field.obstacle = fleet;
     const wrecks = new Wrecks();
     const probes = new Probes();
@@ -625,7 +685,7 @@ const BOW_DOOR = 1650;
 function bowOn(field: AsteroidField, arena: ArenaProfile, share: number, into = 50) {
   field.generate(arena.layout);
   field.setClock(1);
-  const fleet = new Fleet(arena.layout.seed, field, arena.sheet);
+  const fleet = new Fleet(arena.layout.seed, field, arena.sheet, arena.lane);
   fleet.arrivesAt = 0;
   fleet.position.set(0, 0, 0);
   fleet.quaternion.identity();

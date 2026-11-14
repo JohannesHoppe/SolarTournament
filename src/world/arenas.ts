@@ -69,7 +69,7 @@ export const HOLE_RADIUS = 7000;
  * side of it, a rock every SHADE_STEP of the orbit within SHADE_ARC of where it faces the sun
  * squarely, each SHADE_OUT beyond the orbit (units, 580 m: its hull's half width, the clearance it
  * keeps from rock and the rock itself to spare) and lifted as the sun's rays rise, so its shadow
- * falls across the hull's lane; on to SHADE_SIDE, where the sun runs ever more along the lane,
+ * falls across the hull's lane (SHADE_LANE); on to SHADE_SIDE, where the sun runs ever more along the lane,
  * each stands SHADE_OUT straight out from the orbit, its shadow running beside the lane. Ships
  * attacking the battleship hold in their shade, out of a sun that burns hulls (see ship/ship,
  * SUN_ABSORB); the field's own rocks shade the lane on the far side from the sun. Solid, so the
@@ -80,7 +80,11 @@ const SHADE_OUT = 11700;
 const SHADE_STEP = (8 * Math.PI) / 180;
 const SHADE_ARC = (53 * Math.PI) / 180;
 const SHADE_SIDE = (101 * Math.PI) / 180;
-const SHADE_SCALE = 4;
+const SHADE_SCALE = 3;
+/** The height of the battleship's lane at the Corona (units: the field's plane, where the fights are, so the rocks shade them too), set for the arena (see ArenaProfile.lane), which the shade rocks' shadows fall across; rocks of SHADE_SCALE leave its hull ROCK_CLEAR and more as it passes. */
+export const SHADE_LANE = 0;
+/** Every other shade rock stands SHADE_RISE (units, 550 m) higher, so its shadow lies high over the battleship's deck, where ships attacking the reactor hold (see game/fleet siegeFrom: 600 m off it, steeply above), the others' beside its flanks. */
+const SHADE_RISE = 11000;
 function coronaShades(): Placement[] {
   const sun = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize();
   const rise = SUN_DIRECTION.y / Math.sqrt(SUN_DIRECTION.x * SUN_DIRECTION.x + SUN_DIRECTION.z * SUN_DIRECTION.z);
@@ -93,7 +97,7 @@ function coronaShades(): Placement[] {
     const position = radial.clone().multiplyScalar(SHADE_ORBIT);
     if (facingSun) position.addScaledVector(sun, out);
     else position.addScaledVector(radial, out);
-    position.y = Math.max(0, position.clone().sub(radial.clone().multiplyScalar(SHADE_ORBIT)).dot(sun)) * rise;
+    position.y = SHADE_LANE + (k % 2) * SHADE_RISE + Math.max(0, position.clone().sub(radial.clone().multiplyScalar(SHADE_ORBIT)).dot(sun)) * rise;
     placements.push({ kind: 'rock', type: k % 16, scale: SHADE_SCALE, position, orientation: new THREE.Quaternion(), solid: true });
   }
   return placements;
@@ -127,6 +131,8 @@ export interface ArenaProfile {
   grains?: number;
   /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
   sheet?: number;
+  /** The height (units) the President's battleship's lane runs at where the arena sets it, the Corona's for the rocks it lays along it (see SHADE_LANE); else laid out from the field (see game/fleet). */
+  lane?: number;
   /** The light of the haze of its air (see view/haze), right under the deck and deep down, where it is not Jupiter's (see world/jupiter). */
   hazeLight?: { deck: THREE.Color; deep: THREE.Color };
   /** A place of the campaign: no edge, no grid; a ship may fly on into the empty dark as far as it likes. */
@@ -1191,6 +1197,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     tagline: msg('Close to the sun. Its light burns any hull out of the shadows, and its storms blind the sensors.'),
     layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, placements: coronaShades() },
     sunlight: 4.2e6,
+    lane: SHADE_LANE,
     storms: true,
     sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
     mood: MOODS.corona,

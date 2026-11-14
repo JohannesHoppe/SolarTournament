@@ -3125,8 +3125,10 @@ export class Game implements OnlineGame {
       this.fleet.dispose();
     }
     // flying clear of the field's pieces, its lane laid out from the field as generated, before a snapshot breaks any, and clear of the ring's sheet
-    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed, this.field, arena.sheet) : null;
+    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed, this.field, arena.sheet, arena.lane) : null;
     if (this.fleet) this.scene.add(this.fleet.root);
+    // its parts heat in the arena's sunlight as a fighter does
+    this.fleet?.setSun(arena.sunlight, this.space.sunDirection);
     // its hull hides what is behind it and stops torpedoes
     this.field.obstacle = this.fleet;
     this.fleetCalled = false;
@@ -5619,7 +5621,16 @@ export class Game implements OnlineGame {
     fleet.rams.length = 0;
     fleet.update(clock, now);
     fleet.view(this.camera.position);
+    const held = fleet.held;
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
+    if (devlog && fleet.held > held) devlog.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: 'held', part: 'battery', zone: -1, weapon: null, count: fleet.held - held });
+    // what the sun burnt into its parts (the lead's count, which the others take from its state)
+    for (let i = 0; i < fleet.burns.length; i += 2) {
+      const zone = fleet.burns[i];
+      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon: 'sun', count: fleet.burns[i + 1] });
+      this.fleetEvents(fleet.hit(zone, fleet.burns[i + 1]), null);
+    }
+    fleet.burns.length = 0;
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
@@ -5657,6 +5668,8 @@ export class Game implements OnlineGame {
       }
     }
     if (!target) return;
+    fleet.shotHeat(zone);
+    devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: fleet.sunlit[zone] ? 'sun' : 'shade', part: 'battery', zone, weapon: null, count: 1 });
     const roll = hash(textSeed(target.id), shot, zone) / 0x100000000;
     const hit = roll < batteryChance(target.flight.velocity.length(), distance);
     const end = scratch.copy(target.flight.position);
@@ -6003,13 +6016,16 @@ export class Game implements OnlineGame {
     // from its shadow side, or a rock's beside its lane, coming at it from the sun's side), out of
     // its drive plume and in sight of the part
     const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
+    // and once the reactor is open, it alone: only it sinks the ship, and time out in such a sun is
+    // too dear to spend on the drives
+    const core = burns && fleet.phase === 3 ? (part: number) => fleet.zones[part].kind === 'reactor' : undefined;
     let zone = -1;
     let from: THREE.Vector3 = bot.ship.flight.position;
     if (burns) {
       let nearest = Infinity;
       for (const side of SIEGE_SIDES) {
         const point = siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, side * SHADE_FAR);
-        const shaded = (part: number) => this.field.raycast(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
+        const shaded = (part: number) => (!core || core(part)) && this.field.raycast(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
         const found = fleet.nearestZone(bot.ship.flight.position, shaded);
         if (found < 0) continue;
         const distance = fleet.siegeFrom(found, point, SIEGE_DISTANCE, siegeProbe).distanceTo(bot.ship.flight.position);
@@ -6021,7 +6037,7 @@ export class Game implements OnlineGame {
       }
     }
     if (zone < 0) {
-      zone = fleet.nearestZone(bot.ship.flight.position);
+      zone = fleet.nearestZone(bot.ship.flight.position, core);
       from = bot.ship.flight.position;
     }
     if (zone < 0) return null;
