@@ -14,7 +14,8 @@ import { Elevation, EMPHASES, machinery } from './machinery';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
 import { NOVA_RADIUS } from './items';
-import { SIEGE_DISTANCE } from '../ship/bots';
+import { JINK_SCATTER, JINK_SCATTER_MAX, SIEGE_DISTANCE } from '../ship/bots';
+import { RCS_THRUST } from '../ship/flight';
 import { AIR_BURN, type Air } from '../world/air';
 import { MAX_HEAT, OVERHEAT_RESUME, RADIATE, SUN_ABSORB } from '../ship/ship';
 import { PlumeLook } from '../view/plume';
@@ -133,14 +134,21 @@ const BATTERY_SHOT_HEAT = 15;
 const SUN_CHECK = 0.25;
 const SUN_PROBE = 100000;
 /**
- * A battery's beam hits with a chance that falls with the target's speed and distance: at
- * rest and close BATTERY_AIM, at full tournament speed (BATTERY_DODGE_SPEED, units/s) and the
- * edge of its range a quarter of that. Moving is what saves a pilot.
+ * A battery's beam crosses its 1.5 km in 5 µs: no ship outruns it, however fast, and what it
+ * misses by is its turret's aim. The turret aims where the target is going on the motion it
+ * tracked, as a bot does (see ship/bots, senseJink): a target that changes its motion across the
+ * line of sight scatters the aim, by a whole ship radius at half the thrusters' push (5 g), at
+ * most JINK_SCATTER_MAX radii, and the beam hits as often as the hull covers the scatter's disc
+ * (one over the scatter squared, all of it within a radius). It cannot follow a ship whose line
+ * of sight swings faster than its mount slews (BATTERY_SLEW, rad/s, about 29°/s, a heavy naval
+ * gun mount's): crossing speed over distance, 250 m/s within 500 m; such a ship it misses. Its
+ * pointing jitter grows with the distance: close BATTERY_AIM, at the edge of its range half of
+ * that. Steady flight is easy to hit; jinking, and flying close across the hull, save a pilot.
  */
-export const BATTERY_AIM = 0.7;
+export const BATTERY_AIM = 0.4;
+export const BATTERY_SLEW = 0.5;
 /** A battery's beam is heavier than a ship's laser: on top of what a laser does where it strikes, it takes this much hull. */
 export const BATTERY_DAMAGE = 10;
-const BATTERY_DODGE_SPEED = 5000;
 /** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second within PLUME_CORE (units, 300 m) of the nozzles, then falling off with the square of the distance, a twenty-fifth at its end. */
 export const PLUME_REACH = 30000;
 const PLUME_CORE = 6000;
@@ -666,8 +674,16 @@ function crestTexture(): THREE.CanvasTexture | null {
   return texture;
 }
 
-/** The chance a battery's beam hits a target this fast (units/s) this far away (units). */
-export const batteryChance = (speed: number, distance: number) => BATTERY_AIM * (1 - 0.5 * Math.min(1, speed / BATTERY_DODGE_SPEED)) * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE));
+/**
+ * The chance a battery's beam hits a target that changes its motion across the line of sight by
+ * `jink` (units/s², smoothed as a bot senses it), whose line of sight swings at `crossing`
+ * (rad/s), `distance` (units) away (see BATTERY_AIM).
+ */
+export function batteryChance(jink: number, crossing: number, distance: number): number {
+  if (crossing > BATTERY_SLEW) return 0;
+  const scatter = Math.max(1, Math.min(JINK_SCATTER_MAX, jink / (RCS_THRUST * JINK_SCATTER)));
+  return (BATTERY_AIM * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE))) / (scatter * scatter);
+}
 
 /** A part of the battleship as a torpedo homes on it: where it is, and whether it can still be hit. */
 class Beacon implements Homing {

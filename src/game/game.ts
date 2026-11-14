@@ -9,7 +9,7 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOOST_BEND, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOOST_BEND, JINK_MEMORY, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
 import { BOOST_RECHARGE } from '../ship/driveheat';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
@@ -952,6 +952,10 @@ const hookEnd = new THREE.Vector3();
 /** The part of the battleship the HUD marks, how far a battery's beam misses, and the point of the plume a bot flies away from. */
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
+/** A ship's change of motion across the line to the battleship, gravity's pull and that line (see trackJinks, fireBattery). */
+const jinkStep = new THREE.Vector3();
+const jinkPull = new THREE.Vector3();
+const jinkLine = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
 /** A torpedo's velocity against the hull it hits (see applyTorpedoHit). */
 const closingOf = new THREE.Vector3();
@@ -1522,6 +1526,8 @@ export class Game implements OnlineGame {
   private readonly harpoonedAt = new Map<Ship, number>();
   /** Whether the own ship's heat sink vented last frame (see Ship.venting). */
   private wasVenting = false;
+  /** Every ship as the battleship's fire control tracks it: its velocity a step ago and how hard it jinks (see trackJinks). */
+  private readonly jinks = new Map<Ship, { velocity: THREE.Vector3; jink: number }>();
   private readonly cables = new Cables();
   private hookReadyAt = 0;
   private hookHeld = false;
@@ -5652,6 +5658,7 @@ export class Game implements OnlineGame {
     fleet.update(clock, now);
     fleet.view(this.camera.position);
     const held = fleet.held;
+    this.trackJinks(fleet, dt);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
     if (devlog && fleet.held > held) devlog.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: 'held', part: 'battery', zone: -1, weapon: null, count: fleet.held - held });
     // what the sun burnt into its parts (the lead's count, which the others take from its state)
@@ -5683,9 +5690,37 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * The batteries' fire control tracks every ship: how hard it changes its motion across the
+   * line to the battleship (units/s², smoothed over JINK_MEMORY as a bot senses its target's,
+   * see batteryChance), gravity's share taken out, which the fire control reckons with.
+   */
+  private trackJinks(fleet: Fleet, dt: number) {
+    if (dt <= 0) return;
+    for (const ship of this.ships) {
+      const track = this.jinks.get(ship);
+      if (!track) {
+        this.jinks.set(ship, { velocity: ship.flight.velocity.clone(), jink: 0 });
+        continue;
+      }
+      // the change of its velocity in the step, what gravity gave it taken out, across the line to the battleship
+      jinkStep.subVectors(ship.flight.velocity, track.velocity);
+      track.velocity.copy(ship.flight.velocity);
+      if (!ship.alive) {
+        track.jink = 0;
+        continue;
+      }
+      jinkStep.addScaledVector(this.field.gravity(ship.flight.position, jinkPull), -dt);
+      jinkLine.subVectors(ship.flight.position, fleet.position).normalize();
+      jinkStep.addScaledVector(jinkLine, -jinkStep.dot(jinkLine));
+      track.jink += (jinkStep.length() / dt - track.jink) * (1 - exp(-dt / JINK_MEMORY));
+    }
+  }
+
+  /**
    * A battery fires at the nearest ship it sees in range. Whether it hits follows from the
-   * shot's number, the target and its speed and distance (see batteryChance), the same on
-   * every browser; the browser that runs the target takes the damage.
+   * shot's number and the target's jinking, the swing of its line of sight and its distance
+   * (see batteryChance), much the same on every browser; the browser that runs the target takes
+   * the damage.
    */
   private fireBattery(fleet: Fleet, zone: number, shot: number) {
     const origin = fleet.zoneAt(zone, muzzle);
@@ -5703,7 +5738,11 @@ export class Game implements OnlineGame {
     fleet.shotHeat(zone);
     devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: fleet.sunlit[zone] ? 'sun' : 'shade', part: 'battery', zone, weapon: null, count: 1 });
     const roll = hash(textSeed(target.id), shot, zone) / 0x100000000;
-    const hit = roll < batteryChance(target.flight.velocity.length(), distance);
+    // the swing of its line of sight: its velocity against the battleship's, across the line, over the distance
+    jinkLine.subVectors(target.flight.position, origin).divideScalar(Math.max(distance, 1));
+    jinkStep.subVectors(target.flight.velocity, fleet.velocity);
+    const crossing = jinkStep.addScaledVector(jinkLine, -jinkStep.dot(jinkLine)).length() / Math.max(distance, 1);
+    const hit = roll < batteryChance(this.jinks.get(target)?.jink ?? 0, crossing, distance);
     const end = scratch.copy(target.flight.position);
     // a miss goes past the target, by a few of its radii
     if (!hit) end.add(missBy.set(hash(shot, zone, 1) / 0x100000000 - 0.5, hash(shot, zone, 2) / 0x100000000 - 0.5, hash(shot, zone, 3) / 0x100000000 - 0.5).setLength(target.radius * 4));
