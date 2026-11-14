@@ -319,7 +319,6 @@ export const DE: Catalog = {
   'You fly for {side} · your core {own} · theirs {theirs}': 'Du fliegst für {side} · dein Kern {own} · Gegnerkern {theirs}',
 
   // the President's Fleet
-  'In the battleship\'s drive plume · get out': 'Im Antriebsstrahl des Schlachtschiffs · raus da',
   'Battleship · take out its batteries': 'Schlachtschiff · schalt seine Batterien aus',
   '{part} destroyed': '{part} zerstört',
   'Reactor critical · get clear · {distance}': 'Reaktor kritisch · weg da · {distance}',
@@ -382,7 +381,8 @@ export const DE: Catalog = {
   'Plating took the torpedo': 'Panzerplatten haben den Torpedo abgefangen',
   'Torpedo hit': 'Torpedotreffer',
   'CLOSE CALL +{points}': 'KNAPP VORBEI +{points}',
-  'In the drive plume of {name} · get out': 'Im Antriebsstrahl von {name} · raus da',
+  'DRIVE PLUME · {name} · GET OUT': 'ANTRIEBSSTRAHL · {name} · RAUS DA',
+  "BATTLESHIP'S PLUME · GET OUT": 'STRAHL DES SCHLACHTSCHIFFS · RAUS DA',
   'Plating holds': 'Panzerplatten halten',
   'Plating gone': 'Panzerplatten weg',
   'Kill cam · {name} · Enter skips': 'Killcam · {name} · Enter überspringt',
@@ -1444,6 +1444,7 @@ export const DE: Catalog = {
   'A rival on your cable cannot get away from you while its drive fights your winch. Reel it in and give it the laser, or a torpedo, from close range.': 'Ein Rivale an deinem Seil kommt nicht von dir los, solange sein Antrieb gegen deine Winde kämpft. Hol ihn ein und gib ihm den Laser oder einen Torpedo aus nächster Nähe.',
   'The grill': 'Der Grill',
   'A main drive burning hard throws its exhaust {plume} m behind it, deadly close up and fading with distance: three seconds right behind a burning drive kill. Whoever tails you too closely gets grilled, and a clone that burns up counts as your kill. Overtake beside a plume, never through it.': 'Ein Hauptantrieb unter vollem Schub schleudert seinen Abgasstrahl {plume} m hinter sich, aus der Nähe tödlich und mit der Entfernung schwächer: Drei Sekunden direkt hinter einem brennenden Antrieb töten. Wer dir zu dicht folgt, wird gegrillt, und ein Klon, der dabei verglüht, zählt als dein Abschuss. Überhol neben einem Antriebsstrahl, nie durch ihn hindurch.',
+  'A plume glows as far as it burns, white-hot behind the bell and orange along its length, so you see where not to sit. In one, the HUD warns you with an arrow towards the burning drive.': 'Ein Antriebsstrahl leuchtet, so weit er brennt, weißglühend hinter der Düse und orange auf seiner ganzen Länge, damit du siehst, wo du nicht sitzen solltest. Steckst du in einem, warnt dich das HUD mit einem Pfeil zum brennenden Antrieb.',
   'Deathmatch: The Purest Show': 'Deathmatch: Die reinste Show',
   "Five minutes, everyone against everyone. A kill scores {kill}, a close call past a rock {closeCall}. The laser only scorches rock: it is the sponsors', and breaks for nobody's points. The best score wins.": 'Fünf Minuten, alle gegen alle. Ein Abschuss bringt {kill}, ein knapper Vorbeiflug an einem Felsen {closeCall}. Der Laser versengt Felsen nur: Er gehört den Sponsoren und bricht für niemandes Punkte. Die meisten Punkte gewinnen.',
   'The bots hunt the nearest ship they see, at most two on the same one. Keep moving: steady flight is easy to lead, jinking with the thrusters makes them miss. A ship crossing your nose fast up close: switch to free drift, slide on, and turn the nose onto it.': 'Die Bots jagen das nächste Schiff, das sie sehen, höchstens zwei auf dasselbe. Bleib in Bewegung: Auf gleichmäßigen Flug lässt sich leicht vorhalten, Haken mit den Steuerdüsen lassen sie danebenschießen. Kreuzt ein Schiff schnell und nah deine Nase: Schalt auf freien Drift, gleite weiter und dreh die Nase auf das Schiff.',

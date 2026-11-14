@@ -952,6 +952,14 @@ const hookEnd = new THREE.Vector3();
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
+/** Where the drive whose plume grills the own ship burns, for the alarm's arrow. */
+const plumeFrom = new THREE.Vector3();
+/** A comet's head rumbles on the hull within RUMBLE_REACH of it (units, 1.5 km), up to RUMBLE_RATE times a second right at it; a shower's knot strikes as hard as can be heard at GRIT_LOUDEST laser hits' worth. */
+const RUMBLE_REACH = 30000;
+const RUMBLE_RATE = 6;
+const GRIT_LOUDEST = 6;
+/** A plume this strong (0..1) on the own hull raises its alarm to a warning; weaker, a caution. */
+const PLUME_WARNING = 0.25;
 
 /** A solar flare's plasma center, the point of its front nearest the camera, an ember's drift, and the middle of a new clone's places. */
 const flareAt = new THREE.Vector3();
@@ -4864,6 +4872,9 @@ export class Game implements OnlineGame {
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
     if (this.state !== 'paused' || this.online) {
       this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      // the camera rides behind the ship it follows, in that ship's own plume: it is not drawn
+      const followed = this.me ? this.subject() : null;
+      for (const ship of this.ships) ship.plumeHidden = ship === followed;
       // in an arena's air an explosion billows, in vacuum it flashes (see Effects.inAir)
       this.effects.inAir = !!this.field.air;
       this.effects.update(dt);
@@ -5634,7 +5645,9 @@ export class Game implements OnlineGame {
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
-      if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, msg("In the battleship's drive plume · get out"), null, 'exhaust', dt, now);
+      if (plume <= 0) continue;
+      this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, null, null, 'exhaust', dt, now);
+      if (ship === this.me) this.plumeAlarm(plume, t("BATTLESHIP'S PLUME · GET OUT"), fleet.root.position);
     }
     if (fleet.present(clock) && !this.fleetCalled) {
       this.fleetCalled = true;
@@ -8518,7 +8531,15 @@ export class Game implements OnlineGame {
         burner = other;
       }
     }
-    if (burner) this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, msg('In the drive plume of {name} · get out'), burner, 'plume', dt, now);
+    if (!burner) return;
+    this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, null, burner, 'plume', dt, now);
+    if (ship === this.me) this.plumeAlarm(hottest, t('DRIVE PLUME · {name} · GET OUT', { name: burner.name }), burner.flight.position);
+  }
+
+  /** The own ship in a drive's plume (see view/plume, where it glows): a caution, a warning where it burns hard, its arrow towards the drive. */
+  private plumeAlarm(strength: number, text: string, drive: THREE.Vector3) {
+    const me = this.me!;
+    this.alarms.raise({ id: 'plume', level: strength >= PLUME_WARNING ? 'warning' : 'caution', text, direction: plumeFrom.subVectors(drive, me.flight.position) });
   }
 
   /**
@@ -9723,6 +9744,12 @@ export class Game implements OnlineGame {
       }
     }
     this.inTail = inside;
+    // the head passing close: its coma's dust drums on the hull
+    const comet = this.shower?.comet;
+    if (comet && me.alive && this.field.clock <= headEnd(comet)) {
+      const near = 1 - headAt(comet, this.field.clock, cometHead).distanceTo(me.flight.position) / RUMBLE_REACH;
+      if (near > 0 && Math.random() < dt * RUMBLE_RATE * near) this.sound.drum(near);
+    }
     if (!inside) return;
     if (Math.random() < dt * TAIL_PATTER * depth) this.sound.patter(depth);
     if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
@@ -9803,6 +9830,8 @@ export class Game implements OnlineGame {
       cometRelative.normalize();
       // the grit sprays off the hull where it strikes
       this.effects.sparks(cometCover.copy(cometPiece).lerp(position, 0.6), SCRAPE_COLOR, PIECE_RADIUS * 2);
+      // and cracks through the plates, heard in the own cockpit
+      if (ship === this.me) this.sound.grit(Math.min(1, weight / GRIT_LOUDEST));
       this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', weight);
       if (!ship.alive) return;
     }

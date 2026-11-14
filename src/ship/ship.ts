@@ -17,6 +17,8 @@ import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
 import { BURNOUT_DAMAGE, BURNOUT_SECONDS, DriveHeat } from './driveheat';
+import { PLUME_CORE, PLUME_REACH, PLUME_SPREAD, PLUME_THROTTLE } from './plume';
+import { PlumeLook } from '../view/plume';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -254,6 +256,9 @@ const GLOW_IDLE = 0.25;
 /** The drive light sits this far behind the ship's center (units, 20 m), where the exhaust glows. */
 const ENGINE_LIGHT_OFFSET = 400;
 /** The drive flame's tint by the steps of its upgrade: stock, azure, violet, white-hot. */
+/** The glow of a drive's plume (see view/plume), times its flame's tint. */
+const PLUME_GLOW = new THREE.Color(1, 0.4, 0.1);
+const plumeTint = new THREE.Color();
 const FLAME_TINTS = [new THREE.Color(1, 1, 1), new THREE.Color(0.45, 0.75, 1.6), new THREE.Color(1.1, 0.45, 1.6), new THREE.Color(2, 2, 2.2)];
 /**
  * The neon trim's light strips (see ship/models) in sun orange, by the steps of its upgrade: the
@@ -429,6 +434,10 @@ export class Ship {
   /** Decoys the clone holds (see game/decoys): lures a torpedo homing on it turns to. */
   decoys = 0;
   private readonly aura: THREE.Sprite;
+  /** Its drive's plume as the eye sees it (see view/plume): glowing behind it while the drive burns past PLUME_THROTTLE, as far as it burns. */
+  private readonly plume: PlumeLook;
+  /** Its plume hidden: the ship the camera rides behind, whose own plume would glow over the whole view, and a ship on show. */
+  plumeHidden = false;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
@@ -585,6 +594,10 @@ export class Ship {
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.textures.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
     this.aura.visible = false;
     this.root.add(this.aura);
+    const stern = this.radius * 0.5;
+    this.plume = new PlumeLook(PLUME_REACH - stern, PLUME_SPREAD, PLUME_CORE, this.radius * 0.6 + stern * PLUME_SPREAD, PLUME_GLOW);
+    this.plume.mesh.position.z = stern;
+    this.root.add(this.plume.mesh);
   }
 
   /** The Sovereign, the President's gift: marked in its own ivory and gold, which no Host can pick. */
@@ -624,6 +637,7 @@ export class Ship {
     // the hull in its last stage, the Magpie, over all of it (see models, magpieHull)
     showMagpie(this.model, perks.magpie);
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
+    this.plume.tint(plumeTint.copy(PLUME_GLOW).multiply(FLAME_TINTS[perks.flame]));
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;
     stern.visible = perks.neon > 1;
@@ -638,6 +652,7 @@ export class Ship {
   /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
   idle(dt: number, throttle: number) {
     this.flight.throttle = throttle;
+    this.plumeHidden = true;
     this.animateEngine(dt);
   }
 
@@ -1194,6 +1209,8 @@ export class Ship {
       glow.scale.set(glowScale, glowScale, 1);
     }
     if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
+    // the plume burns, and is seen, only past PLUME_THROTTLE and with a drive left
+    this.plume.set(!this.plumeHidden && this.drive > 0 && throttle >= PLUME_THROTTLE ? throttle : 0, this.flameTime);
     if (this.trim.light.map) this.trim.light.map.offset.x = -((this.flameTime * TRIM_RUN * TRIM_PULSES) % 1);
   }
 }
