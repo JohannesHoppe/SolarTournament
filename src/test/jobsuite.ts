@@ -32,13 +32,14 @@ const JOB_TIMEOUT = 600_000;
 
 /**
  * A job is flown on up to this many seeds (the bots' and the Host's dice), `SEEDS=<n>` to change it,
- * and judged won when the middling Host wins most of them (SEED_MAJORITY): one seed alone is a coin
- * thrown, so a change of no consequence (a thousandth of a heat point a second) flipped a close job
- * and the verdict with it. Flying stops once the verdict is certain (a majority won, or no longer
+ * and judged won when the middling Host wins most of them, however close: one seed alone is a
+ * coin thrown, so a change of no consequence (a thousandth of a heat point a second) flipped a
+ * close job and the verdict with it. Flying stops once the verdict is certain (a majority won, or no longer
  * reachable), so a job won seed after seed costs three flights, a close one up to five.
  */
 export const SEEDS = Math.max(1, Number(process.env.SEEDS ?? 5));
-export const SEED_MAJORITY = Math.floor(SEEDS / 2) + 1;
+/** A close job whose verdict flips between runs gets more seeds here (its id: how many), never an exemption. */
+const SEEDS_OF: Readonly<Record<string, number>> = {};
 
 /**
  * The jobs a middling bot does not win as they are built, each with what the runs measured. They
@@ -46,16 +47,15 @@ export const SEED_MAJORITY = Math.floor(SEEDS / 2) + 1;
  * attempt failing before a Host can act); their verdict is for the designer, not for a bot. Most
  * are fights of one against several: two raiders press it at once (see bots, pressOn), and a
  * middling bot loses to two pressing it, ambushers of 0.45, 0.35 and 0.25 alike, mostly to shots
- * into its drive and reactor from the one behind it. A job won on about as many seeds as lost is
- * listed too (`chance`): its verdict is the dice's, never a Host's.
+ * into its drive and reactor from the one behind it. A job won on most seeds is judged like any
+ * other, however close (see SEEDS); one lost on most is listed with its share (`lostMostly`).
  */
-/** A job a middling bot wins on about as many seeds as it loses (see SEEDS): its verdict is the dice's, so it is flown, its share printed, never judged. */
-const chance = (why: string, won: number, flown: number) => `${why}: won or lost as the dice fall, ${won} of ${flown} seeds won when measured`;
+/** A job a middling bot loses on most seeds (see SEEDS), with what it was measured to win. */
+const lostMostly = (why: string, won: number, flown: number) => `${why}: lost by chance on most seeds, ${won} of ${flown} won when measured`;
 const RACE = 'the rivals shoot the leader’s drive and send torpedoes, and a death starts the race over (the balance runs allow a middling bot three deaths a race)';
 export const OUTMATCHED: Readonly<Record<string, string>> = {
-  ...Object.fromEntries(MISSIONS.filter((m) => m.ambush).map((m) => [m.id, 'three bandits of 0.45, two pressing at once: lost to the two, mostly to shots into the drive and reactor'])),
-  'ambush:lantern': chance('three bandits of 0.45, two pressing at once', 3, 4),
-  'ambush:ballroom': chance('three bandits of 0.45, two pressing at once', 3, 5),
+  // the ambushes at the Lantern and the Ballroom are won on most seeds (3 of 4, 3 of 5) and judged
+  ...Object.fromEntries(MISSIONS.filter((m) => m.ambush && m.id !== 'ambush:lantern' && m.id !== 'ambush:ballroom').map((m) => [m.id, 'three bandits of 0.45, two pressing at once: lost to the two, mostly to shots into the drive and reactor'])),
   sawBrothers: 'three brothers at once with the cutter (400 m); the rig falls 10 s after they start sawing, the flight there from the place’s start takes 17 s at 125 m/s',
   feedersComet: 'three guns sink Scout One (her drive turned to the Host and open to the guns on that side, and their torpedoes) within 1 to 5 s of the attempt, even with the Host beside her, so some attempts fail before a Host can act (one gun: won)',
   debtDay: 'four of six collectors at once',
@@ -67,34 +67,17 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   theSweep: 'six Navy fighters at once, Spare on the wing',
   iceRun: 'four of the Loose at once round the convoy',
   dose: 'three of the Loose at once round the tanker, the dose filling meanwhile',
-  theRidge: chance('Spare’s two strays fighting the Host at the echo', 3, 4),
   theMemorial: 'four guards at once round the tower while the Host climbs its hatches',
   hollowJack: 'Hollow Jack (0.7) and three raiders at once',
-  firstDeath: chance('Perihelion (0.75) and four of the Navy at once, Spare on the wing', 3, 5),
   // bounties: the face and its escorts at once, two pressing (the others won seed after seed)
   ...Object.fromEntries(['bounty:occator:1', 'bounty:iapetus:3'].map((id) => [id, 'the face and its escorts, two pressing at once: lost on every seed measured (0 of 3)'])),
   'bounty:occator:3': 'the face and its escorts, two pressing at once: lost on most seeds (1 of 4 won when measured)',
-  ...Object.fromEntries(
-    (
-      [
-        ['bounty:rheasilvia:2', 3, 4],
-        ['bounty:europa:2', 3, 4],
-        ['bounty:europa:3', 2, 5],
-        ['bounty:io:3', 2, 5],
-        ['bounty:ganymede:3', 3, 4],
-        ['bounty:titan:1', 3, 5],
-        ['bounty:triton:3', 3, 4],
-        ['bounty:lantern:3', 3, 5],
-      ] as const
-    ).map(([id, won, flown]) => [id, chance('the face and its escorts, two pressing at once', won, flown)]),
-  ),
+  ...Object.fromEntries(['bounty:europa:3', 'bounty:io:3'].map((id) => [id, lostMostly('the face and its escorts, two pressing at once', 2, 5)])),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
-  'bounty:rheasilvia:3': chance('the face (0.65) and three escorts with the cutter (400 m)', 2, 5),
-  'bounty:titan:3': chance('the face (0.65) and three escorts in Titan’s haze', 2, 5),
+  'bounty:rheasilvia:3': lostMostly('the face (0.65) and three escorts with the cutter (400 m)', 2, 5),
+  'bounty:titan:3': lostMostly('the face (0.65) and three escorts in Titan’s haze', 2, 5),
   // a race against armed rivals: they shoot the drive of whoever leads and send torpedoes, and a death starts the race over
   ...Object.fromEntries(['peakRun', 'stickneyGrand', 'fluxTubeRace'].map((id) => [id, RACE])),
-  heartRun: chance(RACE, 3, 4),
-  haumeaRing: chance(RACE, 3, 5),
   qualifyingHeat: `${RACE}; half of each lap in Titan’s haze, where a hull short of a fin barely holds its course`,
   circuitFinal: `${RACE}; as the Qualifying Heat, and only first home counts`,
   cloudLine: `${RACE}; half of each lap under Venus’s acid clouds, where a hull short of a fin barely holds its course`,
@@ -177,8 +160,8 @@ export function flyJobs(from: number, to: number) {
       const name = `${mission.id}${mission.trial ? ' (its drills)' : ''}${endless ? ' (flown; never done: the night ends with the clone)' : outmatched ? ` (flown; not won by a middling bot: ${outmatched})` : ''}`;
       it(name, () => {
         // an outmatched job or a night in the Pit has no verdict to reach: one flight checks what every job must be
-        const seeds = outmatched || endless ? 1 : SEEDS;
-        const need = Math.min(seeds, SEED_MAJORITY);
+        const seeds = outmatched || endless ? 1 : Math.max(SEEDS, SEEDS_OF[mission.id] ?? 0);
+        const need = Math.floor(seeds / 2) + 1;
         let wins = 0;
         let flown = 0;
         let lost: string | null = null;
@@ -199,7 +182,7 @@ export function flyJobs(from: number, to: number) {
         shares.push(`${mission.id}: ${wins} of ${flown} won${outmatched ? ' (outmatched)' : endless ? ' (endless)' : ''}`);
         if (outmatched || endless) return;
         expect(wins, `won ${wins} of ${flown} seeds, ${need} needed; the first lost, ${lost}`).toBeGreaterThanOrEqual(need);
-      }, JOB_TIMEOUT * SEEDS);
+      }, JOB_TIMEOUT * Math.max(SEEDS, SEEDS_OF[mission.id] ?? 0));
     }
   });
 }
