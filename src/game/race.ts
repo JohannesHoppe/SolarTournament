@@ -44,6 +44,18 @@ const LOOP_RADII = [40000, 38000, 42000, 36000, 44000];
 const LOOP_TURNS = 8;
 /** Every course lies within this share of the arena's edge: a race's loop (see Course) and a ring course of the flight school (see ringCourse); every course fits ahead of a pilot in the middle. */
 export const COURSE_ROOM = 0.85;
+/**
+ * A circuit is never drawn longer than this a lap, flat (units, 14 km; its rise adds about 1 %):
+ * three laps of it take a middling bot at 180 m/s about three and a half minutes, and the
+ * slowest at 140 m/s finishes inside the five minutes of the round.
+ */
+const LAP_MAX = 280000;
+/**
+ * A racing bot on a loop ranges out this far from the field's center (units, about 3.2 km, see
+ * Course.home): beyond the loop's farthest reach, so the pull home that keeps a fighting bot in
+ * the arena never fights the course, and still inside the arena's edge.
+ */
+const RACE_HOME = ARENA_LIMIT * 0.95;
 /** The heights of the loop above the field's plane tried (units, 0 and 600 m up and down): over a flat ring of rock, it may run above or below it. */
 const LOOP_LIFTS = [0, 12000, -12000];
 /**
@@ -337,6 +349,12 @@ function formReach(course: LoopForm): number {
   return Math.max(...circuitPoints(course.layout).map((point) => point.length()));
 }
 
+/** How long a lap of a form is at scale 1, flat (units). */
+function formLength(course: LoopForm): number {
+  const points = circuitPoints(course.layout);
+  return points.reduce((sum, point, i) => sum + point.distanceTo(points[(i + 1) % points.length]), 0);
+}
+
 /**
  * A race course: GATES rings in a loop around the field's center (or in the arena's own form, see
  * CourseForm), rising and falling, each facing the way from the gate before, flown LAPS times. It
@@ -357,6 +375,14 @@ export class Course {
   readonly count: number;
   readonly laps: number;
   readonly finishGates: number;
+  /**
+   * How far from the field's center a racing bot ranges (units, see Bot.home): a loop reaches out
+   * to COURSE_ROOM of the arena's edge, so a racer follows it out to RACE_HOME; a track over a
+   * world has no edge to turn back at.
+   */
+  get home(): number {
+    return this.track ? Infinity : RACE_HOME;
+  }
   /** The windings of each gate (see GateKit): their glow tells the pilot which gate is which. */
   private readonly rings: THREE.Mesh[] = [];
   private readonly kit = new GateKit(GATE_RADIUS);
@@ -578,8 +604,8 @@ export class Course {
     const candidates: { shape: typeof shape; angles: number[]; badness: number; intrusion: number }[] = [];
     for (const lift of dives ? [0] : field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
-        // a form drawn larger than fits within COURSE_ROOM of the edge is never tried
-        if (form && formReach(form) * (radius / COURSE_RADIUS) > ARENA_LIMIT * COURSE_ROOM) continue;
+        // a form drawn larger than fits within COURSE_ROOM of the edge, or longer a lap than LAP_MAX, is never tried
+        if (form && (formReach(form) * (radius / COURSE_RADIUS) > ARENA_LIMIT * COURSE_ROOM || formLength(form) * (radius / COURSE_RADIUS) > LAP_MAX)) continue;
         for (const swell of form ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
             Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
@@ -733,11 +759,15 @@ export class Course {
     this.kit.blink(now);
   }
 
-  /** The gates of one lap in the order flown on the way `ways` (see branches), each with the way it faces: round the loop and through the pink gate again, or a track from its start to its finish (`edgeless`: over a world, with no edge to turn back at). */
-  lap(ways = 0): { points: THREE.Vector3[]; normals: THREE.Vector3[]; edgeless: boolean } {
+  /** The gates of one lap in the order flown on the way `ways` (see branches), each with the way it faces: round the loop and through the pink gate again, or a track from its start to its finish; and how far out a racing bot ranges on it (`home`, see Course.home). */
+  lap(ways = 0): { points: THREE.Vector3[]; normals: THREE.Vector3[]; home: number } {
     const points = this.points.map((_, gate) => this.gatePoint(gate, ways));
     const normals = this.points.map((_, gate) => this.gateNormal(gate, ways));
-    return this.track ? { points, normals, edgeless: true } : { points: [...points, points[0]], normals: [...normals, normals[0]], edgeless: false };
+    if (!this.track) {
+      points.push(points[0]);
+      normals.push(normals[0]);
+    }
+    return { points, normals, home: this.home };
   }
 
   /** The gate a racer that has passed `passed` gates flies for next. */
