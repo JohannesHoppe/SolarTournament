@@ -50,7 +50,7 @@ const STRAIN_AIM = 0.5;
 const STRAIN_REACTION = 0.15;
 /**
  * A bot flies its clone's strain as a pilot does: it spends it where it matters (out of danger,
- * away from a nova, jinking under attack, the moment it fires) and otherwise eases off once the
+ * away from a nova, jinking under attack, the moment it fires, on a race's line) and otherwise eases off once the
  * strain reaches its hold, STRAIN_HOLD at daring 0 and STRAIN_HOLD_DARING more at daring 1 (the
  * daring push it further): then it lets the drive rest and the thrusters push at most
  * EASY_PUSH of their strength (about 2.5 g, under the 3 g a clone recovers below), until the
@@ -817,10 +817,11 @@ export class Bot {
     }
     this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
-    // the clone's strain: spent out of danger, away from a nova, jinking under attack and on the
-    // shot; else the bot eases off at its hold until it has recovered (see STRAIN_HOLD)
+    // the clone's strain: spent out of danger, away from a nova, jinking under attack, on the shot
+    // and on a race's line, where the gates' housings punish a slack hand; else the bot eases off
+    // at its hold until it has recovered (see STRAIN_HOLD)
     this.recovering = easesOff(this.recovering, this.ship.strain, this.skills.daring);
-    const spending = danger || !!this.flee || defending || controls.fire;
+    const spending = danger || !!this.flee || defending || controls.fire || racing;
     if (this.recovering && !spending) flyGently(controls);
     if (devlog) {
       // what the bot does, the first that holds: running from danger, then its task
