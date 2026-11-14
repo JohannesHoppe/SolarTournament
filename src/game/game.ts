@@ -5303,7 +5303,7 @@ export class Game implements OnlineGame {
 
   /**
    * The round is decided before its time: a race once every Host's clone has finished (bots do
-   * not hold it up), Last Clone Standing once no more than one ship has a clone left, Capture
+   * not hold it up; with every Host watching, once every bot has), Last Clone Standing once no more than one ship has a clone left, Capture
    * the Flag once a side has captured enough, the President's Fleet once his battleship went up.
    */
   private decided() {
@@ -5315,14 +5315,21 @@ export class Game implements OnlineGame {
     if (this.flags) return this.flags.won;
     if (this.fleet) return this.fleet.sunk(this.field.clock);
     if (!this.course) return false;
-    // the Hosts who race: a watching Host is in the standings of no one (see standings)
+    // the Hosts who race: a watching Host is in the standings of no one (see standings), and a
+    // Host's ship without a clone and none coming races no more
     let hosts = 0;
+    let racers = 0;
+    let racing = 0;
     for (const ship of this.standings()) {
+      if (ship.kind === 'host' && !ship.alive && ship.respawnAt === Infinity) continue;
+      racers++;
+      if (ship.finish < 0) racing++;
       if (ship.kind !== 'host') continue;
       if (ship.finish < 0) return false;
       hosts++;
     }
-    return hosts > 0;
+    // a race only bots fly (every Host watching) is decided once every racer has finished
+    return hosts > 0 || (racers > 0 && racing === 0);
   }
 
   /** Last Clone Standing as it runs: the announcer and Nicole call the flare and the last one standing. */
