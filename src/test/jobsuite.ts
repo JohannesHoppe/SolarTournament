@@ -58,7 +58,7 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   // bounties: the face and its escorts at once (the other 46 are won)
   // the face and its escorts, two pressing at once, are won or lost as the run's chance falls: a
   // change anywhere shifts which of them the whole run loses (these three lost, others won)
-  ...Object.fromEntries(['bounty:rheasilvia:2', 'bounty:lantern:3', 'bounty:granary:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
+  ...Object.fromEntries(['bounty:rheasilvia:2', 'bounty:lantern:3', 'bounty:ballroom:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
   'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
   'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',
