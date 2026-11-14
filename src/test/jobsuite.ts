@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { complete, freshCampaign, MISSIONS, type Campaign, type Mission } from '../campaign/campaign';
 import { flyJob, JobWorld, type JobRun } from './jobs';
 import { host } from './jobhost';
@@ -14,9 +14,11 @@ const WARM_UP = 300000;
  * manage (CLAUDE.md, Plausibility). A drill that cannot be done (a start inside rock or outside
  * its own zone, a target out of reach, a clock too short, a fail that loops) fails here instead
  * of for a player. The jobs are spread over a few test files (src/campaign/jobs.*.test.ts) so
- * they fly side by side; `npm run jobs` runs them. `JOB=<id>` flies that job alone, and
- * `TRACE=<s>` prints where the clone is every that many seconds of it; `STRICT=1` holds the
- * outmatched jobs (see OUTMATCHED) to winning too.
+ * they fly side by side; `npm run jobs` runs them. Each job is flown on several seeds and won by a
+ * majority of them (see SEEDS); each file prints what its jobs won. `JOB=<id>` flies that job
+ * alone, `SEEDS=<n>` on n seeds, `SEED=<n>` from its n-th seed on, and `TRACE=<s>` prints where
+ * the clone is every that many seconds of it; `STRICT=1` holds the outmatched jobs (see
+ * OUTMATCHED) to winning too, on every seed.
  */
 
 /** A drill is given this long (s of simulated time), and this many attempts. */
@@ -29,16 +31,31 @@ const PLACE_DEATHS = ['rock', 'hull', 'gate', 'well', 'air', 'space'];
 const JOB_TIMEOUT = 600_000;
 
 /**
+ * A job is flown on up to this many seeds (the bots' and the Host's dice), `SEEDS=<n>` to change it,
+ * and judged won when the middling Host wins most of them (SEED_MAJORITY): one seed alone is a coin
+ * thrown, so a change of no consequence (a thousandth of a heat point a second) flipped a close job
+ * and the verdict with it. Flying stops once the verdict is certain (a majority won, or no longer
+ * reachable), so a job won seed after seed costs three flights, a close one up to five.
+ */
+export const SEEDS = Math.max(1, Number(process.env.SEEDS ?? 5));
+export const SEED_MAJORITY = Math.floor(SEEDS / 2) + 1;
+
+/**
  * The jobs a middling bot does not win as they are built, each with what the runs measured. They
  * are flown all the same, and checked for what any job must be (no clone printed in rock, no
  * attempt failing before a Host can act); their verdict is for the designer, not for a bot. Most
  * are fights of one against several: two raiders press it at once (see bots, pressOn), and a
  * middling bot loses to two pressing it, ambushers of 0.45, 0.35 and 0.25 alike, mostly to shots
- * into its drive and reactor from the one behind it.
+ * into its drive and reactor from the one behind it. A job won on about as many seeds as lost is
+ * listed too (`chance`): its verdict is the dice's, never a Host's.
  */
+/** A job a middling bot wins on about as many seeds as it loses (see SEEDS): its verdict is the dice's, so it is flown, its share printed, never judged. */
+const chance = (why: string, won: number, flown: number) => `${why}: won or lost as the dice fall, ${won} of ${flown} seeds won when measured`;
 const RACE = 'the rivals shoot the leader’s drive and send torpedoes, and a death starts the race over (the balance runs allow a middling bot three deaths a race)';
 export const OUTMATCHED: Readonly<Record<string, string>> = {
   ...Object.fromEntries(MISSIONS.filter((m) => m.ambush).map((m) => [m.id, 'three bandits of 0.45, two pressing at once: lost to the two, mostly to shots into the drive and reactor'])),
+  'ambush:lantern': chance('three bandits of 0.45, two pressing at once', 3, 4),
+  'ambush:ballroom': chance('three bandits of 0.45, two pressing at once', 3, 5),
   sawBrothers: 'three brothers at once with the cutter (400 m); the rig falls 10 s after they start sawing, the flight there from the place’s start takes 17 s at 125 m/s',
   feedersComet: 'three guns sink Scout One (her drive turned to the Host and open to the guns on that side, and their torpedoes) within 1 to 5 s of the attempt, even with the Host beside her, so some attempts fail before a Host can act (one gun: won)',
   debtDay: 'four of six collectors at once',
@@ -50,26 +67,38 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   theSweep: 'six Navy fighters at once, Spare on the wing',
   iceRun: 'four of the Loose at once round the convoy',
   dose: 'three of the Loose at once round the tanker, the dose filling meanwhile',
-  theRidge: 'Spare’s two strays fighting the Host at the echo',
+  theRidge: chance('Spare’s two strays fighting the Host at the echo', 3, 4),
   theMemorial: 'four guards at once round the tower while the Host climbs its hatches',
   hollowJack: 'Hollow Jack (0.7) and three raiders at once',
-  firstDeath: 'Perihelion (0.75) and four of the Navy at once, Spare on the wing',
-  theHunter: 'Perihelion (0.7) and two escorts (0.5), two pressing at once: won or lost as the run’s chance falls, lost in the whole run',
-  // bounties: the face and its escorts at once (the other 46 are won)
-  // the face and its escorts, two pressing at once, are won or lost as the run's chance falls: a
-  // change anywhere shifts which of them the whole run loses (these four lost, others won)
-  ...Object.fromEntries(['bounty:occator:1', 'bounty:occator:3', 'bounty:iapetus:3', 'bounty:lantern:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
+  firstDeath: chance('Perihelion (0.75) and four of the Navy at once, Spare on the wing', 3, 5),
+  // bounties: the face and its escorts at once, two pressing (the others won seed after seed)
+  ...Object.fromEntries(['bounty:occator:1', 'bounty:iapetus:3'].map((id) => [id, 'the face and its escorts, two pressing at once: lost on every seed measured (0 of 3)'])),
+  'bounty:occator:3': 'the face and its escorts, two pressing at once: lost on most seeds (1 of 4 won when measured)',
+  ...Object.fromEntries(
+    (
+      [
+        ['bounty:rheasilvia:2', 3, 4],
+        ['bounty:europa:2', 3, 4],
+        ['bounty:europa:3', 2, 5],
+        ['bounty:io:3', 2, 5],
+        ['bounty:ganymede:3', 3, 4],
+        ['bounty:titan:1', 3, 5],
+        ['bounty:triton:3', 3, 4],
+        ['bounty:lantern:3', 3, 5],
+      ] as const
+    ).map(([id, won, flown]) => [id, chance('the face and its escorts, two pressing at once', won, flown)]),
+  ),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
-  'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
-  'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',
-  'bounty:titan:3': 'the face (0.65) and three escorts in Titan’s haze',
-  'bounty:triton:3': 'the face (0.65) and three escorts',
+  'bounty:rheasilvia:3': chance('the face (0.65) and three escorts with the cutter (400 m)', 2, 5),
+  'bounty:titan:3': chance('the face (0.65) and three escorts in Titan’s haze', 2, 5),
   // a race against armed rivals: they shoot the drive of whoever leads and send torpedoes, and a death starts the race over
-  ...Object.fromEntries(['peakRun', 'stickneyGrand', 'fluxTubeRace', 'heartRun', 'haumeaRing', 'terminatorRun'].map((id) => [id, RACE])),
+  ...Object.fromEntries(['peakRun', 'stickneyGrand', 'fluxTubeRace'].map((id) => [id, RACE])),
+  heartRun: chance(RACE, 3, 4),
+  haumeaRing: chance(RACE, 3, 5),
   qualifyingHeat: `${RACE}; half of each lap in Titan’s haze, where a hull short of a fin barely holds its course`,
   circuitFinal: `${RACE}; as the Qualifying Heat, and only first home counts`,
   cloudLine: `${RACE}; half of each lap under Venus’s acid clouds, where a hull short of a fin barely holds its course`,
-  methaneEcho: 'the echo lies 1.6 km under Titan’s deck: the clogged radiators burn the hull within some 110 s under it, and a hull short of a fin loses its course there',
+  methaneEcho: 'the echo lies 1.6 km under Titan’s deck, where a hull short of a fin loses its course: lost on every seed measured (0 of 3)',
   dockingLane: 'six hulls to shoot with the cutter (400 m) before they strike Patience',
   wallRun: 'the searchlights’ cones: the simulated Host has no way of reading them yet',
   rideComet: 'the simulated Host does not hold on to the comet yet',
@@ -147,21 +176,42 @@ export function flyJobs(from: number, to: number) {
       const endless = !!mission.pit;
       const name = `${mission.id}${mission.trial ? ' (its drills)' : ''}${endless ? ' (flown; never done: the night ends with the clone)' : outmatched ? ` (flown; not won by a middling bot: ${outmatched})` : ''}`;
       it(name, () => {
-        // SEED=<n> flies the job on other dice (the n-th of its seeds), to see how far its outcome is chance
-        random = new Randomizer(textSeed(mission.id) + Number(process.env.SEED ?? 0));
-        const run = flyJob(mission, campaignFor(mission), host(BEHAVIORS[mission.id]), DRILL_LIMIT, ATTEMPTS, trace > 0 ? tracer(trace) : undefined);
-        const text = report(run);
-        if (only) console.log(`${mission.id}: ${run.done ? 'done' : 'not done'}\n${text}`);
-        // what every job must be: never a clone printed in rock, never an attempt that fails before a Host can act
-        expect(run.buried, text).toBe(0);
-        // (but where the drill is known to fail at once, see OUTMATCHED: The Feeders' Comet)
-        if (!QUICK_KNOWN.includes(mission.id)) for (const drill of run.drills) expect(drill.quick, text).toBe(0);
+        // an outmatched job or a night in the Pit has no verdict to reach: one flight checks what every job must be
+        const seeds = outmatched || endless ? 1 : SEEDS;
+        const need = Math.min(seeds, SEED_MAJORITY);
+        let wins = 0;
+        let flown = 0;
+        let lost: string | null = null;
+        for (let seed = 0; seed < seeds && wins < need && flown - wins <= seeds - need; seed++) {
+          // SEED=<n> starts at other dice (the n-th of the job's seeds), to see how far its outcome is chance
+          random = new Randomizer(textSeed(mission.id) + Number(process.env.SEED ?? 0) + seed);
+          const run = flyJob(mission, campaignFor(mission), host(BEHAVIORS[mission.id]), DRILL_LIMIT, ATTEMPTS, trace > 0 ? tracer(trace) : undefined);
+          const text = report(run);
+          flown++;
+          if (only) console.log(`${mission.id}, seed ${seed}: ${run.done ? 'done' : 'not done'}\n${text}`);
+          // what every job must be, on every seed: never a clone printed in rock, never an attempt that fails before a Host can act
+          expect(run.buried, text).toBe(0);
+          // (but where the drill is known to fail at once, see OUTMATCHED: The Feeders' Comet)
+          if (!QUICK_KNOWN.includes(mission.id)) for (const drill of run.drills) expect(drill.quick, text).toBe(0);
+          if (won(run)) wins++;
+          else lost ??= `seed ${seed}: ${text}`;
+        }
+        shares.push(`${mission.id}: ${wins} of ${flown} won${outmatched ? ' (outmatched)' : endless ? ' (endless)' : ''}`);
         if (outmatched || endless) return;
-        expect(run.done, text).toBe(true);
-        for (const drill of run.drills) expect(drill.attempts, text).toBeLessThanOrEqual(ATTEMPTS);
-        const crashes = PLACE_DEATHS.reduce((sum, cause) => sum + (run.deaths.causes[cause] ?? 0), 0);
-        expect(crashes, text).toBeLessThanOrEqual(CRASHES);
-      }, JOB_TIMEOUT);
+        expect(wins, `won ${wins} of ${flown} seeds, ${need} needed; the first lost, ${lost}`).toBeGreaterThanOrEqual(need);
+      }, JOB_TIMEOUT * SEEDS);
     }
   });
+}
+
+/** What the jobs of this file won, seeds won of seeds flown, printed once they are flown (see SEEDS). */
+const shares: string[] = [];
+afterAll(() => {
+  if (shares.length) process.stdout.write(`the jobs' seeds won:\n${shares.join('\n')}\n`);
+});
+
+/** Whether a job's flight won it: every drill done within its attempts, the clone lost to the place itself no more than CRASHES times. */
+function won(run: JobRun): boolean {
+  const crashes = PLACE_DEATHS.reduce((sum, cause) => sum + (run.deaths.causes[cause] ?? 0), 0);
+  return run.done && run.drills.every((drill) => drill.attempts <= ATTEMPTS) && crashes <= CRASHES;
 }
