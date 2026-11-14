@@ -2,6 +2,13 @@ import { expect, type Page, test } from '@playwright/test';
 import { PIT_PURSE } from '../src/campaign/gullet';
 import { openGame } from './game';
 
+/**
+ * A job's page load, its briefing and its drills take minutes on a busy machine, and a test's
+ * own waits (up to 90 s for a drill to go live, then the drill's) are its bound: every test here
+ * gets time for them, more where a test asks for it.
+ */
+test.describe.configure({ timeout: 240_000 });
+
 /** Opens the campaign's job board from the menu and takes the next job on it. */
 async function takeNextJob(page: Page) {
   await page.click('#campaign');
@@ -393,8 +400,6 @@ test('a courier run on the job board: six beacons laid at its place from its sta
 });
 
 test('an ambush on the job board: three bandits round the client’s lane at its place, all of them down wins', async ({ page }) => {
-  // the page loaded twice, the job's briefing and the bandits' flight: more than the default on a busy machine
-  test.setTimeout(240_000);
   const errors = await boardAfterPilotEpisode(page, 0);
   await page.locator('#board-side .board-group', { hasText: 'Valhalla' }).locator('button', { hasText: 'Ambush' }).click();
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.venue?.id === 'callisto' && window.game.jumpers?.bots.length === 3, null, { timeout: 90_000 });
