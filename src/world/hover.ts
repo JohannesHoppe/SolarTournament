@@ -45,16 +45,12 @@ export function cushion(fall: number): number {
 }
 
 /**
- * The blow (units/s) a hull meeting a world's ground `into` fast (units/s, along the ground's
- * `normal`) takes, on a world of `fall` whose pull points down from `up`: the share of that speed
- * the field pushes against, along the world's up (it pushes against the world's gravity, so a
- * canyon's wall or a terrace's edge, standing upright, is glided along, never struck), less the
- * field's cushion, struck as on rock (see ship/impact, impactDamage).
+ * The blow (units/s) a hull meeting a world's ground `into` fast (units/s, along the ground's own
+ * normal, a canyon's wall and a terrace's edge alike) takes, on a world of `fall`: what the field's
+ * cushion leaves, struck as on rock (see ship/impact, impactDamage). Gliding along a wall at a
+ * shallow angle stays under the cushion; meeting it steeply strikes it.
  */
-export const groundBlow = (into: number, fall: number, normal: THREE.Vector3, up: Readonly<THREE.Vector3> = WORLD_UP) => Math.max(0, into * Math.max(0, normal.dot(up)) - cushion(fall));
-
-/** Up on a world: against its pull, which points down the arena's y axis (see AsteroidField.gravity, its `fall`). */
-export const WORLD_UP: Readonly<THREE.Vector3> = new THREE.Vector3(0, 1, 0);
+export const groundBlow = (into: number, fall: number) => Math.max(0, into - cushion(fall));
 
 /** The ground under the ship last reckoned (see hover). */
 const under: Ground = { normal: new THREE.Vector3(), gap: 0 };

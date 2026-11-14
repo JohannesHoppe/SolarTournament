@@ -71,14 +71,13 @@ const HEAT_PER_SHOT = 20;
 export const RADIATE = 20;
 /**
  * The heat sunlight puts into a hull (heat units per second per W/m² of sunlight at the arena,
- * see ArenaProfile.sunlight): its sun paint lets in a sliver, so near the Corona's sun (4.2 MW/m²)
- * 12 a second, three fifths of what the radiators shed (a rock's shadow cools 2.5 times as fast
- * there), at Earth's distance (1,361 W/m²) four thousandths a second, out at Jupiter and Saturn
- * nothing a radiator notices. The paint is the Games' own: a real hull at the Corona's distance
- * would melt. A sun that outran the radiators (see Ship.sunExcess) would burn the hull; none of
- * the Games' arenas lies so close, so a fight out in the sun (the battleship sieged in the open) stays possible.
+ * see ArenaProfile.sunlight), by the flux at its distance from the sun: near the Corona's sun
+ * (4.2 MW/m²) 30 a second, more than the radiators shed, so out of a shadow (a rock's or the
+ * battleship's hull) the laser's heat climbs whether it fires or not and, once the radiators are
+ * full, the surplus burns the hull (see Ship.sunExcess); at Earth's distance (1,361 W/m²) a
+ * hundredth a second, out at Jupiter and Saturn nothing a radiator notices.
  */
-export const SUN_ABSORB = 12 / 4.2e6;
+export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
 const OVERHEAT_RESUME = 30;
 /**

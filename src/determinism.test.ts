@@ -99,7 +99,7 @@ describe('the shared world on every machine', () => {
       corona: 'b23a7893ecbc3520',
       hole: '2f956ee569996204',
       derelict: 'd51dc8297fd357f6',
-      crack: '12c20ea39716a1e4',
+      crack: 'b11cab01fb4d7dff',
       throat: '537aa54f0e3f1e19',
       valhalla: 'ccfdfa724f2e5966',
       lineae: '8ceda99699816829',

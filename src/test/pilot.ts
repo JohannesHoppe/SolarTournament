@@ -134,7 +134,7 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
     const touched = !!rock && !!field.resolve(rock, flight.position, SHIP_RADIUS, normal);
     // a world's ground: the hull glides over it, and what the hover field left of its speed into it hurts as on rock (see Game.glideOver)
     if (touched && rock.ground) {
-      hull -= impactDamage(groundBlow(glide(flight.velocity, normal, STEP), field.fall, normal));
+      hull -= impactDamage(groundBlow(glide(flight.velocity, normal, STEP), field.fall));
       if (hull <= 0) return result(true);
     } else if (touched && rock) {
       field.surfaceVelocity(rock, surface.copy(flight.position).addScaledVector(normal, -SHIP_RADIUS), surface);

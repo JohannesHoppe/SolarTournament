@@ -295,6 +295,8 @@ const PLATING_CHARGES = 2;
 const SHADE_HOT = 70;
 const SHADE_COOL = 25;
 const SHADE_OFF = 1500;
+/** How far off the battleship along the sun a bot under a burning sun reckons its siege from (units, 50 km): its shadow side. */
+const SHADE_FAR = 1000000;
 /**
  * Let go by its hook, the own ship flies off along its swing, across its nose. For
  * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
@@ -792,6 +794,9 @@ const sweep = new THREE.Vector3();
 /** A ray's hit into the field, reused: one per place that casts every step, each read before that place casts again. */
 const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.Vector3() });
 const shadeHit = rayHit();
+/** Where a bot under a burning sun comes at the battleship from, far on its shadow side, and a hold tried there (see siegePoint). */
+const siegeShade = new THREE.Vector3();
+const siegeProbe = new THREE.Vector3();
 const sweepHit = rayHit();
 const impactHit = rayHit();
 /** Where the impact warning looks at the ground ahead, and the ground's normal there (see groundHurts). */
@@ -5063,7 +5068,8 @@ export class Game implements OnlineGame {
       this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
-      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
+      // a rock's shadow and the battleship's hull's (the field's obstacle) alike
+      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
       ship.sunlight = this.venue.sunlight;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       this.friction(ship, dt, now);
@@ -5889,10 +5895,15 @@ export class Game implements OnlineGame {
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
   private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
     if (!fleet.present(this.field.clock)) return null;
-    const zone = fleet.nearestZone(bot.ship.flight.position);
+    // under a sun that burns, the nearest part it can hold off in the hull's own shadow, coming at it from the shadow side
+    const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
+    const from = burns ? siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, -SHADE_FAR) : bot.ship.flight.position;
+    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+    let zone = burns ? fleet.nearestZone(bot.ship.flight.position, shaded) : -1;
+    if (zone < 0) zone = fleet.nearestZone(bot.ship.flight.position);
     if (zone < 0) return null;
     // where it shows itself, and whether it does from where the bot is, as a pilot sees it
-    fleet.siegeFrom(zone, bot.ship.flight.position, SIEGE_DISTANCE, bot.siegeHold);
+    fleet.siegeFrom(zone, burns ? from : bot.ship.flight.position, SIEGE_DISTANCE, bot.siegeHold);
     bot.siegeClear = fleet.inSight(zone, bot.ship.flight.position, this.field);
     return fleet.zoneAt(zone, this.botPoint(bot));
   }
@@ -9051,7 +9062,7 @@ export class Game implements OnlineGame {
    * it, the hull's underside throws sparks and grinds through the hull.
    */
   private glideOver(ship: Ship, dt: number, now: number) {
-    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall, normal);
+    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
     if (into >= SAFE_IMPACT * 0.4) {
       ship.syncTransform();
@@ -9219,7 +9230,7 @@ export class Game implements OnlineGame {
   private groundHurts(position: THREE.Vector3, heading: THREE.Vector3, speed: number, distance: number): boolean {
     const at = groundAt.copy(position).addScaledVector(heading, distance);
     if (this.field.groundBelow(at, groundAhead) === null) return false;
-    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall, groundAhead) >= SAFE_IMPACT;
+    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall) >= SAFE_IMPACT;
   }
 
   private pilot(dt: number, now: number) {

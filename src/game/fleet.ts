@@ -1687,14 +1687,15 @@ export class Fleet implements Obstacle {
   /**
    * The part to go for from a point, or -1: the nearest battery while one stands (they fire,
    * and they open the reactor), then the nearest drive or the reactor. Bots aim at it, and the
-   * HUD marks it.
+   * HUD marks it. With `accept`, only a part it accepts (a bot keeping to the hull's shade, see
+   * Game.siegePoint).
    */
-  nearestZone(from: THREE.Vector3): number {
+  nearestZone(from: THREE.Vector3, accept?: (zone: number) => boolean): number {
     let best = -1;
     let distance = Infinity;
     const batteries = this.batteries > 0;
     for (let i = 0; i < this.zones.length; i++) {
-      if (!this.open(i) || (batteries && this.zones[i].kind !== 'battery')) continue;
+      if (!this.open(i) || (batteries && this.zones[i].kind !== 'battery') || (accept && !accept(i))) continue;
       const d = this.zoneAt(i, local).distanceTo(from);
       if (d < distance) {
         distance = d;

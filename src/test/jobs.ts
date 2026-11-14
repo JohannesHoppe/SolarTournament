@@ -395,7 +395,7 @@ export class JobWorld implements SchoolContext {
     if (rock && this.field.resolve(rock, flight.position, ship.radius, normal)) {
       // a world's ground: the hull glides over it, and what the hover field left of its speed into it hurts as on rock (see Game.glideOver)
       if (rock.ground) {
-        const into = groundBlow(glide(flight.velocity, normal, JOB_STEP), this.field.fall, normal);
+        const into = groundBlow(glide(flight.velocity, normal, JOB_STEP), this.field.fall);
         if (into >= SAFE_IMPACT && ship.structural(impactDamage(into), this.now) === 'destroyed') this.destroyed(ship, null, 'rock');
         return;
       }
