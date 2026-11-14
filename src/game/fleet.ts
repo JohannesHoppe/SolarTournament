@@ -15,7 +15,11 @@ import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS,
 import { msg, t } from '../i18n/i18n';
 import { NOVA_RADIUS } from './items';
 import { SIEGE_DISTANCE } from '../ship/bots';
-import type { Air } from '../world/air';
+import { AIR_BURN, type Air } from '../world/air';
+import { MAX_HEAT, OVERHEAT_RESUME, RADIATE, SUN_ABSORB } from '../ship/ship';
+import { PlumeLook } from '../view/plume';
+/** The glow of its drives' plume, hotter than a fighter's. */
+const PLUME_GLOW = new THREE.Color(1, 0.48, 0.18);
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -110,6 +114,25 @@ const FLEET_TURN = 0.12;
 export const BATTERY_PERIOD = 1.6;
 export const BATTERY_RANGE = 30000;
 /**
+ * The parts' heat, by the fighters' rules (see ship/ship): each part's radiators shed RADIATE and
+ * a sunlit part takes in the sunlight's SUN_ABSORB, both of a fighter's heat capacity per second
+ * and both divided by the part's size against a fighter's (its radius over FIGHTER_SIZE, units,
+ * 17.5 m: half a fighter's length), since sunlight and radiators go with a part's surface and its
+ * heat capacity with its bulk: a battery (22.5 m) heats and cools 1.3 times slower than a fighter,
+ * a drive (36 m) 2.1 times, the reactor (31.5 m) 1.8 times. A shot heats its battery by
+ * BATTERY_SHOT_HEAT (of MAX_HEAT): in shade its radiators shed more than it fires in (9.4 against
+ * 15.5 a second), in the Corona's sun the sunlight alone outdoes them (23 against 15.5). A battery
+ * that reaches MAX_HEAT falls silent until it has cooled to OVERHEAT_RESUME, which only a shadow
+ * lets it; a drive that full falters, its plume out; and every part full in the sun burns as a
+ * fighter's hull does (AIR_BURN of its hits per hundred, per unit of heat beyond its radiators).
+ * The lead browser reckons the sunlight every SUN_CHECK (s of field time) from SUN_PROBE (units,
+ * 5 km) out along the sun, and sends the heat with the battleship (see toState).
+ */
+const FIGHTER_SIZE = 350;
+const BATTERY_SHOT_HEAT = 15;
+const SUN_CHECK = 0.25;
+const SUN_PROBE = 100000;
+/**
  * A battery's beam hits with a chance that falls with the target's speed and distance: at
  * rest and close BATTERY_AIM, at full tournament speed (BATTERY_DODGE_SPEED, units/s) and the
  * edge of its range a quarter of that. Moving is what saves a pilot.
@@ -118,8 +141,9 @@ export const BATTERY_AIM = 0.7;
 /** A battery's beam is heavier than a ship's laser: on top of what a laser does where it strikes, it takes this much hull. */
 export const BATTERY_DAMAGE = 10;
 const BATTERY_DODGE_SPEED = 5000;
-/** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second at the nozzles, fading to nothing at its end. */
+/** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second within PLUME_CORE (units, 300 m) of the nozzles, then falling off with the square of the distance, a twenty-fifth at its end. */
 export const PLUME_REACH = 30000;
+const PLUME_CORE = 6000;
 const PLUME_SPREAD = 0.12;
 export const PLUME_HEAT = 150;
 export const PLUME_BURN = 40;
@@ -320,8 +344,8 @@ type Ball = { center: THREE.Vector3; radius: number; part: number };
 /** A battery's shot (see Fleet.firing): the part that fires and the number of its shot. */
 type Shot = { zone: number; shot: number };
 
-/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn; and the field time a comet's head broke up on its hull, once one did (see rammedAt). */
-export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number; c?: number };
+/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn, each part's heat and whether it is overheated (see heatUp); and the field time a comet's head broke up on its hull, once one did (see rammedAt). */
+export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number; k: number[]; o: number[]; c?: number };
 
 /** What the fleet needs to know of a ship. */
 export interface Target {
@@ -341,6 +365,9 @@ const want = new THREE.Vector3();
 const dodge = new THREE.Vector3();
 const look = new THREE.Matrix4();
 const sighted = new THREE.Vector3();
+/** Scratch: a part, and the point out along the sun its sunlight is reckoned from (see Fleet.heatUp). */
+const sunPart = new THREE.Vector3();
+const sunProbe = new THREE.Vector3();
 const sightLine = new THREE.Vector3();
 const facing = new THREE.Vector3();
 const turn = new THREE.Quaternion();
@@ -676,6 +703,16 @@ export class Fleet implements Obstacle {
   down = false;
   readonly hits: number[];
   readonly zones: Zone[] = [];
+  /** Each part's heat (of MAX_HEAT), whether it is overheated (a battery silent, a drive faltering) and, on the lead browser, whether the sun shines on it (see heatUp). */
+  readonly heat: number[];
+  readonly overheated: boolean[];
+  readonly sunlit: boolean[];
+  /** The sunlight here (W/m²) and the way to the sun, as the arena has them (see setSun). */
+  private sunlight = 0;
+  private sunDirection = new THREE.Vector3(0, 0, -1);
+  /** The field time the lead browser last reckoned the sunlight on the parts, and the share of a hit each part's burning has added up to. */
+  private sunCheckedAt = -Infinity;
+  private readonly scorch: number[];
   /** Each part, as a torpedo locks on it. */
   readonly beacons: Beacon[];
   readonly velocity = new THREE.Vector3();
@@ -704,7 +741,8 @@ export class Fleet implements Obstacle {
   private readonly dome: THREE.Mesh;
   /** The hangar walls' machinery in full, a mesh for each tunnel from the bow aft, each drawn only while the camera is in it or close to it (see view). */
   readonly machinery: THREE.Mesh[];
-  private readonly flame: THREE.Mesh;
+  /** Its drives' plume as the eye sees it (see view/plume), glowing while they burn. */
+  private readonly flame: PlumeLook;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly burnt: THREE.MeshStandardMaterial;
@@ -728,12 +766,14 @@ export class Fleet implements Obstacle {
   /**
    * A battleship from `seed`, flying clear of the pieces of `field` (none in a test without it),
    * its lane laid out from the field as it stands now, its hull ROCK_CLEAR clear of a `sheet`
-   * that half thick drawn through the field's plane (the Rings of Saturn's, see RING_SHEET).
+   * that half thick drawn through the field's plane (the Rings of Saturn's, see RING_SHEET);
+   * or at the `lane` an arena sets (the Corona's, see world/arenas SHADE_LANE).
    */
   constructor(
     private readonly seed: number,
     private readonly field: AsteroidField | null = null,
     sheet = 0,
+    lane?: number,
   ) {
     // A carrier refitted for the President, fresh from the newest dock: a heavy hull of dark
     // armor, polished, gilded on its edges, its turrets and its bridge; the runway in the
@@ -780,7 +820,6 @@ export class Fleet implements Obstacle {
     const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
     this.driveGlow = light(0.75, 0.85, 1, 1.4);
-    const flame = this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0.2).multiplyScalar(1.5), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     // the procession: lights along the deck's edges that run forward in a wave towards the bow
     this.procession = this.material(
       new THREE.ShaderMaterial({
@@ -1320,9 +1359,10 @@ export class Fleet implements Obstacle {
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
     this.domeBox = this.colliders[this.colliders.length - 1];
     // the plume behind the drives, while they burn
-    this.flame = new THREE.Mesh(this.geometry(rotateX(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true), -Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
-    this.flame.visible = false;
-    this.root.add(this.flame);
+    this.flame = new PlumeLook(PLUME_REACH, PLUME_SPREAD, PLUME_CORE, PLUME_BASE, PLUME_GLOW);
+    this.material(this.flame.mesh.material as THREE.Material);
+    this.flame.mesh.position.z = NOZZLES;
+    this.root.add(this.flame.mesh);
     // the hull throws its shadow and takes those of the rocks; glowing exhaust and glass do neither
     this.root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
@@ -1330,12 +1370,16 @@ export class Fleet implements Obstacle {
     // inside the hull, where the sun never reaches
     for (const mesh of this.machinery) mesh.castShadow = false;
     this.hits = this.zones.map(() => 0);
+    this.heat = this.zones.map(() => 0);
+    this.overheated = this.zones.map(() => false);
+    this.sunlit = this.zones.map(() => false);
+    this.scorch = this.zones.map(() => 0);
     this.beacons = this.zones.map((_, i) => new Beacon(this, i));
     this.bulk.push(...this.colliders);
     for (const z of HANGARS) {
       this.bulk.push({ center: new THREE.Vector3(0, (HANGAR_FLOOR + HANGAR_CEILING) / 2, z), half: new THREE.Vector3(hullAt(z).half, (HANGAR_CEILING - HANGAR_FLOOR) / 2, HANGAR_WIDTH / 2), part: -1 });
     }
-    this.lane = field ? this.laneOf(field, sheet) : 0;
+    this.lane = lane ?? (field ? this.laneOf(field, sheet) : 0);
     this.enter();
   }
 
@@ -1686,14 +1730,15 @@ export class Fleet implements Obstacle {
   /**
    * The part to go for from a point, or -1: the nearest battery while one stands (they fire,
    * and they open the reactor), then the nearest drive or the reactor. Bots aim at it, and the
-   * HUD marks it.
+   * HUD marks it. With `accept`, only a part it accepts (a bot keeping to the hull's shade, see
+   * Game.siegePoint).
    */
-  nearestZone(from: THREE.Vector3): number {
+  nearestZone(from: THREE.Vector3, accept?: (zone: number) => boolean): number {
     let best = -1;
     let distance = Infinity;
     const batteries = this.batteries > 0;
     for (let i = 0; i < this.zones.length; i++) {
-      if (!this.open(i) || (batteries && this.zones[i].kind !== 'battery')) continue;
+      if (!this.open(i) || (batteries && this.zones[i].kind !== 'battery') || (accept && !accept(i))) continue;
       const d = this.zoneAt(i, local).distanceTo(from);
       if (d < distance) {
         distance = d;
@@ -1715,6 +1760,65 @@ export class Fleet implements Obstacle {
     const broken: FleetEvent = { kind: 'broken', zone, position: this.zoneAt(zone) };
     return this.zones[zone].kind === 'reactor' ? [broken, ...this.sink()] : [broken];
   }
+
+  /** The arena's sunlight (W/m²) and the way to its sun (kept, the scene's own vector), which heat the parts (see heatUp). */
+  setSun(sunlight: number, direction: THREE.Vector3) {
+    this.sunlight = sunlight;
+    this.sunDirection = direction;
+  }
+
+  /** A battery fired a shot: its heat, as a fighter's laser takes it. */
+  shotHeat(zone: number) {
+    this.heat[zone] = Math.min(MAX_HEAT, this.heat[zone] + BATTERY_SHOT_HEAT);
+    if (this.heat[zone] >= MAX_HEAT) this.overheated[zone] = true;
+  }
+
+  /** Every standing drive is overheated: they falter, the plume goes out. */
+  private drivesFaltering() {
+    let standing = 0;
+    for (let i = 0; i < this.zones.length; i++) {
+      if (this.zones[i].kind !== 'drive' || this.broken(i)) continue;
+      if (!this.overheated[i]) return false;
+      standing++;
+    }
+    return standing > 0;
+  }
+
+  /**
+   * The lead browser heats and cools the parts (see FIGHTER_SIZE): the sunlight on the parts it
+   * shines on, out of the hull's shade and any rock's, what the radiators shed, and once a part is
+   * full, the sunlight beyond its radiators burning it into hits.
+   */
+  private heatUp(dt: number, clock: number) {
+    if (clock - this.sunCheckedAt >= SUN_CHECK) {
+      this.sunCheckedAt = clock;
+      for (let i = 0; i < this.zones.length; i++) {
+        this.sunlit[i] = this.sunlight > 0 && !this.broken(i) && this.field !== null && this.inSight(i, sunProbe.copy(this.zoneAt(i, sunPart)).addScaledVector(this.sunDirection, SUN_PROBE), this.field);
+      }
+    }
+    for (let i = 0; i < this.zones.length; i++) {
+      if (this.broken(i)) continue;
+      const size = Math.max(1, this.zones[i].radius / FIGHTER_SIZE);
+      const sun = this.sunlit[i] ? (this.sunlight * SUN_ABSORB) / size : 0;
+      const radiate = RADIATE / size;
+      const heat = this.heat[i] + (sun - radiate) * dt;
+      this.heat[i] = THREE.MathUtils.clamp(heat, 0, MAX_HEAT);
+      if (this.heat[i] >= MAX_HEAT) this.overheated[i] = true;
+      else if (this.heat[i] <= OVERHEAT_RESUME) this.overheated[i] = false;
+      // full in the sun: what the radiators cannot shed burns the part, as a fighter's hull
+      if (heat > MAX_HEAT && this.open(i)) {
+        this.scorch[i] += (heat - MAX_HEAT) * AIR_BURN * 0.01 * this.hitsOf(i);
+        const whole = Math.floor(this.scorch[i]);
+        if (whole > 0) {
+          this.scorch[i] -= whole;
+          this.burns.push(i, whole);
+        }
+      }
+    }
+  }
+
+  /** The hits the sun burnt into parts since last asked (pairs of part and hits), for the game to count as hits without a shooter (see Game.playFleet). */
+  readonly burns: number[] = [];
 
   /**
    * A part is in sight of a point: the line from there to the part meets that part before any
@@ -1857,11 +1961,11 @@ export class Fleet implements Obstacle {
     return this.resolve(center, radius, this.clock, normal);
   }
 
-  /** How strongly a point lies in the drive plume, 0..1 (1 at the nozzles), while the drives burn. */
+  /** How strongly a point lies in the drive plume, 0..1 (1 within PLUME_CORE of the nozzles, falling off with the square of the distance past it as the cone widens, as a ship's does: see ship/plume), while the drives burn. */
   plumeAt(point: THREE.Vector3, radius: number): number {
     if (!this.burning) return 0;
     const along = this.plume(point, radius);
-    return along < 0 ? 0 : 1 - along / PLUME_REACH;
+    return along < 0 ? 0 : along <= PLUME_CORE ? 1 : (PLUME_CORE / along) * (PLUME_CORE / along);
   }
 
   /**
@@ -1889,6 +1993,11 @@ export class Fleet implements Obstacle {
         const offset = i * 0.27;
         const shot = Math.floor((clock + offset) / BATTERY_PERIOD);
         if (shot <= Math.floor((this.lastClock + offset) / BATTERY_PERIOD)) continue;
+        // an overheated battery lets its turn go by, silent
+        if (this.overheated[i]) {
+          this.held++;
+          continue;
+        }
         const entry = (this.shots[fired.length] ??= { zone: 0, shot: 0 });
         entry.zone = i;
         entry.shot = shot;
@@ -1898,6 +2007,8 @@ export class Fleet implements Obstacle {
     this.lastClock = clock;
     return fired;
   }
+  /** The turns an overheated battery let go by, counted for the development log. */
+  held = 0;
   /** What firing hands out, kept for the next frame. */
   private readonly fired: Shot[] = [];
   private readonly shots: Shot[] = [];
@@ -1953,7 +2064,7 @@ export class Fleet implements Obstacle {
       rotateTowards(turned.copy(this.quaternion), turn, FLEET_TURN * dt);
       if (!this.crowded(turned)) this.quaternion.copy(turned);
     }
-    this.burning = !!prey && quaternionAngleTo(this.quaternion, turn) < PLUME_AIM;
+    this.burning = !!prey && quaternionAngleTo(this.quaternion, turn) < PLUME_AIM && !this.drivesFaltering();
     // how fast it turned this frame (rad/s), for the speed its hull sweeps what it meets at
     before.invert().premultiply(this.quaternion);
     const angle = 2 * acos(Math.min(1, Math.abs(before.w)));
@@ -1962,6 +2073,7 @@ export class Fleet implements Obstacle {
     else this.spin.set(0, 0, 0);
     this.root.updateMatrixWorld();
     this.ram(clock);
+    this.heatUp(dt, clock);
   }
 
   /** The way out of a comet's route the battleship sees coming within FLEET_CLEAR (unit length, into `target`), or null when none does. */
@@ -1990,6 +2102,8 @@ export class Fleet implements Obstacle {
       q: this.quaternion.toArray().map(round),
       t: this.target,
       u: this.burning ? 1 : 0,
+      k: this.heat.map(Math.round),
+      o: this.overheated.map((hot) => (hot ? 1 : 0)),
       ...(this.rammedAt === null ? {} : { c: this.rammedAt }),
     };
   }
@@ -2023,6 +2137,12 @@ export class Fleet implements Obstacle {
     this.heardFresh = true;
     this.target = state.t;
     this.burning = state.u === 1;
+    state.k.forEach((heat, zone) => {
+      if (zone < this.heat.length) this.heat[zone] = heat;
+    });
+    state.o.forEach((hot, zone) => {
+      if (zone < this.overheated.length) this.overheated[zone] = hot === 1;
+    });
     return events;
   }
 
@@ -2082,8 +2202,7 @@ export class Fleet implements Obstacle {
     }
     this.dome.visible = this.phase < 3 && !dying;
     this.reactorGlow.color.setRGB(1, 0.75, 0.4).multiplyScalar(dying ? 3 + 2 * sin(now * 30) : this.phase === 3 ? 2 + sin(now * 8) : 1.5);
-    this.flame.visible = this.burning;
-    if (this.burning) this.flame.scale.set(1 + 0.08 * sin(now * 40), 1 + 0.08 * sin(now * 37), 1);
+    this.flame.set(this.burning ? 1 : 0, now);
     this.procession.uniforms.time.value = now;
   }
 

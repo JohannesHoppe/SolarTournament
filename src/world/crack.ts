@@ -13,7 +13,7 @@ import { bump, chaosAt, CHAOS_TOP, EUROPA_RADIUS, LAND, smooth } from './europa'
  * one place to another. Where things are; the scenery is world/lineae's.
  *
  * The rift runs along z, in segments that end in valley heads where its floor rises to the plain:
- * a valley RIFT_DEPTH deep (300 m) whose floor is some 500 m wide, its walls climbing in
+ * a valley RIFT_DEPTH deep (300 m) whose floor is some 500 m wide, its walls rising from a foot of scree (FOOT_RUN), then climbing in
  * WALL_STEPS terraces to the rim, so the sky opens wider the higher the eye looks. The track starts
  * on the floor of the first segment, rides up its head onto the plain, crosses a field of chaos
  * terrain between the two segments in a lane among its rafts, drops into the second, runs its
@@ -97,9 +97,9 @@ const RIDGES = [
 /** Hummocks of the ice over all of it: a few meters, some 150 m across. */
 const BUMPS = 80;
 const BUMP_SCALE = 3000;
-/** Rubble on the floor: blocks up to RUBBLE (15 m) all over it, and up to EDGE_RUBBLE (35 m) along the foot of its walls. */
+/** Rubble on the floor: blocks up to RUBBLE (15 m) all over it, and scree up to EDGE_RUBBLE (12 m) in broad mounds some 120 m across along the foot of its walls, never steep enough to strike. */
 const RUBBLE = 300;
-const EDGE_RUBBLE = 700;
+const EDGE_RUBBLE = 250;
 const bumps = new Noise(6501);
 const rubble = new Noise(6502);
 const jag = new Noise(6503);
@@ -127,9 +127,21 @@ function floorHalf(z: number): number {
   for (const bridge of BRIDGES) if (!bridge.gorge) half += (BRIDGE_FLOOR - half) * bump(z - bridge.z, BRIDGE_EASE * 2);
   return half;
 }
-/** How far up its wall a point lies `beyond` the floor's edge (units): 0 on the floor to 1 at the rim, in its terraces. */
+/**
+ * The walls' foot: a ramp of scree FOOT_RUN wide (300 m) rising FOOT_SHARE of the rift's depth
+ * (120 m: about 22°, past the 45 m a racer flies over the floor) before the terraces, so a ship swinging wide out of a bend at the speed limit
+ * meets the wall at a shallow angle, under the hover field's cushion, and is lifted up it.
+ */
+const FOOT_RUN = 6000;
+const FOOT_SHARE = 0.4;
+/** How far up its wall a point lies `beyond` the floor's edge (units): 0 on the floor to 1 at the rim, up its foot, then its terraces. */
 function wallRise(beyond: number): number {
   if (beyond <= 0) return 0;
+  if (beyond < FOOT_RUN) return (FOOT_SHARE * beyond) / FOOT_RUN;
+  return FOOT_SHARE + (1 - FOOT_SHARE) * terraceRise(beyond - FOOT_RUN);
+}
+/** How far up its terraces a point lies `beyond` the foot (0 to 1). */
+function terraceRise(beyond: number): number {
   const t = beyond / WALL_STEP;
   const step = Math.floor(t);
   if (step >= WALL_STEPS) return 1;
@@ -163,7 +175,7 @@ export function riftHeight(x: number, z: number): number {
     if (rise < 1) {
       // the walls climb to the plain beside them, whatever stands on it
       const floor = LAND - depth;
-      const loose = (1 - rise) * (RUBBLE * Math.max(0, rubble.fractal(x / 1500, 0.2, z / 1500, 2)) + EDGE_RUBBLE * Math.max(0, rubble.fractal(x / 900, 1.7, z / 900, 2)) * smooth((beyond + 1200) / 600));
+      const loose = (1 - rise) * (RUBBLE * Math.max(0, rubble.fractal(x / 1500, 0.2, z / 1500, 2)) + EDGE_RUBBLE * Math.max(0, rubble.fractal(x / 2400, 1.7, z / 2400, 2)) * smooth((beyond + 1200) / 600));
       height = Math.min(height, floor + (height - floor) * rise + loose);
     }
   }

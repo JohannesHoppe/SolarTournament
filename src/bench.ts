@@ -4,7 +4,7 @@ import type { RoundMode } from './game/race';
 import { t } from './i18n/i18n';
 import { BENCH_FEATURES, BENCH_ON, LADDER, tierOf, TIER_NAMES, type BenchFeature, type Tier } from './view/quality';
 import { FIELD_RADIUS } from './world/asteroids';
-import { ARENAS, type ArenaId } from './world/arenas';
+import { ARENAS, FIGHT_WORLDS, RACE_WORLDS, type ArenaId } from './world/arenas';
 import { cos, sin } from './detmath';
 
 /**
@@ -12,7 +12,8 @@ import { cos, sin } from './detmath';
  * round of the default rivals, the Host's clone watching, the camera on a fixed circle around
  * the field) and measures the frame time with everything on, then with each feature switched off
  * on its own (the occasional effects, glitch and datamosh, switched on), every rung of the
- * quality ladder, every arena with and without its landmark, and the modes with their scenery.
+ * quality ladder, every arena with and without its landmark, the modes with their scenery, and the
+ * worlds flown over (the race worlds' tracks, the worlds fought over) behind a pilot.
  * Between two features it measures everything on again, and a feature's cost is the difference
  * to the mean of the two around it, so a fight that grows or calms down does not count as a
  * cost. The table shows on screen at the end (a phone runs it too), in the console, and as JSON
@@ -48,7 +49,7 @@ export interface BenchResult {
 }
 
 /** The benchmark's sections; `&only=quality,arenas` runs only those. */
-export const BENCH_SECTIONS = ['menu', 'features', 'quality', 'arenas', 'modes'] as const;
+export const BENCH_SECTIONS = ['menu', 'features', 'quality', 'arenas', 'modes', 'worlds'] as const;
 export type BenchSection = (typeof BENCH_SECTIONS)[number];
 
 /** Seconds of warm-up before each measurement: a switched feature compiles its shaders, buffers are made anew. */
@@ -140,7 +141,7 @@ export async function runBench(game: Game, seconds: number, only: BenchSection[]
     camera.updateMatrixWorld();
   };
 
-  const counts: Record<BenchSection, number> = { menu: 3, features: (BENCH_FEATURES.length - 3) * 2, quality: LADDER.length, arenas: ARENAS.length * 3 + 2, modes: 3 + 2 };
+  const counts: Record<BenchSection, number> = { menu: 3, features: (BENCH_FEATURES.length - 3) * 2, quality: LADDER.length, arenas: ARENAS.length * 3 + 2, modes: 3 + 2, worlds: RACE_WORLDS.length + FIGHT_WORLDS.length };
   // the round of the features and the ladder starts with one measurement of everything on
   const total = BENCH_SECTIONS.filter(runs).reduce((sum, section) => sum + counts[section], runs('features') || runs('quality') ? 1 : 0);
   let done = 0;
@@ -264,9 +265,20 @@ export async function runBench(game: Game, seconds: number, only: BenchSection[]
     }
   }
 
-  async function scene(arena: ArenaId, mode: RoundMode) {
+  // the worlds flown low over their ground, the race worlds' tracks and the worlds fought over: the
+  // camera rides behind a pilot as the Host's chase camera does, since a circle around the middle
+  // would see neither the track nor the ground a Host flies over
+  if (runs('worlds')) {
+    const worlds: [ArenaId, RoundMode][] = [...RACE_WORLDS.map((world): [ArenaId, RoundMode] => [world.id, 'race']), ...FIGHT_WORLDS.map((world): [ArenaId, RoundMode] => [world.id, 'deathmatch'])];
+    for (const [arena, mode] of worlds) {
+      await scene(arena, mode, false);
+      await measure(t('worlds'), arena);
+    }
+  }
+
+  async function scene(arena: ArenaId, mode: RoundMode, circling = true) {
     game.benchRound(arena, mode);
-    game.benchCamera = fly;
+    game.benchCamera = circling ? fly : null;
     await wait(SCENE_SETTLE);
   }
 

@@ -1,6 +1,6 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
+import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
@@ -11,6 +11,9 @@ import { THROAT_AIR, THROAT_TRACK } from '../world/throat';
 import { TITAN_AIR, TITAN_FALL } from '../world/titan';
 import { bendRadius, RacingLine } from '../game/racingline';
 import { EUROPA_FALL } from '../world/europa';
+import { PSYCHE_FALL } from '../world/yard';
+import { cushion } from '../world/hover';
+import { EXTREME_G } from '../ship/strainhand';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
@@ -76,6 +79,9 @@ export const FROM_CODE: Record<string, number> = {
   onNose: Math.round((ON_NOSE * 180) / Math.PI),
   overdrive: meters(OVERDRIVE_PUSH),
   hoverHeight: meters(HOVER_HEIGHT),
+  // the speed of a dive the hover field takes out (see world/hover, cushion)
+  cushionEuropa: Math.round(meters(cushion(EUROPA_FALL))),
+  cushionPsyche: Math.round(meters(cushion(PSYCHE_FALL))),
   gates: GATES,
   trackGates: CRACK_TRACK.gates.length,
   trackRespawn: TRACK_RESPAWN_SECONDS,
@@ -194,10 +200,11 @@ export const FROM_CODE: Record<string, number> = {
   // hardest turn at the deck at the limit (to 5 m, as the README gives it)
   liftDeck: g(LIFT),
   liftMost: g(LIFT_MOST),
+  extremeG: EXTREME_G,
   carveDeck: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: 1 })) / 5) * 5,
   hotDepth: Math.round(hotDepth() / 100) * 100,
-  safeKm: Math.round(meters(safeSpeed(-20000, COOLING_SHADOW))),
-  safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),
+  climbDepth: Math.round(climbDepth() / 100) * 100,
+  safeTwoKm: Math.round(meters(safeSpeed(jupiterAir(), -40000, RADIATE)) / 5) * 5,
   // how far over the deck the flight computer takes its horizon from the planet
   airTop: meters(IN_AIR_TOP),
   // the nanobots: how long after the last blow they begin, and how long they take from nothing
@@ -230,10 +237,22 @@ function circularAt(distance: number): number {
   return Math.sqrt(wellMu(hole()) / distance);
 }
 
-/** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
+/** Jupiter's air (see world/air). */
+function jupiterAir() {
+  return arenaById('giant')!.layout.air!;
+}
+
+/** How deep under Jupiter's deck the speed limit starts to heat a hull (m). */
 function hotDepth(): number {
   let depth = 0;
-  while (safeSpeed(-depth / METERS_PER_UNIT, COOLING_SHADOW) >= MAX_SPEED) depth += 1;
+  while (safeSpeed(jupiterAir(), -depth / METERS_PER_UNIT, RADIATE) >= MAX_SPEED) depth += 1;
+  return depth;
+}
+
+/** How deep under Jupiter's deck the air heats a hull even at a crawl, where only climbing helps (m). */
+function climbDepth(): number {
+  let depth = 0;
+  while (safeSpeed(jupiterAir(), -depth / METERS_PER_UNIT, RADIATE) > 0) depth += 1;
   return depth;
 }
 
@@ -256,8 +275,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   armor: { value: 2, readme: '# of 100 hull points' },
   driveCone: { value: 50, readme: 'within #° of the ship' },
   heatShot: { value: 20, readme: 'Each shot adds # % of the heat capacity' },
-  burstSun: { value: 6, readme: 'a burst of # in sunlight' },
-  burstShade: { value: 9, readme: 'and # in shadow' },
+  burstSun: { value: 6, readme: 'a cool laser fires a burst of #;' },
   cooled: { value: 30, readme: 'cooled down to # %' },
   torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
@@ -267,7 +285,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   ramNose: { value: 70, readme: 'on the armored nose # % of the blow' },
   ramFlank: { value: 100, readme: 'on a flank # %' },
   ramDrive: { value: 130, readme: 'into the open drive # %' },
-  plume: { value: 150, readme: '# m long and spreading' },
+  plume: { value: 1000, readme: 'a hundredth at a kilometer' },
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },
   pocket: { value: 1.35, readme: '# km deep at its middle' },

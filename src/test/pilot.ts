@@ -4,9 +4,9 @@ import { Bot, evenSkills } from '../ship/bots';
 import { FlightModel, MAX_SPEED } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { bounceOff, impactDamage } from '../ship/impact';
-import { COOLING_SHADOW, COOLING_SUN, MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
+import { MAX_HEAT, MAX_HULL, RADIATE, type Ship } from '../ship/ship';
 import { airBurn, airHeat, altitudeIn } from '../world/air';
-import { glide, outside } from '../world/hover';
+import { glide, groundBlow, outside } from '../world/hover';
 import { approachGate, coilPush, ringCrossing } from '../game/race';
 import type { RacingLine } from '../game/racingline';
 
@@ -66,7 +66,7 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
 export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each, cap = Infinity): Flight {
   const flight = startFlight(start, facing, drift);
   // the hull's heat the bot reads, as its HUD shows it (see flyCourse)
-  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
+  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, extreme: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   if (rings.edgeless) bot.home = Infinity;
@@ -84,8 +84,8 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   }, limit, undefined, each, ship);
 }
 
-/** How fast the radiators shed heat at a place, as the game has it (see Ship.cooling): in the shade under a planet's cloud deck, else in the sun (rocks' shadows left out). */
-const coolingAt = (field: AsteroidField, position: THREE.Vector3) => (field.air && altitudeIn(field.air, position) < 0 ? COOLING_SHADOW : COOLING_SUN);
+/** How fast the radiators shed heat, as the game has it (see Ship.cooling): what they radiate into space, the sunlight of a race's arenas a sliver nothing notices. */
+const coolingAt = (_field: AsteroidField, _position: THREE.Vector3) => RADIATE;
 
 /**
  * A ship flies a course of rings in a field, with the game's flight model, gravity, coils and
@@ -119,7 +119,10 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
     if (field.air) {
       // the radiators shed, then the air heats, as the game steps a ship (see Ship.update, Game.friction)
       const radiators = { heat: Math.max(0, hot.heat - coolingAt(field, flight.position) * STEP), overheated: false, cooling: coolingAt(field, flight.position) };
-      hull -= airBurn(radiators, airHeat(altitudeIn(field.air, flight.position), flight.velocity.length()) * STEP, STEP, MAX_HEAT);
+      // cold air carries heat off (see world/air, airStep), hot air fills the radiators and burns what they cannot hold
+      const heat = airHeat(field.air, altitudeIn(field.air, flight.position), flight.velocity.length()) * STEP;
+      if (heat < 0) radiators.heat = Math.max(0, radiators.heat + heat);
+      else hull -= airBurn(radiators, heat, STEP, MAX_HEAT);
       hot.heat = radiators.heat;
       if (hull <= 0) return result(true);
     }
@@ -129,9 +132,11 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
     if (hit) flight.position.copy(before).addScaledVector(path, Math.max(0, hit.distance - 1));
     const rock = field.overlap(flight.position, SHIP_RADIUS);
     const touched = !!rock && !!field.resolve(rock, flight.position, SHIP_RADIUS, normal);
-    // a world's ground: the hull glides over it, never hurt (see Game.glideOver)
-    if (touched && rock.ground) glide(flight.velocity, normal, STEP);
-    else if (touched && rock) {
+    // a world's ground: the hull glides over it, and what the hover field left of its speed into it hurts as on rock (see Game.glideOver)
+    if (touched && rock.ground) {
+      hull -= impactDamage(groundBlow(glide(flight.velocity, normal, STEP), field.fall));
+      if (hull <= 0) return result(true);
+    } else if (touched && rock) {
       field.surfaceVelocity(rock, surface.copy(flight.position).addScaledVector(normal, -SHIP_RADIUS), surface);
       hull -= impactDamage(bounceOff(flight.velocity, surface, normal));
       if (hull <= 0) return result(true);

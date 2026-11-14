@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARCH_CLEARANCE, ARCH_HALF, BENDS, CANYON_LINE, LANDMARKS, legStart, RIG_HALF, SIGN_HALF, STRAIT, THROAT_AIR, THROAT_GROUND_HALF, THROAT_TRACK, throatGround, throatRelief, throatSea, BEACON_HALF, TRACK_LIFT, WRECK_HALF } from './throat';
 import { airStep, altitudeIn, densityIn, reachIn, safeSpeed, SIGHT_DEPTH } from './air';
-import { COOLING_SHADOW, MAX_HEAT } from '../ship/ship';
+import { RADIATE, MAX_HEAT } from '../ship/ship';
 import { reliefOutside } from '../test/field';
 import { LIFT_MOST, liftAt, MAX_SPEED, turnRadius } from '../ship/flight';
 import { expectGatesApart, expectStartsClear, raceWorld } from '../test/track';
@@ -96,13 +96,13 @@ describe("Kraken Mare's Throat as a race world", () => {
   it('flies in an air that holds the speed limit without burning the hull, clogs nothing, lifts as hard as the flight computer takes and shows 4.5 km and more', () => {
     const at = THROAT_TRACK.points[Math.floor(THROAT_TRACK.points.length / 2)];
     expect(densityIn(THROAT_AIR, at)).toBeGreaterThan(1);
-    for (const height of [at.y, throatSea(at.x, at.z)]) expect(safeSpeed(altitudeIn(THROAT_AIR, at.clone().setY(height)), COOLING_SHADOW)).toBe(MAX_SPEED);
+    for (const height of [at.y, throatSea(at.x, at.z)]) expect(safeSpeed(THROAT_AIR, altitudeIn(THROAT_AIR, at.clone().setY(height)), RADIATE)).toBe(MAX_SPEED);
     expect(liftAt(densityIn(THROAT_AIR, at), MAX_SPEED)).toBeGreaterThanOrEqual(LIFT_MOST);
     expect(reachIn(THROAT_AIR, at, new THREE.Vector3(1, 0, 0), SIGHT_DEPTH, 20 * KM)).toBeGreaterThan(4.5 * KM);
   });
 
-  it('never burns a hull racing at the limit; two overdrive shoves close together burn a few points at most', () => {
-    const hull = { flight: { position: THROAT_TRACK.points[40].clone(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) }, perks: { fins: 2 }, finSpin: new THREE.Vector3(), clog: 0, heat: 0, overheated: false, cooling: COOLING_SHADOW };
+  it('never burns a hull racing at the limit, nor at the overdrive: its cold air carries heat off', () => {
+    const hull = { flight: { position: THROAT_TRACK.points[40].clone(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) }, perks: { fins: 2 }, finSpin: new THREE.Vector3(), clog: 0, heat: 0, overheated: false, cooling: RADIATE };
     const step = 1 / 60;
     let burnt = 0;
     for (let t = 0; t < 150; t += step) {
@@ -118,8 +118,7 @@ describe("Kraken Mare's Throat as a race world", () => {
       burnt += airStep(hull, THROAT_AIR, step, MAX_HEAT);
       hull.heat = Math.max(0, hull.heat - hull.cooling * step);
     }
-    console.info(`two shoves close together burn ${burnt.toFixed(1)} hull points`);
-    expect(burnt).toBeLessThan(10);
+    expect(burnt).toBe(0);
   });
 
   it('stands its landmarks clear of the track: the arches high over it and over its gates, the rest beside it', () => {

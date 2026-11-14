@@ -17,6 +17,9 @@ import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
 import { BURNOUT_DAMAGE, BURNOUT_SECONDS, DriveHeat } from './driveheat';
+import { PLUME_CORE, PLUME_REACH, PLUME_SPREAD, PLUME_THROTTLE } from './plume';
+import { PlumeLook } from '../view/plume';
+import { extremeAfter } from './strainhand';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -69,13 +72,22 @@ const NOVA_PULSE = 2;
 /** Freshly spawned ships cannot be damaged for this long (s), long enough to get the bearings; firing ends it early. */
 const SPAWN_PROTECTION = 5;
 
-/** The laser heats the ship; radiators shed the heat, much better in the shadow of an asteroid. */
+/** The laser heats the ship; the radiators shed the heat into the cold of space. */
 export const MAX_HEAT = 100;
 const HEAT_PER_SHOT = 20;
-export const COOLING_SUN = 20;
-export const COOLING_SHADOW = 50;
+/** What the radiators shed into space (heat units per second, MAX_HEAT the laser's limit), whatever stands around: a shot a second. */
+export const RADIATE = 20;
+/**
+ * The heat sunlight puts into a hull (heat units per second per W/m² of sunlight at the arena,
+ * see ArenaProfile.sunlight), by the flux at its distance from the sun: near the Corona's sun
+ * (4.2 MW/m²) 30 a second, more than the radiators shed, so out of a shadow (a rock's or the
+ * battleship's hull) the laser's heat climbs whether it fires or not and, once the radiators are
+ * full, the surplus burns the hull (see Ship.sunExcess); at Earth's distance (1,361 W/m²) a
+ * hundredth a second, out at Jupiter and Saturn nothing a radiator notices.
+ */
+export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
-const OVERHEAT_RESUME = 30;
+export const OVERHEAT_RESUME = 30;
 /**
  * The radiators glow with the heat they shed (see models' radiator): from RADIATOR_GLOW of the
  * laser's limit on, dull red, deepening to orange-red at the limit, as hot metal does. The metal
@@ -95,8 +107,9 @@ export const G = 9.81 / METERS_PER_UNIT;
  * G_TOLERANCE (g) it starts to grey out; at the main drive's full push (13 g) it takes G_ONSET
  * seconds to full strain; beyond HARSH_G (a pull-up at the hardest turn still under it) its gel holds no more blood in its head, and every g
  * beyond counts HARSH_WEIGHT times; below the tolerance it recovers from full strain in
- * G_RECOVERY seconds. Every clone alike, a Host's and a bot's: a Host's screen darkens at its
- * edges, a bot aims wider and reacts later (see ship/bots).
+ * G_RECOVERY seconds. Every clone alike, a Host's and a bot's: the strain darkens a Host's screen
+ * at its edges; only extreme g, past what a seasoned clone flies through, costs a Host's hands and
+ * a bot's aim and reflexes their steadiness (see ship/strainhand).
  */
 const G_TOLERANCE = 3;
 const G_ONSET = 5;
@@ -245,6 +258,9 @@ const GLOW_IDLE = 0.25;
 /** The drive light sits this far behind the ship's center (units, 20 m), where the exhaust glows. */
 const ENGINE_LIGHT_OFFSET = 400;
 /** The drive flame's tint by the steps of its upgrade: stock, azure, violet, white-hot. */
+/** The glow of a drive's plume (see view/plume), times its flame's tint. */
+const PLUME_GLOW = new THREE.Color(1, 0.4, 0.1);
+const plumeTint = new THREE.Color();
 const FLAME_TINTS = [new THREE.Color(1, 1, 1), new THREE.Color(0.45, 0.75, 1.6), new THREE.Color(1.1, 0.45, 1.6), new THREE.Color(2, 2, 2.2)];
 /**
  * The neon trim's light strips (see ship/models) in sun orange, by the steps of its upgrade: the
@@ -420,6 +436,10 @@ export class Ship {
   /** Decoys the clone holds (see game/decoys): lures a torpedo homing on it turns to. */
   decoys = 0;
   private readonly aura: THREE.Sprite;
+  /** Its drive's plume as the eye sees it (see view/plume): glowing behind it while the drive burns past PLUME_THROTTLE, as far as it burns. */
+  private readonly plume: PlumeLook;
+  /** Its plume hidden: the ship the camera rides behind, whose own plume would glow over the whole view, and a ship on show. */
+  plumeHidden = false;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
@@ -436,6 +456,8 @@ export class Ship {
   private glow = 0;
   /** The clone's g-force strain, 0..1 (see strainAfter), from all it feels (see Seat). */
   strain = 0;
+  /** How hard extreme g bites on the clone's hands and aim, 0..1 (see ship/strainhand, extremeAfter). */
+  extreme = 0;
   /** The clone's seat, which passes on to it every push on the hull but gravity's (see Seat). */
   readonly seat = new Seat();
   /** Game time until which the main drive cools down after an overdrive. */
@@ -454,8 +476,8 @@ export class Ship {
   private slowSentAt = -Infinity;
   /** Set by the game: an asteroid blocks the sun, or the clouds above it in a planet's air. */
   inShadow = false;
-  /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
-  sunCooling = 1;
+  /** Set by the game: the sunlight at the arena (W/m², see ArenaProfile.sunlight). */
+  sunlight = 0;
   /** Whether the nanobots are mending the drive and the thrusters now (see nanobots); when they were last hurt, and what they were last step. */
   mending = false;
   private hurtAt = -Infinity;
@@ -464,9 +486,24 @@ export class Ship {
   /** How far a planet's clouds have clogged the radiators, 0 clean to 1 through (see world/air, clogging); kept by the browser that runs the ship. */
   clog = 0;
 
-  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit), less as far as they are clogged. */
+  /** The heat sunlight puts into the hull per second where the ship is now (heat units/s): none in a shadow (see SUN_ABSORB). */
+  get sunHeat() {
+    return this.inShadow ? 0 : this.sunlight * SUN_ABSORB;
+  }
+
+  /** The heat the radiators could shed per second into space (heat units/s), less as far as they are clogged. */
+  private get radiating() {
+    return RADIATE * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+  }
+
+  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit): what they radiate less the sunlight they take in, less as far as they are clogged. */
   get cooling() {
-    return (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+    return Math.max(0, this.radiating - this.sunHeat);
+  }
+
+  /** The sunlight's heat the radiators cannot shed (heat units/s, see sunHeat): it fills them and, once they are full, burns the hull (see world/air, airBurn); the Corona's sun only. */
+  get sunExcess() {
+    return Math.max(0, this.sunHeat - this.radiating);
   }
   alive = true;
   score = 0;
@@ -561,6 +598,10 @@ export class Ship {
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.textures.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
     this.aura.visible = false;
     this.root.add(this.aura);
+    const stern = this.radius * 0.5;
+    this.plume = new PlumeLook(PLUME_REACH - stern, PLUME_SPREAD, PLUME_CORE, this.radius * 0.6 + stern * PLUME_SPREAD, PLUME_GLOW);
+    this.plume.mesh.position.z = stern;
+    this.root.add(this.plume.mesh);
   }
 
   /** The Sovereign, the President's gift: marked in its own ivory and gold, which no Host can pick. */
@@ -600,6 +641,7 @@ export class Ship {
     // the hull in its last stage, the Magpie, over all of it (see models, magpieHull)
     showMagpie(this.model, perks.magpie);
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
+    this.plume.tint(plumeTint.copy(PLUME_GLOW).multiply(FLAME_TINTS[perks.flame]));
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;
     stern.visible = perks.neon > 1;
@@ -614,6 +656,7 @@ export class Ship {
   /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
   idle(dt: number, throttle: number) {
     this.flight.throttle = throttle;
+    this.plumeHidden = true;
     this.animateEngine(dt);
   }
 
@@ -678,6 +721,7 @@ export class Ship {
     this.glow = 0;
     this.overheated = false;
     this.strain = 0;
+    this.extreme = 0;
     this.seat.reset();
     this.overdrivePending.set(0, 0, 0);
     this.overdriveLeft = 0;
@@ -931,7 +975,9 @@ export class Ship {
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
     // a burning drive is loud (see silent)
     if (this.flight.throttle > SILENT_THROTTLE) this.loudAt = now;
-    this.strain = strainAfter(this.strain, feltLoad(this.seat.after(this.flight, dt)), dt);
+    const load = feltLoad(this.seat.after(this.flight, dt));
+    this.strain = strainAfter(this.strain, load, dt);
+    this.extreme = extremeAfter(this.extreme, load, dt);
     this.show(dt, now);
     this.nanobots(dt, now);
 
@@ -1170,6 +1216,8 @@ export class Ship {
       glow.scale.set(glowScale, glowScale, 1);
     }
     if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
+    // the plume burns, and is seen, only past PLUME_THROTTLE and with a drive left
+    this.plume.set(!this.plumeHidden && this.drive > 0 && throttle >= PLUME_THROTTLE ? throttle : 0, this.flameTime);
     if (this.trim.light.map) this.trim.light.map.offset.x = -((this.flameTime * TRIM_RUN * TRIM_PULSES) % 1);
   }
 }

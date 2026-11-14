@@ -11,6 +11,8 @@ import { BOOST_RADIUS, Course, GATE_RADIUS } from '../game/race';
 import { RACE_SPEED } from '../ship/bots';
 import type { ArenaProfile } from '../world/arenas';
 import { exp, tan } from '../detmath';
+import { feltLoad } from '../ship/ship';
+import { extremeAfter, StrainHand } from '../ship/strainhand';
 import { angleTo, slerp } from '../detthree';
 
 /** The screen the simulated Host looks at (pixels): the game at 1280×720, the pointer's full deflection at its share of the shorter side. */
@@ -94,6 +96,10 @@ export class Human {
   private readonly random: Randomizer;
   private readonly goal = new THREE.Vector3();
   private readonly wobble = { x: 0, y: 0, toX: 0, toY: 0, left: 0 };
+  /** The bite of extreme g (0..1, see ship/strainhand) from what the flight's engines push, and the clone's hands under it, as the game's own clone has them. */
+  private extreme = 0;
+  private readonly hand = new StrainHand();
+  private readonly held: Controls = { ...IDLE };
   /** What the Host saw, oldest first: it acts on what it saw its reaction time ago. */
   private readonly seen: { x: number; y: number }[] = [];
 
@@ -149,7 +155,10 @@ export class Human {
         this.pointer[axis] = THREE.MathUtils.clamp(this.pointer[axis] + this.speed[axis] * (this.step / steps), -half, half);
       }
     }
-    const controls = { ...IDLE, yaw: pointerAxis(this.pointer.x / FULL), pitch: pointerAxis(this.pointer.y / FULL), thrust: pedal === 'drive' ? 1 : 0 };
+    const stick = { ...IDLE, yaw: pointerAxis(this.pointer.x / FULL), pitch: pointerAxis(this.pointer.y / FULL), thrust: pedal === 'drive' ? 1 : 0 };
+    // the clone's hands under the g it felt, late and unsteady as the game's are
+    this.extreme = extremeAfter(this.extreme, feltLoad(flight.felt), this.step);
+    const controls = this.hand.step(stick, this.extreme, this.step, () => this.random.nextFloat(), this.held);
     // the brake flips and burns to rest
     if (pedal === 'brake') return this.brake.fly(flight, controls, flight.driveFactor, this.out);
     this.brake.release();

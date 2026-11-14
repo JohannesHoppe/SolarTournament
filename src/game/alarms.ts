@@ -314,6 +314,8 @@ export const FIELD_CRITICAL = 3;
 /** The heartbeat's strength (0..1, like the g-force strain) with a failing hull, and deep in a well (from WELL_CRITICAL). */
 export const HEART_HULL = 0.6;
 export const HEART_WELL = 0.85;
+/** How much harder the heart pounds at the full bite of extreme g (see ship/strainhand), on top of the strain: louder and faster than any strain alone. */
+export const HEART_EXTREME = 0.4;
 /** Short glitches of the link per second on average while an alarm is CRITICAL. */
 export const CRITICAL_GLITCHES = 0.5;
 /** Death this close (seconds of impact, or a well past return) silences the radio for SILENCE_SECONDS, at most once every SILENCE_COOLDOWN seconds. */

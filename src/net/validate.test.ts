@@ -81,8 +81,12 @@ describe('messages from other browsers', () => {
   });
 
   it("take the President's battleship, and drop it broken", () => {
-    const fleet = { d: 0, h: [3, 0, 30, 0, 0, 0, 0, 0, 0], p: [1, 2, 3], v: [600, 0, 0], q: [0, 0, 0, 1], t: 'p:abc', u: 1 };
+    const fleet = { d: 0, h: [3, 0, 30, 0, 0, 0, 0, 0, 0], p: [1, 2, 3], v: [600, 0, 0], q: [0, 0, 0, 1], t: 'p:abc', u: 1, k: [100, 0, 42, 0, 0, 0, 0, 0, 0], o: [1, 0, 0, 0, 0, 0, 0, 0, 0] };
     expect(fleetState(fleet)).toEqual(fleet);
+    // each part's heat within the laser's limit, overheated or not
+    expect(fleetState({ ...fleet, k: [101] })).toBeNull();
+    expect(fleetState({ ...fleet, o: [2] })).toBeNull();
+    expect(fleetState({ ...fleet, k: undefined })).toBeNull();
     expect(fleetState({ ...fleet, t: null })?.t).toBeNull();
     expect(fleetState({ ...fleet, d: 2 })).toBeNull();
     expect(fleetState({ ...fleet, h: [1.5] })).toBeNull();

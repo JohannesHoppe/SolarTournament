@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, easesOff, evenSkills, flyGently, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, strainHold, TORPEDO_CLEARANCE } from './bots';
+import { IDLE } from '../input/input';
 import { debrisSet } from '../world/shapes';
 import type { JunkBuild } from '../world/junk';
-import { pow } from '../detmath';
-import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
-import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
+import { hypot, pow } from '../detmath';
+import { FlightModel, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from './flight';
+import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
 import { junkField, testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -19,7 +20,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -32,6 +33,8 @@ function field(rock: boolean): AsteroidField {
 }
 
 const at = (x: number, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+/** Drive plus thrusters (as shares) a bot easing off its strain stays under. */
+const EASY_LIMIT = 0.3;
 
 describe('bots fly by the Hosts\' rules', () => {
   it('only command what a Host\'s stick, drive and thrusters can, and never touch their flight themselves', () => {
@@ -347,9 +350,11 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
       me.flight.update(STEP, bot.think(t, [me], f), outside);
       // the air's heat alone, with clean radiators: their clogging has a test of its own
       me.heat = Math.max(0, me.heat - me.cooling * STEP);
-      burnt += airBurn(me, heatInto(altitudeIn(f.air!, me.flight.position), me.flight.velocity.length(), 0) * STEP, STEP, MAX_HEAT);
+      const heat = heatInto(f.air!, altitudeIn(f.air!, me.flight.position), me.flight.velocity.length(), 0) * STEP;
+      if (heat < 0) me.heat = Math.max(0, me.heat + heat);
+      else burnt += airBurn(me, heat, STEP, MAX_HEAT);
       hottest = Math.max(hottest, me.heat);
-      fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling));
+      fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling));
     }
     expect(hottest).toBeLessThan(MAX_HEAT);
     expect(burnt).toBe(0);
@@ -420,9 +425,9 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     const bot = new Bot(me, evenSkills(0.5));
     bot.raceSpeed = MAX_SPEED;
     bot.waypoint = deep(depth, 3000);
-    me.flight.velocity.set(0.85 * safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling), 0, 0);
+    me.flight.velocity.set(0.85 * safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling), 0, 0);
     let fastest = 0;
-    fly(f, me, bot, 5, () => (fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling))));
+    fly(f, me, bot, 5, () => (fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(f.air!, altitudeIn(f.air!, me.flight.position), me.cooling))));
     expect(fastest).toBeLessThan(1);
   });
 
@@ -610,6 +615,42 @@ describe('the clone\'s body and sensors, the same for every ship', () => {
     // the thrusters alone (4 g) barely strain it
     for (let t = 0; t < 5; t += STEP) strain = strainAfter(strain, 800, STEP);
     expect(strain).toBeLessThan(0.15);
+  });
+
+  it('flies its strain as a pilot does: eases off at its hold until it has recovered, the daring holding on longer', () => {
+    // the hold rises with daring; past it a bot eases off, and stays easy until well under it
+    expect(strainHold(0.9)).toBeGreaterThan(strainHold(0.1));
+    const hold = strainHold(0.5);
+    expect(easesOff(false, hold - 0.05, 0.5)).toBe(false);
+    expect(easesOff(false, hold, 0.5)).toBe(true);
+    expect(easesOff(true, hold - 0.2, 0.5)).toBe(true);
+    expect(easesOff(true, hold - 0.4, 0.5)).toBe(false);
+    // gently: the drive rests and the thrusters push under the 3 g a clone recovers below
+    const c = { ...IDLE, thrust: 1, strafeX: 1, strafeY: -1, strafeZ: 0.5 };
+    flyGently(c);
+    expect(c.thrust).toBe(0);
+    expect(hypot(c.strafeX, c.strafeY, c.strafeZ) * RCS_THRUST).toBeLessThan(3 * G);
+    // in the round: a bot burning for a far goal lets its drive rest once its clone is strained,
+    // until it has recovered, while one in danger (a nova close by) spends the strain to get away
+    const f = field(false);
+    const roamer = ship('Kessler', at(0), at(1));
+    const bot = new Bot(roamer, skillsOf('Kessler'));
+    roamer.flight.velocity.set(0, 0, 6000);
+    let clock = 0;
+    const thrustAt = (strain: number) => {
+      let c = IDLE;
+      for (const end = clock + 2; clock < end; clock += STEP) {
+        roamer.strain = strain;
+        c = bot.think(clock, [roamer], f);
+      }
+      return c.thrust + hypot(c.strafeX, c.strafeY, c.strafeZ);
+    };
+    const fresh = thrustAt(0);
+    const strained = thrustAt(0.95);
+    expect(strained).toBeLessThan(fresh);
+    expect(strained).toBeLessThan(EASY_LIMIT);
+    bot.flee = at(0, 0, 3000);
+    expect(thrustAt(0.95)).toBeGreaterThan(EASY_LIMIT);
   });
 
   it('sees a nose locked, tracking or off, within the sensors\' reach', () => {

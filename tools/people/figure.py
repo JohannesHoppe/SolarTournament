@@ -64,7 +64,7 @@ for obj in meshes:
 
 def diffuse(material):
     """The image of a material that colors it: the texture feeding its base color, else the first image."""
-    images = [n for n in material.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image] if material.use_nodes else []
+    images = [n for n in material.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image is not None] if material.use_nodes else []
     for node in images:
         if 'diffuse' in node.image.name.lower() or 'diffuse' in node.label.lower():
             return node.image
@@ -81,7 +81,8 @@ for obj in meshes:
         plain.use_nodes = True
         bsdf = plain.node_tree.nodes['Principled BSDF']
         bsdf.inputs['Roughness'].default_value = 0.85
-        if image:
+        # whether there is an image is asked of None, never of the image's truth value, which Blender does not promise
+        if image is not None:
             # hair and eyebrows are cut out by their alpha and stay PNG; the rest goes as JPEG
             cut = any(key in obj.name for key in CUT_OUT)
             side = next((size for key, size in SIZES if key in obj.name), TEXTURE // 2)

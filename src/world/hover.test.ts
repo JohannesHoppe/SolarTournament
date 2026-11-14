@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { testField } from '../test/field';
 import { PLACES } from './arenas';
-import { FlightModel, flyByNose, HOVER_HEIGHT, type Ground } from '../ship/flight';
+import { FlightModel, flyByNose, HOVER_HEIGHT, MAX_SPEED, type Ground } from '../ship/flight';
 import { IDLE, type Controls } from '../input/input';
-import { glide, outside } from './hover';
+import { cushion, glide, groundBlow, outside } from './hover';
+import { impactDamage, SAFE_IMPACT } from '../ship/impact';
+import { cos, sin } from '../detmath';
 import type { AsteroidField } from './asteroids';
 
 const RADIUS = 340;
@@ -45,31 +47,62 @@ function fly(field: AsteroidField, flight: FlightModel, seconds: number, steer?:
   const heights: number[] = [];
   let struck = false;
   let touched = 0;
+  let blow = 0;
   for (let t = 0; t < seconds; t += STEP) {
     const ground = outside(field, flight.position, flight.velocity, RADIUS, STEP, pull);
     flight.update(STEP, steer ? steer(flight, pull, ground) : IDLE, pull);
     const piece = field.overlap(flight.position, RADIUS);
     if (piece && field.resolve(piece, flight.position, RADIUS, normal)) {
       if (piece.ground) {
-        glide(flight.velocity, normal, STEP);
+        blow = Math.max(blow, groundBlow(glide(flight.velocity, normal, STEP), field.fall));
         touched++;
       } else struck = true;
     }
     const height = field.groundBelow(flight.position, normal);
     heights.push(height === null ? NaN : height - RADIUS);
   }
-  return { heights, struck, touched };
+  return { heights, struck, touched, blow };
+}
+
+
+/**
+ * A ship diving at `speed` (units/s) at `angle` (rad) below the ground's plane at `drop`, its
+ * nose along its flight and the autopilot holding it there, as a Host flies: the blow (units/s)
+ * its hull meets the ground with, as the game steps it.
+ */
+function dive(field: AsteroidField, drop: THREE.Vector3, speed: number, angle: number): number {
+  const up = new THREE.Vector3();
+  field.groundBelow(drop, up);
+  const along = new THREE.Vector3(1, 0, 0).addScaledVector(up, -up.x).normalize();
+  const flight = new FlightModel();
+  const heading = along.clone().multiplyScalar(cos(angle)).addScaledVector(up, -sin(angle));
+  flight.reset(drop.clone().addScaledVector(up, HOVER_HEIGHT * 6), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), heading));
+  flight.velocity.copy(heading).multiplyScalar(speed);
+  const out: Controls = { ...IDLE };
+  return fly(field, flight, 2, (f, pull, ground) => flyByNose(f, IDLE, pull, out, ground)).blow;
 }
 
 describe('the hover field', () => {
-  it.each(GROUNDED.map((place) => [place.id, place] as const))('holds a ship dropped onto the ground of %s at any speed, never hurt, and settles it at the ride height', (_, place) => {
+  it.each(GROUNDED.map((place) => [place.id, place] as const))('on %s lets a graze glide unhurt and makes a steep dive at the limit a crash, as on rock', (_, place) => {
+    const field = testField();
+    field.generate(place.layout);
+    const drop = clearDrop(field, new THREE.Vector3(...(place.start?.at ?? [0, 0, 0])))!;
+    // racing low over the ground at the limit, a few degrees down: the field takes it
+    expect(impactDamage(dive(field, drop, MAX_SPEED, (3 * Math.PI) / 180))).toBe(0);
+    // straight down at the limit: wrecked, whatever the world's pull
+    expect(impactDamage(dive(field, drop, MAX_SPEED, Math.PI / 2))).toBeGreaterThanOrEqual(100);
+    // below the cushion plus what rock forgives, never hurt
+    expect(impactDamage(dive(field, drop, cushion(place.layout.fall!) + SAFE_IMPACT * 0.9, Math.PI / 2))).toBe(0);
+  });
+
+  it.each(GROUNDED.map((place) => [place.id, place] as const))('holds a ship sinking onto the ground of %s within the cushion, unhurt, and settles it at the ride height', (_, place) => {
     const field = testField();
     field.generate(place.layout);
     const start = new THREE.Vector3(...(place.start?.at ?? [0, 0, 0]));
     const drop = clearDrop(field, start);
     expect(drop, 'a clear place to drop a ship onto the ground').not.toBeNull();
     const square = new THREE.Vector3();
-    for (const speed of [0, 1000, 5000, 9000]) {
+    for (const speed of [0, cushion(place.layout.fall!) * 0.8]) {
       const flight = new FlightModel();
       flight.reset(drop!, new THREE.Quaternion());
       // straight into the ground, square to it
@@ -79,8 +112,10 @@ describe('the hover field', () => {
       const settle = Math.max(60, 40 * Math.sqrt(HOVER_HEIGHT / (2 * place.layout.fall!)));
       // the autopilot on, the stick let go: at rest it holds the ship still, as a Host leaves it (free drift slides down a slope)
       const out: Controls = { ...IDLE };
-      const { heights, struck } = fly(field, flight, settle, (f, pull, ground) => flyByNose(f, IDLE, pull, out, ground));
+      const { heights, struck, blow } = fly(field, flight, settle, (f, pull, ground) => flyByNose(f, IDLE, pull, out, ground));
       expect(struck, `${speed / 20} m/s down: nothing but ground met`).toBe(false);
+      // within the cushion the field takes the speed out before the hull meets the ground
+      expect(impactDamage(blow), `${speed / 20} m/s down: met the ground at ${blow / 20} m/s`).toBe(0);
       // the hull never sinks into the ground: the field and the glide hold it on top
       expect(Math.min(...heights), `${speed / 20} m/s down`).toBeGreaterThan(-RADIUS * 0.5);
       // at rest at the ride height in the end

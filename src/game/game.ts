@@ -59,7 +59,8 @@ import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaig
 import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
-import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
+import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
+import { StrainHand } from '../ship/strainhand';
 import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
@@ -70,8 +71,8 @@ import { MAX_FROM, snoozeUntil } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { copyGround, glide, outside as outsideOn } from '../world/hover';
-import { airAround, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { copyGround, glide, groundBlow, outside as outsideOn } from '../world/hover';
+import { airAround, airBurn, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT, outsideArena } from '../world/arena';
@@ -101,6 +102,7 @@ import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAF
 import { shoveSpin } from '../ship/blow';
 import { blastOn, CHARGE_BLAST, CHARGE_FUSE, Charges } from './charges';
 import { blastBreaks, blastEnergy, blastTime } from './blasts';
+import { PLUME_BURN, PLUME_HEAT, plumeStrength } from '../ship/plume';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
@@ -124,6 +126,7 @@ import {
   CRITICAL_GLITCHES,
   escapeLoad,
   FIELD_CRITICAL,
+  HEART_EXTREME,
   HEART_HULL,
   HEART_WELL,
   HULL_CRITICAL,
@@ -293,18 +296,16 @@ const NOVA_FLASH_MS = 1600;
 const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
 const PLATING_CHARGES = 2;
-/**
- * A drive plume: a burning main drive (throttle above PLUME_THROTTLE) throws hot plasma out
- * behind it, PLUME_REACH far (units, 150 m), spreading by PLUME_SPREAD per unit of its length
- * (about 7°). A ship inside takes PLUME_HEAT heat and PLUME_BURN hull per second at the nozzle
- * of a full burn, less with the throttle and fading to nothing at the plume's end. Nothing
- * like a slipstream in vacuum: to overtake, a ship has to get out of the line of the one ahead.
- */
-const PLUME_THROTTLE = 0.3;
-const PLUME_REACH = 3000;
-const PLUME_SPREAD = 0.12;
-const PLUME_HEAT = 60;
-const PLUME_BURN = 8;
+/** A bot the sun burns (see Game.shadeFor) heads for a rock's shadow once its heat passes SHADE_HOT (of 100), to a point SHADE_OFF (units, 75 m) beyond the rock's far side from the sun, and stays until it has cooled to SHADE_COOL. */
+const SHADE_HOT = 70;
+const SHADE_COOL = 25;
+const SHADE_OFF = 1500;
+/** A bot besieging the battleship under a burning sun takes the shadow of a rock within SHADE_FIGHT (units, 1 km, its reach to fire) of the part it attacks before a nearer one, and fights on from there while it sees the part (see Game.shadeFor). */
+const SHADE_FIGHT = 20000;
+/** How far off the battleship along the sun a bot under a burning sun reckons its siege from (units, 50 km): its shadow side. */
+const SHADE_FAR = 1000000;
+/** Nicole tells the own pilot to take cover from a sun that burns once it has heated the hull this far (of 100), early in a round (see Coach, its tip `sun`). */
+const SUN_TIP_HEAT = 25;
 /**
  * Let go by its hook, the own ship flies off along its swing, across its nose. For
  * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
@@ -420,7 +421,7 @@ const KILL_EASE = 0.1;
 const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
-const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'flare', 'comet']);
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'sun', 'flare', 'comet']);
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
  * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
@@ -703,7 +704,7 @@ const STATIC_GLITCH = 0.7;
 const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -808,8 +809,19 @@ const sweep = new THREE.Vector3();
 /** A ray's hit into the field, reused: one per place that casts every step, each read before that place casts again. */
 const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.Vector3() });
 const shadeHit = rayHit();
+/** Where a bot under a burning sun comes at the battleship from, far on its shadow side, and a hold tried there (see siegePoint). */
+const siegeShade = new THREE.Vector3();
+/** Scratch: a rock's shadow spot reckoned in Game.shadeFor. */
+const shadeSpot = new THREE.Vector3();
+const siegeFrom = new THREE.Vector3();
+/** The sides a bot under a burning sun reckons its siege from: the battleship's shadow side, and the sun's side, where a rock beside its lane may shade it (see siegePoint). */
+const SIEGE_SIDES = [-1, 1] as const;
+const siegeProbe = new THREE.Vector3();
 const sweepHit = rayHit();
 const impactHit = rayHit();
+/** Where the impact warning looks at the ground ahead, and the ground's normal there (see groundHurts). */
+const groundAt = new THREE.Vector3();
+const groundAhead = new THREE.Vector3();
 const aimHit = rayHit();
 const laserHit = rayHit();
 /** Scratch of a claim-jumper's sight of its rig and where it starts (see Game.sawPoint, spawnJumpers). */
@@ -942,6 +954,14 @@ const hookEnd = new THREE.Vector3();
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
+/** Where the drive whose plume grills the own ship burns, for the alarm's arrow. */
+const plumeFrom = new THREE.Vector3();
+/** A comet's head rumbles on the hull within RUMBLE_REACH of it (units, 1.5 km), up to RUMBLE_RATE times a second right at it; a shower's knot strikes as hard as can be heard at GRIT_LOUDEST laser hits' worth. */
+const RUMBLE_REACH = 30000;
+const RUMBLE_RATE = 6;
+const GRIT_LOUDEST = 6;
+/** A plume this strong (0..1) on the own hull raises its alarm to a warning; weaker, a caution. */
+const PLUME_WARNING = 0.25;
 
 /** A solar flare's plasma center, the point of its front nearest the camera, an ember's drift, and the middle of a new clone's places. */
 const flareAt = new THREE.Vector3();
@@ -2148,6 +2168,9 @@ export class Game implements OnlineGame {
 
   /** The controls of a trembling hand (see tremble) and of a raider holding its fire, filled anew each step. */
   private readonly trembled: Controls = { ...IDLE };
+  /** The own clone's hands under g (see ship/strainhand), and the stick they give, filled anew each step. */
+  private readonly strainHand = new StrainHand();
+  private readonly strained: Controls = { ...IDLE };
   private readonly heldFire: Controls = { ...IDLE };
 
   /**
@@ -3115,8 +3138,10 @@ export class Game implements OnlineGame {
       this.fleet.dispose();
     }
     // flying clear of the field's pieces, its lane laid out from the field as generated, before a snapshot breaks any, and clear of the ring's sheet
-    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed, this.field, arena.sheet) : null;
+    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed, this.field, arena.sheet, arena.lane) : null;
     if (this.fleet) this.scene.add(this.fleet.root);
+    // its parts heat in the arena's sunlight as a fighter does
+    this.fleet?.setSun(arena.sunlight, this.space.sunDirection);
     // its hull hides what is behind it and stops torpedoes
     this.field.obstacle = this.fleet;
     this.fleetCalled = false;
@@ -4852,6 +4877,9 @@ export class Game implements OnlineGame {
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
     if (this.state !== 'paused' || this.online) {
       this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      // the camera rides behind the ship it follows, in that ship's own plume: it is not drawn
+      const followed = this.me ? this.subject() : null;
+      for (const ship of this.ships) ship.plumeHidden = ship === followed;
       // in an arena's air an explosion billows, in vacuum it flashes (see Effects.inAir)
       this.effects.inAir = !!this.field.air;
       this.effects.update(dt);
@@ -5020,7 +5048,9 @@ export class Game implements OnlineGame {
     const read = this.state === 'playing' ? this.input.read() : IDLE;
     // in a scene in person the Host's stick turns the clone's head, the ship waits in its clamps
     if (this.stage) this.stage.turnHead(read.yaw, read.pitch, dt);
-    const hand = this.stage ? IDLE : this.time < this.tremorUntil ? this.tremble(read) : read;
+    const shaken = this.stage ? IDLE : this.time < this.tremorUntil ? this.tremble(read) : read;
+    // a clone's hands under extreme g: the stick late and unsteady, as a bot's aim and reflexes are (see ship/strainhand)
+    const hand = this.stage ? shaken : this.strainHand.step(shaken, me.alive ? me.extreme : 0, dt, Math.random, this.strained);
     if (recorder) this.record(hand, dt);
     const myControls = this.flightComputer(hand);
     if (recorder) this.recorded(myControls);
@@ -5084,6 +5114,9 @@ export class Game implements OnlineGame {
         const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
         bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
+        // besieging the battleship from its hull's shade, the bot cools at its hold; else, hot in a burning sun, it makes for a rock's shadow
+        const holdShaded = !!this.fleet && !!bot.siege && this.field.raycast(bot.siegeHold, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+        bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
@@ -5148,8 +5181,9 @@ export class Game implements OnlineGame {
       this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
-      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
-      ship.sunCooling = this.venue.cooling;
+      // a rock's shadow and the battleship's hull's (the field's obstacle) alike
+      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+      ship.sunlight = this.venue.sunlight;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (!clamped) devlog?.strain(ship.name, ship.strain, dt);
       this.friction(ship, dt, now);
@@ -5605,11 +5639,22 @@ export class Game implements OnlineGame {
     fleet.rams.length = 0;
     fleet.update(clock, now);
     fleet.view(this.camera.position);
+    const held = fleet.held;
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
+    if (devlog && fleet.held > held) devlog.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: 'held', part: 'battery', zone: -1, weapon: null, count: fleet.held - held });
+    // what the sun burnt into its parts (the lead's count, which the others take from its state)
+    for (let i = 0; i < fleet.burns.length; i += 2) {
+      const zone = fleet.burns[i];
+      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon: 'sun', count: fleet.burns[i + 1] });
+      this.fleetEvents(fleet.hit(zone, fleet.burns[i + 1]), null);
+    }
+    fleet.burns.length = 0;
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
-      if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, msg("In the battleship's drive plume · get out"), null, 'exhaust', dt, now);
+      if (plume <= 0) continue;
+      this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, null, null, 'exhaust', dt, now);
+      if (ship === this.me) this.plumeAlarm(plume, t("BATTLESHIP'S PLUME · GET OUT"), fleet.root.position);
     }
     if (fleet.present(clock) && !this.fleetCalled) {
       this.fleetCalled = true;
@@ -5643,6 +5688,8 @@ export class Game implements OnlineGame {
       }
     }
     if (!target) return;
+    fleet.shotHeat(zone);
+    devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: fleet.sunlit[zone] ? 'sun' : 'shade', part: 'battery', zone, weapon: null, count: 1 });
     const roll = hash(textSeed(target.id), shot, zone) / 0x100000000;
     const hit = roll < batteryChance(target.flight.velocity.length(), distance);
     const end = scratch.copy(target.flight.position);
@@ -5985,10 +6032,37 @@ export class Game implements OnlineGame {
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
   private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
     if (!fleet.present(this.field.clock)) return null;
-    const zone = fleet.nearestZone(bot.ship.flight.position);
+    // under a sun that burns, the nearest part it can hold off in shade (the hull's own, coming at it
+    // from its shadow side, or a rock's beside its lane, coming at it from the sun's side), out of
+    // its drive plume and in sight of the part
+    const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
+    // and once the reactor is open, it alone: only it sinks the ship, and time out in such a sun is
+    // too dear to spend on the drives
+    const core = burns && fleet.phase === 3 ? (part: number) => fleet.zones[part].kind === 'reactor' : undefined;
+    let zone = -1;
+    let from: THREE.Vector3 = bot.ship.flight.position;
+    if (burns) {
+      let nearest = Infinity;
+      for (const side of SIEGE_SIDES) {
+        const point = siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, side * SHADE_FAR);
+        const shaded = (part: number) => (!core || core(part)) && this.field.raycast(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
+        const found = fleet.nearestZone(bot.ship.flight.position, shaded);
+        if (found < 0) continue;
+        const distance = fleet.siegeFrom(found, point, SIEGE_DISTANCE, siegeProbe).distanceTo(bot.ship.flight.position);
+        if (distance < nearest) {
+          nearest = distance;
+          zone = found;
+          from = siegeFrom.copy(point);
+        }
+      }
+    }
+    if (zone < 0) {
+      zone = fleet.nearestZone(bot.ship.flight.position, core);
+      from = bot.ship.flight.position;
+    }
     if (zone < 0) return null;
     // where it shows itself, and whether it does from where the bot is, as a pilot sees it
-    fleet.siegeFrom(zone, bot.ship.flight.position, SIEGE_DISTANCE, bot.siegeHold);
+    fleet.siegeFrom(zone, from, SIEGE_DISTANCE, bot.siegeHold);
     bot.siegeClear = fleet.inSight(zone, bot.ship.flight.position, this.field);
     return fleet.zoneAt(zone, this.botPoint(bot));
   }
@@ -6542,13 +6616,15 @@ export class Game implements OnlineGame {
     this.clogAlarm(me, up);
     // what the radiators shed beyond the reactor's waste heat a clog holds in is left for the air
     const cooling = Math.max(0, me.cooling - REACTOR_WASTE * me.clog);
-    if (heatInto(altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
+    if (heatInto(air, altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
       if (me.heat < AIR_COOL) this.airSaid = 0;
       return;
     }
     const level = me.heat >= MAX_HEAT ? 'critical' : me.heat >= AIR_HOT ? 'warning' : 'caution';
-    const safe = Math.round(safeSpeed(altitude, cooling) * METERS_PER_UNIT);
-    this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up });
+    const safe = Math.round(safeSpeed(air, altitude, cooling) * METERS_PER_UNIT);
+    // where the air is hot enough to heat a hull at any speed, only climbing out cools it
+    const text = safe < 1 ? t('HULL HEAT · CLIMB OUT') : t('HULL HEAT · SAFE {speed} m/s', { speed: safe });
+    this.alarms.raise({ id: 'air', level, text, direction: up });
     this.airGlow = AIR_GLOW[level];
     const said = level === 'critical' ? 2 : 1;
     // a line Nicole could not say yet (she was speaking) is tried again the next frame
@@ -8429,6 +8505,12 @@ export class Game implements OnlineGame {
    * as a knockout of whoever shoved it last (see KNOCKOUTS).
    */
   private friction(ship: Ship, dt: number, now: number) {
+    // sunlight its radiators cannot shed (the Corona's, out of a shadow) fills them and burns the hull as the air's heat does
+    const sun = ship.alive ? ship.sunExcess * dt : 0;
+    if (sun > 0 && ship.structural(airBurn(ship, sun, dt, MAX_HEAT), now) === 'destroyed') {
+      this.shipDestroyed(ship, null, 'sun');
+      return;
+    }
     const air = this.field.air;
     if (!air || !ship.alive) {
       ship.finSpin.set(0, 0, 0);
@@ -8448,22 +8530,23 @@ export class Game implements OnlineGame {
     let hottest = 0;
     let burner: Ship | null = null;
     for (const other of this.ships) {
-      const throttle = other.flight.throttle;
-      if (other === ship || !other.alive || throttle < PLUME_THROTTLE) continue;
-      // behind the other's drive, along its axis, and inside the cone the plume spreads to
-      const back = other.flight.forward(forward).negate();
-      const away = relative.subVectors(ship.flight.position, other.flight.position);
-      const along = away.dot(back);
-      if (along <= 0 || along > PLUME_REACH) continue;
-      const across = away.addScaledVector(back, -along).length();
-      if (across > ship.radius * 0.6 + along * PLUME_SPREAD) continue;
-      const strength = throttle * (1 - along / PLUME_REACH);
+      if (other === ship || !other.alive) continue;
+      // behind the other's drive, along its axis, inside the cone the plume spreads to (see ship/plume)
+      const strength = plumeStrength(other.flight.position, other.flight.forward(forward).negate(), other.flight.throttle, ship.flight.position, ship.radius);
       if (strength > hottest) {
         hottest = strength;
         burner = other;
       }
     }
-    if (burner) this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, msg('In the drive plume of {name} · get out'), burner, 'plume', dt, now);
+    if (!burner) return;
+    this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, null, burner, 'plume', dt, now);
+    if (ship === this.me) this.plumeAlarm(hottest, t('DRIVE PLUME · {name} · GET OUT', { name: burner.name }), burner.flight.position);
+  }
+
+  /** The own ship in a drive's plume (see view/plume, where it glows): a caution, a warning where it burns hard, its arrow towards the drive. */
+  private plumeAlarm(strength: number, text: string, drive: THREE.Vector3) {
+    const me = this.me!;
+    this.alarms.raise({ id: 'plume', level: strength >= PLUME_WARNING ? 'warning' : 'caution', text, direction: plumeFrom.subVectors(drive, me.flight.position) });
   }
 
   /**
@@ -8813,6 +8896,7 @@ export class Game implements OnlineGame {
       else if (cause === 'burnout') this.deathCause = t('Boosted the drive to burnout');
       else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'air') this.deathCause = t('Burned up in the clouds');
+      else if (cause === 'sun') this.deathCause = t('Burned up in the sunlight');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
       else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
@@ -8888,7 +8972,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' || cause === 'air' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -9138,12 +9222,18 @@ export class Game implements OnlineGame {
 
   /**
    * A ship touched a world's ground (the outward `normal` of this frame): it glides over it, never
-   * bounced and never hurt (see world/hover, glide); fast along it, the hull's underside throws
-   * sparks and grinds through the hull.
+   * bounced (see world/hover, glide); what the hover field left of its speed into the ground hurts
+   * as an impact on rock does, so a graze glides unharmed and a dive at speed crashes; fast along
+   * it, the hull's underside throws sparks and grinds through the hull.
    */
   private glideOver(ship: Ship, dt: number, now: number) {
-    glide(ship.flight.velocity, normal, dt);
+    const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
+    if (into >= SAFE_IMPACT * 0.4) {
+      ship.syncTransform();
+      this.bounceHurts(ship, into, now, 'ground');
+      if (!ship.alive) return;
+    }
     ship.syncTransform();
     const speed = ship.flight.velocity.length();
     if (speed < GLIDE_SPARKS || Math.random() > dt * GLIDE_SPARK_RATE) return;
@@ -9161,7 +9251,7 @@ export class Game implements OnlineGame {
   }
 
   /** What a blow `approach` hard (units/s; against a body that gives way, the ship's own share of it) does to a ship struck on `what`, with the outward `normal` of this frame: sparks, a crash through the hull, and the impact's damage. */
-  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk' | 'core') {
+  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk' | 'core' | 'ground') {
     if (approach < SAFE_IMPACT * 0.4) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 40 + approach * 0.05);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, approach / 800), rate: 1.9 });
@@ -9298,6 +9388,43 @@ export class Game implements OnlineGame {
    * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
    * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
+  /**
+   * Where a ship sunlight burns (its radiators cannot shed the sun's heat, the Corona's, see
+   * Ship.sunExcess) finds shade: SHADE_OFF beyond the far side of the rock nearest it from the sun,
+   * once its heat passes SHADE_HOT in the sun, and kept (`seeking`, the point it had) until it has
+   * cooled to SHADE_COOL in the shadow; null otherwise. A bot besieging a part of the battleship
+   * (`part`) takes the shadow of a rock within SHADE_FIGHT of it before a nearer one, and stays
+   * in that shadow past cooling while it sees the part from there (`clear`): cover it fights from.
+   */
+  private shadeFor(ship: Ship, seeking: THREE.Vector3 | null, part: THREE.Vector3 | null = null, clear = false): THREE.Vector3 | null {
+    if (ship.sunlight * SUN_ABSORB <= RADIATE) return null;
+    const cover = !!seeking && !!part && clear && seeking.distanceTo(part) < SHADE_FIGHT;
+    if (!cover && (seeking ? ship.heat < SHADE_COOL : ship.inShadow || ship.heat < SHADE_HOT)) return null;
+    if (cover) return seeking;
+    const into = seeking ?? new THREE.Vector3();
+    let nearest: { radius: number; object: THREE.Object3D } | null = null;
+    let best = Infinity;
+    for (const rock of this.field.asteroids.values()) {
+      if (rock.ground) continue;
+      // a rock whose shadow reaches the part attacked counts as nearer than any other
+      const spot = shadeSpot.copy(rock.object.position).addScaledVector(this.space.sunDirection, -(rock.radius + SHADE_OFF));
+      const distance = spot.distanceToSquared(ship.flight.position) - (part && spot.distanceTo(part) < SHADE_FIGHT ? SHADE_FAR * SHADE_FAR : 0);
+      if (distance < best) {
+        best = distance;
+        nearest = rock;
+      }
+    }
+    if (!nearest) return null;
+    return into.copy(nearest.object.position).addScaledVector(this.space.sunDirection, -(nearest.radius + SHADE_OFF));
+  }
+
+  /** Whether a ship at `position` flying along `heading` at `speed` meets the world's ground `distance` ahead hard enough to hurt: faster into it than the hover field's cushion and what rock forgives (see world/hover, groundBlow). */
+  private groundHurts(position: THREE.Vector3, heading: THREE.Vector3, speed: number, distance: number): boolean {
+    const at = groundAt.copy(position).addScaledVector(heading, distance);
+    if (this.field.groundBelow(at, groundAhead) === null) return false;
+    return groundBlow(speed * Math.max(0, -heading.dot(groundAhead)), this.field.fall) >= SAFE_IMPACT;
+  }
+
   private pilot(dt: number, now: number) {
     const me = this.me!;
     const flight = me.flight;
@@ -9308,9 +9435,9 @@ export class Game implements OnlineGame {
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
-      // a rock, the well's body or the battleship's hull; a world's ground never hurts (see world/hover)
+      // a rock, the well's body or the battleship's hull; a world's ground only where the hover field's cushion would leave a blow (see world/hover)
       const hit = this.field.raycast(flight.position, heading, speed * 20, true, impactHit);
-      if (hit && !hit.asteroid?.ground) {
+      if (hit && (!hit.asteroid?.ground || this.groundHurts(flight.position, heading, speed, hit.distance))) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
         // damaged thrusters turn the ship more slowly
@@ -9331,9 +9458,13 @@ export class Game implements OnlineGame {
       alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
     }
+    // a sun that outruns the radiators (the Corona's): the first time it heats the hull in a round, take cover behind the rocks
+    if (me.alive && me.sunExcess > 0 && me.heat >= SUN_TIP_HEAT) this.tip('sun');
     this.novaAlarm(me);
     this.torpedoAlarm(me);
     if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
+    // extreme g, past what a seasoned clone flies through: its hands go late and unsteady (see ship/strainhand)
+    if (me.alive && me.extreme > 0) alarms.raise({ id: 'gload', level: 'caution', text: t('G-LOAD · HANDS UNSTEADY') });
     this.cometAlarm(me);
     this.flareAlarm(me);
     this.airAlarm(me);
@@ -9357,7 +9488,9 @@ export class Game implements OnlineGame {
     this.hud.setAlarms(alarms.list, this.camera);
     this.alarmTones.play(alarms.top, now, this.sound);
     // heartbeat: faster and louder the harder the pilot is pressed into the seat, steady and loud one hit from death or deep in a well
-    const beat = Math.max(strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0);
+    // extreme g pounds harder and faster still (see ship/strainhand)
+    const pound = me.alive ? me.extreme : 0;
+    const beat = Math.max(strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0) + HEART_EXTREME * pound;
     if (beat > 0.4 && now >= this.nextHeartbeat) {
       this.sound.beep(55, 0.12, 0.25 * beat);
       this.sound.beep(48, 0.14, 0.2 * beat, 0.16);
@@ -9622,6 +9755,12 @@ export class Game implements OnlineGame {
       }
     }
     this.inTail = inside;
+    // the head passing close: its coma's dust drums on the hull
+    const comet = this.shower?.comet;
+    if (comet && me.alive && this.field.clock <= headEnd(comet)) {
+      const near = 1 - headAt(comet, this.field.clock, cometHead).distanceTo(me.flight.position) / RUMBLE_REACH;
+      if (near > 0 && Math.random() < dt * RUMBLE_RATE * near) this.sound.drum(near);
+    }
     if (!inside) return;
     if (Math.random() < dt * TAIL_PATTER * depth) this.sound.patter(depth);
     if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
@@ -9702,6 +9841,8 @@ export class Game implements OnlineGame {
       cometRelative.normalize();
       // the grit sprays off the hull where it strikes
       this.effects.sparks(cometCover.copy(cometPiece).lerp(position, 0.6), SCRAPE_COLOR, PIECE_RADIUS * 2);
+      // and cracks through the plates, heard in the own cockpit
+      if (ship === this.me) this.sound.grit(Math.min(1, weight / GRIT_LOUDEST));
       this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', weight);
       if (!ship.alive) return;
     }

@@ -9,8 +9,10 @@ import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
-import { sheetDamage } from './impact';
+import { SAFE_IMPACT, sheetDamage } from './impact';
+import { groundBlow } from '../world/hover';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { plumeStrength } from './plume';
 import { exp, hypot } from '../detmath';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
@@ -43,9 +45,41 @@ export const missOf = (aim: number) => 1 - Math.min(aim, AIM_BEST);
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
-/** At full g-force strain (see Ship.strain) bots aim this much worse and react this much later (s): the clone greys out, as a Host's screen darkens. */
+/** At the full bite of extreme g (see strainPenalty) bots aim this much worse and react this much later (s), as a Host's hands are late and unsteady (see ship/strainhand). */
 const STRAIN_AIM = 0.5;
 const STRAIN_REACTION = 0.15;
+/** How hard g costs a clone its aim and reflexes (0..1): only extreme g, past what a seasoned clone flies through (see ship/strainhand, extremeAfter), the same onset a Host's hands have. */
+const strainPenalty = (ship: Ship) => ship.extreme;
+/**
+ * A bot flies its clone's strain as a pilot does: it spends it where it matters (out of danger,
+ * away from a nova, jinking under attack, the moment it fires, on a race's line) and otherwise eases off once the
+ * strain reaches its hold, STRAIN_HOLD at daring 0 and STRAIN_HOLD_DARING more at daring 1 (the
+ * daring push it further): then it lets the drive rest and the thrusters push at most
+ * EASY_PUSH of their strength (about 2.5 g, under the 3 g a clone recovers below), until the
+ * strain has fallen STRAIN_RECOVER below the hold (a second and a bit at the clone's recovery).
+ */
+const STRAIN_HOLD = 0.45;
+const STRAIN_HOLD_DARING = 0.35;
+const STRAIN_RECOVER = 0.35;
+const EASY_PUSH = 0.25;
+/** The strain at which a bot of this daring eases off (see STRAIN_HOLD). */
+export const strainHold = (daring: number) => STRAIN_HOLD + STRAIN_HOLD_DARING * daring;
+/** Whether a bot flies gently now: at or past its hold it does, until the strain has fallen STRAIN_RECOVER below it (see STRAIN_HOLD). */
+export function easesOff(recovering: boolean, strain: number, daring: number): boolean {
+  const hold = strainHold(daring);
+  return strain >= hold || (recovering && strain > hold - STRAIN_RECOVER);
+}
+/** Eases the drive and the thrusters of `controls` so the clone recovers (see STRAIN_HOLD). */
+export function flyGently(controls: Controls) {
+  controls.thrust = 0;
+  const push = hypot(controls.strafeX, controls.strafeY, controls.strafeZ);
+  if (push > EASY_PUSH) {
+    const share = EASY_PUSH / push;
+    controls.strafeX *= share;
+    controls.strafeY *= share;
+    controls.strafeZ *= share;
+  }
+}
 /** A bot sees another ship hunting a third (see huntersOf) when its nose lies within HUNT_ANGLE (rad, about 17°) of it, within FIRE_RANGE. */
 const HUNT_ANGLE = 0.3;
 /**
@@ -220,6 +254,9 @@ const AIR_CLOG_DARING = 0.4;
 const KEEP_CLEAR = 5;
 const KEEP_CLEAR_AHEAD = 1;
 const KEEP_CLEAR_PUSH = 800;
+/** A bot in a burning drive's plume stronger than this (see ship/plume, plumeStrength: a twentieth of its full heat, some 450 m behind a full burn) steers sideways out of it. */
+const PLUME_SHRUG = 0.05;
+const plumeBack = new THREE.Vector3();
 /**
  * Bots do not fly into a ring's housings (a race's gate, a base of Capture the Flag). Where
  * their way would cross a ring's plane within RING_HORIZON seconds on its housings or struts,
@@ -261,6 +298,7 @@ const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3(
 const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 /** Where a ray of wayAhead met a piece of junk, in the piece's frame (see world/junk, onCore). */
 const wayPoint = new THREE.Vector3();
+const groundNormal = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
@@ -460,6 +498,8 @@ export class Bot {
   siegeClear = false;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
+  /** Set by the game: where a rock's shadow lies, while sunlight its radiators cannot shed heats the bot's hull (the Corona's, see Ship.sunExcess): it flies there, as a Host would. */
+  shade: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
   fleeFrom = '';
   /** Kept by the game: since when (s) its clone holds a nova core, Infinity while it holds none (see novaWorth). */
@@ -480,6 +520,8 @@ export class Bot {
   /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
   private lookBackUntil = 0;
   private nextLookBack = 0;
+  /** The clone's strain reached the bot's hold (see strainHold): it flies gently until the strain has fallen STRAIN_RECOVER below it. */
+  private recovering = false;
   /**
    * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
@@ -684,6 +726,11 @@ export class Bot {
     }
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
+    // out of a sun that burns the hull: into a rock's shadow, slowing as it arrives (it fights on from there)
+    else if (this.shade) {
+      const toShade = local.subVectors(this.shade, me.position);
+      desired.copy(toShade).normalize().multiplyScalar(Math.min(CRUISE_SPEED, toShade.length() * 0.5));
+    }
     const fromHome = this.homeAt ? local.subVectors(me.position, this.homeAt) : local.copy(me.position);
     if (this.flat) fromHome.y = 0;
     const homeDistance = fromHome.length();
@@ -739,7 +786,7 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.noseAngleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
+      const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * strainPenalty(this.ship);
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
@@ -772,6 +819,12 @@ export class Bot {
     }
     this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
+    // the clone's strain: spent out of danger, away from a nova, jinking under attack, on the shot
+    // and on a race's line, where the gates' housings punish a slack hand; else the bot eases off
+    // at its hold until it has recovered (see STRAIN_HOLD)
+    this.recovering = easesOff(this.recovering, this.ship.strain, this.skills.daring);
+    const spending = danger || !!this.flee || defending || controls.fire || racing;
+    if (this.recovering && !spending) flyGently(controls);
     if (devlog) {
       // what the bot does, the first that holds: running from danger, then its task
       const doing = this.flee ? 'flee' : falling ? 'escape well' : hot ? 'climb out of the heat' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
@@ -820,15 +873,15 @@ export class Bot {
       if (altitude < AIR_ABOVE) desired.addScaledVector(up, AIR_RISE * Math.min(1, (AIR_ABOVE - altitude) / AIR_RISE_SPAN));
     }
     // what the radiators shed beyond the reactor's waste heat a clog holds in is what the air may add
-    const safe = heatSpeed(altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
+    const safe = heatSpeed(air, altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
     // until the hull has cooled again; and choking under the deck, it climbs out at once
-    if (this.ship.heat > AIR_HOT && heatInto(altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
+    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
     else if (this.ship.heat < AIR_COOL) this.climbing = false;
     const out = this.climbing || (choking && altitude < 0);
     // on the way out the waste heat comes whatever the speed, so the quicker out the better: as
     // fast as the air alone allows (AIR_RISE at least), not the speed that would stay cool
-    const escape = Math.max(heatSpeed(altitude, cooling) * AIR_MARGIN, AIR_RISE);
+    const escape = Math.max(heatSpeed(air, altitude, cooling) * AIR_MARGIN, AIR_RISE);
     this.airLimit = out ? escape : Math.max(safe, AIR_RISE);
     if (out) desired.copy(up).multiplyScalar(Math.min(escape, CRUISE_SPEED));
     return out;
@@ -878,14 +931,22 @@ export class Bot {
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
-      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
-      if (!hit || (overGround && hit.asteroid?.ground)) continue;
+      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`) where it would meet it within the hover field's cushion: its glide carries the hull over it and along its walls; met steeply, it strikes as rock does
+      if (!hit || (overGround && hit.asteroid?.ground && !this.groundStrikes(field, direction, hit.distance))) continue;
       // a sheet of junk (a wing's panels, a fairing, a stage's tank) is none either: the hull punches through it (see world/junk)
       const junk = hit.asteroid?.junk;
       if (junk && !onCore(junk.build, wayPoint.copy(wayOrigin).addScaledVector(direction, hit.distance).applyMatrix4(hit.asteroid!.inverse)) && !this.roundSheet(junk.build, hit.distance)) continue;
       if (!best || hit.distance < best.distance) best = Object.assign(wayBest, hit);
     }
     return best;
+  }
+
+  /** Whether the world's ground `distance` ahead along `direction` (from where the way's ray started, wayOrigin) would strike the hull at its speed: faster into it than the hover field's cushion and what rock forgives (see world/hover, groundBlow). */
+  private groundStrikes(field: AsteroidField, direction: THREE.Vector3, distance: number): boolean {
+    wayPoint.copy(wayOrigin).addScaledVector(direction, distance);
+    if (field.groundBelow(wayPoint, groundNormal) === null) return false;
+    const into = this.ship.flight.velocity.length() * Math.max(0, -direction.dot(groundNormal));
+    return groundBlow(into, field.fall) >= SAFE_IMPACT;
   }
 
   /** Whether a sheet of junk built as `build` lying `distance` ahead (units) is worth flying round (see flyRound). */
@@ -901,6 +962,15 @@ export class Bot {
     const clear = this.ship.radius * KEEP_CLEAR;
     for (const ship of ships) {
       if (ship === this.ship || !ship.alive) continue;
+      // out of a burning drive's plume it sits in (its flame is plain to see): sideways off its axis
+      const backward = ship.flight.forward(plumeBack).negate();
+      const grill = plumeStrength(ship.flight.position, backward, ship.flight.throttle, me.position, this.ship.radius);
+      if (grill > PLUME_SHRUG) {
+        local.subVectors(me.position, ship.flight.position);
+        local.addScaledVector(backward, -local.dot(backward));
+        if (local.lengthSq() < 1) local.set(0, 1, 0).addScaledVector(backward, -backward.y);
+        desired.addScaledVector(local.normalize(), CRUISE_SPEED);
+      }
       // where the other ship is, and how fast the two close, as the bot sees it
       local.subVectors(me.position, ship.flight.position);
       line.subVectors(me.velocity, ship.flight.velocity);
@@ -979,7 +1049,7 @@ export class Bot {
    */
   private aimError(distance: number) {
     const miss = missOf(this.skills.aim);
-    return (this.ship.radius * AIM_SPREAD * miss + distance * AIM_ANGLE * 2 * miss) * (1 + EASE_AIM * this.ease + STRAIN_AIM * this.ship.strain);
+    return (this.ship.radius * AIM_SPREAD * miss + distance * AIM_ANGLE * 2 * miss) * (1 + EASE_AIM * this.ease + STRAIN_AIM * strainPenalty(this.ship));
   }
 
   /**

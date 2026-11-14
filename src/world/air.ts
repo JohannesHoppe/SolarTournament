@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { MAX_SPEED } from '../ship/flight';
-import { cbrt, exp, pow } from '../detmath';
+import { MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
+import { exp, pow } from '../detmath';
 
 /**
  * The air of a planet the arena dips into (Jupiter): a shell whose top, the cloud deck, is a
@@ -20,7 +20,22 @@ export interface Air {
   clear?: number;
   /** Whether its clouds crust over the radiators (see clogging): Jupiter's ammonia and sulfur do; Titan's methane and nitrogen do not. */
   clogs?: boolean;
+  /** The air's temperature at the cloud deck (K), and over it. */
+  kelvin: number;
+  /** How much warmer it grows downwards (K per unit of depth under the deck), squeezed as its density is (see SCALE_HEIGHT). */
+  lapse: number;
+  /** Its specific heat (J/(kg·K)): how much a hull's speed warms the air it rams (see stagnation). */
+  heatCapacity: number;
 }
+
+/**
+ * Jupiter's air: 165 K at the cloud deck, about 1 bar, hydrogen and helium (HYDROGEN_HEAT); warming
+ * by 96 K a kilometer downwards, the real ~2 K a kilometer squeezed as the density is (the 22 bar
+ * where the real air is some 425 K lie 2.7 km under the deck here), so the deep air is the hot one.
+ */
+export const JUPITER_KELVIN = 165;
+export const JUPITER_LAPSE = 96 / 20000;
+export const HYDROGEN_HEAT = 12000;
 
 /** An air's share of the haze's extinction (see Air.clear). */
 export const clearOf = (air: Air) => air.clear ?? 1;
@@ -73,12 +88,19 @@ const DECK_DRAG = 1.5 * G;
 const DRAG = DECK_DRAG / (MAX_SPEED * MAX_SPEED);
 
 /**
- * The air heats the hull by the cube of the speed and the air's density (heat units per second,
- * the laser's scale: 100 locks it): DECK_HEAT at the deck at the speed limit. The radiators shed
- * 50 a second in the air (the sun hidden behind the clouds, as in a rock's shadow; see
- * ship/ship), so at the limit the hull heats up from 600 m below the deck on (see safeSpeed).
+ * The air trades heat with the hull as wind does with anything warm (heat units per second, the
+ * laser's scale: 100 locks it): by the difference between the air the hull rams, its temperature
+ * where it flies plus what the ramming warms it by (see stagnation), and the radiators' RADIATOR_KELVIN,
+ * times AIR_EXCHANGE, times the density and the speed each to the 0.8th (forced convection: the
+ * thicker and faster the air, the more it carries), never less than the stir of AIR_STIR (units/s).
+ * Colder air carries heat off the hull, as Titan's 94 K always do and Jupiter's do above 1.3 km
+ * under its deck; the hot deep air below heats it, faster the deeper and the faster. No ship of
+ * the Games is fast enough for its air to glow: at 250 m/s the ram warms Jupiter's hydrogen 2.6 K,
+ * at the overdrive's 450 m/s 8 K, Titan's nitrogen 30 K and 97 K.
  */
-const DECK_HEAT = 25;
+const AIR_EXCHANGE = 0.095;
+export const RADIATOR_KELVIN = 290;
+const AIR_STIR = 400;
 /** Once the radiators are full, every unit of heat the air adds beyond what they shed burns this much hull (100 is a whole ship; see airBurn). */
 export const AIR_BURN = 0.075;
 
@@ -125,8 +147,8 @@ export function clogging(clog: number, altitude: number, dt: number): number {
   return Math.min(1, clog + ((1 + Math.min(1, -altitude / CLOG_DEPTH)) * dt) / CLOG_SECONDS);
 }
 
-/** All the heat going into a hull's radiators in the air per second: the air's at an altitude (units) and speed (units/s), and the reactor's waste heat that a `clog` holds in. */
-export const heatInto = (altitude: number, speed: number, clog: number) => airHeat(altitude, speed) + REACTOR_WASTE * clog;
+/** All the heat going into a hull's radiators in the air per second (negative where the air carries more off than the reactor's waste adds): the air's at an altitude (units) and speed (units/s), traded through the share of the radiators a `clog` leaves bare, and the reactor's waste heat the clog holds in. */
+export const heatInto = (air: Air, altitude: number, speed: number, clog: number) => airHeat(air, altitude, speed) * (1 - CLOG_LOSS * clog) + REACTOR_WASTE * clog;
 
 /** Altitude above the cloud deck (units, negative below it). */
 export const altitudeIn = (air: Air, position: THREE.Vector3) => position.distanceTo(air.center) - air.radius;
@@ -259,22 +281,45 @@ export const reachAt = (altitude: number, depth: number, clear = 1) => depth / (
 /** The air's drag at a place and speed (units/s²), for the readouts and the docs. */
 export const dragAt = (altitude: number, speed: number) => DRAG * density(altitude) * speed * speed;
 
-/** Heat the air puts into a hull per second at an altitude (units) and speed (units/s). */
-export const airHeat = (altitude: number, speed: number) => DECK_HEAT * density(altitude) * pow(speed / MAX_SPEED, 3);
+/** The air's temperature at an altitude (units; K): the deck's over it, warmer by its lapse under it. */
+export const airKelvin = (air: Air, altitude: number) => air.kelvin + air.lapse * Math.max(0, -altitude);
+
+/** How much a hull flying `speed` (units/s) warms the air it rams (K): the stagnation temperature's rise, v²/(2·c_p). */
+export const stagnation = (air: Air, speed: number) => (speed * METERS_PER_UNIT) * (speed * METERS_PER_UNIT) / (2 * air.heatCapacity);
+
+/** Heat the air puts into a hull per second at an altitude (units) and speed (units/s), negative where it carries heat off (see AIR_EXCHANGE). */
+export const airHeat = (air: Air, altitude: number, speed: number) =>
+  AIR_EXCHANGE * pow(density(altitude), 0.8) * pow(Math.max(speed, AIR_STIR) / MAX_SPEED, 0.8) * (airKelvin(air, altitude) + stagnation(air, speed) - RADIATOR_KELVIN);
+
+/** Faster than this (units/s) heatSpeed reckons no further: twice the tournament's limit, past any boost. */
+const HEAT_SPEED_TOP = MAX_SPEED * 2;
 
 /**
  * The speed at which the air heats a hull at an altitude (units) exactly as fast as its radiators
  * shed (`cooling`, heat units per second; units/s), past the tournament's limit too: how far a
- * coil's boost may go before the air heats the hull.
+ * coil's boost may go before the air heats the hull. HEAT_SPEED_TOP where even that is safe; 0
+ * where the air heats a hull beyond them even at a crawl, where only climbing helps.
  */
-export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * cbrt(cooling / (DECK_HEAT * density(altitude)));
+export function heatSpeed(air: Air, altitude: number, cooling: number): number {
+  if (airHeat(air, altitude, HEAT_SPEED_TOP) <= cooling) return HEAT_SPEED_TOP;
+  if (airHeat(air, altitude, 0) > cooling) return 0;
+  // the heat grows with the speed: halve the bracket around where it meets the radiators
+  let slow = 0;
+  let fast = HEAT_SPEED_TOP;
+  for (let i = 0; i < 30; i++) {
+    const middle = (slow + fast) / 2;
+    if (airHeat(air, altitude, middle) > cooling) fast = middle;
+    else slow = middle;
+  }
+  return slow;
+}
 
 /**
  * The fastest a ship flies at an altitude without the air heating its hull beyond what its
- * radiators shed (units/s, see heatSpeed): above 600 m below the deck the tournament's limit;
- * 214 m/s at 1 km, 146 m/s at 2 km, 87 m/s at the arena's bottom.
+ * radiators shed (units/s, see heatSpeed): in Jupiter's air the tournament's limit down to 1.7 km
+ * under the deck; 100 m/s at 2 km, none at the arena's bottom, where only climbing helps.
  */
-export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, heatSpeed(altitude, cooling));
+export const safeSpeed = (air: Air, altitude: number, cooling: number) => Math.min(MAX_SPEED, heatSpeed(air, altitude, cooling));
 
 /** The fins every ship of the Games carries: two, on the struts aft. */
 export const FINS = 2;
@@ -324,6 +369,11 @@ export function airStep(ship: AirHull, air: Air, dt: number, full: number): numb
   // a hull short of a fin cannot hold its course in air
   finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
   ship.clog = air.clogs === false ? 0 : clogging(ship.clog, altitude, dt);
-  const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
+  const heat = heatInto(air, altitude, ship.flight.velocity.length(), ship.clog) * dt;
+  // cold air carries heat off the radiators, beside what they shed themselves
+  if (heat < 0) {
+    ship.heat = Math.max(0, ship.heat + heat);
+    return 0;
+  }
   return heat < 1e-4 ? 0 : airBurn(ship, heat, dt, full);
 }

@@ -102,19 +102,28 @@ export class Sound {
   crackle(strength: number) {
     if (this.context.state !== 'running') return;
     const now = this.context.currentTime;
-    const source = this.context.createBufferSource();
-    source.buffer = this.whiteNoise ??= this.createWhiteNoise();
-    source.playbackRate.value = 0.5 + Math.random();
-    const filter = this.context.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 200 + Math.random() * 600 * (1 + strength);
-    filter.Q.value = 1.5;
-    const gain = this.context.createGain();
+    const gain = this.noiseBurst('bandpass', 200 + Math.random() * 600 * (1 + strength), 1.5, 0.5 + Math.random(), this.master, now, 0.08);
     gain.gain.setValueAtTime(0.25 * Math.min(1, strength + 0.3), now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-    source.connect(filter).connect(gain).connect(this.master);
+  }
+
+  /**
+   * A burst of white noise through a filter of `type` at `frequency` (Hz, quality `q`), played at
+   * `rate` into `out` from `now` for `length` seconds; its gain, returned, is for the caller to shape.
+   */
+  private noiseBurst(type: BiquadFilterType, frequency: number, q: number, rate: number, out: AudioNode, now: number, length: number): GainNode {
+    const source = this.context.createBufferSource();
+    source.buffer = this.whiteNoise ??= this.createWhiteNoise();
+    source.playbackRate.value = rate;
+    const filter = this.context.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = frequency;
+    filter.Q.value = q;
+    const gain = this.context.createGain();
+    source.connect(filter).connect(gain).connect(out);
     source.start(now, Math.random());
-    source.stop(now + 0.08);
+    source.stop(now + length);
+    return gain;
   }
 
   /**
@@ -139,6 +148,39 @@ export class Sound {
       source.start(start, Math.random());
       source.stop(start + 0.02);
     }
+  }
+
+  /**
+   * A comet's grit striking the hull at hundreds of meters a second: a hard crack of the plates
+   * and a dull knock under it, heard through the hull, the harder the blow (`strength` 0..1).
+   */
+  grit(strength: number) {
+    if (this.context.state !== 'running') return;
+    const now = this.context.currentTime;
+    const gain = this.noiseBurst('bandpass', 1200 + Math.random() * 1800, 0.8, 1, this.hull, now, 0.07);
+    gain.gain.setValueAtTime(0.25 + 0.45 * strength, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    const knock = this.context.createOscillator();
+    knock.frequency.value = 70 + Math.random() * 30;
+    const body = this.context.createGain();
+    body.gain.setValueAtTime(0.15 + 0.25 * strength, now);
+    body.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    knock.connect(body).connect(this.hull);
+    knock.start(now);
+    knock.stop(now + 0.14);
+  }
+
+  /**
+   * A comet's head passing close: the dust of its coma drums on the hull as a low, rolling
+   * rumble, louder the closer (`strength` 0..1).
+   */
+  drum(strength: number) {
+    if (this.context.state !== 'running') return;
+    const now = this.context.currentTime;
+    const gain = this.noiseBurst('lowpass', 90 + 60 * strength, 1, 0.3, this.hull, now, 0.65);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.6 * strength + 0.05, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
   }
 
   /** Where the cockpit radio plays: straight into the headset, like the beeps. */

@@ -26,9 +26,11 @@ export const TITAN_RADIUS = 2575 * KM;
 /**
  * Titan's air: its deck through the field's middle, a sphere of Titan's radius (see Air). Its
  * haze is nitrogen and methane with soot-like organic specks, no ammonia and no sulfur: nothing
- * in it crusts over a ship's radiators (see Air.clogs), so only the air's own heat counts.
+ * in it crusts over a ship's radiators (see Air.clogs). It is nitrogen at 94 K (no warmer down
+ * to the sea, as the real air near Titan's ground), specific heat 1,040 J/(kg·K): it carries heat
+ * off a hull at any speed a ship flies (see world/air, airHeat).
  */
-export const TITAN_AIR: Air = { center: new THREE.Vector3(0, -TITAN_RADIUS, 0), radius: TITAN_RADIUS, clogs: false };
+export const TITAN_AIR: Air = { center: new THREE.Vector3(0, -TITAN_RADIUS, 0), radius: TITAN_RADIUS, clogs: false, kelvin: 94, lapse: 0, heatCapacity: 1040 };
 
 /** The sea's surface under the field's middle (units, 2 km under the deck): still, glassy, liquid methane. */
 export const SEA = -2 * KM;

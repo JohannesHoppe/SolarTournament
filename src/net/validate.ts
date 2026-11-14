@@ -1,5 +1,5 @@
 import { hypot } from '../detmath';
-import type { ShipState } from '../ship/ship';
+import { MAX_HEAT, type ShipState } from '../ship/ship';
 import { KNOCKED, rootOf, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
 import { SYNC_SLICES, type FamilyState, type FieldSlice, type HitState } from '../world/fieldsync';
 import type { WreckState } from '../world/wrecks';
@@ -275,6 +275,9 @@ export function fleetState(x: unknown): FleetState | null {
     q: vec(x.q, 4, UNIT_LENGTH),
     u: int(x.u, 0, 1),
     h: listOf(x.h, MAX_FLEET_ZONES, (h) => int(h, 0, MAX_COUNT)),
+    // each part's heat (of MAX_HEAT) and whether it is overheated
+    k: listOf(x.k, MAX_FLEET_ZONES, (k) => int(k, 0, MAX_HEAT)),
+    o: listOf(x.o, MAX_FLEET_ZONES, (o) => int(o, 0, 1)),
   });
   const target = x.t === null ? null : id(x.t);
   // the field time a comet broke up on its hull, once one did
