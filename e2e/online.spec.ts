@@ -110,6 +110,9 @@ test('the game master, named on its screen alone, cuts a round short for a new o
 
 test('the game master is the DJ: it skips the song and types a title, and the other tab plays the same at the same beat, without controls of its own', async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}d`);
+  // nothing here is seen: unrendered, the tabs keep their frames short on a busy machine, where
+  // gaps past CUT_OFF_MS (net/session) make a browser start over
+  for (const page of [a, b]) await page.evaluate(() => (window.game.composer.render = () => {}));
   const onAir = (page: Page) => page.evaluate(() => window.game.musicCue() as { title: string; elapsed: number });
   const deck = (page: Page) => page.evaluate(() => getComputedStyle(document.getElementById('np-next')!).display !== 'none');
   await a.waitForFunction(() => document.getElementById('now-playing')!.classList.contains('dj'));
@@ -422,20 +425,15 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
       const part = game.fleet.zoneAt(2);
       const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
       game.probes.drop(id, deaths, ['nova'], above, game.fleet.velocity.clone(), game.time);
+      // a drop flies apart at up to 20 m/s; this core keeps station over the battery instead, so
+      // the clone sent there meets it however long the tabs take
+      const core = game.probes.list.find((probe: { id: string }) => probe.id.startsWith(`${id}.${deaths}.`));
+      core.velocity.copy(game.fleet.velocity);
+      core.slotVelocity.copy(game.fleet.velocity);
     }, dropper);
   }
   await fireAt(a, 2, null, true);
-  // the core drifts off its drop at up to 20 m/s, so the clone flies through it where it is now
-  await a.waitForFunction(
-    () => {
-      const game = window.game;
-      const core = game.probes.list.find((probe: { kind: string }) => probe.kind === 'nova');
-      if (core && !game.me.nova) game.me.flight.position.copy(core.position);
-      return game.me.nova;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  await a.waitForFunction(() => window.game.me.nova, undefined, { timeout: 10_000 });
   await fireAt(a, 2, false);
   await play(a, 3);
   const counted = await a.evaluate(() => [...window.game.fleet.hits]);
