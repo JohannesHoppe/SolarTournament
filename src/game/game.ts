@@ -300,6 +300,8 @@ const SHADE_COOL = 25;
 const SHADE_OFF = 1500;
 /** How far off the battleship along the sun a bot under a burning sun reckons its siege from (units, 50 km): its shadow side. */
 const SHADE_FAR = 1000000;
+/** Nicole tells the own pilot to take cover from a sun that burns once it has heated the hull this far (of 100), early in a round (see Coach, its tip `sun`). */
+const SUN_TIP_HEAT = 25;
 /**
  * Let go by its hook, the own ship flies off along its swing, across its nose. For
  * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
@@ -9402,6 +9404,8 @@ export class Game implements OnlineGame {
       alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
     }
+    // a sun that outruns the radiators (the Corona's): the first time it heats the hull in a round, take cover behind the rocks
+    if (me.alive && me.sunExcess > 0 && me.heat >= SUN_TIP_HEAT) this.tip('sun');
     this.novaAlarm(me);
     this.torpedoAlarm(me);
     if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });

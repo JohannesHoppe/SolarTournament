@@ -468,6 +468,7 @@ export const TIPS = {
   hot: 'Your laser is cooking. Short bursts, and only when the crosshair glows.',
   torpedo: 'Torpedo! Shoot it down, or put a rock between you and it.',
   crossing: 'It is crossing you, darling. Slide on, and turn your nose onto it.',
+  sun: 'This sun burns hulls, darling. Stay in the shade of the rocks. Against the battleship, strike from the rocks along its lane.',
 } as const;
 
 /**

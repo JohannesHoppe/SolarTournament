@@ -1097,6 +1097,7 @@ export const ES: Catalog = {
   'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Tu láser está ardiendo. Ráfagas cortas, y solo cuando brille la mira.',
   'Torpedo! Shoot it down, or put a rock between you and it.': '¡Torpedo! Derríbalo o pon una roca entre tú y él.',
   'It is crossing you, darling. Slide on, and turn your nose onto it.': 'Te está cruzando, cariño. Sigue deslizándote y gira el morro hacia él.',
+  'This sun burns hulls, darling. Stay in the shade of the rocks. Against the battleship, strike from the rocks along its lane.': 'Este sol quema cascos, cariño. Quédate a la sombra de las rocas. Contra el acorazado, ataca desde las rocas a lo largo de su ruta.',
 
   // Nicole: the sponsor break
   'Oh, you died again, darling. No problem. Just watch this little ad, and I will have you up and ready again. I am rooting for you.':

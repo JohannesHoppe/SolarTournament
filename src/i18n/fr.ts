@@ -1069,6 +1069,7 @@ export const FR: Catalog = {
   'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Ton laser chauffe à blanc. Des rafales courtes, et seulement quand le viseur brille.',
   'Torpedo! Shoot it down, or put a rock between you and it.': 'Torpille ! Abats-la, ou mets un rocher entre toi et elle.',
   'It is crossing you, darling. Slide on, and turn your nose onto it.': 'Il te coupe la route, mon chéri. Continue de glisser, et tourne ton nez vers lui.',
+  'This sun burns hulls, darling. Stay in the shade of the rocks. Against the battleship, strike from the rocks along its lane.': 'Ce soleil brûle les coques, mon chéri. Reste à l’ombre des rochers. Contre le cuirassé, frappe depuis les rochers le long de sa route.',
   'It is turning its drive on us. Get out from behind it!': 'Il tourne ses moteurs vers nous. Sors de derrière lui !',
   'The reactor is open. Now, darling!': 'Le réacteur est ouvert. Maintenant, mon chéri !',
   'Reactor critical! Get clear, darling!': 'Réacteur critique ! Éloigne-toi, mon chéri !',
