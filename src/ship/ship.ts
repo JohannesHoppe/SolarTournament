@@ -46,12 +46,16 @@ export const NANO_SECONDS = 20;
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
 const VENT_TIME = 2.5;
-/** Push of the escaping air right after the hit (units/s²). */
-const VENT_THRUST = 120;
-/** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. */
-const VENT_SPIN = 6;
-/** Rotation kick of the explosive decompression at the moment of the hit (rad/s). */
-const DECOMPRESSION_KICK = 1.2;
+/**
+ * Push of the escaping air right after the hit (units/s², 1 m/s²): a drive compartment's few
+ * hundred kilograms of air leaving at up to about 770 m/s give a 60 t hull about that, fading as
+ * the compartment empties (a whole hull's air on every hit would push six times as hard).
+ */
+const VENT_THRUST = 20;
+/** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. Scaled with VENT_THRUST: the same air. */
+const VENT_SPIN = 1;
+/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a 35 m hull. */
+const DECOMPRESSION_KICK = 0.25;
 /** The exit hole tears wider than the entry hole and vents more. */
 const ENTRY_HOLE = 0.4;
 const EXIT_HOLE = 1;

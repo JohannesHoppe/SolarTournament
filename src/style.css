@@ -2950,14 +2950,20 @@ body.touch #game canvas {
   border-color: var(--accent-strong);
 }
 
-/* the self-destruct, held for a second, above the hook, in the red of danger; only for a ship that carries one */
-#touch-selfDestruct {
+/* the self-destruct, held for a second, above the hook, in the red of danger; only for a ship that carries one. The mining
+   charge, held close to a rock, sits in its place: it is carried only in the campaign's mining jobs, where the self-destruct never is */
+#touch-selfDestruct,
+#touch-charge {
   right: calc(max(20px, env(safe-area-inset-right)) + 22px);
   bottom: 278px;
   width: 52px;
   height: 52px;
   font-size: 0.5rem;
   border-color: var(--danger);
+}
+
+#touch-charge {
+  border-color: var(--accent-strong);
 }
 
 #touch-pause {

@@ -272,24 +272,6 @@ describe('the lead browser', () => {
     expect(session.leadId).toBe('a');
   });
 
-  it('takes rock hits in the order of a round, with a second for a field clock that jumps back', () => {
-    const { transport, session } = joined('n');
-    const taken: number[] = [];
-    session.onRock = (_, time) => taken.push(time);
-    const hit = (time: number, round: number) => transport.handlers.get('r')!({ i: 'r1', t: time, n: round, s: 'p:x' }, 'x');
-    hit(100, 2);
-    hit(99.4, 2);
-    hit(98, 2);
-    hit(5, 3);
-    expect(taken).toEqual([100, 99.4, 5]);
-    // rounds made up to wipe the order out keep none of the peer's hits dated back
-    at(10);
-    for (const round of [7, 8, 9]) hit(1, round);
-    hit(50, 2);
-    hit(1, 3);
-    expect(taken).toEqual([100, 99.4, 5, 1, 1, 1]);
-  });
-
   it("takes a ram of the battleship only from the lead that flies it, checked, and no faster than its budget", () => {
     const { transport, session } = joined('n');
     const rammed: string[] = [];

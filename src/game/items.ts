@@ -36,7 +36,7 @@ export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'over
 /** A probe in flight as it travels to a browser that joins: id, kind, position, velocity, seconds left, and the luck of a sealed one (see Probe.luck). */
 export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: number; x?: number };
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
-const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1, decoys: 2 };
+const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 2, decoys: 2 };
 /** Sealed probes the radar names this way. */
 export const SEALED_NAME = msg('Sealed probe');
 /**
@@ -48,7 +48,7 @@ export const SEALED_NAME = msg('Sealed probe');
 const PLACE_WEIGHTS: readonly Record<ItemKind, number>[] = [
   { twin: 1, plating: 4, torpedoes: 2, overdrive: 1, repair: 4, nova: 0, decoys: 1 },
   WEIGHTS,
-  { twin: 3, plating: 1, torpedoes: 4, overdrive: 4, repair: 2, nova: 2, decoys: 3 },
+  { twin: 3, plating: 1, torpedoes: 4, overdrive: 4, repair: 2, nova: 4, decoys: 3 },
 ];
 
 /** The third of the field a place lies in: 0 the leaders, 1 the middle, 2 the last; a ship alone is the middle. */

@@ -67,6 +67,7 @@
         <dt>G</dt><dd data-i18n>Torpedo: homes on the ship ahead, a limited load per ship</dd>
         <dt>Z</dt><dd data-i18n>Decoy: a torpedo after you turns to it</dd>
         <dt data-i18n>B (hold)</dt><dd data-i18n>Self-destruct: takes every rival close by along</dd>
+        <dt data-i18n>K (hold)</dt><dd data-i18n>Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)</dd>
         <dt data-i18n>V / Right click</dt><dd data-i18n>Hook: bite a rock or a ship and reel in; press again to let go and fly off</dd>
         <dt>C</dt><dd data-i18n>Cockpit / chase camera</dd>
         <dt>M</dt><dd data-i18n>Radio on / off</dd>
@@ -92,6 +93,7 @@
         <dt data-i18n>D-pad right</dt><dd data-i18n>Decoy: a torpedo after you turns to it</dd>
         <dt data-i18n>D-pad down</dt><dd data-i18n>Hook: bite a rock or a ship and reel in; press again to let go and fly off</dd>
         <dt data-i18n>D-pad left (hold)</dt><dd data-i18n>Self-destruct: takes every rival close by along</dd>
+        <dt data-i18n>D-pad left (hold)</dt><dd data-i18n>Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)</dd>
         <dt data-i18n>View</dt><dd data-i18n>Cockpit / chase camera</dd>
         <dt data-i18n>D-pad down (paused)</dt><dd data-i18n>Radio on / off</dd>
         <dt data-i18n>D-pad left / right (paused)</dt><dd data-i18n>Previous / next song (the game master as DJ)</dd>
@@ -110,6 +112,7 @@
         <dt data-i18n>Torpedo</dt><dd data-i18n>Launch a torpedo</dd>
         <dt data-i18n>Decoy</dt><dd data-i18n>Drop a decoy</dd>
         <dt data-i18n>Self-destruct</dt><dd data-i18n>Hold: takes every rival close by along</dd>
+        <dt data-i18n>Charge</dt><dd data-i18n>Hold close to a rock: set a mining charge</dd>
       </dl>
       <p data-i18n>Fly with the phone held sideways. A key pressed on a hardware keyboard hides the touch controls; a touch brings them back.</p>
     </section>
@@ -254,7 +257,7 @@
       </ul>
       <p data-i18n>A dead clone's twin laser, plating and nova core fly out again as probes, for whoever gets there first.</p>
       <h3 id="nova" data-i18n>The nova core</h3>
-      <p data-i18n>One probe in sixteen. Your next press of fire is no laser: the core goes off and destroys every other ship within {nova} m, your own side's too, each rival a double kill. Your clone burns up with it, free of charge: no death, no ad. So fly into the crowd first, then fire. Within {novaPanic} km of a holder the siren tells everyone else to run.</p>
+      <p data-i18n>About one probe in eight. Your next press of fire is no laser: the core goes off and destroys every other ship within {nova} m that it sees, your own side's too, each rival a double kill; a rock between it and a hull shields that hull, and the rock and ice close by break. Your clone burns up with it, free of charge: no death, no ad. So fly into the crowd first, then fire, where no rock covers them. Within {novaPanic} km of a holder the siren tells everyone else to run, or to get a rock between.</p>
       <h3 id="self-destruct" data-i18n>The self-destruct</h3>
       <p data-i18n>Gear from the hangar. Hold its key for {selfDestructHold} s, and your reactor goes off: every ship within {selfDestruct} m dies with you, each a kill of yours. Your own clone dies too, a death like a crash, ad and all. The last answer to a rival on your tail or on your hook: reel it in, then hold. Not in a race, not in the flight school.</p>
     </section>
@@ -276,7 +279,7 @@
 
     <section id="deathmatch">
       <h2 data-i18n>Deathmatch: The Purest Show</h2>
-      <p data-i18n>Five minutes, everyone against everyone. A kill scores {kill}, a rock {rock1}, its fragments {rock2} and theirs {rock3}, a close call past a rock {closeCall}. The best score wins.</p>
+      <p data-i18n>Five minutes, everyone against everyone. A kill scores {kill}, a close call past a rock {closeCall}. The laser only scorches rock: it is the sponsors', and breaks for nobody's points. The best score wins.</p>
       <p data-i18n>The bots hunt the nearest ship they see, at most two on the same one. Keep moving: steady flight is easy to lead, jinking with the thrusters makes them miss. A ship crossing your nose fast up close: switch to free drift, slide on, and turn the nose onto it.</p>
     </section>
 
@@ -354,7 +357,7 @@
 
     <section id="points">
       <h2 data-i18n>Points, Coins and the Hangar</h2>
-      <p data-i18n>A kill {kill} (in a race {raceKill}), rocks {rock1}, {rock2} and {rock3}, a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.</p>
+      <p data-i18n>A kill {kill} (in a race {raceKill}), a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.</p>
       <p data-i18n>Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots' streaks pay alike. A nova's kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone's death ends it.</p>
       <p data-i18n>In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.</p>
       <p data-i18n>Fly the story to its end, and the Magpie is yours for the Games as well: the campaign's ship as Pim finished it, black and chalk white, a neon magpie on each fin. Another trophy, flying like a complete interceptor with all the gear and every look.</p>

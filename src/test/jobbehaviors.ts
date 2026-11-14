@@ -5,6 +5,7 @@ import { MAX_HEAT } from '../ship/ship';
 import { LASER_RANGE } from '../ship/ship';
 import { HOOK_FLING } from '../game/school';
 import { HOOK_RANGE } from '../game/hook';
+import { CHARGE_BLAST } from '../game/charges';
 import { wellMu } from '../game/orbit';
 import type { Asteroid } from '../world/asteroids';
 import { HATCHES, TOWER_HALF } from '../world/bridgetower';
@@ -20,12 +21,19 @@ import type { JobWorld } from './jobs';
 
 /** It fires while its laser is cooler than this (see Ship.heat), so it never locks up. */
 const HOT = MAX_HEAT - 30;
-/** It keeps this far off a rock's surface to cut it (units, 100 m). */
+/** It keeps this far off a rock's surface to wait for a glint among its pieces (units, 100 m). */
 const CUT_STANDOFF = 2000;
+/** It sets a charge this far off a rock's mean surface (units, 25 m): well within CHARGE_REACH. */
+const CHARGE_STANDOFF = 500;
+/** It waits for its charge this much farther off than the blast reaches (units, 50 m). */
+const BLAST_MARGIN = 1000;
+/** A marker on a rock sits on its middle as the step began; the rock may have drifted a little since (units, 2.5 m). */
+const MARKER_SLACK = 50;
 /** On target: the nose within this share of the target's apparent size. */
 const ON = 0.6;
 
 const aim = new THREE.Vector3();
+const away = new THREE.Vector3();
 
 /** Whether the nose points at a sphere (center, radius) closely enough to hit it. */
 function onTarget(world: JobWorld, center: THREE.Vector3, radius: number): boolean {
@@ -41,33 +49,78 @@ const fireAt = (world: JobWorld, center: THREE.Vector3, radius: number) =>
 /** The rock whose middle the marker sits on, if any: a marker on a rock asks for it cut. */
 function rockAt(world: JobWorld, point: THREE.Vector3 | null): Asteroid | null {
   if (!point) return null;
-  for (const rock of world.field.asteroids.values()) if (!rock.solid && rock.object.position.distanceTo(point) < 1) return rock;
+  for (const rock of world.field.asteroids.values()) if (!rock.solid && rock.object.position.distanceTo(point) < MARKER_SLACK) return rock;
   return null;
 }
 
 /**
- * Cutting rock for its ore (First Cut, Cut and Haul, the mining runs): a marker on a rock is cut
- * from a standoff off its surface on the side the Host comes from; a marker on a glint of ore is
- * flown through.
+ * Breaking rock for its ore (First Cut, Cut and Haul, the mining runs): on a marker on a rock it
+ * flies close in on the side it comes from and sets a charge (see game/charges), then flies clear
+ * of the blast on the same side and waits for it; a marker on a glint of ore is flown through.
  */
 const mine: Behavior = (world, pilot) => {
+  // a charge of its own ticking close by: clear of its blast first, whatever the marker shows
+  for (const set of world.charges.set) {
+    const at = world.charges.positionOf(set, world.field, aim);
+    if (at && at.distanceTo(world.me.flight.position) < CHARGE_BLAST + world.me.radius + BLAST_MARGIN) {
+      world.note = `clear of the charge on ${set.rock}`;
+      return { goto: at.clone().add(away.subVectors(world.me.flight.position, at).setLength(CHARGE_BLAST + world.me.radius + BLAST_MARGIN * 2)), look: at.clone() };
+    }
+  }
   const glint = world.waypoint;
   const rock = rockAt(world, glint);
   if (!glint) return standard(world, pilot);
   if (!rock) {
-    // a glint still among the pieces it sprang from is waited for off them, until it drifts clear
+    // a glint still among the pieces it sprang from is waited for off them, until it drifts clear;
+    // one come to rest against a rock that breaks is freed with a charge
     const among = world.field.overlap(glint, world.me.radius + 100);
+    // a glint come to rest against a rock that breaks (on the ground under it, or in it) is freed with a charge
+    const blocking = glintAtRest(glint) && world.chargesLeft > 0 ? blocker(world, glint) : null;
+    if (blocking) return charge(world, blocking);
     if (!among || among.ground) return { goto: glint, cruise: 1200 };
     const center = among.object.position;
     world.note = `waiting for a glint in ${among.id}`;
     return { goto: center.clone().add(aim.subVectors(world.me.flight.position, center).setLength(among.radius + CUT_STANDOFF)), look: glint };
   }
-  const center = rock.object.position;
-  const standoff = Math.min(rock.radius + CUT_STANDOFF, rock.radius + LASER_RANGE * world.me.perks.laserReach * 0.6);
-  const spot = center.clone().add(aim.subVectors(world.me.flight.position, center).setLength(standoff));
-  world.note = `cut ${rock.id} r${Math.round(rock.radius)} at ${Math.round(center.distanceTo(world.me.flight.position))}`;
-  return { goto: spot, look: center, fire: fireAt(world, center, rock.radius) };
+  return charge(world, rock);
 };
+
+/** The piece of rock that breaks nearest a glint and close enough to keep the hull off it, if any. */
+function blocker(world: JobWorld, glint: THREE.Vector3): Asteroid | null {
+  let best: Asteroid | null = null;
+  let nearest = world.me.radius * 2 + 100;
+  for (const rock of world.field.asteroids.values()) {
+    const gap = rock.object.position.distanceTo(glint) - rock.radius;
+    if (gap < nearest && world.field.chargesFor(rock) > 0) {
+      nearest = gap;
+      best = rock;
+    }
+  }
+  return best;
+}
+
+/** A glint that has not moved since the step before (come to rest on a world's ground). */
+function glintAtRest(glint: THREE.Vector3): boolean {
+  const was = lastGlint.get(glint);
+  lastGlint.set(glint, glint.clone());
+  return !!was && was.distanceTo(glint) < 0.01;
+}
+const lastGlint = new WeakMap<THREE.Vector3, THREE.Vector3>();
+
+/** Flies close in to a rock on the side it comes from and sets a charge (see game/charges), then clear of the blast on the same side to wait for it. */
+function charge(world: JobWorld, rock: Asteroid): Intent {
+  const center = rock.object.position;
+  const away = aim.subVectors(world.me.flight.position, center).normalize();
+  // a charge of its own already ticking on the rock: clear of the blast, and wait
+  if (world.charges.set.some((charge) => charge.rock === rock.id)) {
+    world.note = `clear of the charge on ${rock.id}`;
+    return { goto: center.clone().addScaledVector(away, rock.radius + CHARGE_BLAST + BLAST_MARGIN), look: center };
+  }
+  const spot = center.clone().addScaledVector(away, rock.meanRadius + CHARGE_STANDOFF);
+  const close = world.charges.rockFor(world.field, world.me.flight.position, world.me.radius) === rock;
+  world.note = `charge ${rock.id} r${Math.round(rock.radius)} at ${Math.round(center.distanceTo(world.me.flight.position))}`;
+  return { goto: spot, look: center, charge: close && world.chargesLeft > 0, cruise: 1500 };
+}
 
 /** The hulls drifting at Patience, each shot before it strikes her (Docking Lane). */
 const shootDrones: Behavior = (world, pilot) => (world.drone?.alive ? { fight: true, prey: world.drone, goto: world.waypoint } : standard(world, pilot));

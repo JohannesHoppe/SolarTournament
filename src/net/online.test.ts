@@ -44,14 +44,12 @@ function remoteShip(id: string, owner: string) {
 /** The online layer of a browser in round 1 with the ships given, the game's answers stubbed, and the messages of its peers to hand to it. */
 function online(ships: Ship[], game: Partial<OnlineGame> = {}) {
   const session = { justJoined: false } as unknown as Session;
-  const calls = { fleetHits: 0, rocks: 0 };
+  const calls = { fleetHits: 0 };
   const stub = {
     roundId: 1,
     allShips: () => ships,
     remoteFleetHit: () => calls.fleetHits++,
-    remoteRock: () => calls.rocks++,
     fleetNovaHit: () => 0,
-    rockAt: () => ({ position: new THREE.Vector3(0, 0, 50000), radius: 1000 }),
     recentTorpedo: () => null,
     remoteTorpedoGone: () => {},
     showBeam: () => {},
@@ -95,16 +93,6 @@ describe('a hit on the battleship from another browser', () => {
     made.session.onFleetHit(0, 1, 'p:other', 10, false);
     made.session.onFleetHit(1, 1, 'p:other', 10, false);
     expect(made.calls.fleetHits).toBe(2);
-  });
-});
-
-describe('a rock broken on another browser', () => {
-  it("breaks here for the beam of a bot whose first state has not come yet (a new lead's adopted bot)", () => {
-    const { session, calls } = online([]);
-    session.onFire('b:lead:0', [0, 0, 0], [0, 0, 50000]);
-    session.onRock('r1', 10, 1, 'b:lead:0');
-    session.onRock('r2', 10, 1, 'b:lead:1');
-    expect(calls.rocks).toBe(1);
   });
 });
 

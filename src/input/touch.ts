@@ -27,6 +27,7 @@ export class TouchControls {
   flip = false;
   hook = false;
   selfDestruct = false;
+  charge = false;
 
   private readonly sticks: Partial<Record<StickName, Collection>> = {};
   private loading: Promise<void> | null = null;
@@ -50,7 +51,7 @@ export class TouchControls {
       if (e.pointerType === 'touch' || e.pointerType === 'pen') this.setActive(true);
     });
 
-    for (const held of ['drive', 'fire', 'brake', 'flip', 'hook', 'selfDestruct'] as const) this.hold(`touch-${held}`, (down) => (this[held] = down));
+    for (const held of ['drive', 'fire', 'brake', 'flip', 'hook', 'selfDestruct', 'charge'] as const) this.hold(`touch-${held}`, (down) => (this[held] = down));
     for (const action of ['pause', 'autopilot', 'overdrive', 'torpedo', 'decoy'] as const) {
       document.getElementById(`touch-${action}`)!.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -132,7 +133,7 @@ export class TouchControls {
   private release() {
     Object.assign(this.turn, { x: 0, y: 0 });
     Object.assign(this.push, { x: 0, y: 0 });
-    this.drive = this.fire = this.brake = this.flip = this.hook = this.selfDestruct = false;
+    this.drive = this.fire = this.brake = this.flip = this.hook = this.selfDestruct = this.charge = false;
     for (const button of document.querySelectorAll('.touch-button.held')) button.classList.remove('held');
     // a finger whose lifting the system swallowed (a call, a switch of apps) holds nothing any more
     for (const fingers of this.fingers) fingers.clear();

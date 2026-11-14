@@ -106,6 +106,10 @@ export interface SchoolContext {
   readonly torpedoesDown: number;
   /** Rocks the pilot broke so far. */
   readonly rocksBroken: number;
+  /** Hands the pilot's clone `count` of the Rockborn's mining charges (see game/charges), none set: the mining jobs alone carry them. */
+  mining(count: number): void;
+  /** The mining charges the clone still carries. */
+  readonly chargesLeft: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
   /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` (or each its own of `skill`, those past its end its last) named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
@@ -1709,6 +1713,8 @@ function pipeShell(): THREE.BufferGeometry {
   return mergeGeometries(parts.map((part) => (part.index ? part.toNonIndexed() : part)));
 }
 const towAt = new THREE.Vector3();
+/** The ground's outward normal under a glint come to rest (scratch). */
+const groundUp = new THREE.Vector3();
 /** A glint of ore's size (units, 1.5 m) and how its flicker runs (rad/s): the speck turning its faces to the sun and away. */
 const GLINT_SIZE = 30;
 const GLINT_FLICKER = 9;
@@ -2143,8 +2149,13 @@ export class Markers {
         burst.add(position);
         mesh.visible = false;
       }
-      // a glint of ore comes to rest on the ground it meets, still within a hull's reach skimming it
-      if (mesh.userData.glint && field.overlap(position, GLINT_SIZE)?.ground) velocity.set(0, 0, 0);
+      // a glint of ore comes to rest on the ground it meets, lying on top of it, still within a
+      // hull's reach skimming it on the hover field
+      if (mesh.userData.glint && field.overlap(position, GLINT_SIZE)?.ground) {
+        velocity.set(0, 0, 0);
+        const height = field.groundBelow(position, groundUp);
+        if (height !== null && height < GLINT_SIZE) position.addScaledVector(groundUp, GLINT_SIZE - height);
+      }
     }
     for (const child of this.root.children) {
       if (child.userData.spin) rotateY(child, dt * 1.5);

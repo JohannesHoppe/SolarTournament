@@ -43,6 +43,13 @@ import type { Catalog } from './i18n';
  *   capitalizes the first letter of each sentence.
  */
 export const ES: Catalog = {
+  'K (hold)': 'K (mantener)',
+  "Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)": 'Carga minera: colócala en una roca cercana y luego apártate (los trabajos mineros de la campaña)',
+  'Hold close to a rock: set a mining charge': 'Mantén cerca de una roca: coloca una carga minera',
+  'Charge set · {s} s · get clear': 'Carga colocada · {s} s · apártate',
+  'CHARGE · GET CLEAR': 'CARGA · APÁRTATE',
+  'CHARGE': 'CARGA',
+  'Charge': 'Carga',
   // sides, battleship parts, modes
   Orange: 'Naranja',
   Blue: 'Azul',
@@ -350,7 +357,6 @@ export const ES: Catalog = {
   'Torpedo hit': 'Impacto de torpedo',
   'CLOSE CALL +{points}': 'POR LOS PELOS +{points}',
   'In the drive plume of {name} · get out': 'En el chorro del motor de {name} · sal de ahí',
-  'Asteroid cracked +{points}': 'Asteroide partido +{points}',
   'Plating holds': 'El blindaje aguanta',
   'Plating gone': 'Blindaje agotado',
   'Kill cam · {name} · Enter skips': 'Killcam · {name} · Enter para saltar',
@@ -692,9 +698,9 @@ export const ES: Catalog = {
   "Okay, okay! We're going! It was a lousy rig anyway!": '¡Vale, vale! ¡Nos vamos! ¡Total, era una torre de pena!',
   'Ore {ore}/{needed} · rig hits {hits}': 'Mineral {ore}/{needed} · impactos en la torre {hits}',
   'Cut and Haul': 'Cortar y acarrear',
-  'The rock beside the working rig. Cut it apart and fly through its ore. Every beam that strikes the rig costs us fifty coins.': 'La roca junto a la torre que está trabajando. Pártela y vuela a través de su mineral. Cada rayo que dé en la torre nos cuesta cincuenta monedas.',
+  'The rock beside the working rig. Crack it with charges and fly through its ore. Every beam that strikes the rig costs us fifty coins.': 'La roca junto a la torre que está trabajando. Pártela con cargas y vuela a través de su mineral. Cada rayo que dé en la torre nos cuesta cincuenta monedas.',
   'Forty loads of ore. Thirty-five coins a load, less whatever the rig cost us.': 'Cuarenta cargas de mineral. Treinta y cinco monedas por carga, menos lo que nos haya costado la torre.',
-  "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.": 'La concesión está pagada, el mineral no. Trocea la roca junto a la torre que trabaja y trae el mineral. Cuarenta cargas. Cuidado con la torre. Si le das, la pagas. Cincuenta por rayo.',
+  "Claim's paid for, ore's not. Crack the rock next to the working rig with charges and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.": 'La concesión está pagada, el mineral no. Parte con cargas la roca junto a la torre que trabaja y trae el mineral. Cuarenta cargas. Cuidado con la torre. Si le das, la pagas. Cincuenta por rayo.',
   'Claim {n}/{total} · {seconds} s left': 'Concesión {n}/{total} · quedan {seconds} s',
   'Claim Survey': 'Medición de concesiones',
   'There. Do you hear that? Whole sentences, and nothing cut off. I have missed them more than I can tell you.': 'Ya está. ¿Lo oyes? Frases enteras, y nada se corta. Las he echado de menos más de lo que puedo decirte.',
@@ -1423,8 +1429,7 @@ export const ES: Catalog = {
   "A dead clone's twin laser, plating and nova core fly out again as probes, for whoever gets there first.":
     'El láser doble, el blindaje y el núcleo nova de un clon muerto vuelven a salir como sondas, para quien llegue primero.',
   'The nova core': 'El núcleo nova',
-  'One probe in sixteen. Your next press of fire is no laser: the core goes off and destroys every other ship within {nova} m, your own side\'s too, each rival a double kill. Your clone burns up with it, free of charge: no death, no ad. So fly into the crowd first, then fire. Within {novaPanic} km of a holder the siren tells everyone else to run.':
-    'Una sonda de cada dieciséis. Tu siguiente pulsación de disparo no es láser: el núcleo estalla y destruye todas las demás naves a menos de {nova} m, también las de tu propio bando, cada rival una doble baja. Tu clon se calcina con él, sin coste: ni muerte ni anuncio. Así que primero métete entre la multitud, luego dispara. A menos de {novaPanic} km de quien lo lleva, la sirena avisa a todos los demás de que huyan.',
+  "About one probe in eight. Your next press of fire is no laser: the core goes off and destroys every other ship within {nova} m that it sees, your own side's too, each rival a double kill; a rock between it and a hull shields that hull, and the rock and ice close by break. Your clone burns up with it, free of charge: no death, no ad. So fly into the crowd first, then fire, where no rock covers them. Within {novaPanic} km of a holder the siren tells everyone else to run, or to get a rock between.": 'Más o menos una sonda de cada ocho. Tu siguiente pulsación de disparo no es láser: el núcleo estalla y destruye todas las demás naves que ve a menos de {nova} m, también las de tu propio bando, cada rival una doble baja; una roca entre él y un casco protege ese casco, y la roca y el hielo cercanos se rompen. Tu clon se calcina con él, sin coste: ni muerte ni anuncio. Así que primero métete entre la multitud, luego dispara, donde ninguna roca los cubra. A menos de {novaPanic} km de quien lo lleva, la sirena avisa a todos los demás de que huyan o se pongan tras una roca.',
   'Unsportsmanlike Conduct, Approved': 'Conducta antideportiva, aprobada',
   'The Ministry calls it entertainment, and the rules allow all of it.': 'El Ministerio lo llama espectáculo, y las reglas lo permiten todo.',
   'Shoves and knockouts': 'Empujones y K. O.',
@@ -1443,8 +1448,8 @@ export const ES: Catalog = {
   'A main drive burning hard throws plasma {plume} m behind it. Whoever tails you too closely gets grilled, and a clone that burns up counts as your kill. Overtake beside a plume, never through it.':
     'Un motor principal a pleno empuje lanza plasma {plume} m por detrás. Quien te sigue demasiado pegado acaba a la parrilla, y un clon que se calcina cuenta como tu baja. Adelanta junto a un chorro, nunca a través de él.',
   'Deathmatch: The Purest Show': 'Todos contra todos: el espectáculo más puro',
-  'Five minutes, everyone against everyone. A kill scores {kill}, a rock {rock1}, its fragments {rock2} and theirs {rock3}, a close call past a rock {closeCall}. The best score wins.':
-    'Cinco minutos, todos contra todos. Una baja da {kill}, una roca {rock1}, sus fragmentos {rock2} y los fragmentos de estos {rock3}, pasar por los pelos junto a una roca {closeCall}. Gana la mejor puntuación.',
+  "Five minutes, everyone against everyone. A kill scores {kill}, a close call past a rock {closeCall}. The laser only scorches rock: it is the sponsors', and breaks for nobody's points. The best score wins.":
+    'Cinco minutos, todos contra todos. Una baja da {kill}, pasar por los pelos junto a una roca {closeCall}. El láser solo chamusca la roca: es de los patrocinadores y no se rompe para los puntos de nadie. Gana la mejor puntuación.',
   'The bots hunt the nearest ship they see, at most two on the same one. Keep moving: steady flight is easy to lead, jinking with the thrusters makes them miss. A ship crossing your nose fast up close: switch to free drift, slide on, and turn the nose onto it.':
     'Los bots cazan la nave más cercana que ven, como mucho dos a la misma. No te quedes quieto: un vuelo estable es fácil de anticipar, los quiebros con los propulsores les hacen fallar. Una nave que cruza rápido por delante de tu morro, de cerca: cambia a deriva libre, sigue deslizándote y gira el morro hacia ella.',
   'Last Clone Standing: Run from the Sun': 'El último clon en pie: huye del sol',
@@ -1520,8 +1525,8 @@ export const ES: Catalog = {
   'At {hullCritical} hull points or less: HULL FAILING. One more hit and you are dead. Find cover, or a repair probe.':
     'Con {hullCritical} puntos de casco o menos: CASCO FALLANDO. Un impacto más y estás muerto. Busca cobertura, o una sonda de reparación.',
   'Points, Coins and the Hangar': 'Puntos, monedas y el hangar',
-  "A kill {kill} (in a race {raceKill}), rocks {rock1}, {rock2} and {rock3}, a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.":
-    'Una baja {kill} (en carrera {raceKill}), rocas {rock1}, {rock2} y {rock3}, pasar por los pelos {closeCall}, una puerta {gatePoints}, primer puesto en carrera {firstPlace}. Cada punto se paga como una Solar Coin al final de la ronda; el entrenamiento es gratis y no paga nada.',
+  "A kill {kill} (in a race {raceKill}), a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.":
+    'Una baja {kill} (en carrera {raceKill}), pasar por los pelos {closeCall}, una puerta {gatePoints}, primer puesto en carrera {firstPlace}. Cada punto se paga como una Solar Coin al final de la ronda; el entrenamiento es gratis y no paga nada.',
   "Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots' streaks pay alike. A nova's kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone's death ends it.":
     'Las bajas seguidas son un espectáculo, y el público lo paga: una baja a menos de {streak} s de tu última hace una racha. La segunda vale media baja más ({streakDouble}), la tercera y cada una de las siguientes una baja entera más ({streakMore}); las rachas de los bots pagan igual. Las bajas de una nova ya cuentan doble y no dan bonus, pero cuentan en la racha; una baja de tu propio bando no cuenta en ninguna, y la muerte de tu clon la termina.',
   'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.':
@@ -1701,8 +1706,8 @@ export const ES: Catalog = {
   'Four canisters. Fly through one to take it in tow, then drag it to the crusher behind the depot.': 'Cuatro contenedores. Atraviesa uno para remolcarlo y luego arrástralo a la trituradora detrás del depósito.',
   'All four are crushed. Scrap does not pay much, but it pays.': 'Los cuatro están triturados. La chatarra no paga mucho, pero paga.',
   'The cutter is fitted. Its reach is short and it runs hot, so get close and let it cool between bursts.': 'El cortador está montado. Tiene poco alcance y se calienta rápido, así que acércate y dale pausas.',
-  'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart, then fly through the glints of ore it sheds. Three rocks, twenty glints.': 'El campo de escombros, pasados los bastidores. Acércate a menos de cuatrocientos metros de una roca, pártela y luego vuela a través de los destellos de mineral que suelta. Tres rocas, veinte destellos.',
-  'Three rocks. The cutter works, and so do we.': 'Tres rocas. El cortador funciona, y nosotros también.',
+  'The spoil field, past the racks. Fly in close to a rock and set a charge, get clear before it blows, then fly through the glints of ore it sheds. Three rocks, twenty glints.': 'El campo de escombros, pasados los bastidores. Acércate mucho a una roca y coloca una carga, aléjate antes de que estalle y luego vuela a través de los destellos de mineral que suelta. Tres rocas, veinte destellos.',
+  'Three rocks. The charges work, and so do we.': 'Tres rocas. Las cargas funcionan, y nosotros también.',
   'The hauler is coming in, and loose hulls are drifting into her lane. Shoot them before they hit her.': 'El carguero está entrando, y cascos sueltos derivan hacia su ruta. Derríbalos antes de que le den.',
   'Three hulls hit her. She aborts, and we start over.': 'Tres cascos le dieron. Aborta, y empezamos de nuevo.',
   'The lane is clear and the hauler is docked. Her captain says she has a berth for us.': 'La ruta está despejada y el carguero ha atracado. Su capitana dice que tiene una litera para nosotros.',
@@ -1716,7 +1721,7 @@ export const ES: Catalog = {
   'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.': 'Buenas noticias, cariño. Turistas. Pagan por disparar a un casco de verdad con láseres de entrenamiento. Tú vuelas, ellos disparan, yo cobro. Cada impacto te cuesta diez monedas.',
   'Salvage canisters are floating between the rows. The crusher eats them, I sell what comes out, and a bit comes off your debt. Bring me four.': 'Hay contenedores de chatarra flotando entre las filas. La trituradora se los come, yo vendo lo que sale, y algo se descuenta de tu deuda. Tráeme cuatro.',
   "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your debt. My welder will fit it.": 'Necesitas una herramienta, y casualmente tengo una. Un cortador de minería, mil doscientas monedas. Lo apunto en tu deuda. Mi soldadora te lo monta.',
-  "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.": 'Ahora gánatelo. El campo de escombros está lleno de roca que nadie cortó nunca. Córtala, y cada destello de mineral es dinero.',
+  "Now earn it back. The spoil field is full of rock nobody's ever bothered to crack. Here's a crate of blasting gel. Set a charge, get clear, and every glint of ore is money.": 'Ahora gánatelo. El campo de escombros está lleno de roca que nadie se molestó nunca en romper. Aquí tienes una caja de gel explosivo. Coloca una carga, apártate, y cada destello de mineral es dinero.',
   'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.': 'Llega un carguero, la Patience, desde el Cinturón. Su ruta está llena de chatarra, y si un casco le da, su capitana me manda la factura. Mantenla despejada.',
   'Look at that. She wants to take you on. Go, darling. Your debt goes with you, and so does my forty percent.': 'Mira eso. Quiere llevarte con ella. Ve, cariño. La deuda va contigo, y mi cuarenta por ciento también.',
   "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.": '¡Eh! ¡Lote siete mil y pico! Estás aparcado en mi plataforma. Espera. ¿A ti te coló Rask el ordenador de chatarra? Guay. No te muevas, que te estoy soldando los propulsores. Y no dispares. Tampoco tienes con qué.',
@@ -2266,7 +2271,7 @@ export const ES: Catalog = {
   "Ore {ore}/{needed} · {seconds} s left": "Mineral {ore}/{needed} · quedan {seconds} s",
   "Ore {ore}/{needed}": "Mineral {ore}/{needed}",
   "Mining Run": "Carrera minera",
-  "A mining run, Host. Break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break.": "Una carrera minera, Host. Rompe roca y trae el mineral antes de que zarpe la barcaza del comprador. El reloj arranca con la primera rotura.",
+  'A mining run, Host. Set charges, break rock and fly the ore in before the buyer’s barge leaves. The clock starts with the first break.': 'Una carrera minera, Host. Coloca cargas, rompe roca y trae el mineral antes de que zarpe la barcaza del comprador. El reloj arranca con la primera rotura.',
   "The barge left without our ore. Again, Host.": "La barcaza zarpó sin nuestro mineral. Otra vez, Host.",
   "+{ratings} ratings": "+{ratings} puntos de audiencia",
   "Patience holds over the tug yards. A shuttle in Victory Cola’s red has docked; your clone climbs up to the galley, where its man is waiting.": "Patience se mantiene sobre los astilleros de remolcadores. Ha atracado una lanzadera del rojo de Victory Cola; tu clon sube a la cocina, donde espera su hombre.",

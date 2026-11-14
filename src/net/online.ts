@@ -30,10 +30,6 @@ export interface OnlineGame {
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
   /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up; `nova` when the killer's nova core did it. */
   remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean): void;
-  /** Another peer hit an asteroid at a field time, in an online round. */
-  remoteRock(id: string, at: number, round: number): void;
-  /** Where a rock of the running round is and how far it reaches: one in the field, or one this browser broke a moment ago; null for none. */
-  rockAt(id: string): { position: THREE.Vector3; radius: number } | null;
   /** Where a part of the President's battleship is, while it is in the arena; null before it arrives, once it went down, and for a part it does not have. */
   fleetZoneAt(zone: number): THREE.Vector3 | null;
   /** The hits a nova core going off this far from a part's center (units) deals it (see Fleet.novaHit). */
@@ -80,7 +76,8 @@ export interface OnlineGame {
   /** Whether a ship is close enough to a probe to take it, as this browser sees them (true for a probe it does not have). */
   probeWithin(id: string, ship: Ship): boolean;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
-  novaBlast(holder: Ship, position: THREE.Vector3): void;
+  /** A nova goes off: `at` is the field time it went off at on its holder's browser, the rock it breaks broken then (see game/blasts). */
+  novaBlast(holder: Ship, position: THREE.Vector3, at?: number): void;
   selfDestruct(holder: Ship, position: THREE.Vector3): void;
   remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
@@ -99,6 +96,8 @@ export interface OnlineGame {
   announceCheater(name: string): void;
   /** Number of the running online round. */
   readonly roundId: number;
+  /** The field's clock here (s of field time). */
+  readonly fieldClock: number;
   /** Seconds since the running round started (0 while it is not known), and on the race clock (since BURN!). */
   roundSeconds(): number;
   raceSeconds(): number;
@@ -119,6 +118,8 @@ export interface OnlineGame {
  * of what it hit (units, 1 km): rocks turn and drift, the battleship moves, messages lag.
  */
 const EVIDENCE_REACH = AIM_SLACK;
+/** A nova's field time from another browser is taken within this much of the own field clock (s): the clocks follow the lead's to a fraction of a second. */
+const NOVA_TIME_SLACK = 5;
 /** A kill counts without a beam or torpedo of the killer when it was this close to its victim (units, 1.5 km): a drive plume burns at 150 m, a nova core reaches 800 m. */
 const KILL_NEAR = 30000;
 /** A nova core set off is evidence for its kills this long (s): the victims' browsers tell of them a moment later. */
@@ -232,13 +233,6 @@ export class Online {
       this.plausible.died(victim, wall());
       game.remoteDestroyed(ship, credited ? gun : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);
     };
-    session.onRock = (id, at, round, shooter) => {
-      // a rock of the running round breaks only for a beam of the shooter that ended on it (a
-      // browser that has only just come, without the beams before, takes it on trust)
-      const rock = round === game.roundId ? game.rockAt(id) : null;
-      if (rock && !this.session.justJoined && !this.evidence.beamEnded(shooter, rock.position, rock.radius + EVIDENCE_REACH, wall())) return;
-      game.remoteRock(id, at, round);
-    };
     session.onWreck = (id) => game.remoteWreck(id);
     session.onFleetHit = (zone, round, shooter, count, nova) => {
       // a living shooter's beam that ended on the part, a torpedo that went off there (also
@@ -338,13 +332,14 @@ export class Online {
       game.remoteHook(owner, hold.rock, hold.local ? from.fromArray(hold.local) : null, target, length);
     };
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
-    session.onNova = (ship, p) => {
+    session.onNova = (ship, p, at) => {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       this.novas.set(ship, wall());
       // the evidence for the hits it counts on the battleship's parts
       this.evidence.nova(ship, from.fromArray(p), wall());
-      game.novaBlast(holder, from);
+      // the field time its holder's browser broke rock at, when it is near the own; else the own
+      game.novaBlast(holder, from, Math.abs(at - game.fieldClock) <= NOVA_TIME_SLACK ? at : undefined);
     };
     // a self-destruct only from a living ship, where it is; it is gear bought, which no other browser can see
     session.onSelfDestruct = (ship, p) => {
@@ -478,10 +473,6 @@ export class Online {
     this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity), nova);
   }
 
-  sendRock(id: string, at: number, round: number, shooter: Ship) {
-    this.session.sendRock(id, at, round, shooter.id);
-  }
-
   sendWreck(id: string) {
     this.session.sendWreck(id);
   }
@@ -518,8 +509,8 @@ export class Online {
     this.session.sendSelfDestruct(ship.id, round(position));
   }
 
-  sendNova(ship: Ship, position: THREE.Vector3) {
-    this.session.sendNova(ship.id, round(position));
+  sendNova(ship: Ship, position: THREE.Vector3, at: number) {
+    this.session.sendNova(ship.id, round(position), at);
   }
 
   /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) a torpedo (by id: this browser decides where it goes off from now on) or a sponsor probe (by id: every browser reels it in on that cable), or let go (null). */

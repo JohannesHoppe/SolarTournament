@@ -114,7 +114,16 @@ export interface SyncEvent {
   set: number;
 }
 
-export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent | FleetEvent | SyncEvent;
+/** A big blast broke rock and ice (see game/blasts): what went off, at which field time, and the pieces it broke. */
+export interface BlastEvent {
+  kind: 'blast';
+  t: number;
+  cause: 'nova' | 'sink' | 'self';
+  at: number;
+  broken: string[];
+}
+
+export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent | FleetEvent | SyncEvent | BlastEvent;
 
 /** Events kept (about a round's worth of eight bots changing their minds every second or so). */
 const LOG_CAPACITY = 20000;

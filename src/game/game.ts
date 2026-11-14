@@ -7,7 +7,7 @@ import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import type { Assets, ShipType } from '../assets';
-import { ASTEROID_POINTS, AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
+import { AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
 import { allyInLine, Bot, BOOST_BEND, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
 import { BOOST_RECHARGE } from '../ship/driveheat';
@@ -98,6 +98,9 @@ import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlar
 import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
+import { shoveSpin } from '../ship/blow';
+import { blastOn, CHARGE_BLAST, CHARGE_FUSE, Charges } from './charges';
+import { blastBreaks, blastEnergy, blastTime } from './blasts';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
@@ -141,7 +144,7 @@ import {
 import { MOMENTS, Moments, type Moment } from './moments';
 import { killScore } from './friendly';
 import { streakBonus, Streaks } from './streaks';
-import { devlog } from '../devlog';
+import { devlog, type BlastEvent } from '../devlog';
 import { recorder, type FlightMode, type InputFrame } from '../recorder';
 import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, BRAKE_BURN_ANGLE, BRAKE_REST, Brake, keepUpright } from '../ship/computer';
@@ -364,8 +367,16 @@ function arenaButton(arena: ArenaProfile): HTMLButtonElement {
 const chanceArena = (mode: RoundMode): ArenaProfile => (mode === 'deathmatch' ? pick(Math.random() < 0.5 ? FIGHT_WORLDS : ARENAS) : pick(arenasFor(mode)));
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
-/** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
-const ROCK_TIME_SLACK = 5;
+/** A reactor gone critical (see Game.reactorBlast): how far it reaches (units, 60 m, as far as a self-destruct kills), its shove (units/s, 15 m/s) and the hull points it takes, at the hull. */
+const REACTOR_BLAST = 1200;
+const REACTOR_SHOVE = 300;
+const REACTOR_HURT = 10;
+/** A charge set: a lamp of the Rockborn's orange (units, 1.5 m across), plain light. */
+const CHARGE_LAMP_SHAPE = new THREE.SphereGeometry(30, 8, 6);
+const CHARGE_LAMP_LIGHT = new THREE.MeshBasicMaterial({ color: 0xff9d00 });
+/** Where a charge is, and the way out of its blast (scratch). */
+const chargeAt = new THREE.Vector3();
+const chargeAway = new THREE.Vector3();
 /** A motion the lead gave a piece counts as older than the piece's own beyond this much field time (s): the field times travel to the millisecond. */
 const STALE_MOTION = 0.002;
 /** A lead browser's next round is taken this long (s) before the own clock ends the running one at the earliest: clocks drift a little, not by minutes. */
@@ -410,9 +421,6 @@ const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
 const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'flare', 'comet']);
-/** A shove sets the hull spinning by this much per unit of closing speed (rad/s per units/s; 3.2 rad/s at 40 m/s), up to SHOVE_SPIN_MAX; the flight computer catches it within a fraction of a second. */
-const SHOVE_SPIN = 0.004;
-const SHOVE_SPIN_MAX = 6;
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
  * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
@@ -1388,12 +1396,6 @@ export class Game implements OnlineGame {
   private tint = loadTint();
   /** Online round whose scoreboard has been shown and announced. */
   private resultsShownFor: number | null = null;
-  /** Rock hits from other browsers for a round this browser has not started yet. */
-  private readonly pendingRocks: { id: string; at: number; round: number }[] = [];
-  /** Rocks this browser's ships broke online: when, by whom, for how many points, and where the rock was and how far it reached. */
-  private readonly brokenHere = new Map<string, { at: number; ship: Ship; points: number; position: THREE.Vector3; radius: number }>();
-  /** The last hit this browser's ships landed on each rock online that did not break it: when, by whom. */
-  private readonly lastRockHit = new Map<string, { at: number; ship: Ship }>();
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   private schoolContext: SchoolContext | null = null;
@@ -1401,6 +1403,9 @@ export class Game implements OnlineGame {
   private torpedoesDown = 0;
   /** Rocks the own clone broke so far (the campaign's mining missions count them). */
   private rocksBroken = 0;
+  /** The own clone's mining charges (see game/charges, mineOwn) and the lamps of those set. */
+  private readonly charges = new Charges();
+  private readonly chargeLamps: THREE.Mesh[] = [];
   /** The own clone's beams that struck what stands on a rock, a rig or a buoy, so far (see SchoolContext.rigBeams). */
   private rigBeams = 0;
   /** What the running mission's pay is cut by, as its attempt stands (see SchoolContext.fine). */
@@ -1867,6 +1872,7 @@ export class Game implements OnlineGame {
       ['torpedo', TORPEDOES + perks.torpedoes <= 0],
       ['hook', !hook],
       ['selfDestruct', !perks.selfDestruct],
+      ['charge', this.charges.carried === 0],
     ];
     return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
   }
@@ -3582,8 +3588,6 @@ export class Game implements OnlineGame {
     this.decoys.clear();
     this.probes.reset();
     this.wrecks.clear();
-    this.brokenHere.clear();
-    this.lastRockHit.clear();
     for (const ship of this.ships) {
       this.returnLight(ship);
       this.scene.remove(ship.root);
@@ -3679,7 +3683,6 @@ export class Game implements OnlineGame {
     // online the round is unknown until the lead browser tells it (see syncRound)
     this.rejoinedFrom = null;
     this.resultsShownFor = null;
-    this.pendingRocks.length = 0;
     this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
     // a round starts on the programme; online the lead browser's DJ is followed from its round state
     this.dj = { ...DJ_IDLE };
@@ -3934,41 +3937,103 @@ export class Game implements OnlineGame {
     this.wrecks.remove(wreck);
   }
 
-  remoteRock(id: string, at: number, round: number) {
-    // every round has the same rock ids: a hit counts on the field of its own round. A newcomer
-    // that does not know the round yet applies it to the field it has.
-    if (this.roundId >= 0 && round !== this.roundId) {
-      if (round > this.roundId && this.pendingRocks.length < 200) this.pendingRocks.push({ id, at, round });
+  /**
+   * The own clone's mining charges (see game/charges), carried only in the campaign's mining
+   * jobs: the charge's key held close to a rock sets one, its fuse runs out and it goes off,
+   * breaking the rock or wearing a big one down, and hurting and shoving every hull too close.
+   * The campaign is flown alone, so nothing of it goes to another browser.
+   */
+  private mineOwn(now: number, dt: number) {
+    const me = this.me;
+    if (!me || !this.school) {
+      $('touch-charge').hidden = true;
       return;
     }
-    // the field clocks of all browsers follow the lead's closely: a hit far off in field time
-    // is no hit of now (an early time would take the points of whoever broke the rock)
-    if (this.roundId >= 0 && Math.abs(at - this.field.clock) > ROCK_TIME_SLACK) return;
-    if (!this.field.asteroids.has(id)) {
-      // two Hosts broke the same rock at once: the earlier hit by field time gets the points,
-      // and each browser takes its own back when it learns it was later
-      const broken = this.brokenHere.get(id);
-      if (broken && at < broken.at) {
-        broken.ship.score -= broken.points;
-        this.brokenHere.delete(id);
+    $('touch-charge').hidden = this.charges.carried === 0;
+    const holding = this.state === 'playing' && me.alive && !this.stage && !this.clamped && this.input.charging;
+    const { placed, blasts } = this.charges.update(now, dt, holding, me.flight.position, me.radius, this.field);
+    if (placed) {
+      this.sound.play('clonk', { volume: 0.9, rate: 0.7 });
+      this.hud.flashMessage(now, t('Charge set · {s} s · get clear', { s: CHARGE_FUSE }), 2.5);
+    }
+    for (const blast of blasts) {
+      this.effects.explosion(blast.position, CHARGE_BLAST * 0.2, scratch.set(0, 0, 0));
+      this.hearDebris(blast.position, CHARGE_BLAST * 0.2);
+      if (blast.broken) {
+        this.rocksBroken++;
+        this.brokenAt.copy(blast.broken.object.position);
+        this.brokenId = blast.broken.id;
+        this.burstRock(blast.broken);
+        this.speaker.say(COMPUTER.asteroid);
       }
-      return;
+      for (const ship of [...this.ships]) {
+        if (!ship.alive || ship.owner !== null) continue;
+        const { hurt, shove } = blastOn(ship.flight.position.distanceTo(blast.position) - ship.radius);
+        if (!hurt) continue;
+        ship.flight.velocity.addScaledVector(scratch.subVectors(ship.flight.position, blast.position).normalize(), shove);
+        if (ship === me) {
+          this.hud.damaged();
+          this.linkHit(Math.min(1, hurt / 60), 0.5);
+        }
+        if (ship.structural(hurt, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
+      }
     }
-    const destroyed = this.field.hit(id, at);
-    if (!destroyed) return;
-    // the last hit by field time breaks a rock: when an own hit came after this one, the
-    // own ship broke it, though the other hit arrived later
-    const own = this.lastRockHit.get(id);
-    if (own && own.at > at) {
-      if (!this.roundOver) own.ship.score += ASTEROID_POINTS[destroyed.generation];
-      this.keepBroken(destroyed, own.at, own.ship);
+    // a charge ticking with the clone inside its blast: get clear
+    let nearest: THREE.Vector3 | null = null;
+    let left = Infinity;
+    for (const charge of this.charges.set) {
+      const where = this.charges.positionOf(charge, this.field, chargeAt);
+      if (where && where.distanceTo(me.flight.position) < CHARGE_BLAST + me.radius && charge.at - now < left) {
+        left = charge.at - now;
+        nearest = where;
+      }
     }
-    this.burstRock(destroyed);
+    if (nearest && me.alive) this.alarms.raise({ id: 'charge', level: 'warning', text: t('CHARGE · GET CLEAR'), direction: chargeAway.subVectors(me.flight.position, nearest), seconds: left });
+    this.drawCharges(now);
   }
 
-  /** A rock a ship of this browser broke online, kept for remoteRock and rockAt. */
-  private keepBroken(rock: Asteroid, at: number, ship: Ship) {
-    this.brokenHere.set(rock.id, { at, ship, points: this.roundOver ? 0 : ASTEROID_POINTS[rock.generation], position: rock.object.position.clone(), radius: rock.radius });
+  /** The charges set, each a small blinking lamp on its rock. */
+  private drawCharges(now: number) {
+    const set = this.school ? this.charges.set : [];
+    while (this.chargeLamps.length < set.length) {
+      const lamp = new THREE.Mesh(CHARGE_LAMP_SHAPE, CHARGE_LAMP_LIGHT);
+      this.scene.add(lamp);
+      this.chargeLamps.push(lamp);
+    }
+    for (let i = 0; i < this.chargeLamps.length; i++) {
+      const lamp = this.chargeLamps[i];
+      const where = i < set.length ? this.charges.positionOf(set[i], this.field, lamp.position) : null;
+      // it blinks faster as the fuse runs down
+      lamp.visible = where !== null && Math.floor(now * (set[i].at - now < 2 ? 8 : 2)) % 2 === 0;
+    }
+  }
+
+  /**
+   * The rock and ice a big blast of `energy` (J) at `position` breaks at field time `at` (see
+   * game/blasts), each bursting where it stood; the dev log names them.
+   */
+  private blastRock(position: THREE.Vector3, energy: number, at: number, cause: BlastEvent['cause']) {
+    const broken = blastBreaks(this.field, position, energy, at);
+    for (const rock of broken) this.burstRock(rock);
+    if (broken.length) devlog?.add({ kind: 'blast', t: Math.round(this.time * 10) / 10, cause, at, broken: broken.map((rock) => rock.id) });
+  }
+
+  /**
+   * A ship whose reactor went critical (its drive shot to nothing) goes up in a small blast of
+   * its own: every ship this browser runs within REACTOR_BLAST is shoved away by up to
+   * REACTOR_SHOVE and loses up to REACTOR_HURT hull points, both falling off with the distance.
+   */
+  private reactorBlast(victim: Ship) {
+    const now = this.time;
+    for (const ship of this.ships) {
+      if (ship === victim || ship.owner !== null || !ship.alive) continue;
+      const distance = ship.flight.position.distanceTo(victim.flight.position) - ship.radius;
+      if (distance >= REACTOR_BLAST) continue;
+      const near = 1 - Math.max(0, distance) / REACTOR_BLAST;
+      ship.flight.velocity.addScaledVector(scratch.subVectors(ship.flight.position, victim.flight.position).normalize(), REACTOR_SHOVE * near);
+      if (ship === this.me) this.kick = Math.min(2, this.kick + near);
+      if (ship.structural(REACTOR_HURT * near, now) === 'destroyed') this.shipDestroyed(ship, victim, 'blast');
+    }
   }
 
   /** A rock breaks apart, and the own pilot hears its debris. */
@@ -3982,7 +4047,6 @@ export class Game implements OnlineGame {
     this.roundId = -1;
     // the lead's clock may differ from the one this browser ran alone: its start comes with it
     this.roundStartWall = null;
-    this.pendingRocks.length = 0;
   }
 
   syncRound(round: RoundState) {
@@ -4109,9 +4173,6 @@ export class Game implements OnlineGame {
     this.reprintOwn();
     // the round's opening presents arena and field, and the announcer opens the broadcast
     this.briefRound();
-    // hits that arrived before this browser started the round
-    const pending = this.pendingRocks.splice(0);
-    for (const rock of pending) if (rock.round >= this.roundId) this.remoteRock(rock.id, rock.at, rock.round);
     // the new round's start comes with its first clock (see followStart)
     this.roundStartWall = null;
   }
@@ -4179,8 +4240,6 @@ export class Game implements OnlineGame {
     }
     // nothing of the round before runs on in this one (a battleship's sinking blast, the crowd)
     this.cues.length = 0;
-    this.brokenHere.clear();
-    this.lastRockHit.clear();
     this.moments.reset();
     this.streaks.reset();
     this.wrecks.clear();
@@ -5086,6 +5145,7 @@ export class Game implements OnlineGame {
     if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
     this.selfDestructOwn(now);
+    this.mineOwn(now, dt);
     this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field, this.grinds);
     this.killcam.record(now, this.ships);
@@ -5751,10 +5811,12 @@ export class Game implements OnlineGame {
     this.effects.explosion(position, 12000, scratch.set(0, 0, 0));
     this.shockwave(position);
     this.radio.announce(pick(ANNOUNCER_FLEET.sunk), null);
+    this.blastRock(position, blastEnergy(SINK_BLAST), blastTime(this.field.clock), 'sink');
     for (const ship of [...this.ships]) {
       if (ship.owner !== null || ship === this.drone) continue;
       if (!this.roundOver) ship.score += SINK_POINTS;
       if (!ship.alive || ship.flight.position.distanceTo(position) > SINK_BLAST) continue;
+      if (!this.field.lineOfSight(position, ship.flight.position, Infinity)) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
     }
@@ -6698,6 +6760,10 @@ export class Game implements OnlineGame {
       get me() {
         return game.me!;
       },
+      mining: (count) => game.charges.arm(count),
+      get chargesLeft() {
+        return game.charges.carried;
+      },
       controls: IDLE,
       braking: false,
       hooked: false,
@@ -7342,8 +7408,10 @@ export class Game implements OnlineGame {
     const now = this.time;
     this.effects.explosion(position, holder.radius * 6, holder.flight.velocity);
     this.shockwave(position);
+    this.blastRock(position, blastEnergy(SELF_DESTRUCT_RADIUS), blastTime(this.field.clock), 'self');
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > SELF_DESTRUCT_RADIUS) continue;
+      if (!this.field.lineOfSight(position, ship.flight.position, Infinity)) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder, 'self');
     }
@@ -7896,18 +7964,16 @@ export class Game implements OnlineGame {
     return contents(probe, Math.abs(bucket - seen) <= 1 ? bucket : seen);
   }
 
+  get fieldClock() {
+    return this.field.clock;
+  }
+
   probeWithin(id: string, ship: Ship): boolean {
     const probe = this.probes.find(id);
     // the taker flew through it on its own screen: here it may be a moment behind, at full
     // speed, and the probe may still lie where a hook took it from (a cable this browser has
     // not heard of yet), up to the hook's reach away
     return !probe || probe.position.distanceTo(ship.flight.position) < HOOK_RANGE + PROBE_RADIUS + ship.radius + PROBE_LAG + ship.flight.velocity.length() * 0.5;
-  }
-
-  rockAt(id: string): { position: THREE.Vector3; radius: number } | null {
-    const rock = this.field.asteroids.get(id);
-    if (rock) return { position: rock.object.position, radius: rock.radius };
-    return this.brokenHere.get(id) ?? null;
   }
 
   fleetZoneAt(zone: number): THREE.Vector3 | null {
@@ -7944,12 +8010,15 @@ export class Game implements OnlineGame {
    * destroys its own and says so, as with every death), together with torpedoes and wreckage
    * there. The holder's clone burns up too and is printed again at once.
    */
-  novaBlast(holder: Ship, position: THREE.Vector3) {
+  novaBlast(holder: Ship, position: THREE.Vector3, at = blastTime(this.field.clock)) {
     const now = this.time;
     this.effects.explosion(position, holder.radius * 12, holder.flight.velocity);
     this.shockwave(position);
+    this.blastRock(position, blastEnergy(NOVA_RADIUS), at, 'nova');
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
+      // rock between the core and a hull shields it, from the radiation as from the debris
+      if (!this.field.lineOfSight(position, ship.flight.position, Infinity)) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder, 'nova');
     }
@@ -8434,8 +8503,9 @@ export class Game implements OnlineGame {
     if (shooter.nova) {
       shooter.nova = false;
       const position = shooter.flight.position.clone();
-      this.online?.sendNova(shooter, position);
-      this.novaBlast(shooter, position);
+      const at = blastTime(this.field.clock);
+      this.online?.sendNova(shooter, position, at);
+      this.novaBlast(shooter, position, at);
       return;
     }
     const origin = shooter.nose(muzzle);
@@ -8539,35 +8609,12 @@ export class Game implements OnlineGame {
         this.effects.sparks(end, shooter.color, 40);
         return;
       }
+      // the beam only scorches rock: sparks and a spray of grit where it burns in, nothing
+      // breaks (the Games' rock is the sponsors', and only a comet's head or the Rockborn's
+      // charges break it, see game/charges)
       normal.subVectors(end, asteroid.object.position).normalize();
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);
-      // the hull of a wreck only scorches
-      if (asteroid.solid) return;
-      const destroyed = this.field.hit(asteroid.id);
-      if (this.online && !destroyed) this.lastRockHit.set(asteroid.id, { at: this.field.clock, ship: shooter });
-      this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0), shooter);
-      if (destroyed) {
-        const points = ASTEROID_POINTS[destroyed.generation];
-        if (shooter === this.me) {
-          this.rocksBroken++;
-          this.brokenAt.copy(destroyed.object.position);
-          this.brokenId = destroyed.id;
-        }
-        if (!this.roundOver) shooter.score += points;
-        // online, another Host may have broken the same rock a moment earlier (see remoteRock)
-        if (this.online) this.keepBroken(destroyed, this.field.clock, shooter);
-        this.burstRock(destroyed);
-        if (shooter.isLocal) {
-          this.hud.hit();
-          this.kick = Math.min(2, this.kick + 0.6);
-          if (!this.roundOver) {
-            this.hud.popup(this.camera, destroyed.object.position, `+${points}`, 'points');
-            this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points }), 1.5);
-          }
-          this.speaker.say(COMPUTER.asteroid);
-        }
-      }
     }
   }
 
@@ -8676,6 +8723,8 @@ export class Game implements OnlineGame {
       cause = 'knockout';
     }
     if (victim === this.me && this.campaignHull) this.cloneLost(cause, what);
+    // a drive shot to nothing: its reactor went critical, and takes a little of the space round it along
+    if (victim.drive <= 0 && cause !== 'self' && cause !== 'nova') this.reactorBlast(victim);
     devlog?.death({
       t: Math.round(this.time * 10) / 10,
       ship: victim.name,
@@ -9142,12 +9191,8 @@ export class Game implements OnlineGame {
     ship.shovedBy = by;
     ship.shovedAt = now;
     devlog?.add({ kind: 'shove', t: now, by: by.name, ship: ship.name, closing: closing * METERS_PER_UNIT });
-    const blow = ship.flight.toLocalDirection(direction, relative);
-    const spin = Math.min(SHOVE_SPIN_MAX, closing * SHOVE_SPIN);
-    // a blow from the side swings the nose and rolls the hull, one from above or below pitches it
-    ship.flight.angularVelocity.x += blow.y * spin;
-    ship.flight.angularVelocity.y -= blow.x * spin;
-    ship.flight.angularVelocity.z += blow.x * spin * 0.5;
+    // the blow turns the hull by where along it it lands (see ship/blow)
+    shoveSpin(ship.flight.toLocalDirection(direction, relative), closing, ship.flight.angularVelocity);
     if (ship.isLocal) this.kick = Math.min(2, this.kick + closing / 600);
     if (closing < RAM_SAFE) return;
     const { status } = ship.rammed(direction, closing, now);

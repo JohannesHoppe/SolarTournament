@@ -23,7 +23,7 @@ import { COMET_WARNING } from '../game/comet';
 import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
-import { ASTEROID_POINTS, CRUMBLE_AFTER } from '../world/asteroids';
+import { CRUMBLE_AFTER } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
 import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
@@ -182,9 +182,6 @@ export const FROM_CODE: Record<string, number> = {
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
-  rock1: ASTEROID_POINTS[0],
-  rock2: ASTEROID_POINTS[1],
-  rock3: ASTEROID_POINTS[2],
   // Jupiter's air (see world/air): what the eye sees just under the deck, a kilometer and two
   // kilometers down (rounded to 10 m); its drag at the deck at the limit; where the limit starts
   // to heat the hull (to 100 m), and what is safe a kilometer and two kilometers down

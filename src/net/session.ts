@@ -61,8 +61,6 @@ const MAX_SHIPS_PER_PEER = TOURNAMENT_SIZE;
 const MIN_HIT_INTERVAL = 0.07;
 /** Hits per peer and second, and as many beams: every ship it runs firing as fast as the laser allows, each beam through a few ships. */
 const MAX_HITS_PER_SECOND = MAX_SHIPS_PER_PEER * 12;
-/** Asteroid hits per peer and second, generous for several ships firing at once. */
-const MAX_ROCK_HITS_PER_SECOND = 20;
 /** Destructions per peer and second: a nova core can take every ship one browser runs at once, but each dies only once a clone. */
 const MAX_DESTRUCTIONS_PER_SECOND = MAX_SHIPS_PER_PEER;
 /** Cheat reports per peer and second: a browser reports each cheater once. */
@@ -95,15 +93,6 @@ const MAX_SYNCS_PER_SECOND = 2 / SYNC_EVERY;
 const MAX_FLEET_ZONE = 31;
 /** The most hits a part takes (the reactor's): a nova core breaks a part close by outright. */
 const MAX_PART_HITS = Math.max(...Object.values(ZONE_HITS));
-/**
- * The field time of a peer's rock hits in a round only moves on (s): one earlier than it reported
- * before is a lie, beyond ROCK_ORDER_SLACK. That slack is a second: a browser's field clock
- * follows the lead's and may jump back by up to half a second (the game's FIELD_SNAP) when a late
- * round state arrives, and messages cross. A new round starts the field time over.
- */
-const ROCK_ORDER_SLACK = 1;
-/** The rounds whose rock hits are kept in order per peer: the round now, the one before and the next (a newcomer's, a game master's new round); a peer naming more rounds is refused for the lowest it no longer keeps. */
-const ROCK_ROUNDS = 3;
 /** The lead sends a newcomer its field once, again when it starts over; a few at once when several join. */
 const MAX_SNAPSHOTS_PER_SECOND = 2;
 /** A browser pings every peer this often (s): the scoreboard's reading is never far stale. */
@@ -182,7 +171,6 @@ export class Session {
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
   onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean) => void = () => {};
   /** `shooter` is the ship whose beam hit the rock, one the sender runs. */
-  onRock: (id: string, at: number, round: number, shooter: string) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
@@ -208,7 +196,7 @@ export class Session {
   /** A ship of another browser took a probe, in the third of a race its browser names (see placeBucket). */
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
-  onNova: (ship: string, position: Vec) => void = () => {};
+  onNova: (ship: string, position: Vec, at: number) => void = () => {};
   onSelfDestruct: (ship: string, position: Vec) => void = () => {};
   /** A ship of another browser dropped a decoy, here, flying so (see game/decoys). */
   onDecoy: (ship: string, position: Vec, velocity: Vec) => void = () => {};
@@ -259,8 +247,6 @@ export class Session {
   private nextReconcile = 0;
   /** When each peer's start over was last taken up (see PEER_RESTART_GAP). */
   private readonly peerRestartedAt = new Map<string, number>();
-  /** The latest field time of each peer's rock hits in each of its last rounds (see ROCK_ORDER_SLACK, ROCK_ROUNDS). */
-  private readonly lastRockAt = new Map<string, Map<number, number>>();
   /** The age each peer named last (s, see hear): it only falls when the peer starts over. */
   private readonly heardAge = new Map<string, number>();
   private readonly snapshotBudget = new Budget(MAX_SNAPSHOTS_PER_SECOND);
@@ -277,7 +263,6 @@ export class Session {
   /** When each shooter last hit each ship ("shooter>target"). */
   private readonly lastHit = new Map<string, number>();
   private readonly hitBudget = new Budget(MAX_HITS_PER_SECOND);
-  private readonly rockBudget = new Budget(MAX_ROCK_HITS_PER_SECOND);
   private readonly destroyBudget = new Budget(MAX_DESTRUCTIONS_PER_SECOND);
   private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
   private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
@@ -426,7 +411,8 @@ export class Session {
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
       const position = vec(d?.p, 3, MAX_COORDINATE);
-      if (ship && position && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position));
+      const at = num(d?.t, 0, MAX_FIELD_TIME);
+      if (ship && position && at !== null && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position, at));
     });
     transport.on('dc', (d, from) => {
       const ship = id(d?.s);
@@ -448,29 +434,6 @@ export class Session {
       const shooter = id(d?.s);
       const torpedo = id(d?.i);
       if (target && shooter && torpedo && ownerOf(shooter) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoHit(target, shooter, torpedo));
-    });
-    transport.on('r', (d, from) => {
-      const rock = id(d?.i);
-      const at = num(d?.t, 0, MAX_FIELD_TIME);
-      const round = int(d?.n, 0, MAX_COUNT);
-      const shooter = id(d?.s);
-      if (!rock || at === null || round === null || !shooter || ownerOf(shooter) !== from || !this.rockBudget.spend(from)) return;
-      // a peer's hits in a round come in the order of its field time: one dated before the last
-      // it sent would take another Host's points (see game.remoteRock)
-      const rounds = this.lastRockAt.get(from) ?? new Map<number, number>();
-      this.lastRockAt.set(from, rounds);
-      let last = rounds.get(round);
-      if (last === undefined) {
-        if (rounds.size >= ROCK_ROUNDS) {
-          const lowest = Math.min(...rounds.keys());
-          if (round < lowest) return;
-          rounds.delete(lowest);
-        }
-        last = -Infinity;
-      }
-      if (at < last - ROCK_ORDER_SLACK) return;
-      rounds.set(round, Math.max(last, at));
-      this.guard(() => this.onRock(rock, at, round, shooter));
     });
     transport.on('pi', (d, from) => {
       const seq = int(d?.n, 0, MAX_COUNT);
@@ -514,7 +477,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.syncBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget, this.snapshotBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.syncBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget, this.snapshotBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       this.pingSeq.delete(peer);
       this.pingSentAt.delete(peer);
@@ -713,8 +676,9 @@ export class Session {
     else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 
-  sendNova(ship: string, position: Vec) {
-    this.transport.send('nv', { s: ship, p: position });
+  /** `at`: the field time it went off at, the rock it breaks broken then (see game/blasts). */
+  sendNova(ship: string, position: Vec, at: number) {
+    this.transport.send('nv', { s: ship, p: position, t: +at.toFixed(3) });
   }
 
   /** Tells everyone that a ship this browser runs dropped a decoy (see Game.dropDecoy). */
@@ -753,11 +717,6 @@ export class Session {
   /** Tells the browser that runs `target` that the own torpedo `torpedo` of `shooter` hit it. */
   sendTorpedoHit(owner: string, target: string, shooter: string, torpedo: string) {
     this.transport.send('tk', { t: target, s: shooter, i: torpedo }, owner);
-  }
-
-  /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere; `shooter` fired the beam. */
-  sendRock(rock: string, at: number, round: number, shooter: string) {
-    this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round, s: shooter });
   }
 
   /** The lead's battleship rammed a piece of the field in `round`: its motion since (see game/fleet, Fleet.ram). */

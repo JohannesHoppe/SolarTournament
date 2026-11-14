@@ -23,6 +23,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     ['Z', msg('Decoy: a torpedo after you turns to it')],
     [msg('V / Right click'), msg('Hook: bite a rock or a ship and reel in; press again to let go and fly off')],
     [msg('B (hold)'), msg('Self-destruct: takes every rival close by along')],
+    [msg('K (hold)'), msg("Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)")],
     ['C', msg('Cockpit / chase camera')],
     ['M', msg('Radio on / off')],
     [', / .', msg('Previous / next song (the game master as DJ)')],
@@ -46,6 +47,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('D-pad right'), msg('Decoy: a torpedo after you turns to it')],
     [msg('D-pad down'), msg('Hook: bite a rock or a ship and reel in; press again to let go and fly off')],
     [msg('D-pad left (hold)'), msg('Self-destruct: takes every rival close by along')],
+    [msg('D-pad left (hold)'), msg("Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)")],
     [msg('View'), msg('Cockpit / chase camera')],
     [msg('Menu'), msg('Pause')],
     [msg('D-pad down (paused)'), msg('Radio on / off')],
@@ -64,6 +66,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('Torpedo'), msg('Launch a torpedo')],
     [msg('Decoy'), msg('Drop a decoy')],
     [msg('Self-destruct'), msg('Hold: takes every rival close by along')],
+    [msg('Charge'), msg('Hold close to a rock: set a mining charge')],
   ],
 };
 
@@ -88,6 +91,8 @@ const NEEDS: Partial<Record<string, Command>> = {
   'Tap: fire the hook and reel in; tap again to let go': 'hook',
   'Self-destruct: takes every rival close by along': 'selfDestruct',
   'Hold: takes every rival close by along': 'selfDestruct',
+  "Mining charge: set on a rock close by, then get clear (the campaign's mining jobs)": 'charge',
+  'Hold close to a rock: set a mining charge': 'charge',
 };
 
 /**
