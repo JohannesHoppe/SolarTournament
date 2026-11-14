@@ -27,7 +27,7 @@ import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/r
 import { DJ_IDLE, DJ_TITLE_MAX, djFromWire, djNewRound, djSong, djStep, djTitle, djToWire, djTune, type DjState } from '../music/dj';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, TIPS } from '../music/lines';
+import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_MINISTRY, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
@@ -96,7 +96,7 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, torpedo
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
+import { knockShare, ramReach, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { shoveSpin } from '../ship/blow';
@@ -419,7 +419,7 @@ const KILL_EASE = 0.1;
 const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
-const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'sun', 'flare', 'comet']);
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'ministry', 'well', 'air', 'sun', 'flare', 'comet']);
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
  * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
@@ -701,7 +701,8 @@ const STATIC_GLITCH = 0.7;
 const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
+/** `ministry`: the Ministry's charge in every hull of the Games, gone off for a ship that stayed outside the arena (see Game.keepInArena). */
+type DeathCause = 'rock' | 'wreck' | 'ministry' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -1896,7 +1897,8 @@ export class Game implements OnlineGame {
   /**
    * What the controls sheet shows grey and struck through: what the ship flown now lacks (in the
    * menu, the ship picked as the hangar fits it): gear not bought, or what the campaign's hull is
-   * not fitted with yet.
+   * not fitted with yet; mining charges only in a job that hands them out, once all are set, since
+   * nowhere else can a Host have them.
    */
   private lacking(): Set<Command> {
     const me = this.state !== 'menu' ? this.me : null;
@@ -1909,7 +1911,7 @@ export class Game implements OnlineGame {
       ['torpedo', TORPEDOES + perks.torpedoes <= 0],
       ['hook', !hook],
       ['selfDestruct', !perks.selfDestruct],
-      ['charge', this.charges.carried === 0],
+      ['charge', this.charges.issued > 0 && this.charges.carried === 0],
     ];
     return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
   }
@@ -2819,7 +2821,7 @@ export class Game implements OnlineGame {
    */
   private commentOnDeath(victim: Ship, killer: Ship | null, cause: DeathCause) {
     // the flight school is on no broadcast; a death the announcer has no line for goes uncommented
-    if (this.school || (!killer && cause !== 'rock' && cause !== 'comet')) return;
+    if (this.school || (!killer && cause !== 'rock' && cause !== 'comet' && cause !== 'ministry')) return;
     if (wallClock() < this.nextAnnouncement) return;
     const roll = hash(textSeed(victim.id), victim.deaths, 7);
     // a kill of the own side he never lets pass: he scolds the killer
@@ -2828,7 +2830,7 @@ export class Game implements OnlineGame {
       return;
     }
     if (roll % 10 >= 7) return;
-    const lines = cause === 'comet' ? ANNOUNCER_COMET_KILL : victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
+    const lines = cause === 'comet' ? ANNOUNCER_COMET_KILL : cause === 'ministry' ? ANNOUNCER_MINISTRY : victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
     this.announce(lines[(roll >>> 4) % lines.length], victim);
   }
 
@@ -3637,6 +3639,7 @@ export class Game implements OnlineGame {
     this.cues.length = 0;
     this.torpedoes.clear();
     this.decoys.clear();
+    this.charges.arm(0);
     this.probes.reset();
     this.wrecks.clear();
     for (const ship of this.ships) {
@@ -3967,7 +3970,9 @@ export class Game implements OnlineGame {
     if (position) victim.flight.position.copy(position);
     if (velocity) victim.flight.velocity.copy(velocity);
     this.remoteBlast = blast;
-    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null, 'remote');
+    // a ship blown apart outside the arena with nobody's kill: the Ministry's charge, as its owner saw it
+    const ministry = !killer && blast && !this.venue.open && outsideArena(victim.flight.position, this.venue.bounds);
+    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : ministry ? 'ministry' : null, 'remote');
   }
 
   remoteWreck(id: string) {
@@ -4987,7 +4992,7 @@ export class Game implements OnlineGame {
     this.arena.mesh.visible = !this.venue.open;
     this.arena.shape(this.venue.bounds ?? null);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
-    this.landmarks.update(this.field.clock);
+    this.landmarks.update(this.field.clock, this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     if (this.venue.id === 'derelict') this.moveBreak();
     this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
@@ -5130,10 +5135,10 @@ export class Game implements OnlineGame {
         bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
-        // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
+        // to a solar flare's safe pocket; a racer follows the course out as far as it reaches (see Course.home)
         // under an edge of its own over a world, the bot keeps inside it across the ground and under its ceiling
         const bounds = this.venue.bounds;
-        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
+        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course ? this.course.home : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         bot.flat = !!bounds;
         bot.roof = bounds?.ceiling ?? Infinity;
@@ -5259,8 +5264,8 @@ export class Game implements OnlineGame {
     } else if (this.watching()) {
       this.hud.flashMessage(now, t('Out · watching {watched} · Tab: next pilot', { watched: subject === me ? t('the field') : subject.name }), 0.2);
     } else if (outside) {
-      this.hud.flashMessage(now, this.school ? t('Return to the field') : t('Return to the field — {seconds}s', { seconds: Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1) }), 0.2);
-      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
+      this.hud.flashMessage(now, this.school ? t('Return to the field') : t('Return to the field — charge in {seconds}s', { seconds: Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1) }), 0.2);
+      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(this.school ? COMPUTER.arena : COMPUTER.charge, 'urgent');
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
     } else if (this.brakePhase !== 'off' && me.alive) {
@@ -5878,7 +5883,7 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
+    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, ramReach(this.field, piece, state.b, before, fleet.position, fleet.reach), state.b - this.field.clock) > 1) return;
     this.field.move(state);
     this.scrape(fleet, state.id);
   }
@@ -6367,10 +6372,11 @@ export class Game implements OnlineGame {
     }
     if (!this.course) return;
     // a bot lights its drive as a Host does, by its own timing: a perfect start within the
-    // window, a stall when too early, nothing when too late
+    // window, a stall when too early, nothing when too late; with a ship of the row ahead on its
+    // nose's line it lights late on purpose, since the perfect start's shove would ram it
     for (const bot of this.bots) {
       if (bot.ship.owner !== null || !bot.ship.alive || bot === this.sparring?.bot) continue;
-      const lit = startTiming(bot.skills.reflexes, Math.random());
+      const lit = this.shipAhead(bot.ship) ? START_LATE + 1 : startTiming(bot.skills.reflexes, Math.random());
       if (lit < -START_WINDOW) this.stall(bot.ship);
       else if (lit <= START_LATE) this.perfectStart(bot.ship);
       devlog?.add({ kind: 'act', t: this.time, ship: bot.ship.name, act: 'start', detail: lit < -START_WINDOW ? 'false start' : lit <= START_LATE ? 'perfect' : 'late' });
@@ -7448,6 +7454,18 @@ export class Game implements OnlineGame {
     if (me.alive && me.perks.overdrive && this.time >= me.overdriveReadyAt) this.shove(me, this.crosshairMark());
   }
 
+  /** Whether a ship lies on `ship`'s nose's line close ahead (see BOOST_CLEAR), where a shove along the nose would ram it. */
+  private shipAhead(ship: Ship): boolean {
+    const flight = ship.flight;
+    const nose = flight.forward(forward);
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
+      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return true;
+    }
+    return false;
+  }
+
   /**
    * A racing bot's boost (see wantsBoost): ready, its nose on its flight and on its line ahead,
    * the line straight for BOOST_LOOK seconds at the boost's top speed (its bends measured over
@@ -7466,11 +7484,7 @@ export class Game implements OnlineGame {
     const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
     if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
     // never into a ship on the nose's line close ahead (the grid's row in front at the start): the shove would ram it
-    for (const other of this.ships) {
-      if (other === ship || !other.alive) continue;
-      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
-      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return;
-    }
+    if (this.shipAhead(ship)) return;
     let straight = true;
     for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
       straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;
@@ -8979,7 +8993,8 @@ export class Game implements OnlineGame {
       else if (cause === 'sun') this.deathCause = t('Burned up in the sunlight');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
-      else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
+      else if (cause === 'ministry') this.deathCause = t('Blown up by the Ministry · left the field');
+      else this.deathCause = t('Crashed');
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     // a kill of the own side (friendly fire, a shove, a plume, a ram) costs the killer as much
@@ -8999,8 +9014,8 @@ export class Game implements OnlineGame {
       this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Nova kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints() + bonus}`, 'kill');
       this.kick = 2;
     }
-    // a reactor gone critical, a warhead, a self-destruct or a nova blows the ship apart; anything else breaks it up slowly (see Wrecks.spawn)
-    const blast = this.remoteBlast ?? (cause === 'self' || cause === 'nova' || cause === 'blast' || cause === 'battery' || what === 'torpedo' || victim.drive <= 1e-6);
+    // a reactor gone critical, a warhead, a self-destruct, the Ministry's charge or a nova blows the ship apart; anything else breaks it up slowly (see Wrecks.spawn)
+    const blast = this.remoteBlast ?? (cause === 'self' || cause === 'ministry' || cause === 'nova' || cause === 'blast' || cause === 'battery' || what === 'torpedo' || victim.drive <= 1e-6);
     this.remoteBlast = null;
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time, blast);
     // what the clone held flies out again, as probes for whoever gets there first
@@ -9052,7 +9067,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : cause === 'ministry' ? t('Ministry') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -9550,9 +9565,9 @@ export class Game implements OnlineGame {
     this.airAlarm(me);
     this.hud.setFlareHeat(Math.max(this.flareGlow, this.airGlow));
     if (me.alive && me.outsideSince !== null) {
-      // the field's edge: back towards its center before the clone is lost in deep space
+      // the field's edge: back towards its center before the Ministry's charge goes off
       const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
-      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: t('OUT OF FIELD'), direction: relative.copy(flight.position).negate(), seconds: left });
+      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: this.school ? t('OUT OF FIELD') : t('OUT OF FIELD · CHARGE ARMED'), direction: relative.copy(flight.position).negate(), seconds: left });
     }
     const well = this.wellAlarm(me);
     const hullCritical = me.alive && me.hull <= HULL_CRITICAL;
@@ -10181,7 +10196,12 @@ export class Game implements OnlineGame {
     this.hud.setCrosshair(this.camera, aimPoint.copy(flight.position).addScaledVector(direction, depth));
   }
 
-  /** Space has no walls: ships that stay outside the arena for too long are lost. */
+  /**
+   * Space has no walls, so the Games keep their own: every hull of the Games carries the
+   * Ministry's charge, armed the moment it leaves the arena and set off once it has stayed out
+   * ARENA_GRACE (s), or once it reaches the belt beyond; the flight school's trainers arm it only
+   * there. It blows the ship apart, as a self-destruct does, and harms nothing around it.
+   */
   private keepInArena(ship: Ship, now: number) {
     if (!ship.alive) return;
     // a place of the campaign has no edge: space goes on, empty, as far as a ship cares to fly
@@ -10190,11 +10210,14 @@ export class Game implements OnlineGame {
       return;
     }
     ship.outsideSince ??= now;
-    // the belt beyond is scenery: a ship that reaches it before its time is up is lost there;
+    // the belt beyond is scenery: a ship that reaches it before its time is up is blown there;
     // the flight school gives its pilot all the time it takes to find back
     if ((this.school || now - ship.outsideSince < ARENA_GRACE) && ship.flight.position.length() < BELT_INNER) return;
     ship.structural(Infinity, now);
-    if (!ship.alive) this.shipDestroyed(ship, null, 'space');
+    if (!ship.alive) {
+      this.effects.explosion(ship.flight.position, ship.radius * 4, ship.flight.velocity);
+      this.shipDestroyed(ship, null, 'ministry');
+    }
   }
 
   private updateCamera(dt: number) {

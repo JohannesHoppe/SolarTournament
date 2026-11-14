@@ -42,10 +42,10 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: '4548275b53de3c4b',
+      belt: 'a10aeee72b0d9370',
       rings: '12b7d627ea098b9b',
       junkyard: 'd0509f083fbedab3',
-      giant: '1cd64decf1861ab0',
+      giant: '7e467fcf70662eda',
       derelict: 'b85ad9dcd96b2eef',
       crack: '10f331ef438e512c',
       throat: '5c8c7ac694c3203c',
@@ -62,10 +62,10 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: '4798c06b4f2eeae4',
+      belt: '6ff8d86f136e6ed6',
       rings: '3624f8ed4b4a7158',
       junkyard: '20234dbcd0ce36e1',
-      giant: '72a8e02d41a0854f',
+      giant: '9a6892a3a356f2a6',
       derelict: '777d0a716818840b',
       crack: '9596d7592bb9a672',
       throat: '4ab2c884b68d6e2e',

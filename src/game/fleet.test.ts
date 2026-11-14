@@ -18,7 +18,7 @@ import { COMET_SPEED, cometAt, cometEnd, cometStart, headAt, headEnd, HEAD_RADIU
 import { RAMMED, type Asteroid, type AsteroidField, type ShovedState } from '../world/asteroids';
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
-import { ramShare } from '../net/plausible';
+import { ramReach, ramShare } from '../net/plausible';
 import { altitudeIn } from '../world/air';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
@@ -662,9 +662,13 @@ describe("the battleship and the field's rock", () => {
     seen.generate(derelict.layout);
     seen.setClock(1);
     for (const ram of fleet.rams) {
-      const at = seen.positionOf(seen.asteroids.get(ram.id)!, ram.b, new THREE.Vector3());
-      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), hypot(ram.v[0], ram.v[1], ram.v[2]), fleet.position, fleet.reach + seen.asteroids.get(ram.id)!.radius, ram.b - seen.clock), ram.id).toBeLessThan(1);
+      const rammed = seen.asteroids.get(ram.id)!;
+      const at = seen.positionOf(rammed, ram.b, new THREE.Vector3());
+      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), hypot(ram.v[0], ram.v[1], ram.v[2]), fleet.position, ramReach(seen, rammed, ram.b, at, fleet.position, fleet.reach), ram.b - seen.clock), ram.id).toBeLessThan(1);
     }
+    // a piece alone is checked against its own reach
+    const lone = { ...seen.asteroids.get(piece.id)!, weld: null };
+    expect(ramReach(seen, lone, 1, seen.positionOf(lone, 1, new THREE.Vector3()), fleet.position, fleet.reach)).toBeCloseTo(fleet.reach + lone.radius, 6);
   });
 
   it('tells every browser where it shoved a piece, and one that joins later has it there too, and the pieces it breaks into', () => {

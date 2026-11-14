@@ -2,6 +2,13 @@ import { expect, type Page, test } from '@playwright/test';
 import { PIT_PURSE } from '../src/campaign/gullet';
 import { openGame } from './game';
 
+/**
+ * A job's page load, its briefing and its drills take minutes on a busy machine, and a test's
+ * own waits (up to 90 s for a drill to go live, then the drill's) are its bound: every test here
+ * gets time for them, more where a test asks for it.
+ */
+test.describe.configure({ timeout: 240_000 });
+
 /** Opens the campaign's job board from the menu and takes the next job on it. */
 async function takeNextJob(page: Page) {
   await page.click('#campaign');
@@ -1135,10 +1142,10 @@ test('Last Light: Ministry pickets fire at Patience moored at the last dock; all
 /** Chapter 15 flown too: the hull with Plating III and Nicole's wells, on the Ladder. */
 const ladderHull = (...done: string[]) => ({ ...plutoHull('heartRun', 'theFile', 'plutoEcho', 'lastLight', 'wells', 'platingThree', ...done), parts: [...plutoHull().parts, 'platingThree'], modules: ['targeting', 'racingLine', 'radar', 'threat', 'voice', 'wells'] });
 
-test('chapter 16 on the Ladder: five depot crews line up at eight rings in Haumea’s ring', async ({ page }) => {
+test('chapter 16 on the Ladder: four depot crews line up at eight rings in Haumea’s ring', async ({ page }) => {
   test.setTimeout(400_000);
   const errors = await takeJobFrom(page, ladderHull());
-  await page.waitForFunction(() => window.game.venue?.id === 'haumea' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
+  await page.waitForFunction(() => window.game.venue?.id === 'haumea' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 4, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
   expect(errors).toEqual([]);
 });

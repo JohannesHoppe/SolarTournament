@@ -8,6 +8,7 @@ import type { Mood } from './nebula';
 import { HYDROGEN_HEAT, JUPITER_KELVIN, JUPITER_LAPSE } from './air';
 import { atan2, cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
+import { KEEL_HALF, KEEL_TYPE } from './shapes';
 import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
 import { VENUS_DECK_LIGHT, VENUS_DEEP_LIGHT } from './highball';
@@ -214,8 +215,7 @@ function derelict(): Placement[] {
   const pieces: Placement[] = [];
   // turned by roll, yaw and pitch in that order; 'ZYX' pitches last, about the world's z, as the
   // stern's hull is tilted, whatever the yaw
-  // each half one body, welded (see Placement.weld): the bow 0, the stern 1
-  let weld = 0;
+  // the whole wreck one body, welded (see Placement.weld): the keel's girder holds the halves
   const add = (type: number, scale: number, x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0, order: THREE.EulerOrder = 'XYZ') =>
     pieces.push({
       kind: 'hull',
@@ -224,7 +224,7 @@ function derelict(): Placement[] {
       position: new THREE.Vector3(x, y, z),
       orientation: setFromEuler(new THREE.Quaternion(), roll, yaw, pitch, order),
       solid: true,
-      weld,
+      weld: 0,
     });
   // the bow half: two sections of 700 m (the emblem and registry by the bridge, PER ASPERA aft
   // of it), the bridge tower on top, a spar across, the torn end
@@ -234,8 +234,7 @@ function derelict(): Placement[] {
   add(3, 7, -36000, 3200, 0);
   add(1, 7, -17000, 0, 0);
   add(4, 7, -30000, 0, 0, Math.PI / 2);
-  // the stern half drifted off, tilted: its torn end faces back towards the bow
-  weld = 1;
+  // the stern half broke off, tilted: its torn end faces back towards the bow
   const [x1, y1] = sternAt(12000);
   add(1, 7, x1, y1, STERN_SHIFT, Math.PI, -STERN_TILT);
   const [x2, y2] = sternAt(25000);
@@ -245,7 +244,47 @@ function derelict(): Placement[] {
   add(2, 7, x3, y3, STERN_SHIFT + 3000, 0, STERN_TILT);
   // the spar across the stern tilts with its hull: level across, turned about the hull's tilt
   add(4, 7, x2, y2, STERN_SHIFT, Math.PI / 2, STERN_TILT, 0, 'ZYX');
+  pieces.push(...keelGirder());
   return pieces;
+}
+
+/**
+ * The keel's girder that survived the break (see README, The Derelict): from KEEL_IN (units, 60 m)
+ * inside the bow's torn end, along the bottom of its core (KEEL_LOW under its middle), across the
+ * gap to as far inside the stern's, in segments of world/shapes' KEEL_HALF, overlapping where they
+ * join: bowed out sideways by KEEL_BOW and down by KEEL_SAG at its middle, kinked where it buckled
+ * locally (KEEL_KINK down, at KEEL_KINK_AT of its way) and twisted by KEEL_TWIST along its length.
+ * Every third segment, and both ends, are the ravaged one.
+ */
+const KEEL_IN = 1200;
+const KEEL_LOW = 1600;
+const KEEL_BOW = 300;
+const KEEL_SAG = 500;
+const KEEL_KINK = 200;
+const KEEL_KINK_AT = 0.62;
+const KEEL_TWIST = 0.6;
+function keelGirder(): Placement[] {
+  const across = new THREE.Vector3(1, 0, 0);
+  const sternAxis = new THREE.Vector3(...sternAt(1), 0).sub(new THREE.Vector3(...sternAt(0), 0)).normalize();
+  const sternUp = new THREE.Vector3(-sternAxis.y, sternAxis.x, 0);
+  const from = new THREE.Vector3(-10000 - KEEL_IN, -KEEL_LOW, 0);
+  const to = new THREE.Vector3(...sternAt(5000), STERN_SHIFT).addScaledVector(sternUp, -KEEL_LOW).addScaledVector(sternAxis, KEEL_IN);
+  const way = to.clone().sub(from);
+  const side = new THREE.Vector3(0, 1, 0).cross(way).normalize();
+  const down = side.clone().cross(way).normalize();
+  const count = Math.ceil(way.length() / (KEEL_HALF.x * 2 * 0.95));
+  const point = (t: number) => {
+    const kink = Math.max(0, 1 - Math.abs(t - KEEL_KINK_AT) / 0.12);
+    return from.clone().addScaledVector(way, t).addScaledVector(side, sin(Math.PI * t) * KEEL_BOW).addScaledVector(down, sin(Math.PI * t) * KEEL_SAG + kink * KEEL_KINK);
+  };
+  return Array.from({ length: count }, (_, i) => {
+    const a = point(i / count);
+    const b = point((i + 1) / count);
+    const turn = new THREE.Quaternion().setFromUnitVectors(across, b.clone().sub(a).normalize());
+    turn.multiply(setFromAxisAngle(new THREE.Quaternion(), across, ((i + 0.5) / count) * KEEL_TWIST));
+    const ravaged = i === 0 || i === count - 1 || i % 3 === 1;
+    return { kind: 'hull', type: KEEL_TYPE + (ravaged ? 1 : 0), scale: 1, position: a.add(b).multiplyScalar(0.5), orientation: turn, solid: true, weld: 0 } as Placement;
+  });
 }
 
 /**

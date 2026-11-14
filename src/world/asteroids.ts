@@ -146,7 +146,7 @@ export interface Placement {
   orientation: THREE.Quaternion;
   /** Solid pieces never break and give no points. */
   solid: boolean;
-  /** Pieces of one structure (a half of the world ship, the junkyard's hub) share a weld: they move as one body, never against each other (see AsteroidField.welded). */
+  /** Pieces of one structure (the world ship, its halves held by the keel's girder; the junkyard's hub) share a weld: they move as one body, never against each other (see AsteroidField.welded). */
   weld?: number;
   /** A world's ground under a place (see world/vesta): ships fly over it, and a racing line keeps over it without bowing round it as round a rock. */
   ground?: boolean;

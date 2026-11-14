@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { ARENAS, sternAt } from './arenas';
 import { Derelict, JET_WELDS, mistDensity } from './derelict';
 import { testField } from '../test/field';
-import { HULL_BOXES, HULL_PAINT } from './shapes';
+import { HULL_PAINT } from './shapes';
+import { FALL_STEP, FreeFall, hullClearance, METERS } from './wreckgravity';
+import { WRECK_ORBITS, WRECK_ORBITS_DAYS } from './wreckorbits';
 import { stencilable } from '../view/lettering';
 import { quaternionAngleTo } from '../detthree';
 
@@ -20,7 +22,7 @@ describe('the derelict', () => {
     expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
   });
 
-  it('lets the mist follow its half of the hull when a comet shoves it', () => {
+  it('lets the mist follow the wreck when a comet shoves it, the keel holding both halves together', () => {
     const field = testField();
     field.generate(ARENAS.find((arena) => arena.id === 'derelict')!.layout);
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
@@ -32,13 +34,12 @@ describe('the derelict', () => {
     settle();
     const start = wreck.jets.map((jet) => jet.from.clone());
     expect(start[0].distanceTo(new THREE.Vector3(-14200, 0, 0))).toBeLessThan(1e-6);
-    // a comet strikes the bow: the whole half drifts on at 171 units/s for two minutes
+    // a comet strikes the bow: the whole wreck drifts on at 171 units/s for two minutes, the stern with it
     const hull = [...field.asteroids.values()].find((rock) => rock.weld === 0)!;
     field.shove(hull.id, 0, new THREE.Vector3(0, 0, 171), new THREE.Vector3(0, 1, 0), 0, 3);
     field.setClock(120);
     settle();
-    expect(wreck.jets[0].from.distanceTo(start[0].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
-    expect(wreck.jets[1].from.distanceTo(start[1])).toBeLessThan(1e-6);
+    for (const i of [0, 1]) expect(wreck.jets[i].from.distanceTo(start[i].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
     // the mist thickens at the end where it is now and is gone from where it was
     expect(wreck.mistAt(wreck.jets[0].from.clone().add(new THREE.Vector3(1200, 0, 0)))).toBeGreaterThan(0.5);
     expect(wreck.mistAt(new THREE.Vector3(-13000, 0, 0))).toBe(0);
@@ -55,62 +56,80 @@ describe('the derelict', () => {
     expect(shader.vertexShader).toContain('mix(vec3(1.0), instanceColor.rgb, cloth)');
   });
 
-  it('keeps its dead drifting and turning slowly about the breaches, never wandering off', () => {
+  it('hangs its caught dead still where they snagged, and lets the rest fall slowly about the wreck, tumbling', () => {
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
-    const mouths = [0, 1].map((b) => wreck.mouth(b, new THREE.Vector3()));
     const at = (i: number) => wreck.deadAt(i, new THREE.Vector3());
     const turn = (i: number) => wreck.deadTurn(i, new THREE.Quaternion());
-    let moving = 0;
-    for (const time of [0, 100, 1000, 10000]) {
+    const all = Array.from({ length: wreck.count }, (_, i) => i);
+    const free = all.filter((i) => wreck.falls(i));
+    // most of them caught at the breaches, a few dozen falling free
+    expect(wreck.count - free.length).toBeGreaterThan((wreck.count * 2) / 3);
+    expect(free.length).toBe(WRECK_ORBITS.length);
+    for (const time of [0, 100, 1000, 3000]) {
       wreck.update(time);
-      const before = Array.from({ length: wreck.count }, (_, i) => ({ at: at(i), turn: turn(i) }));
+      const before = all.map((i) => ({ at: at(i), turn: turn(i) }));
       wreck.update(time + 10);
-      for (let i = 0; i < wreck.count; i++) {
-        const now = at(i);
-        // within 1.1 km of a breach's mouth
-        expect(Math.min(...mouths.map((mouth) => now.distanceTo(mouth)))).toBeLessThan(22000);
-        // drifting at no more than 0.25 m/s, turning at no more than 0.12 rad/s
-        const moved = now.distanceTo(before[i].at);
-        expect(moved).toBeLessThan(50);
-        expect(quaternionAngleTo(turn(i), before[i].turn)).toBeLessThan(1.21);
-        // but moving: a gentle drift or tumble to be seen
-        if (moved > 0.1 || quaternionAngleTo(turn(i), before[i].turn) > 0.01) moving++;
+      for (const i of all) {
+        const moved = at(i).distanceTo(before[i].at);
+        const turned = quaternionAngleTo(turn(i), before[i].turn);
+        if (wreck.falls(i)) {
+          // slower than 0.15 m/s, yet moving, and tumbling at up to 0.12 rad/s
+          expect(moved).toBeLessThan(30);
+          expect(moved).toBeGreaterThan(0.05);
+          expect(turned).toBeGreaterThan(0.02);
+          expect(turned).toBeLessThan(1.21);
+        } else {
+          expect(at(i).toArray()).toEqual(before[i].at.toArray());
+          expect(turn(i).toArray()).toEqual(before[i].turn.toArray());
+        }
       }
     }
-    expect(moving).toBe(wreck.count * 4);
   });
 
-  it('keeps its dead thickest at the breaches, thinning out with the distance, a few far out, none in the hull but the caught', () => {
+  it('falls every free one from a stored start state, bound and clear of the hull for three days of field time; hangs the caught on the hull', () => {
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
-    expect(wreck.count).toBeGreaterThanOrEqual(180);
-    const pieces = ARENAS.find((arena) => arena.id === 'derelict')!.layout.placements!;
-    const boxes = pieces.map((piece) => ({ piece, inverse: piece.orientation.clone().invert(), half: HULL_BOXES[piece.type].clone().multiplyScalar(piece.scale) }));
-    const local = new THREE.Vector3();
-    const inside = (at: THREE.Vector3) => boxes.filter(({ piece, inverse, half }) => (local.subVectors(at, piece.position).applyQuaternion(inverse), Math.abs(local.x) < half.x && Math.abs(local.y) < half.y && Math.abs(local.z) < half.z));
-    // how far from a torn section's box, whose open end is the breach (0 within it)
-    const fromTorn = (at: THREE.Vector3) =>
-      Math.min(
-        ...boxes
-          .filter(({ piece }) => piece.type === 1)
-          .map(({ piece, inverse, half }) => {
-            local.subVectors(at, piece.position).applyQuaternion(inverse);
-            return new THREE.Vector3(Math.max(0, Math.abs(local.x) - half.x), Math.max(0, Math.abs(local.y) - half.y), Math.max(0, Math.abs(local.z) - half.z)).length();
-          }),
-      );
-    const bands = [0, 0, 0, 0];
-    const at = new THREE.Vector3();
+    let free = 0;
     for (let i = 0; i < wreck.count; i++) {
-      wreck.deadAt(i, at);
-      const distance = fromTorn(at);
-      bands[distance < 1200 ? 0 : distance < 3000 ? 1 : distance < 6000 ? 2 : 3]++;
-      // only the caught lie in a box of the hull, and only in a torn section's
-      for (const { piece } of inside(at)) expect(piece.type).toBe(1);
+      const fall = wreck.fallOf(i);
+      if (!fall) {
+        // on the hull: within its box, or just out of the mouth
+        expect(hullClearance(wreck.deadAt(i, new THREE.Vector3()).multiplyScalar(METERS))).toBeLessThan(10);
+        continue;
+      }
+      free++;
+      // the search kept each a year (see tools/derelict); three days of it here, every step looked at
+      const body = new FreeFall(fall.start, fall.speed);
+      const energy = body.energy();
+      expect(energy).toBeLessThan(0);
+      for (let t = 0; t < 3 * 86400; t += FALL_STEP) {
+        body.advance();
+        const off = hullClearance(body.position);
+        expect(off).toBeGreaterThanOrEqual(20);
+        expect(off).toBeLessThanOrEqual(2000);
+      }
+      expect(Math.abs(body.energy() - energy) / Math.abs(energy)).toBeLessThan(1e-5);
     }
-    // most within 60 m of a breach, thinning out, and a few far out
-    expect(bands[0]).toBeGreaterThan(wreck.count / 2);
-    expect(bands[0]).toBeGreaterThan(bands[1]);
-    expect(bands[1]).toBeGreaterThan(bands[3] / 2);
-    expect(bands[3]).toBeGreaterThanOrEqual(5);
+    expect(free).toBe(WRECK_ORBITS.length);
+    expect(WRECK_ORBITS_DAYS).toBeGreaterThanOrEqual(30);
+  });
+
+
+  it('finds its dead alike however the frames fall, after a snapshot taken halfway and in a new round', () => {
+    const framed = new Derelict(new THREE.Color(1, 1, 1));
+    for (let t = 0; t <= 300; t += 0.0161 + (t % 0.03)) framed.update(t);
+    framed.update(300);
+    const joined = new Derelict(new THREE.Color(1, 1, 1));
+    joined.update(150);
+    joined.update(300);
+    const again = new Derelict(new THREE.Color(1, 1, 1));
+    again.update(300);
+    again.update(0);
+    again.update(300);
+    for (let i = 0; i < framed.count; i++) {
+      const there = framed.deadAt(i, new THREE.Vector3()).toArray();
+      expect(joined.deadAt(i, new THREE.Vector3()).toArray()).toEqual(there);
+      expect(again.deadAt(i, new THREE.Vector3()).toArray()).toEqual(there);
+    }
   });
 
   it('hands the GPU only the dead it would see: the nearest few whole, the rest low, none under a pixel', () => {

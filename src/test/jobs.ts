@@ -375,12 +375,12 @@ export class JobWorld implements SchoolContext {
     if (burn > 0 && ship.structural(burn, this.now) === 'destroyed') this.destroyed(ship, null, 'air');
   }
 
-  /** A place of the campaign has no edge; an arena of the Games loses a ship far out (see Game.keepInArena, the school's patience). */
+  /** A place of the campaign has no edge; an arena of the Games blows a ship far out with the Ministry's charge (see Game.keepInArena, the school's patience). */
   private keepInArena(ship: Ship) {
     if (!ship.alive || this.venue.open || ship.flight.position.length() < ARENA_LIMIT) return;
     if (ship.flight.position.length() < ARENA_LIMIT * 4) return;
     ship.structural(Infinity, this.now);
-    if (!ship.alive) this.destroyed(ship, null, 'space');
+    if (!ship.alive) this.destroyed(ship, null, 'ministry');
   }
 
   /** A ship against the well, rock (swept along its way), the drill's rings and hulls (see Game.collide). */

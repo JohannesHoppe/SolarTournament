@@ -58,7 +58,7 @@ const VENT_TIME = 2.5;
 const VENT_THRUST = 20;
 /** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. Scaled with VENT_THRUST: the same air. */
 const VENT_SPIN = 1;
-/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a 35 m hull. */
+/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a hull some 30 to 37 m long. */
 const DECOMPRESSION_KICK = 0.25;
 /** The exit hole tears wider than the entry hole and vents more. */
 const ENTRY_HOLE = 0.4;
@@ -106,7 +106,11 @@ export const RADIATE = 20;
  * (4.2 MW/m²) 30 a second, more than the radiators shed, so out of a shadow (a rock's or the
  * battleship's hull) the laser's heat climbs whether it fires or not and, once the radiators are
  * full, the surplus burns the hull (see Ship.sunExcess); at Earth's distance (1,361 W/m²) a
- * hundredth a second, out at Jupiter and Saturn nothing a radiator notices.
+ * hundredth a second (0.05 % of RADIATE), out at Jupiter and Saturn nothing a radiator notices.
+ * A deliberate deviation for the 26th century's coatings and radiators: with today's best white
+ * coating (absorbing some 8 %) and radiators at 500 K (3.5 kW/m²), a sunlit square meter takes in
+ * about 3 % of what a square meter of radiator sheds at Earth and 100 times it at the Corona; the
+ * Games' hulls take in some 60 times less, everywhere alike (README, Heat).
  */
 export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
