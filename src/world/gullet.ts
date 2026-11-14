@@ -169,7 +169,8 @@ export function gullet(): THREE.Group {
   const bottles: THREE.BufferGeometry[] = [];
   const glass = [new THREE.Color(0.9, 0.55, 0.15), new THREE.Color(0.25, 0.75, 0.3), new THREE.Color(0.55, 0.3, 0.12), new THREE.Color(0.75, 0.8, 0.85), new THREE.Color(0.6, 0.15, 0.2)];
   for (const y of [14, 23, 32]) {
-    shelves.push(box(8, 1, length - 10, -hx + 4, y, middle));
+    // a rail across the bottles' fronts, as in a ship's galley: at 0.03 g a knock floats a bottle off an open shelf
+    shelves.push(box(8, 1, length - 10, -hx + 4, y, middle), box(0.6, 0.6, length - 10, -hx + 8.4, y + 4, middle));
     strips.push(box(0.6, 0.5, length - 12, -hx + 8, y - 0.8, middle));
     for (let z = COUNTER_FROM + 8; z < COUNTER_TO - 6; z += r.range(2.6, 5)) {
       if (r.nextFloat() < 0.15) continue;
@@ -212,6 +213,11 @@ export function gullet(): THREE.Group {
   metal(tables);
   // mugs and a deck of cards' worth of litter on them
   metal([cylinder(1.3, 1.1, 3, 8, 16, 22.2, -50), cylinder(1.3, 1.1, 3, 8, 62, 22.2, -18), cylinder(1.3, 1.1, 3, 8, 66, 22.2, -10), box(4, 0.3, 3, 48, 20.85, 54)]);
+  // every drink in the Gullet has a lid with a spout, the glasses on the counter too: at 0.03 g a
+  // drink sloshes up and out of an open cup at the first knock of the table
+  const lids: THREE.BufferGeometry[] = [];
+  for (const [x, y, z] of [[16, 23.7, -50], [62, 23.7, -18], [66, 23.7, -10], [COUNTER_X + 3, COUNTER_HEIGHT + 3, -18], [COUNTER_X + 4, COUNTER_HEIGHT + 3, 14]] as const) lids.push(cylinder(1.45, 1.45, 0.5, 8, x, y + 0.25, z), cylinder(0.25, 0.3, 1, 5, x + 0.6, y + 0.9, z));
+  metal(lids);
 
   // the ceiling's girders, a pipe along it, cables run between them and hanging slack
   const ceiling: THREE.BufferGeometry[] = [];
@@ -249,10 +255,13 @@ export function gullet(): THREE.Group {
     root.add(lamp);
   }
 
-  // smoke hanging in the light under the ceiling
+  // smoke hanging in the light where it was breathed out: in Ceres's 0.03 g warm air hardly rises
+  // (its lift is a thirtieth of Earth's), so the smoke stays at the heads' height, over the tables
+  // where the drinkers sit and along the counter, and spreads slowly instead of pooling under the
+  // ceiling
   const smoke = smokeTexture();
-  for (const [x, y, z, size, tint] of [[-60, 44, -10, 60, 0x9fffb4], [30, 46, 10, 80, 0xffd2a0], [80, 40, -50, 60, 0xff9fe0], [-10, 38, 40, 50, 0xffffff]] as const) {
-    const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: smoke, color: tint, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  for (const [x, y, z, size, tint] of [[-56, 32, -10, 60, 0x9fffb4], [24, 26, -46, 70, 0xffd2a0], [62, 25, -10, 60, 0xff9fe0], [48, 27, 48, 60, 0xffffff]] as const) {
+    const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: smoke, color: tint, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     puff.position.set(x, y, z);
     puff.scale.setScalar(size);
     root.add(puff);
