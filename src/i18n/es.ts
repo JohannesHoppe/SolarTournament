@@ -235,7 +235,7 @@ export const ES: Catalog = {
   'fake drop': 'drop falso',
   polymeter: 'polimétrico',
   'by its timbre': 'por su timbre',
-  'Return to the field — {seconds}s': 'Vuelve al campo — {seconds}s',
+  'Return to the field — charge in {seconds}s': 'Vuelve al campo — carga en {seconds}s',
   'Flipped · drive brakes': 'Volteada · el motor frena',
   Flip: 'Volteo',
   'At rest': 'En reposo',
@@ -386,16 +386,17 @@ export const ES: Catalog = {
   FRIEND: 'AMIGO',
   Crashed: 'Estrellado',
   'Burned up in the solar flare': 'Calcinado en la erupción solar',
-  'Lost in deep space': 'Perdido en el espacio profundo',
+  'Blown up by the Ministry · left the field': 'Volado por el Ministerio · abandonó el campo',
   'Nova kill +{points}': 'Baja por nova +{points}',
   'Streak bonus +{points}': 'Bonus de racha +{points}',
   'Solar flare': 'Erupción solar',
-  'Deep space': 'Espacio profundo',
+  'Ministry': 'Ministerio',
   Crash: 'Choque',
   'Impact at {speed} m/s': 'Impacto a {speed} m/s',
   'Debris impact': 'Impacto de escombros',
   'IMPACT': 'IMPACTO',
   'OUT OF FIELD': 'FUERA DEL CAMPO',
+  'OUT OF FIELD · CHARGE ARMED': 'FUERA DEL CAMPO · CARGA ARMADA',
   'HULL FAILING': 'CASCO FALLANDO',
   'NO RETURN': 'SIN RETORNO',
   'OVERDRIVE · AWAY FROM IT': 'OVERDRIVE · LEJOS DE AHÍ',
@@ -1049,6 +1050,7 @@ export const ES: Catalog = {
   'Debris impact.': 'Impacto de escombros.',
   'Asteroid cracked.': 'Asteroide partido.',
   'Come back to the field, darling.': 'Vuelve al campo, cariño.',
+  'Back into the field, darling, before the Ministry blows us up.': 'Vuelve al campo, cariño, antes de que el Ministerio nos haga volar.',
   'Your mouse pointer turns your nose. Center it to fly straight on.': 'El puntero de tu ratón gira tu morro. Al centro, y sigues recto.',
   'Could not connect.': 'No se ha podido conectar.',
   'Round over. You were wonderful.': 'Fin de la ronda. Has estado de maravilla.',
@@ -1186,6 +1188,8 @@ export const ES: Catalog = {
   'the monster is dead. cheer for the united solar states': 'el monstruo ha muerto. un aplauso para los estados solares unidos',
   'and {name} meets an asteroid. the rockborn send their regards': 'y {name} se topa con un asteroide. saludos de los rockborn',
   'a rock wins again. {name} goes back to the printer': 'otra vez gana la roca. {name} vuelve a la impresora',
+  '{name} left the field. the ministry pressed the button': '{name} dejó el campo. el ministerio pulsó el botón',
+  'boom. {name} strayed from the arena. rules are rules': 'bum. {name} se salió de la arena. las reglas son las reglas',
   'and {name} takes the lead': 'y {name} se pone en cabeza',
   '{name} in front now. the crowd goes wild': '{name} ya va primero. el público enloquece',
   'last lap. {name} leads the pack': 'última vuelta. {name} encabeza el pelotón',
@@ -1437,8 +1441,8 @@ export const ES: Catalog = {
   'Unsportsmanlike Conduct, Approved': 'Conducta antideportiva, aprobada',
   'The Ministry calls it entertainment, and the rules allow all of it.': 'El Ministerio lo llama espectáculo, y las reglas lo permiten todo.',
   'Shoves and knockouts': 'Empujones y K. O.',
-  "A ship struck by another at {shove} m/s or more is shoved, and if it crashes within {knockout} s (into rock, a gate's housing, the battleship's hull, the flare or deep space), the shover gets the kill: a knockout. Your tool is the dodge: kicked into a ship alongside, it throws that ship off at about {shoveSpeed} m/s. The shove dents both hulls; the rock beside the line does the killing. At a race's speed a ship shoved off its line meets the housing ahead at full speed.":
-    'Una nave golpeada por otra a {shove} m/s o más queda empujada, y si se estrella en menos de {knockout} s (contra la roca, la carcasa de una puerta, el casco del acorazado, la erupción o el espacio profundo), la baja es para quien la empujó: un K. O. Tu herramienta es la esquiva: lanzada contra una nave que vuela a tu lado, la despide a unos {shoveSpeed} m/s. El empujón abolla ambos cascos; la roca junto a la trazada es la que mata. A velocidad de carrera, una nave sacada de su trazada se encuentra con la carcasa de delante a toda velocidad.',
+  "A ship struck by another at {shove} m/s or more is shoved, and if it crashes within {knockout} s (into rock, a gate's housing, the battleship's hull or the flare, or blown up by the Ministry's charge outside the arena), the shover gets the kill: a knockout. Your tool is the dodge: kicked into a ship alongside, it throws that ship off at about {shoveSpeed} m/s. The shove dents both hulls; the rock beside the line does the killing. At a race's speed a ship shoved off its line meets the housing ahead at full speed.":
+    'Una nave golpeada por otra a {shove} m/s o más queda empujada, y si se estrella en menos de {knockout} s (contra la roca, la carcasa de una puerta, el casco del acorazado o la erupción, o volado por la carga del Ministerio fuera de la arena), la baja es para quien la empujó: un K. O. Tu herramienta es la esquiva: lanzada contra una nave que vuela a tu lado, la despide a unos {shoveSpeed} m/s. El empujón abolla ambos cascos; la roca junto a la trazada es la que mata. A velocidad de carrera, una nave sacada de su trazada se encuentra con la carcasa de delante a toda velocidad.',
   Ramming: 'Embestidas',
   'Below {bump} m/s two ships only bump. Faster, it is a ram: each of you takes the blow of half your closing speed, as from a rock. Where it lands decides: the armored nose takes {ramNose} % of the blow, a flank {ramFlank} %, an open drive {ramDrive} %. Ram with your nose into their drive, never the other way round. A ram that kills is your kill, a kamikaze too. Whatever else you hit hurts by its mass the same way: a torn plate of wreckage is a knock, a ship\'s hulk at speed a crash.':
     'Por debajo de {bump} m/s dos naves solo se rozan. Más rápido, es una embestida: cada una recibe el golpe de la mitad de vuestra velocidad de acercamiento, como contra una roca. Decide dónde impacta: el morro acorazado recibe el {ramNose} % del golpe, un flanco el {ramFlank} %, un motor al descubierto el {ramDrive} %. Embiste con tu morro contra su motor, nunca al revés. Una embestida que mata es tu baja, también un kamikaze. Todo lo demás que golpees te hiere igual, según su masa: una placa arrancada de un pecio es un golpecito, el pecio del motor de una nave a toda velocidad, un choque.',
@@ -1523,8 +1527,8 @@ export const ES: Catalog = {
   'Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':
     'Cerca del agujero negro y sobre Júpiter, el indicador TIRÓN muestra cuánto de tu motor haría falta para salir: PRECAUCIÓN desde el {wellCaution} %, ALERTA desde el {wellWarning} %, CRÍTICO desde el {wellCritical} %, y cuando haría falta todo, SIN RETORNO. Aléjate a fondo a tiempo: en caída, el indicador sube rápido. El límite de velocidad solo rige para tu propio motor; la gravedad te arrastra más allá de {limit} m/s.',
   "The arena's edge": 'El borde de la arena',
-  'Space has no walls, but the Games do. More than {edge} km from the center the clock runs: {grace} s to get back, or the clone is lost in deep space. Outside, the whole edge glows orange, so the way home is always in sight.':
-    'El espacio no tiene paredes, pero los Juegos sí. A más de {edge} km del centro corre el reloj: {grace} s para volver, o el clon se pierde en el espacio profundo. Fuera, todo el borde brilla en naranja, así que el camino a casa siempre está a la vista.',
+  'Space has no walls, but the Games do: every hull carries the Ministry\'s charge. More than {edge} km from the center it is armed and the clock runs: {grace} s to get back, or the charge blows your clone apart. Outside, the whole edge glows orange, so the way home is always in sight.':
+    'El espacio no tiene paredes, pero los Juegos sí: cada casco lleva la carga del Ministerio. A más de {edge} km del centro se arma y corre el reloj: {grace} s para volver, o la carga hace volar a tu clon. Fuera, todo el borde brilla en naranja, así que el camino a casa siempre está a la vista.',
   'Hull failing': 'Casco fallando',
   'At {hullCritical} hull points or less: HULL FAILING. One more hit and you are dead. Find cover, or a repair probe.':
     'Con {hullCritical} puntos de casco o menos: CASCO FALLANDO. Un impacto más y estás muerto. Busca cobertura, o una sonda de reparación.',

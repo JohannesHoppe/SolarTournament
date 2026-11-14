@@ -26,7 +26,7 @@ export const DRILL_LIMIT = 900;
 export const ATTEMPTS = 8;
 /** The clone may be lost to the place itself (rock, ground, a hull, a ring, the well, the air) this often in a job before the job counts as one a Host cannot fly; deaths in a fight are the fight's. */
 export const CRASHES = 4;
-const PLACE_DEATHS = ['rock', 'hull', 'gate', 'well', 'air', 'space'];
+const PLACE_DEATHS = ['rock', 'hull', 'gate', 'well', 'air', 'ministry'];
 /** A job may take this long to fly on a busy machine (ms): its verdict is its assertions, never the wall clock. */
 const JOB_TIMEOUT = 600_000;
 
