@@ -9,7 +9,8 @@ import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
-import { sheetDamage } from './impact';
+import { SAFE_IMPACT, sheetDamage } from './impact';
+import { groundBlow } from '../world/hover';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
 import { plumeStrength } from './plume';
 import { exp, hypot } from '../detmath';
@@ -265,6 +266,7 @@ const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3(
 const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 /** Where a ray of wayAhead met a piece of junk, in the piece's frame (see world/junk, onCore). */
 const wayPoint = new THREE.Vector3();
+const groundNormal = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
@@ -889,14 +891,22 @@ export class Bot {
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
-      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`): the hover field and its glide carry the hull over it and along its walls
-      if (!hit || (overGround && hit.asteroid?.ground)) continue;
+      // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`) where it would meet it within the hover field's cushion: its glide carries the hull over it and along its walls; met steeply, it strikes as rock does
+      if (!hit || (overGround && hit.asteroid?.ground && !this.groundStrikes(field, direction, hit.distance))) continue;
       // a sheet of junk (a wing's panels, a fairing, a stage's tank) is none either: the hull punches through it (see world/junk)
       const junk = hit.asteroid?.junk;
       if (junk && !onCore(junk.build, wayPoint.copy(wayOrigin).addScaledVector(direction, hit.distance).applyMatrix4(hit.asteroid!.inverse)) && !this.roundSheet(junk.build, hit.distance)) continue;
       if (!best || hit.distance < best.distance) best = Object.assign(wayBest, hit);
     }
     return best;
+  }
+
+  /** Whether the world's ground `distance` ahead along `direction` (from where the way's ray started, wayOrigin) would strike the hull at its speed: faster into it than the hover field's cushion and what rock forgives (see world/hover, groundBlow). */
+  private groundStrikes(field: AsteroidField, direction: THREE.Vector3, distance: number): boolean {
+    wayPoint.copy(wayOrigin).addScaledVector(direction, distance);
+    if (field.groundBelow(wayPoint, groundNormal) === null) return false;
+    const into = this.ship.flight.velocity.length() * Math.max(0, -direction.dot(groundNormal));
+    return groundBlow(into, field.fall) >= SAFE_IMPACT;
   }
 
   /** Whether a sheet of junk built as `build` lying `distance` ahead (units) is worth flying round (see flyRound). */

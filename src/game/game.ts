@@ -5895,10 +5895,10 @@ export class Game implements OnlineGame {
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
   private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
     if (!fleet.present(this.field.clock)) return null;
-    // under a sun that burns, the nearest part it can hold off in the hull's own shadow, coming at it from the shadow side
+    // under a sun that burns, the nearest part it can hold off in the hull's own shadow, out of its drive plume, coming at it from the shadow side
     const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
     const from = burns ? siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, -SHADE_FAR) : bot.ship.flight.position;
-    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0;
     let zone = burns ? fleet.nearestZone(bot.ship.flight.position, shaded) : -1;
     if (zone < 0) zone = fleet.nearestZone(bot.ship.flight.position);
     if (zone < 0) return null;
