@@ -149,7 +149,7 @@ const COCKPIT = new THREE.Vector3(0, 0, -HULL_LENGTH * 0.15);
  * hull but gravity's, which the clone falls with: its engines' and the air's (the flight model's
  * `felt`), the other outside pulls (the hover field, the air's drag), and whatever changed the
  * hull's speed between its steps, from outside its engines (a cable, a blow, a coil, a shove,
- * the dodge, the overdrive's shove), as a jolt it passes on over JOLT_TIME.
+ * the dodge's and the overdrive's pushes), as a jolt it passes on over JOLT_TIME.
  */
 export class Seat {
   /** What the clone felt in the last step (units/s², ship space; see feltLoad). */
@@ -283,8 +283,16 @@ const THRUSTERS: Record<ShipType, Thrusters> = {
 /** How fast a nozzle's puff follows its firing (1/s): there at once, gone a little slower, so a flight computer's quick corrections do not flicker. */
 const JET_RISE = 40;
 const JET_FALL = 14;
-/** How long the dodge's kick fires its nozzles at full push (s). */
-const JET_KICK = 0.15;
+/**
+ * The dodge (a thruster key tapped twice, LB; a bot's shove): the maneuvering thrusters fire all
+ * at once past their rating, at DODGE_THRUST (units/s², 20 g: twice their 10 g, the overload a
+ * nozzle bears for a moment) for DODGE_SECONDS (s), sideways or up or down in the ship's own
+ * frame: 60 m/s across the flight in 0.31 s, about 9 m aside by its end. Spread over that time the
+ * clone feels 20 g against the side of its seat (see Ship.felt), where the same kick at once would
+ * be a blow of hundreds; a damaged thruster pushes weaker (see Ship.dodge).
+ */
+export const DODGE_THRUST = 3924;
+export const DODGE_SECONDS = 1200 / DODGE_THRUST;
 /**
  * Another browser's ship: the push and turn of its thrusters read from how its velocity and spin
  * changed between two states (see applyState), what pulls and brakes it from outside taken out
@@ -384,9 +392,10 @@ export class Ship {
   /** Its maneuvering thrusters, and how hard each nozzle puffs now (0..1, eased, see fireJets). */
   readonly nozzles: Thrusters;
   readonly jets = new Float32Array(NOZZLES);
-  /** The dodge's kick in ship space, and how long its nozzles still fire (s). */
+  /** The dodge's kick in ship space (unit length), how long its nozzles still fire (s) and how hard (units/s², see DODGE_THRUST). */
   private readonly kick = new THREE.Vector3();
   private kickLeft = 0;
+  private kickThrust = 0;
   /**
    * Who flies the ship, read from its id, which no Host can choose: a bot, a real Host, or
    * nobody (the flight school's target drone). The HUD marks names with it (see view/marks).
@@ -877,10 +886,27 @@ export class Ship {
     }
   }
 
-  /** The dodge's kick (see Game.thrusterKick) in ship space: its nozzles fire at full push for a moment. */
+  /**
+   * The dodge's kick (see DODGE_THRUST) in ship space: its nozzles fire at overload for
+   * DODGE_SECONDS, a damaged thruster weaker. On a ship this browser runs it pushes the hull (see
+   * dodgeStep); on another browser's it only fires the nozzles.
+   */
   kickJets(direction: THREE.Vector3) {
     this.kick.copy(direction).normalize();
-    this.kickLeft = JET_KICK;
+    this.kickLeft = DODGE_SECONDS;
+    this.kickThrust = DODGE_THRUST * (0.25 + 0.75 * this.thrusters);
+  }
+
+  /** One step of `dt` of a dodge under way: its push along the kick in the ship's frame as it turns now. */
+  dodgeStep(dt: number) {
+    if (this.kickLeft <= 0 || this.owner !== null) return;
+    const share = Math.min(dt, this.kickLeft);
+    this.flight.velocity.addScaledVector(jetPush.copy(this.kick).applyQuaternion(this.flight.orientation), this.kickThrust * share);
+  }
+
+  /** Whether a dodge is still under way (its nozzles firing). */
+  get dodging(): boolean {
+    return this.kickLeft > 0;
   }
 
   /**

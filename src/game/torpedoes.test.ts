@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { atan2, sin } from '../detmath';
 import { describe, expect, it } from 'vitest';
 import { gripAt, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from '../ship/flight';
-import type { Ship as GameShip } from '../ship/ship';
+import { DODGE_SECONDS, DODGE_THRUST, type Ship as GameShip } from '../ship/ship';
 import type { Effects } from '../view/effects';
 import type { AsteroidField } from '../world/asteroids';
 import { MASS, type Body } from '../world/bodies';
@@ -13,13 +13,12 @@ import { creditOf, FLING_CREDIT, flyTorpedo, fused, strikes, TORPEDO_ARMING, TOR
 const DT = 1 / 60;
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
 const HULL = 340;
-/** A tube's push (units/s, 40 m/s) and a dodge's (units/s, 40 m/s). */
+/** A tube's push (units/s, 40 m/s). */
 const LAUNCH = 800;
-const DODGE = 800;
 /** A hard break across a torpedo's path (units/s², 15 g): in free drift, the nose turned 60° across the flight and the drive burning, the thrusters pushing the same way. */
 const BREAK = MAIN_THRUST * sin(Math.PI / 3) + RCS_THRUST;
 
-/** How a ship flies against a torpedo: its acceleration this frame (units/s², at most BREAK), a dodge (a kick in units/s), or nothing. */
+/** How a ship flies against a torpedo: its acceleration this frame (units/s², at most BREAK), a dodge's push this frame (units/s², see DODGE_THRUST), or nothing. */
 type Evasion = (state: { t: number; seconds: number; ship: Ship; torpedo: TorpedoFlight }) => { push?: THREE.Vector3; kick?: THREE.Vector3 } | null;
 interface Ship {
   position: THREE.Vector3;
@@ -55,7 +54,7 @@ function chase(ship: Ship, torpedoAt: THREE.Vector3, torpedoVelocity: THREE.Vect
     const closing = -relative.dot(lastVelocity.subVectors(ship.velocity, torpedo.velocity)) / distance;
     const seconds = closing > 0 ? distance / closing : Infinity;
     const action = evade({ t, seconds, ship, torpedo });
-    if (action?.kick) ship.velocity.add(action.kick);
+    if (action?.kick) ship.velocity.addScaledVector(action.kick, DT);
     if (action?.push) {
       const speed = ship.velocity.length();
       ship.velocity.addScaledVector(action.push.clampLength(0, BREAK), DT);
@@ -99,13 +98,13 @@ function breaking(before: number, side: (since: number) => number = () => 1): Ev
     return { push: push.addScaledVector(line, -push.dot(line) / line.lengthSq()).setLength(BREAK) };
   };
 }
-/** One dodge across the line to the torpedo, `before` seconds before it hits. */
+/** One dodge across the line to the torpedo, `before` seconds before it hits: its push over its fraction of a second, as the game fires it. */
 function dodging(before: number): Evasion {
-  let done = false;
-  return ({ seconds }) => {
-    if (done || seconds >= before) return null;
-    done = true;
-    return { kick: v(DODGE, 0, 0) };
+  let since: number | null = null;
+  return ({ t, seconds }) => {
+    if (since === null && seconds < before) since = t;
+    if (since === null || t - since >= DODGE_SECONDS) return null;
+    return { kick: v(DODGE_THRUST, 0, 0) };
   };
 }
 /** Breaks to one side, then the other, every `period` seconds. */
@@ -139,9 +138,9 @@ describe('a torpedo', () => {
       for (const before of IN_TIME.filter((seconds) => seconds <= 1.5)) expect(run(scene, jinking(before, 1.5)).hit, `jinks from ${before} s before`).toBeNull();
     });
 
-    it(`misses a ship (${name}) dodging 0.6 to 1.2 s before the hit, and hits one dodging earlier or later`, () => {
-      for (const before of [0.6, 0.8, 1, 1.2]) expect(run(scene, dodging(before)).firstPass, `dodge ${before} s before`).toBeGreaterThan(HULL);
-      for (const before of [0.4, 1.5, 2]) expect(run(scene, dodging(before)).firstPass, `dodge ${before} s before`).toBe(0);
+    it(`misses a ship (${name}) dodging 0.6 to 1.5 s before the hit, and hits one dodging earlier or later`, () => {
+      for (const before of [0.6, 0.8, 1, 1.2, 1.5]) expect(run(scene, dodging(before)).firstPass, `dodge ${before} s before`).toBeGreaterThan(HULL);
+      for (const before of [0.4, 2]) expect(run(scene, dodging(before)).firstPass, `dodge ${before} s before`).toBe(0);
     });
 
     it(`never pushes across its flight harder than its thrusters (${name})`, () => {

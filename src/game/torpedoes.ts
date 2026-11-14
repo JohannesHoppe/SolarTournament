@@ -56,7 +56,7 @@ const SEEKER_LAG = 0.4;
 const STEER_LAG = 0.25;
 /**
  * The moment to break (s before the hit at the closing speed): a hard turn started 0.6 to 2 s
- * before the hit makes a torpedo overshoot, a dodge 0.6 to 1.2 s before; Nicole calls it here.
+ * before the hit makes a torpedo overshoot, a dodge 0.6 to 1.5 s before; Nicole calls it here.
  */
 export const TORPEDO_BREAK = 1.5;
 /**

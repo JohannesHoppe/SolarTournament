@@ -64,10 +64,10 @@ export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'> & { junk?: A
 }
 
 /**
- * A jolt (the speed a blow, a cable's jerk, a coil, a shove or the dodge gives a hull at once)
- * reaches what it carries over about this long (s): the clone through its seat's gel, a cable
- * through its stretch. Its peak is the jolt's speed over this time, falling off as it passes; a
- * push that lasts (the overdrive's, a cable's swing) passes on as it comes.
+ * A jolt (the speed a blow, a cable's jerk, a coil or a shove gives a hull at once) reaches what
+ * it carries over about this long (s): the clone through its seat's gel, a cable through its
+ * stretch. Its peak is the jolt's speed over this time, falling off as it passes; a push that
+ * lasts (the overdrive's, the dodge's, a cable's swing) passes on as it comes.
  */
 export const JOLT_TIME = 0.2;
 

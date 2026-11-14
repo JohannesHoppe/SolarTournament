@@ -546,14 +546,13 @@ const boostBeyond = new THREE.Vector3();
 const ESCAPE_EVERY = 0.2;
 /**
  * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
- * overload, a kick of DODGE_SPEED (units/s, 60 m/s) sideways or up or down: strong enough to leave
- * a line of fire, and to throw the ship back onto a racing line after a missed ring. The autopilot
- * lets the drift be for DODGE_DRIFT seconds, so the ship plainly leaves the line of fire (about
- * 70 m, two ship lengths, before the autopilot takes the drift out), and the thrusters
- * need DODGE_RECHARGE seconds before the next one. It throws the clone against the side of its
- * seat, a jolt it feels (see Ship.felt).
+ * overload, 60 m/s sideways or up or down within 0.31 s at 20 g (see DODGE_THRUST in ship/ship):
+ * strong enough to leave a line of fire, and to throw the ship back onto a racing line after a
+ * missed ring. The autopilot lets the drift be for DODGE_DRIFT seconds, so the ship plainly leaves
+ * the line of fire (about 60 m, nearly two ship lengths, before the autopilot takes the drift
+ * out), and the thrusters need DODGE_RECHARGE seconds before the next one. It presses the clone
+ * against the side of its seat at 20 g (see Ship.felt).
  */
-const DODGE_SPEED = 1200;
 const DODGE_DRIFT = 1.2;
 const DODGE_RECHARGE = 1.5;
 /**
@@ -5178,6 +5177,8 @@ export class Game implements OnlineGame {
         ship.overdriveLeft = overdriveStep(ship.flight.velocity, ship.overdrivePending, ship.overdriveLeft, dt);
         if (ship.flight.velocity.length() > ship.overdriveCap) ship.flight.velocity.setLength(ship.overdriveCap);
       }
+      // a dodge under way pushes over its fraction of a second (see DODGE_THRUST)
+      if (!clamped) ship.dodgeStep(dt);
       this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
@@ -8322,7 +8323,7 @@ export class Game implements OnlineGame {
     this.blowUp(torpedo);
   }
 
-  /** A thruster key tapped twice, or LB: the dodge; see DODGE_SPEED. */
+  /** A thruster key tapped twice, or LB: the dodge; see DODGE_THRUST. */
   private dodge(direction: { x: number; y: number }) {
     const me = this.me!;
     if (!me.alive || !me.perks.dodge || this.time < this.dodgeReadyAt) return;
@@ -8335,9 +8336,7 @@ export class Game implements OnlineGame {
 
   /** A ship kicks its thrusters, sideways or up or down in its own frame: the dodge, and a bot's shove (see Bot.shove). */
   private thrusterKick(ship: Ship, direction: { x: number; y: number }) {
-    // a damaged thruster kicks weaker
-    const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
-    ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
+    // it pushes over its fraction of a second (see Ship.dodgeStep), a damaged thruster weaker
     ship.kickJets(scratch.set(direction.x, direction.y, 0));
   }
 
