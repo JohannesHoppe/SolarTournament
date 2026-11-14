@@ -17,6 +17,9 @@ import { NOVA_RADIUS } from './items';
 import { SIEGE_DISTANCE } from '../ship/bots';
 import { AIR_BURN, type Air } from '../world/air';
 import { MAX_HEAT, OVERHEAT_RESUME, RADIATE, SUN_ABSORB } from '../ship/ship';
+import { PlumeLook } from '../view/plume';
+/** The glow of its drives' plume, hotter than a fighter's. */
+const PLUME_GLOW = new THREE.Color(1, 0.48, 0.18);
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -738,7 +741,8 @@ export class Fleet implements Obstacle {
   private readonly dome: THREE.Mesh;
   /** The hangar walls' machinery in full, a mesh for each tunnel from the bow aft, each drawn only while the camera is in it or close to it (see view). */
   readonly machinery: THREE.Mesh[];
-  private readonly flame: THREE.Mesh;
+  /** Its drives' plume as the eye sees it (see view/plume), glowing while they burn. */
+  private readonly flame: PlumeLook;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly burnt: THREE.MeshStandardMaterial;
@@ -816,7 +820,6 @@ export class Fleet implements Obstacle {
     const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
     this.driveGlow = light(0.75, 0.85, 1, 1.4);
-    const flame = this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0.2).multiplyScalar(1.5), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     // the procession: lights along the deck's edges that run forward in a wave towards the bow
     this.procession = this.material(
       new THREE.ShaderMaterial({
@@ -1356,9 +1359,10 @@ export class Fleet implements Obstacle {
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
     this.domeBox = this.colliders[this.colliders.length - 1];
     // the plume behind the drives, while they burn
-    this.flame = new THREE.Mesh(this.geometry(rotateX(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true), -Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
-    this.flame.visible = false;
-    this.root.add(this.flame);
+    this.flame = new PlumeLook(PLUME_REACH, PLUME_SPREAD, PLUME_CORE, PLUME_BASE, PLUME_GLOW);
+    this.material(this.flame.mesh.material as THREE.Material);
+    this.flame.mesh.position.z = NOZZLES;
+    this.root.add(this.flame.mesh);
     // the hull throws its shadow and takes those of the rocks; glowing exhaust and glass do neither
     this.root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
@@ -2198,8 +2202,7 @@ export class Fleet implements Obstacle {
     }
     this.dome.visible = this.phase < 3 && !dying;
     this.reactorGlow.color.setRGB(1, 0.75, 0.4).multiplyScalar(dying ? 3 + 2 * sin(now * 30) : this.phase === 3 ? 2 + sin(now * 8) : 1.5);
-    this.flame.visible = this.burning;
-    if (this.burning) this.flame.scale.set(1 + 0.08 * sin(now * 40), 1 + 0.08 * sin(now * 37), 1);
+    this.flame.set(this.burning ? 1 : 0, now);
     this.procession.uniforms.time.value = now;
   }
 
