@@ -28,6 +28,7 @@ import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
 import { vestaGround } from './rheasilvia';
+import { tiledGround } from './groundlod';
 
 /**
  * How the Boneyard on Psyche looks (the campaign's first place; where things stand in
@@ -888,6 +889,8 @@ const RELIEF_CELL = 1500;
  * relief on a grid of `cell` (units, 75 m unless a place needs it finer), in groundMaterial's
  * layers in `color` lit a little by `emissive`; the yards' set gives the field the same relief
  * (RACK_RELIEFS in world/yard), so it collides as this very ground; `shade` gives each vertex a tone of its own over the tint.
+ * Drawn in tiles that thin out their grid with distance (see world/groundlod); the collisions
+ * always take the relief itself.
  */
 export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void): THREE.Group {
   const geometry = flatGrid(half, cell);
@@ -913,10 +916,10 @@ export function reliefGround(half: THREE.Vector3, relief: Relief, color: number,
     };
     material.customProgramCacheKey = () => 'ground-toned';
   }
-  const mesh = new THREE.Mesh(groundUv(geometry), material);
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-  return withCollider(new THREE.Group().add(mesh), half);
+  // drawn in tiles, each in less detail the farther it lies (see world/groundlod)
+  const ground = tiledGround(groundUv(geometry), geometry.parameters.widthSegments, geometry.parameters.heightSegments, material);
+  ground.traverse((object) => (object.receiveShadow = object.castShadow = object instanceof THREE.Mesh));
+  return withCollider(ground, half);
 }
 
 function crater(): THREE.Group {

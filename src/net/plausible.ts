@@ -6,6 +6,7 @@ import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME, TORPEDOES_PER_PROBE } from '../g
 import { DECOYS_PER_PROBE } from '../game/decoys';
 import { HOOK_RANGE } from '../game/hook';
 import { FINISH_GATES } from '../game/race';
+import type { Asteroid, AsteroidField } from '../world/asteroids';
 
 /**
  * Rough plausibility checks on what other browsers report about their own ships. Every bound is
@@ -571,6 +572,20 @@ const BLOW_AGE = 3;
  */
 export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: number, hull: THREE.Vector3, reach: number, age: number): number {
   return Math.max(Math.abs(age) / BLOW_AGE, before.distanceTo(hull) / (reach + AIM_SLACK), before.distanceTo(after) / RAM_PUSH, speed / RAM_SPEED);
+}
+
+const nearPiece = new THREE.Vector3();
+/**
+ * The reach a ram of `piece` (lying at `before` at field time `time`) is checked against by
+ * ramShare, for a battleship at `hull` reaching `reach` into what it rams: a piece alone has to
+ * lie at the hull, its own reach added; a piece welded into a structure is rammed with the whole
+ * of it, so the structure's piece nearest the hull has to lie there (the Derelict's wreck is
+ * 5 km long, one body held by its keel).
+ */
+export function ramReach(field: Pick<AsteroidField, 'welded' | 'positionOf'>, piece: Asteroid, time: number, before: THREE.Vector3, hull: THREE.Vector3, reach: number): number {
+  let gap = Infinity;
+  for (const member of field.welded(piece)) gap = Math.min(gap, field.positionOf(member, time, nearPiece).distanceTo(hull) - member.radius);
+  return reach + before.distanceTo(hull) - gap;
 }
 
 /**

@@ -5,15 +5,15 @@ import { RACK_BOXES, RACK_RELIEFS } from '../world/yard';
 import { createRocks, DETAIL, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
 import { claimsOf, planMining, standClaims, type Claim, type Plan } from '../world/mining';
 import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
-import { debrisSet } from '../world/shapes';
+import { debrisSet, KEEL_HALF, KEEL_TYPE } from '../world/shapes';
 
 /** The rock shapes of each detail, built once for all tests (a field only clones them). */
 const built = new Map<number, THREE.Mesh[]>();
 const shapes = (detail: number) => built.get(detail) ?? built.set(detail, createRocks(detail)).get(detail)!;
 /** The pieces' material in tests: nothing draws them. */
 const undrawn = new THREE.MeshBasicMaterial();
-/** Plain hull boxes (half extents, units): 100 m long, 20 m square, as many as the hull has shapes. */
-const PLAIN_HULLS = Array.from({ length: 8 }, () => new THREE.Vector3(1000, 200, 200));
+/** Plain hull boxes (half extents, units): 100 m long, 20 m square, one for each of the hull's sections; the keel's girder at its own size. */
+const PLAIN_HULLS = [...Array.from({ length: KEEL_TYPE }, () => new THREE.Vector3(1000, 200, 200)), KEEL_HALF, KEEL_HALF];
 
 /** A box piece of these half extents: its collider alone. */
 function box(half: THREE.Vector3): THREE.Group {
