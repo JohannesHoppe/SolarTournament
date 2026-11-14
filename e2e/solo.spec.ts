@@ -502,7 +502,10 @@ test('the flight school’s orbit drill flies at the Event Horizon: free drift f
   await page.click('#school-tactician');
   await play(page, 2);
   expect(await page.evaluate(() => window.game.venue.id)).toBe('hole');
-  // the drill puts the pilot 1.2 km above the hole, drifting too slowly for an orbit
+  // the drill puts the pilot 1.2 km above the hole, drifting too slowly for an orbit, once
+  // Nicole's instruction is said (the attempt live): until then the ship falls wherever the
+  // school brought it, and a path set before would be taken from it the moment the drill starts
+  await page.waitForFunction(() => window.game.school?.attempt?.live, null, { timeout: 90_000 });
   await expect(page.locator('#hud-orbit')).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#hud-orbit-state')).toHaveText('NO ORBIT · FALLS IN');
   // a burn along the nose (still across the line to the hole) up to the speed of a circular orbit there
