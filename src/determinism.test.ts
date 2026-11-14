@@ -92,15 +92,15 @@ describe('the shared world on every machine', () => {
     const hashes: Record<string, string> = {};
     for (let i = 0; i < TOURNAMENT_ARENAS.length; i++) hashes[TOURNAMENT_ARENAS[i].id] = arenaWorld(i);
     expect(hashes).toEqual({
-      belt: 'e33c6d365f254b52',
-      rings: '5d2d46f48b1ba934',
+      belt: '3a2e54d8c7bd8386',
+      rings: 'e8f2a6a485162633',
       junkyard: 'e0237d8600e351f0',
       giant: '75ea76a17a11f810',
-      corona: 'b23a7893ecbc3520',
+      corona: 'f93ab4c7d43ec14a',
       hole: '2f956ee569996204',
-      derelict: 'd51dc8297fd357f6',
-      crack: '12c20ea39716a1e4',
-      throat: '537aa54f0e3f1e19',
+      derelict: '0839e7690da6f693',
+      crack: 'e96e07c0014d041d',
+      throat: '33d679b53815922a',
       valhalla: 'ccfdfa724f2e5966',
       lineae: '8ceda99699816829',
     });

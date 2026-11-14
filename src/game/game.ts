@@ -106,7 +106,7 @@ import { FieldContacts, ringFixture } from '../world/contacts';
 import { fieldSlice, SYNC_EVERY, SYNC_GRACE, SYNC_SLICES, syncField, type FieldSlice } from '../world/fieldsync';
 import { IMMOVABLE, MASS, massOf, share, type Body } from '../world/bodies';
 import { onCore } from '../world/junk';
-import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { BLOCK_RADIUS, BLOCKS, breakHead, COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, knotWeight, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
@@ -712,11 +712,13 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
  * A comet's shower (see comet.ts) strikes a ship like a laser, armor or drive by where it comes
  * from, unless rock within SHOWER_COVER (units, 300 m) upstream of the ship stands in its way:
  * cover behind an asteroid is the best answer, the armored nose turned into it the next. Each
- * piece weighs SHOWER_WEIGHT laser hits: 3 hull on the armor, 0.3 of the thrust in the drive,
- * so the fourth piece into the drive sends its reactor critical.
+ * knot of grit weighs as many laser hits as its energy at the speed between it and the ship
+ * (see comet.ts, knotWeight): about 3 for a ship at rest (6 hull on the armor, 0.6 of the thrust
+ * in the drive), so two knots into the drive send its reactor critical. A drill of the campaign
+ * pelting a hull with grit (see JobContext.pelt) strikes PELT_WEIGHT laser hits a grain.
  */
 const SHOWER_COVER = 6000;
-const SHOWER_WEIGHT = 1.5;
+const PELT_WEIGHT = 1.5;
 /** The share of a shower's pieces bursting on armor, rock or anything else solid that throws sparks (the rest go to dust unseen, so a swarm's worth does not fill the screen). */
 const SHOWER_SPARKS = 0.25;
 /** How far a well bends a comet's route off its course over the swarm's length, at most (units, 300 m: the black hole's pull, see Comets in the README): what may stand in its way is looked for this much wider. */
@@ -5022,7 +5024,7 @@ export class Game implements OnlineGame {
         // the plume to the side, away from the sun
         const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
-        bot.flee = danger ?? this.cometDanger(ship);
+        bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
@@ -6880,7 +6882,7 @@ export class Game implements OnlineGame {
       },
       pelt: (at, direction, ship) => {
         const hull = ship ?? game.me;
-        if (hull?.alive) this.applyLaserHit(hull, at, direction, null, undefined, 'shower', SHOWER_WEIGHT);
+        if (hull?.alive) this.applyLaserHit(hull, at, direction, null, undefined, 'shower', PELT_WEIGHT);
       },
       ambush: (count, skill, names, hold) => {
         const actors = game.jumpers?.bots.map((bot) => bot.ship) ?? [];
@@ -7958,12 +7960,21 @@ export class Game implements OnlineGame {
    * A nova core goes off: a shockwave runs out to NOVA_RADIUS, and every ship this browser
    * runs inside it is gone, whatever protects it and whichever side it is on (each browser
    * destroys its own and says so, as with every death), together with torpedoes and wreckage
-   * there. The holder's clone burns up too and is printed again at once.
+   * there. The holder's clone burns up too and is printed again at once. A comet's head within
+   * its reach at the nova's field time `at` breaks into its blocks (see comet.ts, breakHead).
    */
-  novaBlast(holder: Ship, position: THREE.Vector3) {
+  novaBlast(holder: Ship, position: THREE.Vector3, at: number) {
     const now = this.time;
     this.effects.explosion(position, holder.radius * 12, holder.flight.velocity);
     this.shockwave(position);
+    const comet = this.shower?.comet;
+    if (comet && breakHead(comet, at, position)) {
+      cometVelocity.subVectors(headAt(comet, at + 0.5, cometPiece), headAt(comet, at - 0.5, cometCover));
+      headAt(comet, at, cometHead);
+      this.effects.explosion(cometHead, HEAD_RADIUS * 2, cometVelocity);
+      this.hearDebris(cometHead, HEAD_RADIUS * 3);
+      if (holder === this.me) this.moment('shattered');
+    }
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
@@ -8450,8 +8461,8 @@ export class Game implements OnlineGame {
     if (shooter.nova) {
       shooter.nova = false;
       const position = shooter.flight.position.clone();
-      this.online?.sendNova(shooter, position);
-      this.novaBlast(shooter, position);
+      this.online?.sendNova(shooter, position, this.field.clock);
+      this.novaBlast(shooter, position, this.field.clock);
       return;
     }
     const origin = shooter.nose(muzzle);
@@ -9443,7 +9454,7 @@ export class Game implements OnlineGame {
       if (showerOffset.addScaledVector(cometCourse, -along).length() > SHOWER_WIDE + PIECE_RADIUS + rock.radius + margin) continue;
       rocks.push(rock);
     }
-    // the solids a piece is held against besides the field's: only those near the swarm are looked at, for each of its 800 pieces
+    // the solids a piece is held against besides the field's: only those near the swarm are looked at, for each of its 2,000 knots
     this.showerMargin = margin;
     const near = this.showerNear;
     near.ring = near.wreck = near.core = false;
@@ -9454,6 +9465,15 @@ export class Game implements OnlineGame {
     meetSolids(shower, clock, dt, this.showerHit, (point) => {
       if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
     });
+    // the blocks of a head a nova broke burst on what they meet, as the head would
+    if (!comet.burst) return;
+    for (let i = 0; i < BLOCKS; i++) {
+      if (!shower.blockAt(i, clock, cometPiece) || !shower.blockAt(i, clock - dt, cometCover)) continue;
+      if (!this.showerHit(cometCover, cometPiece, cometOffset)) continue;
+      shower.blockStop(i);
+      this.effects.explosion(cometOffset, BLOCK_RADIUS * 3, STILL);
+      this.hearDebris(cometOffset, BLOCK_RADIUS * 6);
+    }
   }
 
   /** Whether something of `reach` around `center` may touch the swarm this step (the swarm as showerMeetsSolids lays it out). */
@@ -9600,6 +9620,15 @@ export class Game implements OnlineGame {
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'comet');
       return;
     }
+    // the blocks of a head a nova broke run a ship down as the head would
+    if (comet.burst) {
+      for (let i = 0; i < BLOCKS; i++) {
+        if (!shower.blockAt(i, clock, cometPiece) || cometPiece.distanceTo(position) >= BLOCK_RADIUS + ship.radius) continue;
+        ship.protectedUntil = Math.min(ship.protectedUntil, now);
+        if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'comet');
+        return;
+      }
+    }
     // beside the swarm, ahead of it or behind it: nothing to strike
     const when = routeNearest(comet, position, clock - SHOWER_LENGTH / COMET_SPEED, clock, cometOffset);
     if (cometOffset.distanceTo(position) > SHOWER_WIDE + PIECE_RADIUS + ship.radius) return;
@@ -9614,18 +9643,27 @@ export class Game implements OnlineGame {
       struck[i] = 1;
       // only rock gives cover, haze does not
       if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position, Infinity)) continue;
-      cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
-      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', SHOWER_WEIGHT);
+      cometRelative.subVectors(cometVelocity, ship.flight.velocity);
+      const weight = knotWeight(cometRelative.length());
+      cometRelative.normalize();
+      // the grit sprays off the hull where it strikes
+      this.effects.sparks(cometCover.copy(cometPiece).lerp(position, 0.6), SCRAPE_COLOR, PIECE_RADIUS * 2);
+      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', weight);
       if (!ship.alive) return;
     }
   }
 
-  /** For a bot close to a comet's route as its head nears or its shower passes: the point of the route nearest it, to fly away from; else null. */
-  private cometDanger(ship: Ship): THREE.Vector3 | null {
+  /**
+   * For a ship close to a comet's route as its head nears (`heed` seconds ahead at most) or its
+   * shower passes: the point of the route nearest it, to fly away from; else null. A bot heeds
+   * the head the more briefly the more daring it is (COMET_WARNING at daring 0, none at 1): a
+   * daring one fights on until the swarm is upon it, and may be caught in it.
+   */
+  private cometDanger(ship: Ship, heed = COMET_WARNING): THREE.Vector3 | null {
     const comet = this.shower?.comet ?? null;
     if (!comet) return null;
     const clock = this.field.clock;
-    routeNearest(comet, ship.flight.position, clock - (SHOWER_LENGTH + COMET_DANGER) / COMET_SPEED, clock + COMET_WARNING, cometAway);
+    routeNearest(comet, ship.flight.position, clock - (SHOWER_LENGTH + COMET_DANGER) / COMET_SPEED, clock + heed, cometAway);
     return cometAway.distanceTo(ship.flight.position) > SHOWER_WIDE + COMET_DANGER ? null : cometAway;
   }
 

@@ -5,20 +5,21 @@ import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
-import { blowSpin, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
+import { blowSpin, MAX_GENERATION, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
 import { share } from '../world/bodies';
 import { anchored } from '../world/contacts';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
 /**
- * Comets: now and then a comet crosses the arena, its glowing head first, a swarm of small
- * rocks of ice and dust (its shower) after it, its two harmless tails of gas and dust streaming
- * away from the sun. The head keeps its route, bent only by the
- * arena's massive body, and clears whatever stands in its way: rock breaks, the wreck's hull
- * is shoved aside, ships are run down. The shower is the real danger, a storm of pieces that
- * strike a ship like lasers: the armor shrugs them off, the drive does not. A black hole or
- * Jupiter's depths swallow a comet, its shower after it.
+ * Comets: now and then a comet crosses the arena, its glowing head first, a wide swarm of grit
+ * (its shower) after it, its two harmless tails of gas and dust streaming away from the sun.
+ * The head keeps its route, bent only by the arena's massive body: it runs down ships and what
+ * is lighter than itself, and bursts on the first rock or hull heavier than itself, which takes
+ * its momentum (a rock breaking under the blow). The shower is the real danger, a storm of
+ * grit that strikes a ship like lasers, as hard as its energy: the armor takes it, the drive
+ * does not. A nova core close by breaks the head into blocks. A black hole or Jupiter's depths
+ * swallow a comet, its shower after it.
  *
  * Everything about a comet follows from the room's seed, the round and the field time, which
  * every browser shares: when it comes, from where, how gravity bends it, where each piece of
@@ -39,11 +40,11 @@ export const COMET_WINDOWS: readonly { from: number; to: number; chance: number 
 export const COMET_SPEED = 12000;
 /**
  * The head starts this far before the point of its route nearest the field's center (units,
- * 8.8 km), 5.4 km beyond the arena's edge, and flies as far beyond it: at COMET_SPEED it shows
- * 9 s before it reaches the edge, just before the warning (see COMET_WARNING), and is in view
- * about 25 s until its shower has left the arena (9 s coming, 11 s across, 5 s of shower).
+ * 10.8 km), 7.4 km beyond the arena's edge, and flies as far beyond it: at COMET_SPEED it shows
+ * 12 s before it reaches the edge, as the warning sounds (see COMET_WARNING), and is in view
+ * about 28 s until its shower has left the arena (12 s coming, 11 s across, 5 s of shower).
  */
-export const COMET_REACH = 176000;
+export const COMET_REACH = 216000;
 /** The route passes the field's center within this much (units, 800 m), so it crosses the thick of the field. */
 const COMET_MISS = 16000;
 /** The route lies within this angle (rad, 35°) of the arena's horizon plane, where the field is. */
@@ -56,23 +57,47 @@ const DIVE: readonly [number, number] = [0.45, 0.75];
 export const HEAD_RADIUS = 1400;
 /**
  * The flight computer warns this many seconds before the head reaches the arena's edge (s): at
- * COMET_SPEED the head is 4.8 km beyond the edge then, and it crosses from the edge to the
- * center in another 5.6 s.
+ * COMET_SPEED the head is 7.2 km beyond the edge then, and it crosses from the edge to the
+ * center in another 5.6 s: time enough to see where it comes from and get out of its way.
  */
-export const COMET_WARNING = 8;
+export const COMET_WARNING = 12;
 /**
- * The shower: SHOWER_PIECES pieces from SHOWER_GAP (units, 60 m) behind the head back to
- * SHOWER_LENGTH (3 km, 5 s at COMET_SPEED) behind it, the swarm widening from SHOWER_NARROW (60 m) to SHOWER_WIDE
- * (260 m) around the route, denser near the head. Each piece follows the head's route a little
- * later, so the swarm bends with it.
+ * The shower: SHOWER_PIECES knots of grit from SHOWER_GAP (units, 60 m) behind the head back to
+ * SHOWER_LENGTH (3 km, 5 s at COMET_SPEED) behind it, the swarm widening from SHOWER_NARROW
+ * (200 m) to SHOWER_WIDE (700 m) around the route, denser near the head: a band 1.4 km across
+ * through the arena's middle, wide enough that the ships fighting there are caught in it unless
+ * they get out of its way. Each knot follows the head's route a little later, so the swarm bends
+ * with it.
  */
-export const SHOWER_PIECES = 800;
+export const SHOWER_PIECES = 2000;
 const SHOWER_GAP = 1200;
 export const SHOWER_LENGTH = 60000;
-const SHOWER_NARROW = 1200;
-export const SHOWER_WIDE = 5200;
-/** Radius of a piece (units, 3 m): a ship within its own radius plus this is struck. */
-export const PIECE_RADIUS = 60;
+const SHOWER_NARROW = 4000;
+export const SHOWER_WIDE = 14000;
+/**
+ * A knot of the shower is grit, grains of ice and rock of a few centimeters (a comet sheds
+ * nothing larger in a swarm), KNOT_MASS (kg) of it spread over a cloud PIECE_RADIUS (units, 12 m)
+ * across its middle: a ship within its own radius plus this is struck by the knot. At the head's
+ * 600 m/s each kilogram brings 180 kJ, so a knot strikes by its energy in the ship's frame (see
+ * knotWeight): grit that strips armor and punches through a drive bell, the way a laser does.
+ */
+export const PIECE_RADIUS = 240;
+/** The mass of grit in a knot (kg): at 600 m/s some 4.5 MJ, a solid blow (see knotWeight). */
+export const KNOT_MASS = 25;
+/** Meters per world unit. */
+const METERS = 0.05;
+/**
+ * How many laser hits a knot of grit weighs, by its kinetic energy at `closing` (units/s, the
+ * speed between knot and ship): a laser hit for every KNOT_JOULES (J), the same 0.75 MJ a hull
+ * point takes from a sheet of junk torn out at speed (see ship/impact, sheetDamage), two hull
+ * points a laser hit. Head-on at 600 m/s about 3 laser hits (6 hull on the armor, 0.6 of the
+ * thrust in a drive struck from behind); flying with the swarm, far less.
+ */
+export const KNOT_JOULES = 1.5e6;
+export function knotWeight(closing: number): number {
+  const v = closing * METERS;
+  return (0.5 * KNOT_MASS * v * v) / KNOT_JOULES;
+}
 /** The route is kept as the head's position every PATH_STEP seconds of field time, flown in SUBSTEPS steps each. */
 const PATH_STEP = 0.1;
 const SUBSTEPS = 10;
@@ -120,6 +145,9 @@ const TAIL_NEAR: readonly [number, number] = [3000, 30000];
 /** Each piece of the shower glints in the sunlight this large (units, 20 m across), at least GLINT_PIXELS on screen however far off, so the swarm shows as the danger it is. */
 const GLINT = 400;
 const GLINT_PIXELS = 3;
+/** A knot of the shower drawn up close as a bright clot this large (units, 2 m), and drawn out behind it as a streak of STREAK seconds of its flight (s, 60 m at the head's speed). */
+const KNOT_DRAWN = 40;
+const STREAK = 0.1;
 /** Inside a tail, the dust the ship flies through: MOTES of it in a cube of MOTE_BOX (units, 600 m) around the camera, drawn as streaks MOTE_SECONDS (s) of their flight past the ship long. */
 const MOTES = 400;
 const MOTE_BOX = 12000;
@@ -193,13 +221,45 @@ export interface Comet {
   /** Field time at which a well swallows the head; Infinity when it meets none. */
   readonly swallowed: number;
   /**
-   * Field time at which the head broke up on the President's battleship, Infinity while it has
-   * not: a body of ice and dust some 140 m across meeting a hull of over a million tonnes at
-   * 600 m/s bursts (each kilogram of it brings 180 kJ, far more than holds a loose body together);
-   * its shards spray off the armor and are gone in the flash, and the battleship goes down (see
-   * Game.playComet). Its shower flies on, each piece stopped by the hull where it meets it.
+   * Field time at which the head broke up, Infinity while it has not: on the President's
+   * battleship (a body of ice and dust some 140 m across meeting a hull of over a million tonnes
+   * at 600 m/s bursts: each kilogram of it brings 180 kJ, far more than holds a loose body
+   * together; its shards spray off the armor and are gone in the flash, and the battleship goes
+   * down, see Game.playComet), on a piece of the field heavier than itself (see runDown), or in a
+   * nova core's blast (see breakHead). Its shower flies on, each piece stopped by what it meets.
    */
   broken: number;
+  /** Where and when a nova core broke the head into its blocks (see breakHead, Shower.blockAt); null while no nova did. */
+  burst: { readonly at: number; readonly point: THREE.Vector3 } | null;
+}
+
+/**
+ * A nova core going off near the head breaks it apart. The game's reckoning, as plausible as a
+ * game needs: a nova kills a fighter at 800 m (see items, NOVA_RADIUS), which takes some
+ * NOVA_FLUENCE (J/m²) on its hull, so it sets free about NOVA_FLUENCE · 4π (800 m)² ≈ 8e13 J
+ * (some 19 kt of TNT). The head, 70 m in radius, catches R² / (4 d²) of it at a distance d, and
+ * NOVA_COUPLING of what it catches goes into tearing it apart (the rest flashes its surface off);
+ * a loose body of dust and ice that size comes apart at HEAD_STRENGTH (J/kg). So it breaks
+ * within NOVA_BREAK of the core's center: about 475 m.
+ */
+const NOVA_FLUENCE = 1e7;
+const NOVA_COUPLING = 0.1;
+const HEAD_STRENGTH = 60;
+const NOVA_ENERGY = NOVA_FLUENCE * 4 * Math.PI * 800 * 800;
+/** Within this distance of a nova core (units, about 475 m) the head breaks apart (see above). */
+export const NOVA_BREAK = Math.sqrt((NOVA_ENERGY * NOVA_COUPLING * pow(HEAD_RADIUS / 20, 2)) / (4 * HEAD_STRENGTH * HEAD_MASS)) * 20;
+
+/**
+ * A nova core goes off at `point` at field time `at`: when the head is still whole then and
+ * within NOVA_BREAK of it, it breaks into its blocks there (see Shower.blockAt), which fly on
+ * along its course at its speed; true then. Every browser hears of the nova with its field time
+ * and place, so every browser breaks it alike.
+ */
+export function breakHead(comet: Comet, at: number, point: THREE.Vector3): boolean {
+  if (at >= headEnd(comet) || at < comet.start || headAt(comet, at, head).distanceTo(point) > NOVA_BREAK) return false;
+  comet.broken = at;
+  comet.burst = { at, point: point.clone() };
+  return true;
 }
 
 /** Field time at which a comet's head is gone: swallowed by a well or broken up on the battleship. */
@@ -299,6 +359,7 @@ export function makeComet(at: number, direction: THREE.Vector3, nearest: THREE.V
     edge: from + edge * PATH_STEP,
     swallowed: inside >= 0 ? from + inside * PATH_STEP : Infinity,
     broken: Infinity,
+    burst: null,
   };
 }
 
@@ -434,6 +495,7 @@ export class Shower {
       this.offsets[i * 2] = cos(angle) * out;
       this.offsets[i * 2 + 1] = sin(angle) * out;
     }
+    this.layBlocks();
   }
 
   /** Where piece `i` is at a field time: where the head was as long ago as it trails it, off to its side. */
@@ -457,7 +519,49 @@ export class Shower {
   stop(i: number) {
     this.stopped[i] = 1;
   }
+
+  /**
+   * The blocks a nova core broke the head into (see breakHead): each flies on with the head's
+   * course and speed (the blast's push on the whole of it is a few centimeters a second, nothing
+   * to see), spread out from where the head was by up to BLOCK_SPREAD (units/s, 25 m/s) in a
+   * direction of its own, laid out from the comet's seed. Each a block of BLOCK_RADIUS: a ship in
+   * the way of one is run down as by the head.
+   */
+  readonly spread = new Float32Array(BLOCKS * 3);
+  readonly blockStopped = new Uint8Array(BLOCKS);
+
+  private layBlocks() {
+    const r = new Randomizer(((this.comet.seed + 7) % 2147483000) + 1);
+    for (let i = 0; i < BLOCKS; i++) {
+      const z = r.range(-1, 1);
+      const angle = r.range(0, Math.PI * 2);
+      const ring = Math.sqrt(1 - z * z);
+      const speed = BLOCK_SPREAD * r.range(0.3, 1);
+      this.spread[i * 3] = cos(angle) * ring * speed;
+      this.spread[i * 3 + 1] = z * speed;
+      this.spread[i * 3 + 2] = sin(angle) * ring * speed;
+    }
+  }
+
+  /** Where block `i` is at a field time, or null while the head is whole, before it broke or once the block burst (see blockStop). */
+  blockAt(i: number, time: number, target: THREE.Vector3): THREE.Vector3 | null {
+    const burst = this.comet.burst;
+    if (!burst || time < burst.at || this.blockStopped[i] === 1 || time >= this.comet.swallowed) return null;
+    const since = time - burst.at;
+    return headAt(this.comet, time, target).add(blockOffset.set(this.spread[i * 3], this.spread[i * 3 + 1], this.spread[i * 3 + 2]).multiplyScalar(since));
+  }
+
+  /** Block `i` burst on what it met. */
+  blockStop(i: number) {
+    this.blockStopped[i] = 1;
+  }
 }
+
+/** The blocks of a head a nova broke (see Shower.blockAt), their radius (units, 12 m) and how fast the blast spread them (units/s, 25 m/s at most). */
+export const BLOCKS = 36;
+export const BLOCK_RADIUS = 240;
+const BLOCK_SPREAD = 500;
+const blockOffset = new THREE.Vector3();
 
 const head = new THREE.Vector3();
 const piece = new THREE.Vector3();
@@ -473,29 +577,31 @@ export const BREAK_STEP = 0.1;
 const LOOK_BACK = 3;
 
 /**
- * The head runs down what stands in its way: a rock or hull piece it touches is struck at the
- * first moment of a grid of BREAK_STEP (s) of field time at which it touched it (looked for up
- * to LOOK_BACK back), so every browser strikes it at the same field time, however its frames
- * fell. A whole rock breaks (its fragments, deterministic from the rock and that time, fly alike
- * everywhere); a piece of one (a fragment, broken junk) goes to dust without pieces, and so do
- * the fragments born in the head's way. `broke` hears of each. On the
- * first solid piece its own shape meets (a hull section, the junkyard's hub) the head breaks up,
- * as on the battleship's hull, and the piece takes its momentum (see strikeWall), unless it stands
- * for good (a world's ground, see world/contacts anchored); what lies beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
- * nothing.
+ * The head runs down what stands in its way: a piece it touches is struck at the first moment of
+ * a grid of BREAK_STEP (s) of field time at which it touched it (looked for up to LOOK_BACK
+ * back), so every browser strikes it at the same field time, however its frames fell. A piece
+ * lighter than the head is run down: a whole rock breaks (its fragments, deterministic from the
+ * rock and that time, fly alike everywhere), a piece of one (a fragment, broken junk) goes to
+ * dust without pieces, and so do the fragments born in the head's way; `broke` hears of each. On
+ * the first piece heavier than it (most of the field's rock and ice: a rock of 110 m outweighs
+ * it fifteen times) or solid (a hull section, the junkyard's hub) that its own shape meets, the
+ * head breaks up, as on the battleship's hull: each kilogram of it brings 180 kJ, far more than
+ * holds a loose body together, and the piece takes its momentum (see strikeWall), unless it
+ * stands for good (a world's ground, see world/contacts anchored); what lies beyond it is never
+ * reached. Once the well swallowed the head, or it broke up, it strikes nothing.
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
   if (time >= headEnd(comet)) return;
   // a piece it shoved already (a browser that took the field from a snapshot after the head
   // broke up on it): the head broke up when that piece took its motion, and never strikes it twice
-  for (const rock of field.asteroids.values()) if (rock.solid && rock.shovedBy === comet.seed && rock.born < comet.broken) comet.broken = rock.born;
+  for (const rock of field.asteroids.values()) if (rock.shovedBy === comet.seed && rock.born < comet.broken) comet.broken = rock.born;
   if (time >= headEnd(comet)) return;
   headAt(comet, time, head);
   // the solid piece the head meets first, if it meets one: there it breaks up
   let wall: Asteroid | null = null;
   let wallAt = Infinity;
   for (const rock of field.asteroids.values()) {
-    if (!rock.solid || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
+    if (!stops(field, rock) || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
     const at = firstTouch(comet, field, rock, time, meets);
     if (at !== null && (at < wallAt || (at === wallAt && wall !== null && rock.id < wall.id))) {
       wall = rock;
@@ -503,7 +609,7 @@ export function runDown(comet: Comet, field: AsteroidField, time: number, broke:
     }
   }
   for (const rock of field.asteroids.values()) {
-    if (rock.solid || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
+    if (stops(field, rock) || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
     const at = firstTouch(comet, field, rock, time, touches);
     // what lies beyond where it broke up, it never reaches
     if (at === null || at >= wallAt) continue;
@@ -511,7 +617,12 @@ export function runDown(comet: Comet, field: AsteroidField, time: number, broke:
     const broken = rock.generation === 0 ? field.shatter(rock.id, at) : field.pulverize(rock.id, at);
     if (broken) broke(broken);
   }
-  if (wall) strikeWall(comet, field, wall, wallAt, shoved);
+  if (wall) strikeWall(comet, field, wall, wallAt, broke, shoved);
+}
+
+/** Whether the head breaks up on a piece (see runDown): a solid one, or one heavier than the head. */
+function stops(field: AsteroidField, rock: Asteroid): boolean {
+  return rock.solid || field.bodyMass(rock) > HEAD_MASS;
 }
 
 /** The first moment of the grid of BREAK_STEP the head touched a piece (`touching` says how), looked for up to LOOK_BACK back from `time` while it touches now; null when it does not. */
@@ -524,13 +635,16 @@ function firstTouch(comet: Comet, field: AsteroidField, rock: Asteroid, time: nu
 }
 
 /**
- * The head breaks up on a solid piece at field time `at` (see Comet.broken): its rubble stays
- * with the hull, so the piece takes the head's momentum, the two moving on together at the speed
- * that keeps it (see world/bodies, share: HEAD_MASS against the piece's, or its whole structure's when welded), and the
- * off-center blow sets it tumbling about its center (2/5 m r², as a ball), at most SHOVE_SPIN
- * more. `shoved` hears of it with the point struck.
+ * The head breaks up on a piece at field time `at` (see Comet.broken): its rubble stays with the
+ * piece, so the piece takes the head's momentum, the two moving on together at the speed that
+ * keeps it (see world/bodies, share: HEAD_MASS against the piece's, or its whole structure's when
+ * welded), and the off-center blow sets it tumbling about its center (2/5 m r², as a ball), at
+ * most SHOVE_SPIN more. A rock or ice piece that can still break (not solid, not of the last
+ * generation) breaks under the blow: some 11 kJ for each kilogram of a 110 m rock, far beyond
+ * what holds it together; `broke` hears of it, and each of its fragments takes the same added
+ * speed, so the momentum stays. `shoved` hears of what moved with the point struck.
  */
-function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: number, shoved: (piece: Asteroid, point: THREE.Vector3) => void) {
+function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void) {
   comet.broken = at;
   courseAt(comet, at, course);
   field.positionOf(wall, at, stone);
@@ -543,6 +657,20 @@ function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: numb
     return;
   }
   kick.copy(course).multiplyScalar(COMET_SPEED * share(field.bodyMass(wall), HEAD_MASS));
+  // a rock that breaks under the blow: its fragments fly on with the head's momentum shared among them
+  if (!wall.solid && wall.generation < MAX_GENERATION) {
+    const prefix = `${wall.id}.`;
+    const broken = field.shatter(wall.id, at);
+    if (broken) {
+      broke(broken);
+      for (const fragment of [...field.asteroids.values()]) {
+        if (!fragment.id.startsWith(prefix) || fragment.generation !== wall.generation + 1) continue;
+        field.shove(fragment.id, at, kick, fragment.spinAxis, fragment.spinRate, comet.seed);
+      }
+      shoved(wall, piece);
+      return;
+    }
+  }
   blowSpin(wall, stone.subVectors(piece, stone), kick, SHOVE_SPIN, axis);
   const rate = axis.length();
   if (rate > 1e-9) axis.divideScalar(rate);
@@ -847,11 +975,16 @@ export class CometView {
   private readonly tails: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly pieces: THREE.InstancedMesh;
   private readonly glints: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  /** The head's blocks once a nova broke it: lumps of its crust in the nucleus's own dark dust and ice. */
+  private readonly blocks: THREE.InstancedMesh;
   private readonly motes: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   /** How strongly the tails show now (0..1): faded in as the comet comes, drawn in after a well swallowed it. */
   private strength = 0;
   /** The dust's velocity in the tails (units/s): the head's, and away from the sun. */
   private readonly dustVelocity = new THREE.Vector3();
+  /** A streak behind a knot of the shower, back along its flight (see STREAK). */
+  private readonly streakFlight = new THREE.Vector3();
   /** Where the head is and flies, and how much of the tails' length is drawn (see update). */
   private readonly head = new THREE.Vector3();
   private readonly course = new THREE.Vector3();
@@ -887,8 +1020,8 @@ export class CometView {
     this.flash = new THREE.Sprite(glow.clone());
     // the tails: two ribbons, laid out anew every frame (see layTail), in one geometry
     this.tails = ribbons(TAILS.map((tail) => tail.tint), TAIL_SEGMENTS, TAIL_NEAR, 0);
-    // the shower: small bright pieces of ice and rock, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
-    this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(PIECE_RADIUS * 1.3, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.45).multiplyScalar(1.2), toneMapped: false }), SHOWER_PIECES);
+    // the shower: bright knots of grit, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
+    this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(KNOT_DRAWN, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.45).multiplyScalar(1.2), toneMapped: false }), SHOWER_PIECES);
     this.pieces.frustumCulled = false;
     const glints = new THREE.BufferGeometry();
     glints.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SHOWER_PIECES * 3), 3).setUsage(THREE.DynamicDrawUsage));
@@ -907,10 +1040,18 @@ export class CometView {
       }),
     );
     this.glints.frustumCulled = false;
+    // each knot drawn out along its flight, so the swarm reads as a storm rushing by
+    const streaks = new THREE.BufferGeometry();
+    streaks.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SHOWER_PIECES * 6), 3).setUsage(THREE.DynamicDrawUsage));
+    this.streaks = new THREE.LineSegments(streaks, new THREE.LineBasicMaterial({ color: new THREE.Color(1, 0.62, 0.3), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    this.streaks.frustumCulled = false;
+    this.blocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(BLOCK_RADIUS, 1), nucleusMaterial(false), BLOCKS);
+    this.blocks.frustumCulled = false;
+    this.blocks.castShadow = true;
     const motes = new Float32Array(MOTES * 3);
     for (let i = 0; i < motes.length; i++) motes[i] = r.nextFloat() * MOTE_BOX;
     this.motes = dustStreaks(motes, MOTE_BOX, new THREE.Color(0.85, 0.85, 0.8));
-    this.root.add(this.body, this.coma, this.flash, this.tails, this.jets, this.pieces, this.glints, this.motes);
+    this.root.add(this.body, this.coma, this.flash, this.tails, this.jets, this.pieces, this.glints, this.streaks, this.blocks, this.motes);
     this.root.visible = false;
   }
 
@@ -976,22 +1117,42 @@ export class CometView {
     // the dust in the tails flies on with the head, pushed away from the sun
     this.dustVelocity.subVectors(headAt(comet, time + 0.5, piece), headAt(comet, time - 0.5, stone)).addScaledVector(AWAY, OUTFLOW);
     const glints = this.glints.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const streaks = this.streaks.geometry.getAttribute('position') as THREE.BufferAttribute;
+    // the pieces fly as fast as the head, the streak STREAK seconds of it long
+    this.streakFlight.copy(this.dustVelocity).addScaledVector(AWAY, -OUTFLOW).multiplyScalar(-STREAK);
     for (let i = 0; i < SHOWER_PIECES; i++) {
       if (shower.gone(i, time)) {
         dummy.scale.setScalar(0);
         // far beyond what the camera draws
         glints.setXYZ(i, 0, 1e9, 0);
+        streaks.setXYZ(i * 2, 0, 1e9, 0);
+        streaks.setXYZ(i * 2 + 1, 0, 1e9, 0);
       } else {
         dummy.scale.setScalar(1);
         shower.pieceAt(i, time, dummy.position);
         setRotation(dummy, i + time * 1.3, i * 0.7 + time, 0);
         glints.setXYZ(i, dummy.position.x, dummy.position.y, dummy.position.z);
+        streaks.setXYZ(i * 2, dummy.position.x, dummy.position.y, dummy.position.z);
+        streaks.setXYZ(i * 2 + 1, dummy.position.x + this.streakFlight.x, dummy.position.y + this.streakFlight.y, dummy.position.z + this.streakFlight.z);
       }
       dummy.updateMatrix();
       this.pieces.setMatrixAt(i, dummy.matrix);
     }
     this.pieces.instanceMatrix.needsUpdate = true;
+    // the blocks of a head a nova broke, tumbling as they fly
+    this.blocks.visible = !!comet.burst;
+    if (comet.burst) {
+      for (let i = 0; i < BLOCKS; i++) {
+        if (shower.blockAt(i, time, dummy.position)) dummy.scale.setScalar(0.4 + (i % 5) * 0.15);
+        else dummy.scale.setScalar(0);
+        setRotation(dummy, i * 1.7 + time * 0.4, i * 0.9 + time * 0.3, i);
+        dummy.updateMatrix();
+        this.blocks.setMatrixAt(i, dummy.matrix);
+      }
+      this.blocks.instanceMatrix.needsUpdate = true;
+    }
     glints.needsUpdate = true;
+    streaks.needsUpdate = true;
     this.glints.material.uniforms.time.value = time;
   }
 
@@ -1061,7 +1222,7 @@ export class CometView {
   }
 
   dispose() {
-    for (const mesh of [this.near, this.far, this.tails, this.jets, this.pieces, this.glints, this.motes]) {
+    for (const mesh of [this.near, this.far, this.tails, this.jets, this.pieces, this.glints, this.streaks, this.blocks, this.motes]) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
