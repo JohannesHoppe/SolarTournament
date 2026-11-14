@@ -116,6 +116,15 @@ function tracer(every: number): (world: JobWorld) => void {
   };
 }
 
+/** Whether Math.random is called by three.js naming an object it builds (its generateUUID), told by the few frames above the call. */
+function namingObject(): boolean {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 10;
+  const stack = new Error().stack ?? '';
+  Error.stackTraceLimit = limit;
+  return stack.includes('generateUUID');
+}
+
 /** The jobs of MISSIONS from `from` up to `to` (indices), each flown in a test of its own. */
 export function flyJobs(from: number, to: number) {
   describe('the campaign’s jobs, flown by a middling Host', () => {
@@ -129,8 +138,12 @@ export function flyJobs(from: number, to: number) {
       const first = MISSIONS[0];
       new JobWorld(first, campaignFor(first), host(BEHAVIORS[first.id]));
     }, WARM_UP);
+    // three.js names every object it builds by Math.random (generateUUID): those names come from a
+    // stream of their own, so building an object (a ship's plume, a wreck, a world) never moves the
+    // dice of the pilots and bots, whatever a change adds to what is built
+    let naming = new Randomizer(2);
     beforeEach(() => {
-      vi.spyOn(Math, 'random').mockImplementation(() => random.nextFloat());
+      vi.spyOn(Math, 'random').mockImplementation(() => (namingObject() ? naming : random).nextFloat());
     });
     afterEach(() => vi.restoreAllMocks());
 
@@ -149,6 +162,7 @@ export function flyJobs(from: number, to: number) {
       it(name, () => {
         // SEED=<n> flies the job on other dice (the n-th of its seeds), to see how far its outcome is chance
         random = new Randomizer(textSeed(mission.id) + Number(process.env.SEED ?? 0));
+        naming = new Randomizer(2);
         const run = flyJob(mission, campaignFor(mission), host(BEHAVIORS[mission.id]), DRILL_LIMIT, ATTEMPTS, trace > 0 ? tracer(trace) : undefined);
         const text = report(run);
         if (only) console.log(`${mission.id}: ${run.done ? 'done' : 'not done'}\n${text}`);
