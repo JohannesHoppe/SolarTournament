@@ -203,13 +203,13 @@ describe('the field meets itself', () => {
   }, 120000);
 });
 
-describe("the world ship's halves", () => {
-  it('meet as two bodies when a comet sends one into the other, never sinking into each other', () => {
+describe("the world ship's wreck", () => {
+  it('moves as one body when a comet strikes its bow, its halves held by the keel, never sinking into each other', () => {
     const arena = arenaById('derelict')!;
     const field = fieldOf(arena);
     const pieces = [...field.asteroids.values()];
     const key = (a: { id: string }, b: { id: string }) => `${a.id}|${b.id}`;
-    // the sections of a half overlap where they are joined: only how much deeper counts
+    // the sections and the keel's segments overlap where they are joined: only how much deeper counts
     const joined = new Map<string, number>();
     for (const a of pieces) for (const b of pieces) if (a.id < b.id) joined.set(key(a, b), depthBetween(field, a, b));
     // a comet along x into the bow's middle, towards the stern
@@ -222,14 +222,14 @@ describe("the world ship's halves", () => {
       runDown(comet, field, field.clock, () => {});
       contacts.run(field);
       if (Math.round(field.clock * 60) % 30) continue;
-      for (const a of pieces) for (const b of pieces) if (a.id < b.id && a.weld !== b.weld) deepest = Math.max(deepest, depthBetween(field, a, b) - joined.get(key(a, b))!);
+      for (const a of pieces) for (const b of pieces) if (a.id < b.id) deepest = Math.max(deepest, depthBetween(field, a, b) - joined.get(key(a, b))!);
     }
     const stern = field.asteroids.get('h5')!;
     expect(comet.broken).toBeLessThan(40);
-    // the stern took its share of the blow, and neither half lies in the other
+    // the blow moved the whole wreck, the stern as the bow, and no piece of it into another
     expect(stern.velocity.x).toBeGreaterThan(0);
-    expect(contacts.contacts).toBeGreaterThan(0);
-    expect(deepest).toBeLessThan(200);
+    expect(stern.velocity.distanceTo(bow.velocity)).toBeLessThan(stern.velocity.length() * 0.05 + 1e-6);
+    expect(deepest).toBeLessThan(1);
   }, 120000);
 });
 

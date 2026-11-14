@@ -17,7 +17,7 @@ export type ShipType = 'human' | 'alien' | 'sovereign' | 'magpie';
 
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
-  /** The rock shapes for the belt beyond the arena (see world/belt): `near` close to its inner edge, `impostor` (a billboard, see view/impostor) for the rest of it. */
+  /** The rock shapes for the belt beyond the arena (see world/belt): `near` close to its inner edge (the rocks' light far meshes), `impostor` (a billboard, see view/impostor) for the rest of it. */
   belt: { near: THREE.Mesh[]; impostor: THREE.Mesh[] };
   /** Every kind of shape the arenas' fields are built from (see world/shapes); the rocks also in less detail for afar, and as a billboard farther yet. */
   fieldSets: Record<TemplateKind, TemplateSet>;
@@ -195,7 +195,8 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     sky: { stars, glow: milkyWay.texture, sharp: () => bakeMilkyWayTexture(MILKY_WAY_SIZES.at(-1)!) },
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human), magpie: scrapInterceptor(human) },
-    belt: { near: asteroidsNear, impostor: asteroidImpostors },
+    // the belt lies 6 km and more from a camera in the arena, far beyond where the field draws a rock in its full detail (see world/belt)
+    belt: { near: asteroidsFar, impostor: asteroidImpostors },
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet(), rack: rackSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },
     sounds: synthesizeSounds(audio),

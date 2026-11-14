@@ -40,6 +40,8 @@ function seaSheet(half: THREE.Vector3, surface: (x: number, z: number) => number
   const material = new THREE.MeshStandardMaterial({ color: 0x241a10, roughness: 0.12, metalness: 0.7, normalMap: rippleTexture(), normalScale: new THREE.Vector2(0.25, 0.25) });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.receiveShadow = true;
+  // nothing it would shade is ever seen: under it lies only the bed under the water
+  mesh.userData.shadowless = true;
   return mesh;
 }
 

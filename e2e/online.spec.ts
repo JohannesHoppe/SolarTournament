@@ -32,6 +32,29 @@ const world = (page: Page) =>
     };
   });
 
+/**
+ * The game master, paused, picks a new round on its plate and starts it: the mode first, since a
+ * mode offers only its own arenas (a race never the Corona or the Event Horizon).
+ */
+const chooseRound = (page: Page, arena: string, mode: string) =>
+  page.evaluate(
+    ({ arena, mode }) => {
+      window.game.pause();
+      document.getElementById('new-round-open')!.click();
+      document.querySelector<HTMLElement>(`[data-choice="new-round-mode"] button[data-value="${mode}"]`)!.click();
+      document.querySelector<HTMLElement>(`#new-round-arenas button[data-value="${arena}"]`)!.click();
+      document.getElementById('new-round-start')!.click();
+    },
+    { arena, mode },
+  );
+
+/** The game master (`a`) cuts the round short for one of `mode` in `arena`, and both tabs fly it. */
+async function cutTo(a: Page, b: Page, arena: string, mode: string) {
+  const round = await a.evaluate(() => window.game.roundId as number);
+  await chooseRound(a, arena, mode);
+  for (const page of [a, b]) await page.waitForFunction(({ round, arena }) => window.game.roundId === round + 1 && window.game.venue.id === arena && window.game.state === 'playing', { round, arena }, { timeout: 60_000 });
+}
+
 /** No errors in the tabs, and honest tabs never take each other for cheats. */
 async function ranHonestly(errors: string[], ...pages: Page[]) {
   expect(errors).toEqual([]);
@@ -68,17 +91,10 @@ test('the game master, named on its screen alone, cuts a round short for a new o
   await b.evaluate(() => document.getElementById('resume')!.click());
   expect(await offered(a)).toBe(true);
   const before = await world(a);
-  const target = before.arena === 'hole' ? 'corona' : 'hole';
+  // an arena of free space both modes are played in
+  const target = before.arena === 'belt' ? 'rings' : 'belt';
   const mode = before.mode === 'race' ? 'deathmatch' : 'race';
-  await a.evaluate(
-    ({ target, mode }) => {
-      document.getElementById('new-round-open')!.click();
-      document.querySelector<HTMLElement>(`#new-round-arenas button[data-value="${target}"]`)!.click();
-      document.querySelector<HTMLElement>(`[data-choice="new-round-mode"] button[data-value="${mode}"]`)!.click();
-      document.getElementById('new-round-start')!.click();
-    },
-    { target, mode },
-  );
+  await chooseRound(a, target, mode);
   // the round ends on both, with the reason on the scoreboard of the other
   await b.waitForFunction(() => !document.getElementById('results')!.hidden, undefined, { timeout: 20_000 });
   expect(await b.evaluate(() => document.getElementById('results-next')!.textContent)).toContain('game master');
@@ -94,6 +110,9 @@ test('the game master, named on its screen alone, cuts a round short for a new o
 
 test('the game master is the DJ: it skips the song and types a title, and the other tab plays the same at the same beat, without controls of its own', async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}d`);
+  // nothing here is seen: unrendered, the tabs keep their frames short on a busy machine, where
+  // gaps past CUT_OFF_MS (net/session) make a browser start over
+  for (const page of [a, b]) await page.evaluate(() => (window.game.composer.render = () => {}));
   const onAir = (page: Page) => page.evaluate(() => window.game.musicCue() as { title: string; elapsed: number });
   const deck = (page: Page) => page.evaluate(() => getComputedStyle(document.getElementById('np-next')!).display !== 'none');
   await a.waitForFunction(() => document.getElementById('now-playing')!.classList.contains('dj'));
@@ -406,10 +425,15 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
       const part = game.fleet.zoneAt(2);
       const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
       game.probes.drop(id, deaths, ['nova'], above, game.fleet.velocity.clone(), game.time);
+      // a drop flies apart at up to 20 m/s; this core keeps station over the battery instead, so
+      // the clone sent there meets it however long the tabs take
+      const core = game.probes.list.find((probe: { id: string }) => probe.id.startsWith(`${id}.${deaths}.`));
+      core.velocity.copy(game.fleet.velocity);
+      core.slotVelocity.copy(game.fleet.velocity);
     }, dropper);
   }
   await fireAt(a, 2, null, true);
-  expect(await a.evaluate(() => window.game.me.nova)).toBe(true);
+  await a.waitForFunction(() => window.game.me.nova, undefined, { timeout: 10_000 });
   await fireAt(a, 2, false);
   await play(a, 3);
   const counted = await a.evaluate(() => [...window.game.fleet.hits]);
@@ -443,7 +467,7 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
   const nova = () =>
     cheat.evaluate((at) => {
       const game = window.game;
-      game.online.session.sendNova(game.me.id, at);
+      game.online.session.sendNova(game.me.id, at, game.field.clock);
       return { name: game.me.name, id: game.me.id };
     }, victim);
   const { name, id: cheaterId } = await nova();
@@ -464,11 +488,13 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
   await play(a, 2);
   await play(b, 2);
   for (const page of [a, b]) {
-    const seen = await page.evaluate(() => {
+    // no clone of theirs went down to it (a clone left idle for minutes can be lost otherwise: one drifted out past the arena's edge)
+    const seen = await page.evaluate((name) => {
       const game = window.game;
-      return { alive: game.me.alive, cheaters: game.cheaters };
-    });
-    expect(seen.alive).toBe(true);
+      const novas = game.log.filter('death').filter((death: { cause: string; killer: string | null }) => death.cause === 'nova' || death.killer === name);
+      return { novas: novas.length, cheaters: game.cheaters };
+    }, name);
+    expect(seen.novas).toBe(0);
     expect(seen.cheaters).toEqual([name]);
   }
   // cast out: its ship is gone from the others; the tab named sees its callsign called, but never
@@ -481,18 +507,10 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
   expect(errors).toEqual([]);
 });
 
-test("a ship flies through a satellite's solar wing at speed unharmed, and both tabs see the wing go the same way", async ({ context }) => {
+test("a ship flies through a satellite's solar wing at speed with only the plug's scrape, and both tabs see the wing go the same way", async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}j&bots=0`);
   // the game master takes the room to the Satellite Junkyard
-  const round = await a.evaluate(() => window.game.roundId as number);
-  await a.evaluate(() => {
-    window.game.pause();
-    document.getElementById('new-round-open')!.click();
-    document.querySelector<HTMLElement>('#new-round-arenas button[data-value="junkyard"]')!.click();
-    document.querySelector<HTMLElement>('[data-choice="new-round-mode"] button[data-value="deathmatch"]')!.click();
-    document.getElementById('new-round-start')!.click();
-  });
-  for (const page of [a, b]) await page.waitForFunction((round) => window.game.roundId === round + 1 && window.game.venue.id === 'junkyard' && window.game.state === 'playing', round, { timeout: 60_000 });
+  await cutTo(a, b, 'junkyard', 'deathmatch');
   // past the round's opening (its intro flight and the start lights), when the ships fly free
   await b.waitForFunction(() => window.game.roundSeconds() > 10, undefined, { timeout: 60_000 });
   // the following tab's ship, 100 m short of a satellite's wing, flying square through it at 250 m/s
@@ -514,9 +532,10 @@ test("a ship flies through a satellite's solar wing at speed unharmed, and both 
   await play(b, 1.5);
   const seen = (page: Page, id: string) => page.evaluate((id) => ({ velocity: window.game.field.asteroids.get(id).velocity.toArray() as number[], by: window.game.field.asteroids.get(id).shovedBy as number | null, hull: window.game.me.hull as number, alive: window.game.me.alive as boolean }), id);
   const there = await seen(b, struck.id);
-  // through the wing at full speed, the hull without a scratch; the wing knocked into a tumble
+  // through the wing at full speed, the hull scraped by the plug it tore out (75 kg at 250 m/s,
+  // 2.3 MJ: 3 hull points, see sheetDamage); the wing knocked into a tumble
   expect(there.alive).toBe(true);
-  expect(there.hull).toBe(100);
+  expect(100 - there.hull).toBeCloseTo(3, 0);
   expect(there.by).toBe(-2);
   expect(there.velocity).not.toEqual(struck.velocity);
   // the leading tab took the strike from the striker's word
@@ -535,6 +554,8 @@ test("two tabs agree again on a piece one of them moved alone, once the lead's s
       },
       [id, time] as const,
     );
+  // a field of free space whose rocks drift (over a world fought over every piece stands solid on its ground)
+  await cutTo(a, b, 'belt', 'deathmatch');
   const id = await a.evaluate(() => [...window.game.field.asteroids.values()].find((piece: { solid: boolean }) => !piece.solid)!.id as string);
   // the second tab (it follows) shoves it 100 m aside on its own
   const moved = await b.evaluate((id) => {

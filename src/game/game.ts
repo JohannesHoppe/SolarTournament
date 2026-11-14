@@ -96,7 +96,7 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
+import { knockShare, ramReach, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { shoveSpin } from '../ship/blow';
@@ -1886,7 +1886,8 @@ export class Game implements OnlineGame {
   /**
    * What the controls sheet shows grey and struck through: what the ship flown now lacks (in the
    * menu, the ship picked as the hangar fits it): gear not bought, or what the campaign's hull is
-   * not fitted with yet.
+   * not fitted with yet; mining charges only in a job that hands them out, once all are set, since
+   * nowhere else can a Host have them.
    */
   private lacking(): Set<Command> {
     const me = this.state !== 'menu' ? this.me : null;
@@ -1899,7 +1900,7 @@ export class Game implements OnlineGame {
       ['torpedo', TORPEDOES + perks.torpedoes <= 0],
       ['hook', !hook],
       ['selfDestruct', !perks.selfDestruct],
-      ['charge', this.charges.carried === 0],
+      ['charge', this.charges.issued > 0 && this.charges.carried === 0],
     ];
     return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
   }
@@ -3627,6 +3628,7 @@ export class Game implements OnlineGame {
     this.cues.length = 0;
     this.torpedoes.clear();
     this.decoys.clear();
+    this.charges.arm(0);
     this.probes.reset();
     this.wrecks.clear();
     for (const ship of this.ships) {
@@ -5122,10 +5124,10 @@ export class Game implements OnlineGame {
         bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
-        // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
+        // to a solar flare's safe pocket; a racer follows the course out as far as it reaches (see Course.home)
         // under an edge of its own over a world, the bot keeps inside it across the ground and under its ceiling
         const bounds = this.venue.bounds;
-        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
+        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course ? this.course.home : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         bot.flat = !!bounds;
         bot.roof = bounds?.ceiling ?? Infinity;
@@ -5826,7 +5828,7 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
+    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, ramReach(this.field, piece, state.b, before, fleet.position, fleet.reach), state.b - this.field.clock) > 1) return;
     this.field.move(state);
     this.scrape(fleet, state.id);
   }
@@ -6315,10 +6317,11 @@ export class Game implements OnlineGame {
     }
     if (!this.course) return;
     // a bot lights its drive as a Host does, by its own timing: a perfect start within the
-    // window, a stall when too early, nothing when too late
+    // window, a stall when too early, nothing when too late; with a ship of the row ahead on its
+    // nose's line it lights late on purpose, since the perfect start's shove would ram it
     for (const bot of this.bots) {
       if (bot.ship.owner !== null || !bot.ship.alive || bot === this.sparring?.bot) continue;
-      const lit = startTiming(bot.skills.reflexes, Math.random());
+      const lit = this.shipAhead(bot.ship) ? START_LATE + 1 : startTiming(bot.skills.reflexes, Math.random());
       if (lit < -START_WINDOW) this.stall(bot.ship);
       else if (lit <= START_LATE) this.perfectStart(bot.ship);
       devlog?.add({ kind: 'act', t: this.time, ship: bot.ship.name, act: 'start', detail: lit < -START_WINDOW ? 'false start' : lit <= START_LATE ? 'perfect' : 'late' });
@@ -7396,6 +7399,18 @@ export class Game implements OnlineGame {
     if (me.alive && me.perks.overdrive && this.time >= me.overdriveReadyAt) this.shove(me, this.crosshairMark());
   }
 
+  /** Whether a ship lies on `ship`'s nose's line close ahead (see BOOST_CLEAR), where a shove along the nose would ram it. */
+  private shipAhead(ship: Ship): boolean {
+    const flight = ship.flight;
+    const nose = flight.forward(forward);
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
+      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return true;
+    }
+    return false;
+  }
+
   /**
    * A racing bot's boost (see wantsBoost): ready, its nose on its flight and on its line ahead,
    * the line straight for BOOST_LOOK seconds at the boost's top speed (its bends measured over
@@ -7414,11 +7429,7 @@ export class Game implements OnlineGame {
     const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
     if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
     // never into a ship on the nose's line close ahead (the grid's row in front at the start): the shove would ram it
-    for (const other of this.ships) {
-      if (other === ship || !other.alive) continue;
-      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
-      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return;
-    }
+    if (this.shipAhead(ship)) return;
     let straight = true;
     for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
       straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;

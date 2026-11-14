@@ -124,7 +124,7 @@ const frostedPlating = new WeakMap<THREE.Material, boolean>();
 const welds = new Map<number, { home: { value: THREE.Matrix4 }; copies: Map<THREE.Material, THREE.Material> }>();
 
 /**
- * Gives the pieces of welded body `weld` (a half of the world ship, the junkyard's hub; see
+ * Gives the pieces of welded body `weld` (the world ship, the junkyard's hub; see
  * Placement.weld) their own copies of the frosted materials, all of them sharing one matrix,
  * and returns that matrix for the field to set: the way from where the body is now back to
  * where it was laid out (see AsteroidField.weldMotion, inverted). The copies share their
