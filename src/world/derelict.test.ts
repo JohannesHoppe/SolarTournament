@@ -5,6 +5,7 @@ import { Derelict, JET_WELDS, mistDensity } from './derelict';
 import { testField } from '../test/field';
 import { HULL_PAINT } from './shapes';
 import { FALL_STEP, FreeFall, hullClearance, METERS } from './wreckgravity';
+import { WRECK_ORBITS, WRECK_ORBITS_DAYS } from './wreckorbits';
 import { stencilable } from '../view/lettering';
 import { quaternionAngleTo } from '../detthree';
 
@@ -21,7 +22,7 @@ describe('the derelict', () => {
     expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
   });
 
-  it('lets the mist follow its half of the hull when a comet shoves it', () => {
+  it('lets the mist follow the wreck when a comet shoves it, the keel holding both halves together', () => {
     const field = testField();
     field.generate(ARENAS.find((arena) => arena.id === 'derelict')!.layout);
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
@@ -33,13 +34,12 @@ describe('the derelict', () => {
     settle();
     const start = wreck.jets.map((jet) => jet.from.clone());
     expect(start[0].distanceTo(new THREE.Vector3(-14200, 0, 0))).toBeLessThan(1e-6);
-    // a comet strikes the bow: the whole half drifts on at 171 units/s for two minutes
+    // a comet strikes the bow: the whole wreck drifts on at 171 units/s for two minutes, the stern with it
     const hull = [...field.asteroids.values()].find((rock) => rock.weld === 0)!;
     field.shove(hull.id, 0, new THREE.Vector3(0, 0, 171), new THREE.Vector3(0, 1, 0), 0, 3);
     field.setClock(120);
     settle();
-    expect(wreck.jets[0].from.distanceTo(start[0].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
-    expect(wreck.jets[1].from.distanceTo(start[1])).toBeLessThan(1e-6);
+    for (const i of [0, 1]) expect(wreck.jets[i].from.distanceTo(start[i].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
     // the mist thickens at the end where it is now and is gone from where it was
     expect(wreck.mistAt(wreck.jets[0].from.clone().add(new THREE.Vector3(1200, 0, 0)))).toBeGreaterThan(0.5);
     expect(wreck.mistAt(new THREE.Vector3(-13000, 0, 0))).toBe(0);
@@ -64,7 +64,7 @@ describe('the derelict', () => {
     const free = all.filter((i) => wreck.falls(i));
     // most of them caught at the breaches, a few dozen falling free
     expect(wreck.count - free.length).toBeGreaterThan((wreck.count * 2) / 3);
-    expect(free.length).toBeGreaterThanOrEqual(25);
+    expect(free.length).toBe(WRECK_ORBITS.length);
     for (const time of [0, 100, 1000, 3000]) {
       wreck.update(time);
       const before = all.map((i) => ({ at: at(i), turn: turn(i) }));
@@ -86,8 +86,9 @@ describe('the derelict', () => {
     }
   });
 
-  it('keeps every free one bound to the wreck and clear of its hull for two hours, starting 150 to 600 m off it; the caught in the torn sections', () => {
+  it('falls every free one from a stored start state, bound and clear of the hull for three days of field time; hangs the caught on the hull', () => {
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    let free = 0;
     for (let i = 0; i < wreck.count; i++) {
       const fall = wreck.fallOf(i);
       if (!fall) {
@@ -95,17 +96,23 @@ describe('the derelict', () => {
         expect(hullClearance(wreck.deadAt(i, new THREE.Vector3()).multiplyScalar(METERS))).toBeLessThan(10);
         continue;
       }
+      free++;
+      // the search kept each a year (see tools/derelict); three days of it here, every step looked at
       const body = new FreeFall(fall.start, fall.speed);
-      expect(body.energy()).toBeLessThan(0);
-      const off = hullClearance(body.position);
-      expect(off).toBeGreaterThanOrEqual(150);
-      expect(off).toBeLessThanOrEqual(600);
-      for (let t = 0; t < 2 * 3600; t += FALL_STEP) {
+      const energy = body.energy();
+      expect(energy).toBeLessThan(0);
+      for (let t = 0; t < 3 * 86400; t += FALL_STEP) {
         body.advance();
-        expect(hullClearance(body.position)).toBeGreaterThanOrEqual(20);
+        const off = hullClearance(body.position);
+        expect(off).toBeGreaterThanOrEqual(20);
+        expect(off).toBeLessThanOrEqual(2000);
       }
+      expect(Math.abs(body.energy() - energy) / Math.abs(energy)).toBeLessThan(1e-5);
     }
+    expect(free).toBe(WRECK_ORBITS.length);
+    expect(WRECK_ORBITS_DAYS).toBeGreaterThanOrEqual(30);
   });
+
 
   it('finds its dead alike however the frames fall, after a snapshot taken halfway and in a new round', () => {
     const framed = new Derelict(new THREE.Color(1, 1, 1));

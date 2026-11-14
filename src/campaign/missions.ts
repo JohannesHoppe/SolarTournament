@@ -3075,13 +3075,14 @@ const geyserField = timeTrial({ line: CAMPAIGN.geyserField, arena: 'triton', poi
 
 /**
  * The Memorial (14.3): the bow's bridge tower (see world/bridgetower), torn off and drifting in the
- * gap before the bow's torn end, its open bottom at TOWER_AT; into it from below and up through
+ * gap before the bow's torn end, off to the side of the keel's girder (see world/arenas), its open
+ * bottom at TOWER_AT; into it from below and up through
  * the hatch of every deck in turn (passed once the hull is above it inside the shaft) to the
  * bridge, where the ninth echo is the log (ECHO_NINE), held still there; a Navy guard of GUARDS
  * at GUARD_SKILL fights outside. Grave Shift (14.4): the guard on the hull's tail, out of the
  * tower to the arena's edge (within EDGE_SHARE of ARENA_LIMIT).
  */
-export const TOWER_AT = point(-8000, -2600, 0);
+export const TOWER_AT = point(-8000, -2600, -3600);
 export const ECHO_NINE = TOWER_AT.clone().add(LOG);
 const TOWER_HATCHES = HATCHES.map((hatch) => hatch.clone().add(TOWER_AT));
 const TOWER_TURN = new THREE.Quaternion();

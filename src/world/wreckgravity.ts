@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { ARENAS } from './arenas';
 import type { Asteroid } from './asteroids';
 import { massOf } from './bodies';
-import { HULL_BOXES } from './shapes';
+import { HULL_BOXES, KEEL_TYPE } from './shapes';
 import { log } from '../detmath';
 
 /**
  * The gravity of the Derelict's wreck (see README, "The Derelict"), for the dead that fall freely
  * about it (see world/derelict). Every box of the hull is a uniform rod along its longest side,
  * of the box's mass by the field's own rule (world/bodies, massOf: a hull section 13.6 million
- * tonnes, the bow 49.8 in all, the stern 45.1), its pull in closed form; the sum over both halves.
+ * tonnes, the bow 49.8 in all, the stern 45.1, the keel's girder between them 0.09), its pull in
+ * closed form; the sum over the whole wreck.
  * In meters and seconds. Only `+ - * /` and the square root in the pull, so every browser reckons
  * the same bits; the potential (for the tests and for whether a body is bound) takes detmath's log.
  */
@@ -19,14 +20,14 @@ export const GRAVITATION = 6.674e-11;
 /** Meters per world unit. */
 export const METERS = 0.05;
 
-/** A box of the hull as its pull sees it: a rod from `from` along `along` (unit) for `length` (m), G times its mass per meter (`pull`), and the box itself (m) for keeping clear of it. */
+/** A box of the hull as its pull sees it: a rod from `from` along `along` (unit) for `length` (m), G times its mass per meter (`pull`), what it is part of (`part`: 0 the bow, 1 the stern, 2 the keel's girder), and the box itself (m) for keeping clear of it. */
 export interface Rod {
   from: THREE.Vector3;
   along: THREE.Vector3;
   length: number;
   pull: number;
   mass: number;
-  weld: number;
+  part: 0 | 1 | 2;
   center: THREE.Vector3;
   inverse: THREE.Quaternion;
   half: THREE.Vector3;
@@ -48,15 +49,15 @@ export const WRECK: readonly Rod[] = PIECES.map((piece) => {
     length,
     pull: (GRAVITATION * mass) / length,
     mass,
-    weld: piece.weld ?? 0,
+    part: piece.type >= KEEL_TYPE ? 2 : piece.position.x < 0 ? 0 : 1,
     center,
     inverse: piece.orientation.clone().invert(),
     half: half.multiplyScalar(METERS),
   };
 });
 
-/** Each half's mass (kg), the bow's and the stern's. */
-export const HALF_MASS = [0, 1].map((weld) => WRECK.filter((rod) => rod.weld === weld).reduce((sum, rod) => sum + rod.mass, 0));
+/** The mass (kg) of each part: the bow, the stern, the keel's girder. */
+export const PART_MASS = [0, 1, 2].map((part) => WRECK.filter((rod) => rod.part === part).reduce((sum, rod) => sum + rod.mass, 0));
 
 const offset = new THREE.Vector3();
 const across = new THREE.Vector3();
@@ -109,17 +110,6 @@ export function hullClearance(p: THREE.Vector3): number {
   return least;
 }
 
-/** How far `p` (m) lies from the nearest rod of half `weld` (m), and the pull's arm for a body going round it. */
-export function rodDistance(p: THREE.Vector3, weld: number): number {
-  let least = Infinity;
-  for (const rod of WRECK) {
-    if (rod.weld !== weld) continue;
-    offset.subVectors(p, rod.from);
-    const x = Math.min(rod.length, Math.max(0, offset.dot(rod.along)));
-    least = Math.min(least, offset.addScaledVector(rod.along, -x).length());
-  }
-  return least;
-}
 
 /**
  * A body falling freely about the wreck, stepped on a grid of field time FALL_STEP (s) apart by

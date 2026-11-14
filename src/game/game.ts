@@ -96,7 +96,7 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
+import { knockShare, ramReach, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { shoveSpin } from '../ship/blow';
@@ -5825,7 +5825,7 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
+    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, ramReach(this.field, piece, state.b, before, fleet.position, fleet.reach), state.b - this.field.clock) > 1) return;
     this.field.move(state);
     this.scrape(fleet, state.id);
   }
