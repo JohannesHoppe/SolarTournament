@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { Asteroid, AsteroidField } from '../world/asteroids';
 import { METERS_PER_UNIT } from '../ship/flight';
-import { BREAK_STEP } from './comet';
 
 /**
  * Big blasts by their energy. In vacuum there is no blast wave: a blast kills by the radiation
@@ -45,8 +44,10 @@ export function breakReach(energy: number, meanRadius: number, kind: 'rock' | 'i
   return reach / METERS_PER_UNIT;
 }
 
-/** A blast's field time on the grid the comet breaks rock on (see comet BREAK_STEP), alike on every browser that heard of it. */
-export const blastTime = (at: number) => Math.floor(at / BREAK_STEP) * BREAK_STEP;
+/** The grid of field time a blast breaks rock on (s): the comet's (comet BREAK_STEP; comet.ts takes the nova's energy from here, so the grid is kept here too, the test holding them alike). */
+export const BLAST_STEP = 0.1;
+/** A blast's field time on that grid, alike on every browser that heard of it. */
+export const blastTime = (at: number) => Math.floor(at / BLAST_STEP) * BLAST_STEP;
 
 const toward = new THREE.Vector3();
 

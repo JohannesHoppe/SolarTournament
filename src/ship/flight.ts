@@ -14,7 +14,7 @@ export const MAX_SPEED = 5000;
 /**
  * The overdrive's shove (units/s, 200 m/s): past the tournament's limit, see Game.overdrive. Rammed
  * from behind at that much faster, a drive or a flank goes down and the rammer's armored nose holds
- * (see impact's RAM_SCALE).
+ * (see impact's RAM_ZONE).
  */
 export const OVERDRIVE_PUSH = 4000;
 /** After the overdrive the main drive glows and gives no thrust for this long (s). */

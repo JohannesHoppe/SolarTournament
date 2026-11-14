@@ -5,12 +5,17 @@ import { NOVA_RADIUS } from './items';
 import { SELF_DESTRUCT_RADIUS } from './hangar';
 import { SINK_BLAST } from './fleet';
 import { testField } from '../test/field';
-import { blastBreaks, blastEnergy, blastTime, breakReach } from './blasts';
+import { BLAST_STEP, blastBreaks, blastEnergy, blastTime, breakReach } from './blasts';
+import { BREAK_STEP } from './comet';
 
 /** Meters to units (1 unit = 5 cm). */
 const m = (meters: number) => meters * 20;
 
 describe('big blasts by their energy', () => {
+  it("break rock on the comet's grid of field time", () => {
+    expect(BLAST_STEP).toBe(BREAK_STEP);
+  });
+
   it('take their energy from how far they kill: a nova some 8e13 J, the battleship more, a self-destruct far less', () => {
     expect(blastEnergy(NOVA_RADIUS)).toBeGreaterThan(7e13);
     expect(blastEnergy(NOVA_RADIUS)).toBeLessThan(9e13);

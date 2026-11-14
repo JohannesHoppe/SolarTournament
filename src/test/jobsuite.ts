@@ -124,7 +124,7 @@ export function flyJobs(from: number, to: number) {
     // a world built once before any job fills what the game builds on first use (the rock shapes of
     // a detail, ...): three.js names every object it makes with Math.random, so a job flown first,
     // or alone (JOB), would otherwise draw other dice than the same job flown after others
-    // (building the rock shapes takes seconds, many on a loaded machine: WARM_UP)
+    // (building it bakes the shapes' meshes: on a busy machine far longer than a hook's default 10 s, WARM_UP)
     beforeAll(() => {
       const first = MISSIONS[0];
       new JobWorld(first, campaignFor(first), host(BEHAVIORS[first.id]));

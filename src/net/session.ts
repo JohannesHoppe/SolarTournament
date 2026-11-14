@@ -169,7 +169,7 @@ export class Session {
   onFire: (shooter: string, from: Vec, to: Vec) => void = () => {};
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
-  onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean) => void = () => {};
+  onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean, blast: boolean) => void = () => {};
   /** `shooter` is the ship whose beam hit the rock, one the sender runs. */
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
@@ -311,7 +311,7 @@ export class Session {
       const position = vec(d?.p, 3, MAX_COORDINATE);
       const velocity = vec(d?.u, 3, MAX_SPEED);
       if (!victim || killer === undefined || deaths === null || ownerOf(victim) !== from || !this.destroyBudget.spend(from)) return;
-      this.guard(() => this.onDestroyed(victim, killer, deaths, position, velocity, d?.n === 1));
+      this.guard(() => this.onDestroyed(victim, killer, deaths, position, velocity, d?.n === 1, d?.b === 1));
     });
     transport.on('w', (d, from) => {
       const wreck = id(d?.i);
@@ -649,8 +649,8 @@ export class Session {
    * `deaths` is the victim's death count with this death, so every peer seeds the same wreckage,
    * where the victim broke up; `n: 1` when the killer's nova core did it (it counts double).
    */
-  sendDestroyed(victim: string, killer: string | null, deaths: number, position: Vec, velocity: Vec, nova: boolean) {
-    this.transport.send('x', { v: victim, k: killer, de: deaths, p: position, u: velocity, ...(nova ? { n: 1 } : {}) });
+  sendDestroyed(victim: string, killer: string | null, deaths: number, position: Vec, velocity: Vec, nova: boolean, blast = false) {
+    this.transport.send('x', { v: victim, k: killer, de: deaths, p: position, u: velocity, ...(nova ? { n: 1 } : {}), ...(blast ? { b: 1 } : {}) });
   }
 
   sendWreck(wreck: string) {
@@ -676,7 +676,7 @@ export class Session {
     else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 
-  /** `at`: the field time it went off at, the rock it breaks broken then (see game/blasts). */
+  /** A nova core went off at `position` at field time `at` (s): every browser breaks a comet's head and the rock in its blast at that field time (see comet.ts, breakHead; game/blasts). */
   sendNova(ship: string, position: Vec, at: number) {
     this.transport.send('nv', { s: ship, p: position, t: +at.toFixed(3) });
   }
