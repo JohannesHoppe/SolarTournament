@@ -297,7 +297,7 @@ describe("a comet's head", () => {
     const speed = COMET_SPEED * (HEAD_MASS / (HEAD_MASS + a.bodyMass(moved)));
     expect(moved.velocity.length()).toBeCloseTo(speed, 3);
     expect(moved.object.position.distanceTo(before)).toBeGreaterThan(speed * 10);
-    // its half of the world ship goes along as one body, every section alike, none turning
+    // the world ship goes along as one body, every section alike, none turning
     for (const section of a.welded(moved)) {
       expect(section.velocity.distanceTo(moved.velocity)).toBeLessThan(1e-9);
       expect(section.spinRate).toBe(0);
