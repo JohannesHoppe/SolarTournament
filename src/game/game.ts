@@ -4979,7 +4979,7 @@ export class Game implements OnlineGame {
     this.arena.mesh.visible = !this.venue.open;
     this.arena.shape(this.venue.bounds ?? null);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
-    this.landmarks.update(this.field.clock);
+    this.landmarks.update(this.field.clock, this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     if (this.venue.id === 'derelict') this.moveBreak();
     this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);

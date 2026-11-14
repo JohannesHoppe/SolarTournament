@@ -243,6 +243,12 @@ const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
 /** At most this many exhaust puffs per frame and ship, even at extreme speed. */
 const TRAIL_MAX_PUFFS = 12;
+/** A laser's muzzle flash: its size (units, 4 m), how long it glows (s) and how bright (times its color). */
+const MUZZLE_SIZE = 80;
+const MUZZLE_LIFE = 0.09;
+const MUZZLE_GLOW = 1.6;
+const muzzleColor = new THREE.Color();
+const zero = new THREE.Vector3();
 const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 const spread = new THREE.Vector3();
@@ -364,7 +370,16 @@ export class Effects {
     }
   }
 
+  /**
+   * A laser shot from `from` to `to` in the shooter's tint. In vacuum a beam shows nothing from
+   * the side: what the sensors see is the flash at the muzzle and the hit, and the line between
+   * them is the flight computer's, drawn as the HUD draws. In a planet's air the air scatters the
+   * beam and it glows itself; either way it fades in the haze as anything seen through it.
+   */
   beam(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color) {
+    // the muzzle's flash: a small, short glow the sensors see
+    muzzleColor.set(0xffffff).lerp(color, 0.4).multiplyScalar(MUZZLE_GLOW);
+    this.fire.emit(from, zero, MUZZLE_LIFE, MUZZLE_SIZE, MUZZLE_SIZE * 0.4, muzzleColor);
     let beam: Beam | null = null;
     for (const b of this.beams) {
       if (b.age >= Beam.LIFE) {
@@ -397,7 +412,7 @@ const CORE_TINT = 0.85;
 const CORE_GLOW = 1.5;
 const HALO_GLOW = 2.5;
 
-/** A laser beam: bright core plus a soft halo, fading out quickly. */
+/** A laser beam as the screen shows it (see Effects.beam): bright core plus a soft halo, fading out quickly. */
 class Beam {
   /** Seconds a beam glows before it is gone. */
   static readonly LIFE = 0.3;
