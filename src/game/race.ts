@@ -24,7 +24,7 @@ export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, ga
  */
 export const canSkip = (gates: number, skipLap: number) => gates % GATES !== 0 && skipLap !== lapOf(gates);
 /**
- * Radius of a gate's opening (units, 120 m): wide enough for a pack of 35 m ships, and for a
+ * Radius of a gate's opening (units, 120 m): wide enough for a pack of ships 30 to 37 m long, and for a
  * racer coming in at speed a little off its center to pass the coil's solid housings.
  */
 export const GATE_RADIUS = 2400;

@@ -51,7 +51,7 @@ Everything we come up with for the game must be documented, so that we can under
 
 ## Units
 
-1 world unit = 5 cm. A ship is about 35 m long. Speeds in code in units/s, in the HUD in m/s (factor 0.05). 1 g = 196.2 units/s².
+1 world unit = 5 cm. A ship is about 30 to 37 m long (the human interceptor 30 m long and 31 m across, the alien 37 m long and 16 m across). Speeds in code in units/s, in the HUD in m/s (factor 0.05). 1 g = 196.2 units/s².
 
 ## Commands
 

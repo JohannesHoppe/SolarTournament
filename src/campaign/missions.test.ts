@@ -366,7 +366,7 @@ describe('the Derelict’s bridge tower', () => {
           }
       expect(center.length() + box.half.length()).toBeLessThan(ARENA_LIMIT);
     }
-    // a hatch passes an interceptor (35 m long) with room: 60 m a side
+    // a hatch passes an interceptor (30 to 37 m long) with room: 60 m a side
     expect(HATCH_HALF * 2 * 0.05).toBeGreaterThanOrEqual(60);
     expect(ECHO_NINE.distanceTo(TOWER_AT.clone().add(LOG))).toBe(0);
   });
