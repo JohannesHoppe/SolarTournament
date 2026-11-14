@@ -92,7 +92,7 @@ import { clipType, recordClip } from '../view/clip';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, hullLooks, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_ARMING, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, torpedoDamage, TORPEDO_SIGHT, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_ARMING, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
@@ -953,6 +953,10 @@ const hookEnd = new THREE.Vector3();
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
+/** A torpedo's velocity against the hull it hits (see applyTorpedoHit). */
+const closingOf = new THREE.Vector3();
+/** How far a torpedo's blast flashes and is heard from (units, 20 m: 100 kg of explosive going off in vacuum; looks and sound only). */
+const TORPEDO_FIREBALL = 400;
 /** Where the drive whose plume grills the own ship burns, for the alarm's arrow. */
 const plumeFrom = new THREE.Vector3();
 /** A comet's head rumbles on the hull within RUMBLE_REACH of it (units, 1.5 km), up to RUMBLE_RATE times a second right at it; a shower's knot strikes as hard as can be heard at GRIT_LOUDEST laser hits' worth. */
@@ -7317,7 +7321,7 @@ export class Game implements OnlineGame {
       const range = line.length();
       if (range > LASER_RANGE) continue;
       const off = angleTo(nose, line);
-      const onIt = off < TORPEDO_RADIUS / Math.max(range, 1) && range < hitRange;
+      const onIt = off < TORPEDO_SIGHT / Math.max(range, 1) && range < hitRange;
       const rival = torpedo.shooter !== me && !torpedo.shooter.allyOf(me);
       const assist = rival && off < angle && range <= AIM_ASSIST_RANGE;
       if ((!onIt && !assist) || !this.field.lineOfSight(flight.position, torpedo.position)) continue;
@@ -7967,7 +7971,7 @@ export class Game implements OnlineGame {
       devlog.add({ kind: 'act', t: this.time, ship: torpedo.shooter.name, act: 'torpedo gone', detail: `${outcome}${torpedo.target ? '' : ', lock lost'}${torpedo.shooter.alive ? '' : ', shooter dead'}` });
     }
     if (!hit) return;
-    if (hit.owner === null) this.applyTorpedoHit(hit, credit);
+    if (hit.owner === null) this.applyTorpedoHit(hit, credit, torpedo);
     else this.online?.sendTorpedoHit(hit, credit, torpedo.id);
     if (credit.isLocal) {
       this.hud.hit();
@@ -8273,13 +8277,17 @@ export class Game implements OnlineGame {
   }
 
   private blowUp(torpedo: Torpedo) {
-    this.effects.explosion(torpedo.position, TORPEDO_RADIUS * 4, torpedo.velocity);
-    this.hearDebris(torpedo.position, TORPEDO_RADIUS * 4);
+    this.effects.explosion(torpedo.position, TORPEDO_FIREBALL, torpedo.velocity);
+    this.hearDebris(torpedo.position, TORPEDO_FIREBALL);
     this.torpedoes.remove(torpedo);
   }
 
-  /** A torpedo went off on a ship this browser runs, whichever side the shooter is on (friendly fire). */
-  applyTorpedoHit(ship: Ship, shooter: Ship | null) {
+  /**
+   * A torpedo went off on a ship this browser runs, whichever side the shooter is on (friendly
+   * fire): its warhead and the energy of the speed the two closed at (see torpedoDamage), as the
+   * torpedo flew here.
+   */
+  applyTorpedoHit(ship: Ship, shooter: Ship | null, torpedo: Torpedo) {
     const now = this.time;
     // plating (an item) takes a whole torpedo and is gone
     if (ship.plating > 0 && now >= ship.protectedUntil) {
@@ -8288,7 +8296,7 @@ export class Game implements OnlineGame {
       if (ship.isLocal) this.hud.flashMessage(now, t('Plating took the torpedo'), 1.5);
       return;
     }
-    const status = ship.structural(TORPEDO_DAMAGE, now);
+    const status = ship.structural(torpedoDamage(closingOf.subVectors(torpedo.velocity, ship.flight.velocity).length(), ship.body.mass), now);
     if (status === 'protected') return;
     if (shooter?.isLocal) this.torpedoesHit++;
     // the blast shakes the thrusters too
@@ -8341,8 +8349,8 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The puffs of gas from every living ship's firing nozzles (see Ship.fireJets), white-blue and
-   * tiny, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
+   * The hot jets from every living ship's firing nozzles (see Ship.fireJets), white-hot and rose,
+   * short, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
    */
   private showJets() {
     for (const ship of this.ships) {

@@ -23,7 +23,7 @@ export const IMMOVABLE = Infinity;
  * times a fighter jet of today, for its reactor, drive and armor. A sponsor core (an armored
  * reactor canister 14 m long) a quarter of that; a sponsor probe 60 kg (solar wings, a dish and
  * a beacon on a light frame: a hook's winch has it in at a jerk, and its thrusters, about 20 kN,
- * throw it about at some 33 g, see game/items); a torpedo a
+ * throw it about at some 33 g, see game/items); a torpedo (5.5 m long, half a meter thick, see game/torpedoes) a
  * tonne (its 20 g motor makes about 196 kN); wreckage what it is (see world/wrecks: a hulk of 24 t and plates by their area); Scout One, the
  * campaign's scout, 12 t; the President's
  * battleship (1,150 m) 4.5 million t: a carrier of today, 330 m long, displaces some 100,000 t,

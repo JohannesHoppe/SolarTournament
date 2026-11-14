@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { atan2, sin } from '../detmath';
 import { describe, expect, it } from 'vitest';
-import { gripAt, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from '../ship/flight';
-import { DODGE_SECONDS, DODGE_THRUST, type Ship as GameShip } from '../ship/ship';
+import { gripAt, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH, RCS_THRUST } from '../ship/flight';
+import { DODGE_SECONDS, DODGE_THRUST, MAX_HULL, type Ship as GameShip } from '../ship/ship';
 import type { Effects } from '../view/effects';
 import type { AsteroidField } from '../world/asteroids';
 import { MASS, type Body } from '../world/bodies';
 import { pullOn } from './hook';
-import { creditOf, FLING_CREDIT, flyTorpedo, fused, strikes, TORPEDO_ARMING, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, Torpedoes, type Homing, type Torpedo, type TorpedoFlight } from './torpedoes';
+import { creditOf, FLING_CREDIT, flyTorpedo, fused, strikes, TORPEDO_ARMING, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_MOST, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDO_WARHEAD, torpedoDamage, Torpedoes, type Homing, type Torpedo, type TorpedoFlight } from './torpedoes';
 
 /** The game's frames, at a fast browser's rate. */
 const DT = 1 / 60;
@@ -118,8 +118,21 @@ const IN_TIME = [0.6, 0.8, 1, 1.2, 1.5, 2];
 describe('a torpedo', () => {
   it('is faster than a ship in normal flight, slower than an overdrive, and less agile', () => {
     expect(TORPEDO_TOP_SPEED).toBeGreaterThan(MAX_SPEED);
-    expect(TORPEDO_TOP_SPEED).toBeLessThan(400 / 0.05);
+    expect(TORPEDO_TOP_SPEED).toBeLessThan(MAX_SPEED + OVERDRIVE_PUSH);
     expect(TORPEDO_LATERAL).toBeLessThan(gripAt(MAX_SPEED));
+  });
+
+  it('strikes with its warhead and the energy of the speed it closes at, never more than a whole hull', () => {
+    // its warhead alone, touching
+    expect(torpedoDamage(0, MASS.ship)).toBe(TORPEDO_WARHEAD);
+    // a ship fleeing at the limit, caught at 110 m/s: 6 MJ more, 8 points
+    expect(torpedoDamage(TORPEDO_TOP_SPEED - MAX_SPEED, MASS.ship)).toBeCloseTo(TORPEDO_WARHEAD + 7.9, 0);
+    // one at rest, or head on: all of it
+    expect(torpedoDamage(TORPEDO_TOP_SPEED, MASS.ship)).toBe(TORPEDO_MOST);
+    expect(torpedoDamage(TORPEDO_TOP_SPEED + MAX_SPEED, MASS.ship)).toBe(TORPEDO_MOST);
+    // fleeing, two kill and one does not
+    expect(torpedoDamage(TORPEDO_TOP_SPEED - MAX_SPEED, MASS.ship)).toBeLessThan(MAX_HULL);
+    expect(2 * torpedoDamage(TORPEDO_TOP_SPEED - MAX_SPEED, MASS.ship)).toBeGreaterThanOrEqual(MAX_HULL);
   });
 
   it('catches a ship flying straight: from 1 km behind one fleeing at full speed in under 10 s, one at rest, one coming head-on', () => {

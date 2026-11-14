@@ -15,7 +15,7 @@ import { PSYCHE_FALL } from '../world/yard';
 import { cushion } from '../world/hover';
 import { EXTREME_G } from '../ship/strainhand';
 import { CALLISTO_FALL } from '../world/callisto';
-import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
+import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, torpedoDamage, TORPEDO_LATERAL, TORPEDO_WARHEAD, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
@@ -120,7 +120,8 @@ export const FROM_CODE: Record<string, number> = {
   probeTorpedoes: TORPEDOES_PER_PROBE,
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
   lockRange: km(LOCK_DISTANCE),
-  torpedoDamage: TORPEDO_DAMAGE,
+  torpedoWarhead: TORPEDO_WARHEAD,
+  torpedoTail: Math.round(torpedoDamage(TORPEDO_TOP_SPEED - MAX_SPEED, MASS.ship)),
   torpedoSpeed: meters(TORPEDO_TOP_SPEED),
   torpedoTurn: g(TORPEDO_LATERAL),
   grip: g(gripAt(MAX_SPEED)),
@@ -277,7 +278,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   heatShot: { value: 20, readme: 'Each shot adds # % of the heat capacity' },
   burstSun: { value: 6, readme: 'a cool laser fires a burst of #;' },
   cooled: { value: 30, readme: 'cooled down to # %' },
-  torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
+  torpedoShot: { value: 50, readme: 'the game keeps the 6 m for play; # points' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },
