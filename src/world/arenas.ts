@@ -1256,7 +1256,8 @@ export const ARENAS: readonly ArenaProfile[] = [
       radius: FIELD_RADIUS * 1.3,
       inner: 28000,
       flat: 2500,
-      orbit: { axis: 'vertical', speed: 500 },
+      // on the circular orbits the hole's pull holds them on: 167 m/s at 1.4 km, 116 m/s at 2.9 km
+      orbit: { axis: 'vertical' },
       spin: 0.06,
       toughness: 800,
       well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (HOLE_PULL * HOLE_PULL_AT * HOLE_PULL_AT) / (HOLE_RADIUS * HOLE_RADIUS) },

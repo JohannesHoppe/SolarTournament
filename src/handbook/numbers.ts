@@ -186,6 +186,9 @@ export const FROM_CODE: Record<string, number> = {
   orbitKm: Math.round(meters(circularAt(20000))),
   orbitKmTime: Math.round((2 * Math.PI * 20000) / circularAt(20000)),
   orbitEdge: Math.round(meters(circularAt(orbitRoom(hole())))),
+  // the circles its rocks fly, at the inner and the outer edge of their ring (m/s)
+  holeRocksInner: Math.round(meters(circularAt(arenaById('hole')!.layout.inner))),
+  holeRocksOuter: Math.round(meters(circularAt(arenaById('hole')!.layout.radius))),
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,

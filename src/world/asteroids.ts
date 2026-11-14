@@ -12,6 +12,7 @@ import { massOf } from './bodies';
 import type { JunkBuild } from './junk';
 import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
+import { kepler } from './orbits';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -118,6 +119,26 @@ export interface Well {
   position: THREE.Vector3;
   radius: number;
   surfaceGravity: number;
+  /**
+   * The radius (units) of the real body whose pull this is, where the game draws it smaller
+   * (Jupiter, see world/arenas): the pull falls off with the square of the distance from that
+   * body's center, its surface lying where the well's own does, so over the few kilometers of an
+   * arena it barely changes, as near the real planet. Without, the well's own radius.
+   */
+  body?: number;
+}
+
+/** A well's pull (units/s²) at `distance` (units) from its center (see Well.body). */
+export function wellPull(well: Well, distance: number): number {
+  if (well.body === undefined) return (well.surfaceGravity * well.radius * well.radius) / (distance * distance);
+  const reach = well.body + distance - well.radius;
+  return (well.surfaceGravity * well.body * well.body) / (reach * reach);
+}
+
+/** The distance from a well's center (units) at which it pulls with `accel` (units/s²): where a drive of that thrust outpulls it. */
+export function wellReach(well: Well, accel: number): number {
+  const at = well.body ?? well.radius;
+  return well.radius - at + at * Math.sqrt(well.surfaceGravity / accel);
 }
 
 /** Something besides rocks that stands in the field, blocks the line of sight and sets off a torpedo (the President's battleship). */
@@ -190,8 +211,8 @@ export interface FieldLayout {
   open?: { count: number; minScale: number; maxScale: number; from: number; to: number; radius: number };
   /**
    * The rocks circle the center: about the vertical axis or each about an axis of its own
-   * (crossing orbits), at `speed` (units/s) or, with a well, at the speed its gravity holds
-   * them in (Kepler).
+   * (crossing orbits), at `speed` (units/s) or, with a well, on the circular orbit its gravity
+   * holds them on (Kepler), its plane through the well's center.
    */
   orbit?: { axis: 'vertical' | 'random'; speed?: number };
   /** How fast each rock turns about itself (rad/s). */
@@ -249,6 +270,13 @@ export interface Asteroid {
   /** The rock circles the field's center about this axis at this rate (rad/s); zero for a rock that only drifts. */
   orbitAxis: THREE.Vector3;
   orbitRate: number;
+  /**
+   * The strength of the well it circles on its own orbit (units³/s², see world/orbits kepler):
+   * a piece of a field circling a well's center as its gravity holds it (FieldLayout.orbit
+   * without a speed); once it drifts off its circle (a knock, a break) it flies the conic its
+   * motion gives it, its drift taken in the frame its orbit turns. Zero for every other piece.
+   */
+  orbitMu: number;
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
   /** Field time (s) it crumbles to dust (see CRUMBLE_AFTER), from when it broke off, whatever moved it since; Infinity for a piece that lasts. */
@@ -299,6 +327,7 @@ interface Origin {
   position: THREE.Vector3;
   spinAxis: THREE.Vector3;
   spinRate: number;
+  velocity: THREE.Vector3;
   orbitAxis: THREE.Vector3;
   orbitRate: number;
   solid: boolean;
@@ -510,6 +539,8 @@ export class AsteroidField {
   layout: FieldLayout | null = null;
   /** The massive body of the arena, if it has one. */
   well: Well | null = null;
+  /** The strength of the well the pieces circle on their own orbits (see Asteroid.orbitMu), 0 for none. */
+  private orbitMu = 0;
   /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
   fall = 0;
   /** The pieces that are a world's ground (see Placement.ground), for the hover field (see groundBelow). */
@@ -596,6 +627,9 @@ export class AsteroidField {
     if (this.layout?.key !== layout.key) this.attachments.clear();
     this.layout = layout;
     this.well = layout.well ?? null;
+    // a well at the field's center whose pull falls off as its own (see Well.body): the pieces fly about it as two bodies do
+    const kepler = layout.well && layout.orbit && layout.orbit.speed === undefined && layout.well.body === undefined && layout.well.position.lengthSq() === 0;
+    this.orbitMu = kepler ? layout.well!.surfaceGravity * layout.well!.radius * layout.well!.radius : 0;
     this.fall = layout.fall ?? 0;
     this.columns = layout.columns ?? [];
     this.air = layout.air ?? null;
@@ -648,7 +682,7 @@ export class AsteroidField {
     this.origins.clear();
     for (const a of this.asteroids.values()) {
       this.roots.push(a.id);
-      this.origins.set(a.id, { ...a, position: a.basePosition.clone(), spinAxis: a.spinAxis.clone(), orbitAxis: a.orbitAxis.clone(), baseOrientation: a.baseOrientation.clone(), type: a.object.userData.type, scale: a.object.userData.scale, template: a.object.userData.template });
+      this.origins.set(a.id, { ...a, position: a.basePosition.clone(), spinAxis: a.spinAxis.clone(), velocity: a.velocity.clone(), orbitAxis: a.orbitAxis.clone(), baseOrientation: a.baseOrientation.clone(), type: a.object.userData.type, scale: a.object.userData.scale, template: a.object.userData.template });
     }
   }
 
@@ -688,7 +722,7 @@ export class AsteroidField {
       this.heard.delete(id);
       this.dust.delete(id);
     }
-    const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), new THREE.Vector3(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
+    const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), origin.velocity.clone(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
     a.baseOrientation.copy(origin.baseOrientation);
     a.weld = origin.weld;
     this.place(a);
@@ -700,7 +734,7 @@ export class AsteroidField {
   originOf(root: string): ShovedState | null {
     const origin = this.origins.get(root);
     if (!origin) return null;
-    return { id: root, b: 0, p: origin.position.toArray(), v: [0, 0, 0], q: origin.baseOrientation.toArray(), s: [...origin.spinAxis.toArray(), origin.spinRate], c: KNOCKED };
+    return { id: root, b: 0, p: origin.position.toArray(), v: origin.velocity.toArray(), q: origin.baseOrientation.toArray(), s: [...origin.spinAxis.toArray(), origin.spinRate], c: KNOCKED };
   }
 
   /**
@@ -724,6 +758,11 @@ export class AsteroidField {
       if (layout.orbit?.axis === 'random') {
         // an axis across the line to the center, so the rock circles at its distance
         orbitAxis.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).cross(position).normalize();
+      } else if (layout.orbit && layout.orbit.speed === undefined && this.well) {
+        // a real orbit's plane runs through the body's center: the axis square to the line to
+        // the center, as near the vertical as that leaves it, so a rock above the disk's middle
+        // swings through it and below it, as far again, on its way round
+        orbitAxis.copy(position).cross(u.set(0, 1, 0).cross(position)).normalize();
       }
       const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
       const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
@@ -754,12 +793,12 @@ export class AsteroidField {
     this.place(piece);
   }
 
-  /** How fast a rock at a place circles the center: at `speed` (units/s), or as the well's gravity holds it. */
+  /** How fast a rock at a place circles the center: at `speed` (units/s), or on the circular orbit the well's gravity holds it on (Kepler: its pull is the circle's v²/r). */
   private orbitRate(position: THREE.Vector3, speed?: number) {
     const distance = Math.max(position.length(), 1);
     if (speed !== undefined) return speed / distance;
     const well = this.well;
-    return well ? Math.sqrt((well.surfaceGravity * well.radius * well.radius) / (distance * distance * distance)) : 0;
+    return well ? Math.sqrt(wellPull(well, distance) / distance) : 0;
   }
 
   clear() {
@@ -842,6 +881,7 @@ export class AsteroidField {
       velocity,
       orbitAxis,
       orbitRate,
+      orbitMu: orbitRate ? this.orbitMu : 0,
       born,
       crumbles: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
       basePosition: position.clone(),
@@ -1082,10 +1122,10 @@ export class AsteroidField {
   /** One piece of a shove (see shove). */
   private push(a: Asteroid, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number) {
     const age = at - a.born;
+    const drift = driftAt(a, at, new THREE.Vector3());
     positionAt(a, at, a.basePosition);
     a.baseOrientation.premultiply(setFromAxisAngle(new THREE.Quaternion(), a.spinAxis, a.spinRate * age));
-    if (a.orbitRate) applyAxisAngle(a.velocity, a.orbitAxis, a.orbitRate * age);
-    a.velocity.add(kick);
+    a.velocity.copy(drift).add(kick);
     a.spinAxis = axis.clone();
     a.spinRate = rate;
     a.born = at;
@@ -1138,8 +1178,7 @@ export class AsteroidField {
     const scale = asteroid.object.userData.scale * FRAGMENT_SCALE;
     // the fragments fly apart from where the piece stood, and keep circling with its orbit
     const origin = positionAt(asteroid, at, new THREE.Vector3());
-    const drift = asteroid.velocity.clone();
-    if (asteroid.orbitRate) applyAxisAngle(drift, asteroid.orbitAxis, asteroid.orbitRate * (at - asteroid.born));
+    const drift = driftAt(asteroid, at, new THREE.Vector3());
     const templates = this.templates[asteroid.kind];
     for (let i = 0; i < count; i++) {
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
@@ -1173,8 +1212,7 @@ export class AsteroidField {
     const r = new Randomizer(textSeed(rock.id));
     const age = at - rock.born;
     const origin = positionAt(rock, at, new THREE.Vector3());
-    const drift = rock.velocity.clone();
-    if (rock.orbitRate) applyAxisAngle(drift, rock.orbitAxis, rock.orbitRate * age);
+    const drift = driftAt(rock, at, new THREE.Vector3());
     const turn = setFromAxisAngle(new THREE.Quaternion(), rock.spinAxis, rock.spinRate * age).multiply(rock.baseOrientation);
     const spin = rock.spinAxis.clone().multiplyScalar(rock.spinRate);
     const tumble = (this.layout?.spin ?? SPIN_RATE) * FRAGMENT_TUMBLE;
@@ -1501,9 +1539,9 @@ export class AsteroidField {
   surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3(), time = this.clock): THREE.Vector3 {
     const arm = pull.subVectors(point, asteroid.object.position);
     target.copy(asteroid.spinAxis).multiplyScalar(asteroid.spinRate).cross(arm);
-    if (!asteroid.orbitRate) return target.add(asteroid.velocity);
-    // the orbit carries the rock (and turns its drift) about the field's center
-    target.add(applyAxisAngle(v.copy(asteroid.velocity), asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
+    target.add(driftAt(asteroid, time, v));
+    // the orbit carries the rock about the field's center
+    if (!asteroid.orbitRate) return target;
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
@@ -1551,7 +1589,7 @@ export class AsteroidField {
     if (well) {
       pull.subVectors(well.position, position);
       const distance = Math.max(pull.length(), well.radius);
-      target.addScaledVector(pull.normalize(), (well.surfaceGravity * well.radius * well.radius) / (distance * distance));
+      target.addScaledVector(pull.normalize(), wellPull(well, distance));
     }
     return target;
   }
@@ -1601,10 +1639,43 @@ function rayAttachment(asteroid: Asteroid, part: Attachment, origin: THREE.Vecto
   return rayBox(localOrigin, localStep, part.half);
 }
 
-/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center. */
+const flown = new THREE.Vector3();
+const flownVelocity = new THREE.Vector3();
+const startVelocity = new THREE.Vector3();
+
+/** Whether a piece flies its own conic about the well (see Asteroid.orbitMu): it circles one, and drifts off its circle. */
+const ownConic = (a: Asteroid) => a.orbitMu !== 0 && (a.velocity.x !== 0 || a.velocity.y !== 0 || a.velocity.z !== 0);
+
+/** A piece on its own conic (see ownConic): where it is `age` seconds after it was born, and how fast it moves there, into `position` and `velocity`. */
+function conic(a: Asteroid, age: number, position: THREE.Vector3, velocity: THREE.Vector3) {
+  // its drift was taken in the frame its orbit turns: the turn's speed where it was born on top
+  startVelocity.copy(a.orbitAxis).multiplyScalar(a.orbitRate).cross(a.basePosition).add(a.velocity);
+  kepler(a.orbitMu, a.basePosition, startVelocity, age, position, velocity);
+}
+
+/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center, or flown along its own conic about the well. */
 function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
   const age = time - a.born;
+  if (ownConic(a)) {
+    conic(a, age, flown, flownVelocity);
+    return target.copy(flown);
+  }
   target.copy(a.basePosition).addScaledVector(a.velocity, age);
+  return a.orbitRate ? applyAxisAngle(target, a.orbitAxis, a.orbitRate * age) : target;
+}
+
+/**
+ * A rock's drift at a field time (units/s), into `target`: how it moves besides what its orbit's
+ * turn carries (the turn's speed where it stands, see surfaceVelocity), in the world's axes; its
+ * drift as born, turned with its orbit, or what is left of its speed on its own conic.
+ */
+function driftAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
+  const age = time - a.born;
+  if (ownConic(a)) {
+    conic(a, age, flown, flownVelocity);
+    return target.copy(a.orbitAxis).multiplyScalar(-a.orbitRate).cross(flown).add(flownVelocity);
+  }
+  target.copy(a.velocity);
   return a.orbitRate ? applyAxisAngle(target, a.orbitAxis, a.orbitRate * age) : target;
 }
 

@@ -97,7 +97,7 @@ describe('the shared world on every machine', () => {
       junkyard: '244c6a22a52f4d10',
       giant: '2847130a14fa3460',
       corona: 'abd0ef83e0594884',
-      hole: '44ebf3482e7f6d96',
+      hole: '6e291c3a694efc42',
       // the Derelict's wreck held as one body by its keel's girder, its segments in the field
       derelict: '5753e40190f4afe9',
       crack: 'f08ab2d988e99ebc',

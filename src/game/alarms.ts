@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Well } from '../world/asteroids';
+import { type Well, wellPull, wellReach } from '../world/asteroids';
 import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { angleTo } from '../detthree';
@@ -183,7 +183,7 @@ export class AlarmTones {
  */
 export function escapeLoad(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, thrust: number): number {
   const distance = Math.max(position.distanceTo(well.position), 1);
-  const pull = (well.surfaceGravity * well.radius * well.radius) / (distance * distance);
+  const pull = wellPull(well, distance);
   const gap = Math.max(1, distance - well.radius);
   // the speed towards the well's center
   const inward = -(velocity.x * (position.x - well.position.x) + velocity.y * (position.y - well.position.y) + velocity.z * (position.z - well.position.z)) / distance;
@@ -242,8 +242,7 @@ function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, 
   // moment, and the drive's too unless it burns away already
   const turned = ESCAPE_REACTION + angleTo(nose, awayFrom) / MAX_TURN_RATE;
   const driveFrom = burning ? 0 : turned;
-  const free = well.radius * Math.sqrt(well.surfaceGravity / Math.max(MAIN_THRUST * drive, 1));
-  const strength = well.surfaceGravity * well.radius * well.radius;
+  const free = wellReach(well, Math.max(MAIN_THRUST * drive, 1));
   let coldUntil = cold;
   let fired = false;
   let shoving = 0;
@@ -270,7 +269,7 @@ function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, 
     flight.orientation.setFromRotationMatrix(probeLook.lookAt(flight.position, probeTarget, Math.abs(awayFrom.y) > 0.9 ? PROBE_SIDE : PROBE_UP));
     flight.driveFactor = t < coldUntil ? 0 : drive;
     probeControls.thrust = t >= driveFrom ? 1 : 0;
-    probePull.copy(awayFrom).multiplyScalar(-strength / (r * r));
+    probePull.copy(awayFrom).multiplyScalar(-wellPull(well, r));
     flight.update(ESCAPE_STEP, probeControls, probePull);
   }
   return true;
