@@ -4,9 +4,9 @@ import { Randomizer } from '../random';
 import { ARENAS, sternAt } from './arenas';
 import { MASS } from './bodies';
 import { BREACH_CORE, BREACH_DECK_COUNT, BREACH_EDGE, HULL_BOXES } from './shapes';
-import { cos, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { FALL_STEP, FreeFall, hullClearance, METERS, rodDistance, wreckPotential, wreckPull } from './wreckgravity';
+import { FreeFall, METERS } from './wreckgravity';
+import { WRECK_ORBITS } from './wreckorbits';
 import { FROZEN_NEAR, frostMaterial, frostShader, frozenSurface, frozenUv, loadFrozen, type FrozenCell } from '../view/frozen';
 
 /**
@@ -130,26 +130,26 @@ const mistFragment = /* glsl */ `
  * The dead, by what they look like: each kind one of the figures of the frozen dead (its number,
  * see view/frozen, loadFrozen: MakeHuman's, a man or a woman, young or old, in everyday clothes,
  * the crew's coveralls or under an old helmet, posed in free fall or against the cold; or the
- * crew in the ship's light emergency suits, `suited`), how many of them (on the full picture;
+ * crew in the ship's light emergency suits, `suit`), how many of them (on the full picture;
  * fewer on a cheaper one, see setParticles), and how the figure built in code is dressed and
  * posed that stands in for it beyond FROZEN_NEAR and until it has loaded. A pair counts as one:
  * two holding on to each other. 196 in all, 204 bodies.
  */
 const DEAD_KINDS = [
-  { dress: 'everyday', pose: 'crouch', count: 14, suited: false },
-  { dress: 'everyday', pose: 'spread', count: 13, suited: false },
-  { dress: 'work', pose: 'curled', count: 12, suited: false },
-  { dress: 'work', pose: 'reach', count: 11, suited: false },
-  { dress: 'everyday', pose: 'spread', count: 10, suited: false },
-  { dress: 'everyday', pose: 'curled', count: 10, suited: false },
-  { dress: 'work', pose: 'crouch', count: 10, suited: false },
-  { dress: 'everyday', pose: 'pair', count: 8, suited: false },
-  { dress: 'suit', pose: 'reach', count: 18, suited: true },
-  { dress: 'suit', pose: 'spread', count: 18, suited: true },
-  { dress: 'suit', pose: 'crouch', count: 18, suited: true },
-  { dress: 'suit', pose: 'curled', count: 18, suited: true },
-  { dress: 'suit', pose: 'reach', count: 18, suited: true },
-  { dress: 'suit', pose: 'spread', count: 18, suited: true },
+  { dress: 'everyday', pose: 'crouch', count: 14 },
+  { dress: 'everyday', pose: 'spread', count: 13 },
+  { dress: 'work', pose: 'curled', count: 12 },
+  { dress: 'work', pose: 'reach', count: 11 },
+  { dress: 'everyday', pose: 'spread', count: 10 },
+  { dress: 'everyday', pose: 'curled', count: 10 },
+  { dress: 'work', pose: 'crouch', count: 10 },
+  { dress: 'everyday', pose: 'pair', count: 8 },
+  { dress: 'suit', pose: 'reach', count: 18 },
+  { dress: 'suit', pose: 'spread', count: 18 },
+  { dress: 'suit', pose: 'crouch', count: 18 },
+  { dress: 'suit', pose: 'curled', count: 18 },
+  { dress: 'suit', pose: 'reach', count: 18 },
+  { dress: 'suit', pose: 'spread', count: 18 },
 ] as const;
 type Dress = (typeof DEAD_KINDS)[number]['dress'];
 type Pose = 'crouch' | 'spread' | 'curled' | 'reach' | 'embrace';
@@ -180,23 +180,13 @@ const CORE_ACROSS = TORN_HALF.z * BREACH_CORE;
  * How the dead lie about the breaches, reckoned from the break (see README, "The Derelict"): the
  * air rushing out of a torn deck carried its people out at a few m/s, faster than the wreck holds
  * anything (its escape speed is about 0.1 m/s near the hull, see world/wreckgravity), and the ship
- * stranded long ago, so whoever left that fast is gone. What is left is settled: CAUGHT of the
- * dead (SUITED_CAUGHT of the suited crew, who were at the leak) never left and hang where they
- * snagged, on the torn plating, in the mouth of the breach and on the broken decks inside, fixed to
- * their half; the rest fell into loops about the wreck, bound by its gravity, and fall freely along
- * them (see FreeFall): each starts, at field time 0, FREE_NEAR to FREE_FAR (m) off the hull out of
- * a breach's mouth, moving across the pull at 1 to 1.4 times the speed that would hold it going
- * round its half's nearest rod, and is kept only if it is bound and its path stays CLEAR (m) off
- * every box of the hull for SETTLED (s) of field time (a round's field time starts at 0 and lasts
- * five minutes). TOGETHER of them fall beside another one, a few meters off, at its speed.
+ * stranded long ago, so whoever left that fast is gone, and so is whoever fell into a loop that
+ * strikes the hull sooner or later. What is left is settled: most of the dead never left and hang
+ * where they snagged, on the torn plating, in the mouth of the breach and on the broken decks
+ * inside, fixed to their half; one for each start state of WRECK_ORBITS (found by tools/derelict,
+ * each lasting a year of field time) falls freely along a loop about the wreck, bound by its
+ * gravity (see FreeFall).
  */
-const CAUGHT = 0.7;
-const SUITED_CAUGHT = 0.85;
-const FREE_NEAR = 150;
-const FREE_FAR = 600;
-const CLEAR = 20;
-const SETTLED = 2 * 3600;
-const TOGETHER = 0.4;
 /** The free dead tumble at up to DEAD_SPIN (rad/s), the spin the blast gave them never damped in vacuum. */
 const DEAD_SPIN = 0.12;
 /** A body as the ships meet it: a ball of DEAD_RADIUS (units, 0.9 m) of DEAD_MASS (kg) against a ship of MASS.ship. */
@@ -345,15 +335,6 @@ function framed(b: number, at: THREE.Vector3, out: THREE.Vector3): THREE.Vector3
   return out.copy(mouths[b]).addScaledVector(JETS[b].along, at.x).addScaledVector(sides[b], at.y).addScaledVector(ups[b], at.z);
 }
 
-/** Whether a fall stays CLEAR (m) off every box of the hull for SETTLED (s) of field time. */
-function settles(fall: FreeFall): boolean {
-  for (let t = 0; t < SETTLED; t += FALL_STEP) {
-    fall.advance();
-    if (hullClearance(fall.position) < CLEAR) return false;
-  }
-  return true;
-}
-
 /** One kind's instanced bodies: its whole figure for the nearest (`dressed` once it has loaded, else the one built in code), its low one for the rest (see Derelict.draw). */
 interface Level {
   near: THREE.InstancedMesh;
@@ -411,7 +392,10 @@ export class Derelict {
       frostShader(shader);
     };
     material.customProgramCacheKey = () => 'derelict-dead';
-    const last: (FreeFall | null)[] = [null, null];
+    // the free dead spread evenly over the kinds, one start state each
+    let body = 0;
+    let orbit = 0;
+    const falls = () => Math.floor(((body + 1) * WRECK_ORBITS.length) / DEAD_TOTAL) > Math.floor((body * WRECK_ORBITS.length) / DEAD_TOTAL);
     DEAD_KINDS.forEach((kind, k) => {
       const level = (detail: number) => {
         const mesh = new THREE.InstancedMesh(bodyOf(kind, detail), material, kind.count);
@@ -426,7 +410,8 @@ export class Derelict {
       this.levels.push({ near, far: level(0), dressed: false });
       this.meshes.push(near);
       for (let i = 0; i < kind.count; i++) {
-        const d = this.place(r, kind.suited, last);
+        const d = this.place(r, falls() ? WRECK_ORBITS[orbit++] : undefined);
+        body++;
         this.dead.push(d);
         this.kindOf.push(k);
         this.colors.push(new THREE.Color(CLOTHES[r.nextInt() % CLOTHES.length]).lerp(RIME, r.range(0.35, 0.55)));
@@ -458,67 +443,39 @@ export class Derelict {
   }
 
   /**
-   * Where one of the dead lies (see Dead and CAUGHT), drawn from `r`: caught on the torn plating,
-   * in the breach's mouth or on a broken deck; or falling freely about the wreck from a start out
-   * of a breach's mouth, alone or beside the last one that fell out of it (`last`, by breach), on a
-   * path that is bound and stays clear of the hull (see settles).
+   * Where one of the dead lies (see Dead), drawn from `r`: falling freely about the wreck from the
+   * start state `orbit` (see WRECK_ORBITS); or, without one, caught on the torn plating, in the
+   * breach's mouth or on a broken deck.
    */
-  private place(r: Randomizer, suited: boolean, last: (FreeFall | null)[]): Dead {
+  private place(r: Randomizer, orbit: (typeof WRECK_ORBITS)[number] | undefined): Dead {
     const breach = r.nextFloat() < 0.5 ? 0 : 1;
     const axis = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
     const turn = setFromEuler(new THREE.Quaternion(), r.range(0, 6.3), r.range(0, 6.3), r.range(0, 6.3));
     const spin = r.range(0.25, 1) * DEAD_SPIN * (r.nextFloat() < 0.5 ? -1 : 1);
-    if (r.nextFloat() < (suited ? SUITED_CAUGHT : CAUGHT)) {
-      const where = r.nextFloat();
-      const wall = r.nextInt() % 4;
-      const sign = wall % 2 === 0 ? 1 : -1;
-      let at: THREE.Vector3;
-      if (where < 0.5) {
-        // on the outside of the torn plating, short of its ragged edge
-        const along = r.range(-EDGE_FROM, -100);
-        at = wall < 2 ? v(along, r.range(-1, 1) * CORE_ACROSS, sign * (CORE_UP + 25)) : v(along, sign * (CORE_ACROSS + 25), r.range(-1, 1) * CORE_UP);
-      } else if (where < 0.8) {
-        // lying on a broken deck inside
-        const deck = 1 + (r.nextInt() % (BREACH_DECK_COUNT - 1));
-        at = v(r.range(-0.5, -0.08) * TORN_HALF.x, r.range(-0.85, 0.85) * CORE_ACROSS, -CORE_UP + (deck * 2 * CORE_UP) / BREACH_DECK_COUNT + 22);
-      } else {
-        // in the mouth, against the plating's inside
-        const along = r.range(-500, 100);
-        at = wall < 2 ? v(along, r.range(-0.9, 0.9) * CORE_ACROSS, sign * (CORE_UP - 60)) : v(along, sign * (CORE_ACROSS - 60), r.range(-0.9, 0.9) * CORE_UP);
-      }
-      return { half: breach, at: framed(breach, at, new THREE.Vector3()), fall: null, turn, axis, spin: 0, shoved: null };
+    if (orbit) {
+      const [x, y, z, vx, vy, vz, half] = orbit;
+      return { half, at: new THREE.Vector3(), fall: new FreeFall(v(x, y, z), v(vx, vy, vz)), turn, axis, spin, shoved: null };
     }
-    const prev = last[breach];
-    const start = new THREE.Vector3();
-    const speed = new THREE.Vector3();
-    const pull = new THREE.Vector3();
-    for (let tries = 0; ; tries++) {
-      if (prev && tries === 0 && r.nextFloat() < TOGETHER) {
-        // beside the last one, at its speed
-        start.copy(prev.start).add(v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(r.range(3, 12)));
-        speed.copy(prev.speed);
-      } else {
-        // out of the mouth, up to 75° off its axis
-        const tilt = r.range(0, 1.3);
-        const around = r.range(0, 6.2832);
-        framed(breach, v(cos(tilt), sin(tilt) * cos(around), sin(tilt) * sin(around)).multiplyScalar(r.range(FREE_NEAR, FREE_FAR) / METERS), start).multiplyScalar(METERS);
-        const off = hullClearance(start);
-        if (off < FREE_NEAR || off > FREE_FAR) continue;
-        // across the pull, at about the speed that holds a body going round its half's nearest rod
-        const g = wreckPull(start, pull).length();
-        speed.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1));
-        speed.addScaledVector(pull, -speed.dot(pull) / (g * g));
-        if (speed.lengthSq() < 1e-4) continue;
-        speed.setLength(Math.sqrt(g * rodDistance(start, breach)) * r.range(1, 1.4));
-      }
-      if (speed.lengthSq() / 2 + wreckPotential(start) >= 0) continue;
-      const fall = new FreeFall(start.clone(), speed.clone());
-      if (!settles(fall)) continue;
-      last[breach] = fall;
-      return { half: breach, at: new THREE.Vector3(), fall, turn, axis, spin, shoved: null };
+    const where = r.nextFloat();
+    const wall = r.nextInt() % 4;
+    const sign = wall % 2 === 0 ? 1 : -1;
+    let at: THREE.Vector3;
+    if (where < 0.5) {
+      // on the outside of the torn plating, short of its ragged edge
+      const along = r.range(-EDGE_FROM, -100);
+      at = wall < 2 ? v(along, r.range(-1, 1) * CORE_ACROSS, sign * (CORE_UP + 25)) : v(along, sign * (CORE_ACROSS + 25), r.range(-1, 1) * CORE_UP);
+    } else if (where < 0.8) {
+      // lying on a broken deck inside
+      const deck = 1 + (r.nextInt() % (BREACH_DECK_COUNT - 1));
+      at = v(r.range(-0.5, -0.08) * TORN_HALF.x, r.range(-0.85, 0.85) * CORE_ACROSS, -CORE_UP + (deck * 2 * CORE_UP) / BREACH_DECK_COUNT + 22);
+    } else {
+      // in the mouth, against the plating's inside
+      const along = r.range(-500, 100);
+      at = wall < 2 ? v(along, r.range(-0.9, 0.9) * CORE_ACROSS, sign * (CORE_UP - 60)) : v(along, sign * (CORE_ACROSS - 60), r.range(-0.9, 0.9) * CORE_UP);
     }
+    // caught, it hangs still where it snagged
+    return { half: breach, at: framed(breach, at, new THREE.Vector3()), fall: null, turn, axis, spin: 0, shoved: null };
   }
-
 
   /** The crystals of both jets (see mistVertex): where each starts on its way, where across, which jet. */
   private buildMist(r: Randomizer, light: THREE.Color): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {

@@ -109,17 +109,6 @@ export function hullClearance(p: THREE.Vector3): number {
   return least;
 }
 
-/** How far `p` (m) lies from the nearest rod of half `weld` (m), and the pull's arm for a body going round it. */
-export function rodDistance(p: THREE.Vector3, weld: number): number {
-  let least = Infinity;
-  for (const rod of WRECK) {
-    if (rod.weld !== weld) continue;
-    offset.subVectors(p, rod.from);
-    const x = Math.min(rod.length, Math.max(0, offset.dot(rod.along)));
-    least = Math.min(least, offset.addScaledVector(rod.along, -x).length());
-  }
-  return least;
-}
 
 /**
  * A body falling freely about the wreck, stepped on a grid of field time FALL_STEP (s) apart by
