@@ -211,7 +211,7 @@ describe("the flight school's courses", () => {
     const start = well.position.clone().add(ORBIT_START);
     const flight = startFlight(start, ORBIT_NOSE, ORBIT_DRIFT);
     // the ship as the bot reads it, its drive whole
-    const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, drive: 1, cooling: 1, allyOf: () => false } as unknown as Ship;
+    const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, extreme: 0, heat: 0, drive: 1, cooling: 1, allyOf: () => false } as unknown as Ship;
     const bot = new Bot(ship, evenSkills(SKILL));
     // it flies the circle it starts on at the speed of a circular orbit there, for a point 30° ahead on it
     const radius = ORBIT_START.length();

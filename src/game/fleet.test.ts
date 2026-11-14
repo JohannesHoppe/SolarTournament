@@ -857,7 +857,7 @@ describe("the battleship's hangars", () => {
         const fleet = battleship();
         field.obstacle = fleet;
         const flight = startFlight(new THREE.Vector3(1500, middle + dy, z + dz), new THREE.Vector3(-1, 0, 0), 3000);
-        const ship = { id: 'bot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, cooling: 1 } as unknown as Ship;
+        const ship = { id: 'bot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, extreme: 0, heat: 0, allyOf: () => false, cooling: 1 } as unknown as Ship;
         const bot = new Bot(ship, evenSkills(0.5));
         bot.waypoint = new THREE.Vector3(-20000, middle, z);
         const gravity = new THREE.Vector3();

@@ -66,7 +66,7 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
 export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each, cap = Infinity): Flight {
   const flight = startFlight(start, facing, drift);
   // the hull's heat the bot reads, as its HUD shows it (see flyCourse)
-  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
+  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, extreme: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   if (rings.edgeless) bot.home = Infinity;
