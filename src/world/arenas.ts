@@ -44,16 +44,20 @@ const G = 196.2;
 /**
  * Jupiter, whose cloud deck runs through its arena: a planet of JUPITER_RADIUS (units, 40 km) to
  * the deck, which lies in the reference plane at the field's center, so half the arena is open
- * space over its curved horizon and half is its air (see world/air). It pulls with JUPITER_GRAVITY
- * at the deck, falling off with the square of the distance from its center: 0.71 g at the
- * arena's top, 0.99 g at its bottom, as near a real planet. Its scale is the game's: the real
- * Jupiter is 140 000 km wide and pulls with 2.5 g; a planet of 80 km shows its curve from a few
- * kilometers up. The arena's well, what a ship cannot fly into, is its core JUPITER_FLOOR (units,
- * 5 km) below the deck, deeper than the air lets any ship get alive.
+ * space over its curved horizon and half is its air (see world/air). Its scale is the game's: the
+ * real Jupiter is 143 000 km wide; a planet of 80 km shows its curve from a few kilometers up. Its
+ * pull is the real one: JUPITER_GRAVITY (units/s², 24.8 m/s², 2.53 g) at the cloud tops, falling
+ * off with the square of the distance from the real planet's center (JUPITER_BODY, units, its
+ * radius of 71 492 km), so over the arena's 6.8 km of height it changes by two parts in ten
+ * thousand, as near the real planet; only its direction is the drawn planet's, square to the
+ * clouds the game shows (a deviation of up to 5° at the arena's edge, where the real planet's
+ * curve would tilt it 0.003°). The arena's well, what a ship cannot fly into, is its core
+ * JUPITER_FLOOR (units, 5 km) below the deck, deeper than the air lets any ship get alive.
  */
 const JUPITER_RADIUS = 800000;
 const JUPITER_FLOOR = 100000;
-const JUPITER_GRAVITY = 0.83 * G;
+const JUPITER_GRAVITY = 24.79 / 0.05;
+const JUPITER_BODY = 71492000 / 0.05;
 const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
 /**
  * The black hole's event horizon (units, 350 m), in the middle of its arena. It pulls with
@@ -1220,7 +1224,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       inner: 0,
       spin: SPIN_RATE,
       toughness: 800,
-      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow(JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR), 2) },
+      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow((JUPITER_BODY + JUPITER_FLOOR) / JUPITER_BODY, 2), body: JUPITER_BODY },
       air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT },
     },
     sunlight: 50,

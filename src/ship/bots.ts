@@ -222,7 +222,7 @@ const WELL_PULL = 0.3;
  * that by up to AIR_RISE (units/s, 80 m/s), in full from AIR_RISE_SPAN under it (units, 500 m),
  * and never sinks under it of its own wish, after a rival or a probe neither: it waits above. Over
  * it, it sinks no faster than it could stop at it braking with AIR_BRAKE (units/s², 1.5 g: its
- * thrusters' 10 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
+ * thrusters' 10 g, less the planet's pull of 2.5 g, with room to spare). Three exceptions:
  * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
  * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
  * a bot of AIR_DARING and more follows its target down into them; and one heading home from

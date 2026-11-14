@@ -26,7 +26,7 @@ import { COMET_WARNING } from '../game/comet';
 import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
-import { CRUMBLE_AFTER } from '../world/asteroids';
+import { CRUMBLE_AFTER, wellPull } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
 import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
@@ -186,6 +186,9 @@ export const FROM_CODE: Record<string, number> = {
   orbitKm: Math.round(meters(circularAt(20000))),
   orbitKmTime: Math.round((2 * Math.PI * 20000) / circularAt(20000)),
   orbitEdge: Math.round(meters(circularAt(orbitRoom(hole())))),
+  // Jupiter's pull at its cloud deck (g), and the share of the main drive that holds a ship up against it (%)
+  jupiterG: Math.round((meters(jupiterPull()) / 9.81) * 100) / 100,
+  jupiterHold: percent(jupiterPull() / MAIN_THRUST),
   // the circles its rocks fly, at the inner and the outer edge of their ring (m/s)
   holeRocksInner: Math.round(meters(circularAt(arenaById('hole')!.layout.inner))),
   holeRocksOuter: Math.round(meters(circularAt(arenaById('hole')!.layout.radius))),
@@ -243,6 +246,11 @@ function circularAt(distance: number): number {
 /** Jupiter's air (see world/air). */
 function jupiterAir() {
   return arenaById('giant')!.layout.air!;
+}
+
+/** Jupiter's pull at its cloud deck (units/s²). */
+function jupiterPull() {
+  return wellPull(arenaById('giant')!.layout.well!, jupiterAir().radius);
 }
 
 /** How deep under Jupiter's deck the speed limit starts to heat a hull (m). */
