@@ -147,7 +147,8 @@ export function flyJobs(from: number, to: number) {
       const endless = !!mission.pit;
       const name = `${mission.id}${mission.trial ? ' (its drills)' : ''}${endless ? ' (flown; never done: the night ends with the clone)' : outmatched ? ` (flown; not won by a middling bot: ${outmatched})` : ''}`;
       it(name, () => {
-        random = new Randomizer(textSeed(mission.id));
+        // SEED=<n> flies the job on other dice (the n-th of its seeds), to see how far its outcome is chance
+        random = new Randomizer(textSeed(mission.id) + Number(process.env.SEED ?? 0));
         const run = flyJob(mission, campaignFor(mission), host(BEHAVIORS[mission.id]), DRILL_LIMIT, ATTEMPTS, trace > 0 ? tracer(trace) : undefined);
         const text = report(run);
         if (only) console.log(`${mission.id}: ${run.done ? 'done' : 'not done'}\n${text}`);

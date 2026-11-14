@@ -5085,7 +5085,9 @@ export class Game implements OnlineGame {
         const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
         bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
-        bot.shade = this.shadeFor(ship, bot.shade);
+        // besieging the battleship from its hull's shade, the bot cools at its hold; else, hot in a burning sun, it makes for a rock's shadow
+        const holdShaded = !!this.fleet && !!bot.siege && this.field.raycast(bot.siegeHold, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+        bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
