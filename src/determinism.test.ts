@@ -96,7 +96,7 @@ describe('the shared world on every machine', () => {
       rings: '69fd78461bc4a7a3',
       junkyard: '8cddd98d885b7876',
       giant: '9e1736d8b837a9e7',
-      corona: 'deb84ed736a69ab8',
+      corona: '2cd1de3f39768180',
       hole: 'ce4777de180ea143',
       derelict: '0839e7690da6f693',
       crack: 'f08ab2d988e99ebc',

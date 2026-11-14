@@ -805,6 +805,9 @@ const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.V
 const shadeHit = rayHit();
 /** Where a bot under a burning sun comes at the battleship from, far on its shadow side, and a hold tried there (see siegePoint). */
 const siegeShade = new THREE.Vector3();
+const siegeFrom = new THREE.Vector3();
+/** The sides a bot under a burning sun reckons its siege from: the battleship's shadow side, and the sun's side, where a rock beside its lane may shade it (see siegePoint). */
+const SIEGE_SIDES = [-1, 1] as const;
 const siegeProbe = new THREE.Vector3();
 const sweepHit = rayHit();
 const impactHit = rayHit();
@@ -5990,15 +5993,34 @@ export class Game implements OnlineGame {
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
   private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
     if (!fleet.present(this.field.clock)) return null;
-    // under a sun that burns, the nearest part it can hold off in the hull's own shadow, out of its drive plume, coming at it from the shadow side
+    // under a sun that burns, the nearest part it can hold off in shade (the hull's own, coming at it
+    // from its shadow side, or a rock's beside its lane, coming at it from the sun's side), out of
+    // its drive plume and in sight of the part
     const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
-    const from = burns ? siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, -SHADE_FAR) : bot.ship.flight.position;
-    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(zone, siegeProbe, this.field);
-    let zone = burns ? fleet.nearestZone(bot.ship.flight.position, shaded) : -1;
-    if (zone < 0) zone = fleet.nearestZone(bot.ship.flight.position);
+    let zone = -1;
+    let from: THREE.Vector3 = bot.ship.flight.position;
+    if (burns) {
+      let nearest = Infinity;
+      for (const side of SIEGE_SIDES) {
+        const point = siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, side * SHADE_FAR);
+        const shaded = (part: number) => this.field.raycast(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
+        const found = fleet.nearestZone(bot.ship.flight.position, shaded);
+        if (found < 0) continue;
+        const distance = fleet.siegeFrom(found, point, SIEGE_DISTANCE, siegeProbe).distanceTo(bot.ship.flight.position);
+        if (distance < nearest) {
+          nearest = distance;
+          zone = found;
+          from = siegeFrom.copy(point);
+        }
+      }
+    }
+    if (zone < 0) {
+      zone = fleet.nearestZone(bot.ship.flight.position);
+      from = bot.ship.flight.position;
+    }
     if (zone < 0) return null;
     // where it shows itself, and whether it does from where the bot is, as a pilot sees it
-    fleet.siegeFrom(zone, burns ? from : bot.ship.flight.position, SIEGE_DISTANCE, bot.siegeHold);
+    fleet.siegeFrom(zone, from, SIEGE_DISTANCE, bot.siegeHold);
     bot.siegeClear = fleet.inSight(zone, bot.ship.flight.position, this.field);
     return fleet.zoneAt(zone, this.botPoint(bot));
   }

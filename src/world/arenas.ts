@@ -6,7 +6,7 @@ import { msg } from '../i18n/i18n';
 import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { HYDROGEN_HEAT, JUPITER_KELVIN, JUPITER_LAPSE } from './air';
-import { cos, pow, sin } from '../detmath';
+import { atan2, cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
 import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE } from './yard';
 import { BIODOME_FOUR, cityPlacements, hallAt, VENUS_AIR, VENUS_FALL } from './venus';
@@ -63,6 +63,35 @@ const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
  * horizon is 2.95 km per sun) and pulls with some 400 billion g at 2 km (see README, Event Horizon).
  */
 export const HOLE_RADIUS = 7000;
+/**
+ * The Corona's shade along the President's battleship's lane: where its orbit (SHADE_ORBIT, units,
+ * 2.5 km round the middle, see game/fleet ORBIT) faces the sun, rocks stand on the sun's
+ * side of it, a rock every SHADE_STEP of the orbit within SHADE_ARC of where it faces the sun
+ * squarely, each SHADE_OUT beyond the orbit (units, 580 m: its hull's half width, the clearance it
+ * keeps from rock and the rock itself to spare) and lifted as the sun's rays rise, so its shadow
+ * falls across the hull's lane: ships attacking the battleship from its sun's side hold in their
+ * shade, out of a sun that burns hulls (see ship/ship, SUN_ABSORB). Solid, so the shade stays.
+ */
+const SHADE_ORBIT = 50700;
+const SHADE_OUT = 11700;
+const SHADE_STEP = (8 * Math.PI) / 180;
+const SHADE_ARC = (53 * Math.PI) / 180;
+const SHADE_SCALE = 4;
+function coronaShades(): Placement[] {
+  const sun = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize();
+  const rise = SUN_DIRECTION.y / Math.sqrt(SUN_DIRECTION.x * SUN_DIRECTION.x + SUN_DIRECTION.z * SUN_DIRECTION.z);
+  const facing = atan2(sun.z, sun.x);
+  const placements: Placement[] = [];
+  for (let angle = -SHADE_ARC, k = 0; angle <= SHADE_ARC + 1e-9; angle += SHADE_STEP, k++) {
+    const radial = new THREE.Vector3(cos(facing + angle), 0, sin(facing + angle));
+    const out = SHADE_OUT / Math.max(0.6, radial.dot(sun));
+    const position = radial.clone().multiplyScalar(SHADE_ORBIT).addScaledVector(sun, out);
+    position.y = out * rise;
+    placements.push({ kind: 'rock', type: k % 16, scale: SHADE_SCALE, position, orientation: new THREE.Quaternion(), solid: true });
+  }
+  return placements;
+}
+
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
@@ -1153,7 +1182,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'corona',
     name: msg('Corona'),
     tagline: msg('Close to the sun. Its light burns any hull out of the shadows, and its storms blind the sensors.'),
-    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
+    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, placements: coronaShades() },
     sunlight: 4.2e6,
     storms: true,
     sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
