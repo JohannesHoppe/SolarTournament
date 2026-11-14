@@ -5993,7 +5993,7 @@ export class Game implements OnlineGame {
     // under a sun that burns, the nearest part it can hold off in the hull's own shadow, out of its drive plume, coming at it from the shadow side
     const burns = bot.ship.sunlight * SUN_ABSORB > RADIATE;
     const from = burns ? siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, -SHADE_FAR) : bot.ship.flight.position;
-    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0;
+    const shaded = (zone: number) => this.field.raycast(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(zone, siegeProbe, this.field);
     let zone = burns ? fleet.nearestZone(bot.ship.flight.position, shaded) : -1;
     if (zone < 0) zone = fleet.nearestZone(bot.ship.flight.position);
     if (zone < 0) return null;
