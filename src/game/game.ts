@@ -60,6 +60,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
+import { StrainHand } from '../ship/strainhand';
 import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
@@ -125,6 +126,7 @@ import {
   CRITICAL_GLITCHES,
   escapeLoad,
   FIELD_CRITICAL,
+  HEART_EXTREME,
   HEART_HULL,
   HEART_WELL,
   HULL_CRITICAL,
@@ -2166,6 +2168,9 @@ export class Game implements OnlineGame {
 
   /** The controls of a trembling hand (see tremble) and of a raider holding its fire, filled anew each step. */
   private readonly trembled: Controls = { ...IDLE };
+  /** The own clone's hands under g (see ship/strainhand), and the stick they give, filled anew each step. */
+  private readonly strainHand = new StrainHand();
+  private readonly strained: Controls = { ...IDLE };
   private readonly heldFire: Controls = { ...IDLE };
 
   /**
@@ -5043,7 +5048,9 @@ export class Game implements OnlineGame {
     const read = this.state === 'playing' ? this.input.read() : IDLE;
     // in a scene in person the Host's stick turns the clone's head, the ship waits in its clamps
     if (this.stage) this.stage.turnHead(read.yaw, read.pitch, dt);
-    const hand = this.stage ? IDLE : this.time < this.tremorUntil ? this.tremble(read) : read;
+    const shaken = this.stage ? IDLE : this.time < this.tremorUntil ? this.tremble(read) : read;
+    // a clone's hands under extreme g: the stick late and unsteady, as a bot's aim and reflexes are (see ship/strainhand)
+    const hand = this.stage ? shaken : this.strainHand.step(shaken, me.alive ? me.extreme : 0, dt, Math.random, this.strained);
     if (recorder) this.record(hand, dt);
     const myControls = this.flightComputer(hand);
     if (recorder) this.recorded(myControls);
@@ -9456,6 +9463,8 @@ export class Game implements OnlineGame {
     this.novaAlarm(me);
     this.torpedoAlarm(me);
     if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
+    // extreme g, past what a seasoned clone flies through: its hands go late and unsteady (see ship/strainhand)
+    if (me.alive && me.extreme > 0) alarms.raise({ id: 'gload', level: 'caution', text: t('G-LOAD · HANDS UNSTEADY') });
     this.cometAlarm(me);
     this.flareAlarm(me);
     this.airAlarm(me);
@@ -9479,7 +9488,9 @@ export class Game implements OnlineGame {
     this.hud.setAlarms(alarms.list, this.camera);
     this.alarmTones.play(alarms.top, now, this.sound);
     // heartbeat: faster and louder the harder the pilot is pressed into the seat, steady and loud one hit from death or deep in a well
-    const beat = Math.max(strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0);
+    // extreme g pounds harder and faster still (see ship/strainhand)
+    const pound = me.alive ? me.extreme : 0;
+    const beat = Math.max(strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0) + HEART_EXTREME * pound;
     if (beat > 0.4 && now >= this.nextHeartbeat) {
       this.sound.beep(55, 0.12, 0.25 * beat);
       this.sound.beep(48, 0.14, 0.2 * beat, 0.16);

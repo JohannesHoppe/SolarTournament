@@ -19,6 +19,7 @@ import { setFromAxisAngle, slerp } from '../detthree';
 import { BURNOUT_DAMAGE, BURNOUT_SECONDS, DriveHeat } from './driveheat';
 import { PLUME_CORE, PLUME_REACH, PLUME_SPREAD, PLUME_THROTTLE } from './plume';
 import { PlumeLook } from '../view/plume';
+import { extremeAfter } from './strainhand';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -106,8 +107,9 @@ export const G = 9.81 / METERS_PER_UNIT;
  * G_TOLERANCE (g) it starts to grey out; at the main drive's full push (13 g) it takes G_ONSET
  * seconds to full strain; beyond HARSH_G (a pull-up at the hardest turn still under it) its gel holds no more blood in its head, and every g
  * beyond counts HARSH_WEIGHT times; below the tolerance it recovers from full strain in
- * G_RECOVERY seconds. Every clone alike, a Host's and a bot's: a Host's screen darkens at its
- * edges, a bot aims wider and reacts later (see ship/bots).
+ * G_RECOVERY seconds. Every clone alike, a Host's and a bot's: the strain darkens a Host's screen
+ * at its edges; only extreme g, past what a seasoned clone flies through, costs a Host's hands and
+ * a bot's aim and reflexes their steadiness (see ship/strainhand).
  */
 const G_TOLERANCE = 3;
 const G_ONSET = 5;
@@ -454,6 +456,8 @@ export class Ship {
   private glow = 0;
   /** The clone's g-force strain, 0..1 (see strainAfter), from all it feels (see Seat). */
   strain = 0;
+  /** How hard extreme g bites on the clone's hands and aim, 0..1 (see ship/strainhand, extremeAfter). */
+  extreme = 0;
   /** The clone's seat, which passes on to it every push on the hull but gravity's (see Seat). */
   readonly seat = new Seat();
   /** Game time until which the main drive cools down after an overdrive. */
@@ -717,6 +721,7 @@ export class Ship {
     this.glow = 0;
     this.overheated = false;
     this.strain = 0;
+    this.extreme = 0;
     this.seat.reset();
     this.overdrivePending.set(0, 0, 0);
     this.overdriveLeft = 0;
@@ -970,7 +975,9 @@ export class Ship {
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
     // a burning drive is loud (see silent)
     if (this.flight.throttle > SILENT_THROTTLE) this.loudAt = now;
-    this.strain = strainAfter(this.strain, feltLoad(this.seat.after(this.flight, dt)), dt);
+    const load = feltLoad(this.seat.after(this.flight, dt));
+    this.strain = strainAfter(this.strain, load, dt);
+    this.extreme = extremeAfter(this.extreme, load, dt);
     this.show(dt, now);
     this.nanobots(dt, now);
 

@@ -13,6 +13,7 @@ import { bendRadius, RacingLine } from '../game/racingline';
 import { EUROPA_FALL } from '../world/europa';
 import { PSYCHE_FALL } from '../world/yard';
 import { cushion } from '../world/hover';
+import { EXTREME_G } from '../ship/strainhand';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
 import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
@@ -199,6 +200,7 @@ export const FROM_CODE: Record<string, number> = {
   // hardest turn at the deck at the limit (to 5 m, as the README gives it)
   liftDeck: g(LIFT),
   liftMost: g(LIFT_MOST),
+  extremeG: EXTREME_G,
   carveDeck: Math.round(meters(turnRadius(MAX_SPEED, { driveFactor: 1, thrusterFactor: 1, airDensity: 1 })) / 5) * 5,
   hotDepth: Math.round(hotDepth() / 100) * 100,
   climbDepth: Math.round(climbDepth() / 100) * 100,

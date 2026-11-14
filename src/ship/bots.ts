@@ -45,9 +45,11 @@ export const missOf = (aim: number) => 1 - Math.min(aim, AIM_BEST);
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
-/** At full g-force strain (see Ship.strain) bots aim this much worse and react this much later (s): the clone greys out, as a Host's screen darkens. */
+/** At the full bite of extreme g (see strainPenalty) bots aim this much worse and react this much later (s), as a Host's hands are late and unsteady (see ship/strainhand). */
 const STRAIN_AIM = 0.5;
 const STRAIN_REACTION = 0.15;
+/** How hard g costs a clone its aim and reflexes (0..1): only extreme g, past what a seasoned clone flies through (see ship/strainhand, extremeAfter), the same onset a Host's hands have. */
+const strainPenalty = (ship: Ship) => ship.extreme;
 /**
  * A bot flies its clone's strain as a pilot does: it spends it where it matters (out of danger,
  * away from a nova, jinking under attack, the moment it fires, on a race's line) and otherwise eases off once the
@@ -784,7 +786,7 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.noseAngleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
+      const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * strainPenalty(this.ship);
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
@@ -1047,7 +1049,7 @@ export class Bot {
    */
   private aimError(distance: number) {
     const miss = missOf(this.skills.aim);
-    return (this.ship.radius * AIM_SPREAD * miss + distance * AIM_ANGLE * 2 * miss) * (1 + EASE_AIM * this.ease + STRAIN_AIM * this.ship.strain);
+    return (this.ship.radius * AIM_SPREAD * miss + distance * AIM_ANGLE * 2 * miss) * (1 + EASE_AIM * this.ease + STRAIN_AIM * strainPenalty(this.ship));
   }
 
   /**
