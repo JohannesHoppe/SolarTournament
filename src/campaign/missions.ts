@@ -895,7 +895,7 @@ const pitFight: Drill = {
  * PERIHELION_BREAK (of 100) he breaks off, as he always does before his clone can die, and the
  * duel is won.
  */
-const PERIHELION_SKILL: Skills = { aim: 0.6, reflexes: 0.65, daring: 0.4 };
+const PERIHELION_SKILL: Skills = { aim: 0.55, reflexes: 0.65, daring: 0.4 };
 const PERIHELION_BREAK = 35;
 const DUEL_FIELD = point(0, -25000, 0);
 const DUEL_GONE = point(-60000, -10000, -20000);
