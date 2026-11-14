@@ -877,6 +877,7 @@ export const DE: Catalog = {
   'features': 'Funktionen',
   'quality': 'Qualität',
   'arenas': 'Arenen',
+  worlds: 'Welten',
   'modes': 'Modi',
   'Done: {n} measurements of {seconds} s each.': 'Fertig: {n} Messungen zu je {seconds} s.',
   'cores': 'Kerne',

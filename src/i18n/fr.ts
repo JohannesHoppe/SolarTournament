@@ -850,6 +850,7 @@ export const FR: Catalog = {
   'features': 'fonctions',
   'quality': 'qualité',
   'arenas': 'arènes',
+  worlds: 'mondes',
   'modes': 'modes',
   'Done: {n} measurements of {seconds} s each.': 'Terminé : {n} mesures de {seconds} s chacune.',
   'cores': 'cœurs',

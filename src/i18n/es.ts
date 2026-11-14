@@ -851,6 +851,7 @@ export const ES: Catalog = {
   features: 'funciones',
   quality: 'calidad',
   arenas: 'arenas',
+  worlds: 'mundos',
   modes: 'modos',
   'Done: {n} measurements of {seconds} s each.': 'Listo: {n} mediciones de {seconds} s cada una.',
   cores: 'núcleos',

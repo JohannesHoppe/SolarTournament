@@ -64,7 +64,7 @@ The HUD's attitude display (horizon, pitch ladder, bank scale, heading tape) is 
 
 On a phone: open the address with `?bench` (the test stage, or the dev server over the LAN), lay the phone sideways, wait until the table shows, and press "Copy JSON".
 
-`npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
+`npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, `worlds`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
 
 **Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame and GPU time at each rung (quiet machine, an Apple M4):
 
