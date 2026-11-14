@@ -69,24 +69,31 @@ export const HOLE_RADIUS = 7000;
  * side of it, a rock every SHADE_STEP of the orbit within SHADE_ARC of where it faces the sun
  * squarely, each SHADE_OUT beyond the orbit (units, 580 m: its hull's half width, the clearance it
  * keeps from rock and the rock itself to spare) and lifted as the sun's rays rise, so its shadow
- * falls across the hull's lane: ships attacking the battleship from its sun's side hold in their
- * shade, out of a sun that burns hulls (see ship/ship, SUN_ABSORB). Solid, so the shade stays.
+ * falls across the hull's lane; on to SHADE_SIDE, where the sun runs ever more along the lane,
+ * each stands SHADE_OUT straight out from the orbit, its shadow running beside the lane. Ships
+ * attacking the battleship hold in their shade, out of a sun that burns hulls (see ship/ship,
+ * SUN_ABSORB); the field's own rocks shade the lane on the far side from the sun. Solid, so the
+ * shade stays.
  */
 const SHADE_ORBIT = 50700;
 const SHADE_OUT = 11700;
 const SHADE_STEP = (8 * Math.PI) / 180;
 const SHADE_ARC = (53 * Math.PI) / 180;
+const SHADE_SIDE = (101 * Math.PI) / 180;
 const SHADE_SCALE = 4;
 function coronaShades(): Placement[] {
   const sun = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize();
   const rise = SUN_DIRECTION.y / Math.sqrt(SUN_DIRECTION.x * SUN_DIRECTION.x + SUN_DIRECTION.z * SUN_DIRECTION.z);
   const facing = atan2(sun.z, sun.x);
   const placements: Placement[] = [];
-  for (let angle = -SHADE_ARC, k = 0; angle <= SHADE_ARC + 1e-9; angle += SHADE_STEP, k++) {
+  for (let angle = -SHADE_SIDE, k = 0; angle <= SHADE_SIDE + 1e-9; angle += SHADE_STEP, k++) {
     const radial = new THREE.Vector3(cos(facing + angle), 0, sin(facing + angle));
-    const out = SHADE_OUT / Math.max(0.6, radial.dot(sun));
-    const position = radial.clone().multiplyScalar(SHADE_ORBIT).addScaledVector(sun, out);
-    position.y = out * rise;
+    const facingSun = Math.abs(angle) <= SHADE_ARC + 1e-9;
+    const out = facingSun ? SHADE_OUT / Math.max(0.6, radial.dot(sun)) : SHADE_OUT;
+    const position = radial.clone().multiplyScalar(SHADE_ORBIT);
+    if (facingSun) position.addScaledVector(sun, out);
+    else position.addScaledVector(radial, out);
+    position.y = Math.max(0, position.clone().sub(radial.clone().multiplyScalar(SHADE_ORBIT)).dot(sun)) * rise;
     placements.push({ kind: 'rock', type: k % 16, scale: SHADE_SCALE, position, orientation: new THREE.Quaternion(), solid: true });
   }
   return placements;

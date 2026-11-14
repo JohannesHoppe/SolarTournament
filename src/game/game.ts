@@ -298,6 +298,8 @@ const PLATING_CHARGES = 2;
 const SHADE_HOT = 70;
 const SHADE_COOL = 25;
 const SHADE_OFF = 1500;
+/** A bot besieging the battleship under a burning sun takes the shadow of a rock within SHADE_FIGHT (units, 1 km, its reach to fire) of the part it attacks before a nearer one, and fights on from there while it sees the part (see Game.shadeFor). */
+const SHADE_FIGHT = 20000;
 /** How far off the battleship along the sun a bot under a burning sun reckons its siege from (units, 50 km): its shadow side. */
 const SHADE_FAR = 1000000;
 /** Nicole tells the own pilot to take cover from a sun that burns once it has heated the hull this far (of 100), early in a round (see Coach, its tip `sun`). */
@@ -807,6 +809,8 @@ const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.V
 const shadeHit = rayHit();
 /** Where a bot under a burning sun comes at the battleship from, far on its shadow side, and a hold tried there (see siegePoint). */
 const siegeShade = new THREE.Vector3();
+/** Scratch: a rock's shadow spot reckoned in Game.shadeFor. */
+const shadeSpot = new THREE.Vector3();
 const siegeFrom = new THREE.Vector3();
 /** The sides a bot under a burning sun reckons its siege from: the battleship's shadow side, and the sun's side, where a rock beside its lane may shade it (see siegePoint). */
 const SIEGE_SIDES = [-1, 1] as const;
@@ -5092,7 +5096,7 @@ export class Game implements OnlineGame {
         bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
         // besieging the battleship from its hull's shade, the bot cools at its hold; else, hot in a burning sun, it makes for a rock's shadow
         const holdShaded = !!this.fleet && !!bot.siege && this.field.raycast(bot.siegeHold, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
-        bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade);
+        bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
@@ -9344,17 +9348,23 @@ export class Game implements OnlineGame {
    * Where a ship sunlight burns (its radiators cannot shed the sun's heat, the Corona's, see
    * Ship.sunExcess) finds shade: SHADE_OFF beyond the far side of the rock nearest it from the sun,
    * once its heat passes SHADE_HOT in the sun, and kept (`seeking`, the point it had) until it has
-   * cooled to SHADE_COOL in the shadow; null otherwise. Written into `into` where given.
+   * cooled to SHADE_COOL in the shadow; null otherwise. A bot besieging a part of the battleship
+   * (`part`) takes the shadow of a rock within SHADE_FIGHT of it before a nearer one, and stays
+   * in that shadow past cooling while it sees the part from there (`clear`): cover it fights from.
    */
-  private shadeFor(ship: Ship, seeking: THREE.Vector3 | null): THREE.Vector3 | null {
+  private shadeFor(ship: Ship, seeking: THREE.Vector3 | null, part: THREE.Vector3 | null = null, clear = false): THREE.Vector3 | null {
     if (ship.sunlight * SUN_ABSORB <= RADIATE) return null;
-    if (seeking ? ship.heat < SHADE_COOL : ship.inShadow || ship.heat < SHADE_HOT) return null;
+    const cover = !!seeking && !!part && clear && seeking.distanceTo(part) < SHADE_FIGHT;
+    if (!cover && (seeking ? ship.heat < SHADE_COOL : ship.inShadow || ship.heat < SHADE_HOT)) return null;
+    if (cover) return seeking;
     const into = seeking ?? new THREE.Vector3();
     let nearest: { radius: number; object: THREE.Object3D } | null = null;
     let best = Infinity;
     for (const rock of this.field.asteroids.values()) {
       if (rock.ground) continue;
-      const distance = rock.object.position.distanceToSquared(ship.flight.position);
+      // a rock whose shadow reaches the part attacked counts as nearer than any other
+      const spot = shadeSpot.copy(rock.object.position).addScaledVector(this.space.sunDirection, -(rock.radius + SHADE_OFF));
+      const distance = spot.distanceToSquared(ship.flight.position) - (part && spot.distanceTo(part) < SHADE_FIGHT ? SHADE_FAR * SHADE_FAR : 0);
       if (distance < best) {
         best = distance;
         nearest = rock;
