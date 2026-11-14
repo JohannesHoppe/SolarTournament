@@ -178,7 +178,7 @@ export function flyJobs(from: number, to: number) {
         let wins = 0;
         let flown = 0;
         let lost: string | null = null;
-        for (let seed = 0; seed < seeds && wins < need && flown - wins <= seeds - need; seed++) {
+        for (let seed = 0; seed < seeds && (process.env.ALLSEEDS || (wins < need && flown - wins <= seeds - need)); seed++) {
           // SEED=<n> starts at other dice (the n-th of the job's seeds), to see how far its outcome is chance
           random = new Randomizer(textSeed(mission.id) + Number(process.env.SEED ?? 0) + seed);
           naming = new Randomizer(2);

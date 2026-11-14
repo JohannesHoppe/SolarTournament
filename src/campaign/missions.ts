@@ -1248,7 +1248,7 @@ const haumeaRing = race({
   marks: HAUMEA_COURSE,
   laps: HAUMEA_LAPS,
   pipes: null,
-  rivals: { names: ['Rime', 'Sleet', 'Hoar', 'Glaze', 'Floe'], skills: [0.6, 0.55, 0.5, 0.45, 0.45] },
+  rivals: { names: ['Rime', 'Sleet', 'Hoar', 'Glaze', 'Floe'], skills: [0.5, 0.45, 0.4, 0.35, 0.35] },
   podium: 1,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
@@ -1994,7 +1994,7 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.45;
+const AMBUSH_SKILL = 0.35;
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2084,8 +2084,8 @@ const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambus
  */
 export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
   { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
-  { target: 0.55, escorts: 2, skill: 0.45, pay: 2500, ratings: 150 },
-  { target: 0.65, escorts: 3, skill: 0.5, pay: 4000, ratings: 250 },
+  { target: 0.45, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
+  { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
 /** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
 const WANTED: readonly (readonly [string, string, string])[] = [
@@ -3150,7 +3150,7 @@ const ECHO_EIGHT_X = -45000;
 const ECHO_EIGHT_OVER = 1000;
 export const ECHO_EIGHT = point(ECHO_EIGHT_X, iapetusHeight(ECHO_EIGHT_X, crestZ(ECHO_EIGHT_X)) + ECHO_EIGHT_OVER, crestZ(ECHO_EIGHT_X));
 const WINGMEN_AFTER = 8;
-const WINGMAN_SKILL = 0.45;
+const WINGMAN_SKILL = 0.35;
 /** Spare's strays (never translated). */
 const WINGMEN = ['Fade', 'Mute'];
 const WINGMEN_FROM = point(60000, 0, -30000);
