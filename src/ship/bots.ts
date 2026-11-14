@@ -9,7 +9,7 @@ import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
-import { SAFE_IMPACT, sheetDamage } from './impact';
+import { RAM_SAFE, SAFE_IMPACT, sheetDamage } from './impact';
 import { groundBlow } from '../world/hover';
 import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
 import { plumeStrength } from './plume';
@@ -249,12 +249,14 @@ const AIR_CLOG_DARING = 0.4;
  * coil throws onto the one ahead, two fighters circling each other) pushes the bot's wanted
  * velocity off the point where they would meet, up to KEEP_CLEAR_PUSH (units/s, 40 m/s) for a
  * dead-center meeting; a ship already that close and closing pushes it straight away. Gentle
- * enough that a racer stays near its line, clear of the rock beside it. A way that would run into
+ * enough that a racer stays near its line, clear of the rock beside it. For a racer a way into
  * the other's hull (closer than KEEP_CLEAR_INTO times the two hit radii, a margin for the swing
- * out), however far ahead they would meet, is no way
- * past it: the bot closes on it no faster than it would reach the other's hull in KEEP_CLEAR_BRAKE
- * (s; a slow hand's lag, the drive's spooling down and the thrusters' braking fit in it), so a racer behind a slow one on a track's grid holds back while
- * it swings out instead of ramming it from behind.
+ * out), however far ahead they would meet, is no way past it: it closes on it no faster than it
+ * would reach that hull in KEEP_CLEAR_BRAKE (s; a slow hand's lag, the drive spooling down and the
+ * thrusters' braking fit in it), nor faster than a bump (RAM_SAFE) at the last, so a racer behind
+ * a slow one on a track's grid holds back while it swings out instead of ramming it from behind,
+ * and one that cannot get round nudges past rather than trailing in its line of fire. A fighter's closing in is left to its attack:
+ * held back so, it would never get a rival in range.
  */
 const KEEP_CLEAR = 5;
 const KEEP_CLEAR_AHEAD = 1;
@@ -745,7 +747,7 @@ export class Bot {
     if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
     const overRoof = me.position.y - (this.roof - ROOF_MARGIN);
     if (overRoof > 0) desired.y -= CRUISE_SPEED * Math.min(1, overRoof / ROOF_MARGIN);
-    const givingWay = this.keepClear(ships, field);
+    const givingWay = this.keepClear(ships, field, racing);
     const hot = this.air(field, racing, defending, !!target, homeDistance > this.home, now);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
@@ -962,8 +964,8 @@ export class Bot {
     return flyRound(build, this.ship.flight.velocity.length(), distance);
   }
 
-  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. Returns the ship it gives way to most, or null. */
-  private keepClear(ships: readonly Ship[], field: AsteroidField): Ship | null {
+  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest, and a racer holds back on a way into another's hull. Returns the ship it gives way to most, or null. */
+  private keepClear(ships: readonly Ship[], field: AsteroidField, racing: boolean): Ship | null {
     let most: Ship | null = null;
     let least = Infinity;
     const me = this.ship.flight;
@@ -987,7 +989,7 @@ export class Bot {
       // the look ahead for the push (now, when they already part)
       const meet = speed2 > 1 ? -local.dot(line) / speed2 : 0;
       const hulls = this.ship.radius + ship.radius;
-      const into = meet > 0 && towardShip.copy(local).addScaledVector(line, meet).length() < hulls * KEEP_CLEAR_INTO;
+      const into = racing && meet > 0 && towardShip.copy(local).addScaledVector(line, meet).length() < hulls * KEEP_CLEAR_INTO;
       const when = THREE.MathUtils.clamp(meet, 0, KEEP_CLEAR_AHEAD);
       local.addScaledVector(line, when);
       const miss = local.length();
@@ -998,7 +1000,7 @@ export class Bot {
         const gap = towardShip.length() - hulls;
         towardShip.normalize();
         const closing = line.subVectors(desired, ship.flight.velocity).dot(towardShip);
-        const allowed = Math.max(0, gap) / KEEP_CLEAR_BRAKE;
+        const allowed = Math.max(RAM_SAFE, gap / KEEP_CLEAR_BRAKE);
         if (closing > allowed) desired.addScaledVector(towardShip, allowed - closing);
       }
       if (miss >= clear) continue;
