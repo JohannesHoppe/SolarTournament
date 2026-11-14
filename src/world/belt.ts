@@ -23,7 +23,10 @@ const BELT_THICKNESS = 60000;
 const MIN_SCALE = 2;
 const MAX_SCALE = 9;
 /**
- * Rocks closer than this (units) draw as real, low-poly geometry; the rest of the ring (most of
+ * Rocks closer than this (units) draw as real, low-poly geometry (the field's far meshes: from
+ * inside the arena a belt rock is at least 6 km away, a hundred of its radii, where the field
+ * itself draws a rock as a billboard already; only a ship lost beyond the arena's limit comes
+ * within 1 km of one); the rest of the ring (most of
  * it: this is a small share of the belt's area) draws as a billboard (see view/impostor), far
  * cheaper and, at that distance, no different to look at. Set beyond where a ship coasting past
  * the arena's limit, still alive in its grace period, could end up (see BELT_INNER).

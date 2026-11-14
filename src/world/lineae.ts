@@ -60,9 +60,12 @@ function icy(material: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
 /** A ground of Europa's ice on `relief`, its tones from `paint`. */
 function iceGround(half: THREE.Vector3, relief: (x: number, z: number) => number, paint: (x: number, z: number, color: THREE.Color) => void): THREE.Group {
   const group = reliefGround(half, relief, ICE_TINT, EUROPA_GLOW, GROUND_CELL, paint);
+  // the ground's tiles share one material: made icy once
+  const materials = new Set<THREE.MeshStandardMaterial>();
   group.traverse((object) => {
-    if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) icy(object.material);
+    if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) materials.add(object.material);
   });
+  materials.forEach(icy);
   return group;
 }
 
