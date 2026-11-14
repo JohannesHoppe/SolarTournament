@@ -1248,7 +1248,7 @@ const haumeaRing = race({
   marks: HAUMEA_COURSE,
   laps: HAUMEA_LAPS,
   pipes: null,
-  rivals: { names: ['Rime', 'Sleet', 'Hoar', 'Glaze', 'Floe'], skills: [0.5, 0.45, 0.4, 0.35, 0.35] },
+  rivals: { names: ['Rime', 'Sleet', 'Hoar', 'Glaze'], skills: [0.5, 0.45, 0.4, 0.35] },
   podium: 1,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
@@ -1994,7 +1994,7 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.35;
+const AMBUSH_SKILL = 0.3;
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2084,7 +2084,7 @@ const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambus
  */
 export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
   { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
-  { target: 0.45, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
+  { target: 0.5, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
   { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
 /** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
@@ -2107,8 +2107,11 @@ const WANTED: readonly (readonly [string, string, string])[] = [
   ['Feeder Fang', 'Snowball', 'The Harvester'],
   ['Gala Crasher', 'Champagne Vex', 'Mister Bow Tie'],
 ];
+/** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
+const HAZE_PLACES: readonly ArenaId[] = ['titan'];
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
-  const { target, escorts, skill } = BOUNTY_TIERS[tier];
+  const { target, skill } = BOUNTY_TIERS[tier];
+  const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
   // the field they guard is laid where the place's field lies, as the attempt begins
   const field = new THREE.Vector3();
   const drill = bounty(CAMPAIGN.wanted, arena, field, [name, ...AMBUSH_NAMES, 'Wick', 'Burr'].slice(0, 1 + escorts), [target, skill]);
