@@ -60,6 +60,14 @@ const JUPITER_GRAVITY = 24.79 / 0.05;
 const JUPITER_BODY = 71492000 / 0.05;
 const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
 /**
+ * Jupiter's wind under its cloud deck (units/s, 30 m/s; see world/air windIn): east, which over
+ * the arena's 13° south runs along -z (the map's frame turns the planet's axis about z, see
+ * world/landmarks JUPITER_LATITUDE). Its zonal jets blow up to 150 m/s at the cloud tops and
+ * faster under them; at the arena's latitude, between its belts, 30 m/s. The clouds under the
+ * deck drift with it (see world/jupiter), and it drags and heats what flies in it.
+ */
+const JUPITER_WIND = new THREE.Vector3(0, 0, -600);
+/**
  * The black hole's event horizon (units, 350 m), in the middle of its arena. It pulls with
  * HOLE_PULL (units/s², 1 g) at HOLE_PULL_AT (units, 2 km), falling off with the square of the
  * distance: 4 g at 1 km, and the main drive's 13 g gets out from no nearer than about 555 m,
@@ -1225,7 +1233,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       spin: SPIN_RATE,
       toughness: 800,
       well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow((JUPITER_BODY + JUPITER_FLOOR) / JUPITER_BODY, 2), body: JUPITER_BODY },
-      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT },
+      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT, wind: JUPITER_WIND },
     },
     sunlight: 50,
     storms: false,

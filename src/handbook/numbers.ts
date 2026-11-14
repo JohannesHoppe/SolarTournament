@@ -202,6 +202,8 @@ export const FROM_CODE: Record<string, number> = {
   seeKm: Math.round(meters(reachAt(-20000, SIGHT_DEPTH)) / 10) * 10,
   seeTwoKm: Math.round(meters(reachAt(-40000, SIGHT_DEPTH)) / 10) * 10,
   dragDeck: Math.round((dragAt(-1, MAX_SPEED) / G) * 10) / 10,
+  // the wind under the deck (m/s)
+  jupiterWind: Math.round(meters(jupiterAir().wind!.length())),
   // the lift of the fins at the deck at the limit, the flight computer's trim, and the autopilot's
   // hardest turn at the deck at the limit (to 5 m, as the README gives it)
   liftDeck: g(LIFT),

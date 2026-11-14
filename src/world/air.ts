@@ -26,6 +26,28 @@ export interface Air {
   lapse: number;
   /** Its specific heat (J/(kg·K)): how much a hull's speed warms the air it rams (see stagnation). */
   heatCapacity: number;
+  /** How the air moves under the deck (units/s): its wind, the same everywhere there (see windIn); none without. */
+  wind?: THREE.Vector3;
+}
+
+/**
+ * Over the deck the air turns with the planet, as its cloud tops do; under it the wind blows,
+ * full from WIND_DEPTH under the deck (units, 50 m, where the wisps of cloud streaming with it
+ * begin, see world/jupiter), growing from nothing at the deck down to there.
+ */
+const WIND_DEPTH = 1000;
+
+/** The air's motion at `position` (units/s), into `target` (see Air.wind). */
+export function windIn(air: Air | null, position: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
+  if (!air?.wind) return target.set(0, 0, 0);
+  const share = Math.min(1, Math.max(0, -altitudeIn(air, position) / WIND_DEPTH));
+  return target.copy(air.wind).multiplyScalar(share);
+}
+
+const wind = new THREE.Vector3();
+/** How fast a body at `position` flying at `velocity` moves through the air there (units/s), into `target`: what the air's drag, heat and lift answer to. */
+export function throughAir(air: Air | null, position: THREE.Vector3, velocity: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
+  return target.copy(velocity).sub(windIn(air, position, wind));
 }
 
 /**
@@ -263,17 +285,20 @@ const end = new THREE.Vector3();
 
 /**
  * Adds the air's drag on a ship flying at `velocity` (units/s) to `acceleration` (units/s²), for
- * a step of `dt` seconds: the speed the step takes is that of dv/dt = -k v|v| solved over the
- * step, so a slow frame never brakes a ship past standstill. A body that loses less to the air per
- * unit of its mass than a ship (a torpedo, see TORPEDO_DRAG) passes its `share` of a ship's drag.
+ * a step of `dt` seconds, by how fast it moves through the air (see throughAir): the speed the
+ * step takes is that of dv/dt = -k v|v| solved over the step, so a slow frame never brakes a ship
+ * past the wind's own speed. A body that loses less to the air per unit of its mass than a ship
+ * (a torpedo, see TORPEDO_DRAG) passes its `share` of a ship's drag.
  */
 export function dragOn(air: Air, position: THREE.Vector3, velocity: THREE.Vector3, dt: number, acceleration: THREE.Vector3, share = 1): THREE.Vector3 {
-  const speed = velocity.length();
+  const flow = throughAir(air, position, velocity, flowing);
+  const speed = flow.length();
   const k = DRAG * share * density(altitudeIn(air, position));
   if (speed < 1e-6 || dt <= 0 || k * speed < 1e-9) return acceleration;
   const lost = speed - speed / (1 + k * speed * dt);
-  return acceleration.addScaledVector(velocity, -lost / (speed * dt));
+  return acceleration.addScaledVector(flow, -lost / (speed * dt));
 }
+const flowing = new THREE.Vector3();
 
 /** How far a sense reaching `depth` (see SIGHT_DEPTH) sees through level haze at an altitude under the deck (units), the planet's curve left out, in an air of `clear` (see Air.clear): for the docs. */
 export const reachAt = (altitude: number, depth: number, clear = 1) => depth / (HAZE * clear * density(altitude));
@@ -366,10 +391,12 @@ export interface AirHull {
  */
 export function airStep(ship: AirHull, air: Air, dt: number, full: number): number {
   const altitude = altitudeIn(air, ship.flight.position);
+  // the air's speed past the hull, the wind taken out
+  const speed = throughAir(air, ship.flight.position, ship.flight.velocity, flowing).length();
   // a hull short of a fin cannot hold its course in air
-  finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
+  finSpin(altitude, speed, ship.perks.fins, ship.finSpin);
   ship.clog = air.clogs === false ? 0 : clogging(ship.clog, altitude, dt);
-  const heat = heatInto(air, altitude, ship.flight.velocity.length(), ship.clog) * dt;
+  const heat = heatInto(air, altitude, speed, ship.clog) * dt;
   // cold air carries heat off the radiators, beside what they shed themselves
   if (heat < 0) {
     ship.heat = Math.max(0, ship.heat + heat);
