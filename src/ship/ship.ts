@@ -27,7 +27,7 @@ export const MAX_HULL = 100;
  * The ships are heavily armored: a beam from the front or the side only scorches the armor
  * (this many hull points; fifty such hits wreck a ship). The drive is the weak spot.
  */
-const ARMOR_DAMAGE = 2;
+export const ARMOR_DAMAGE = 2;
 /**
  * A beam from behind, within REAR_CONE of the ship's axis, goes into the drive: each hit costs
  * this share of the thrust, and the hit that leaves nothing of it sends the drive's reactor
@@ -75,6 +75,29 @@ const SPAWN_PROTECTION = 5;
 /** The laser heats the ship; the radiators shed the heat into the cold of space. */
 export const MAX_HEAT = 100;
 const HEAT_PER_SHOT = 20;
+/**
+ * Plating (an item, see game/items): PLATES plates of ablative composite clamped over the stern,
+ * 60 kg each, which burn away as they take a blow instead of the hull: about 0.05 MJ a kilogram,
+ * 3 MJ a plate, PLATE_POINTS of the game's hull points (0.75 MJ each). A beam into the drive
+ * costs a plate what it costs the armor (2 points), so the two stop four; a torpedo's blast
+ * burns through both and the rest goes on into the hull. Armor, not a shield: what a plate cannot
+ * take passes on.
+ */
+export const PLATES = 2;
+export const PLATE_POINTS = 4;
+/**
+ * A repair (an item): its nanobots and the feedstock they mend from (300 kg) make hull, drive
+ * and thrusters whole over REPAIR_SECONDS (s), evenly, sealing the holes first; a blow meanwhile
+ * still lands.
+ */
+export const REPAIR_SECONDS = 4;
+/**
+ * A twin laser (an item) is a second laser module clamped on, with its own radiator and coolant
+ * (see game/items, PROBE_LOAD): the two fire in turn, twice as fast, each shot with a whole
+ * shot's heat, and its radiator sheds TWIN_RADIATE (heat units a second) more, as much as the
+ * ship's own.
+ */
+const TWIN_RADIATE = 20;
 /** What the radiators shed into space (heat units per second, MAX_HEAT the laser's limit), whatever stands around: a shot a second. */
 export const RADIATE = 20;
 /**
@@ -450,9 +473,12 @@ export class Ship {
   lean = false;
   /** Torpedoes this ship fired with this clone and before, for their ids. */
   torpedoesFired = 0;
-  /** Items the clone holds (see game/items): a twin laser, and plating charges left. */
+  /** Items the clone holds (see game/items): a twin laser, and plating's plates left, the outer one with PLATE_POINTS or less left in it (kept by the browser that runs the ship). */
   twin = false;
   plating = 0;
+  plateLeft = PLATE_POINTS;
+  /** Seconds a repair's nanobots still mend the ship (see REPAIR_SECONDS). */
+  repairLeft = 0;
   /** The clone holds a nova core: it pulses for everyone to see (see pulse). */
   nova = false;
   /** Decoys the clone holds (see game/decoys): lures a torpedo homing on it turns to. */
@@ -517,7 +543,7 @@ export class Ship {
 
   /** The heat the radiators could shed per second into space (heat units/s), less as far as they are clogged. */
   private get radiating() {
-    return RADIATE * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+    return (RADIATE * this.perks.cooling + (this.twin ? TWIN_RADIATE : 0)) * (1 - CLOG_LOSS * this.clog);
   }
 
   /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit): what they radiate less the sunlight they take in, less as far as they are clogged. */
@@ -735,6 +761,8 @@ export class Ship {
     this.torpedoes = (this.lean ? DRILL_TORPEDOES : TORPEDOES) + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
+    this.plateLeft = PLATE_POINTS;
+    this.repairLeft = 0;
     this.nova = false;
     this.decoys = 0;
     this.heat = 0;
@@ -788,6 +816,8 @@ export class Ship {
     this.deaths = from.deaths;
     this.twin = from.twin;
     this.plating = from.plating;
+    this.plateLeft = from.plateLeft;
+    this.repairLeft = from.repairLeft;
     this.nova = from.nova;
     // no more than a fresh clone's load: to the other browsers it is a ship never seen, and
     // they count its launches against that load (see Plausibility.torpedo)
@@ -1005,7 +1035,7 @@ export class Ship {
    * for its radiators' glow; that browser keeps the real heat.
    */
   warm() {
-    this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT / (this.twin ? 2 : 1));
+    this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT);
   }
 
   /**
@@ -1042,14 +1072,15 @@ export class Ship {
     this.extreme = extremeAfter(this.extreme, load, dt);
     this.show(dt, now);
     this.nanobots(dt, now);
+    this.mend(dt);
 
     this.cool(dt, now);
-    // a twin laser (an item) fires twice as fast at half the heat per shot
+    // a twin laser (an item) fires twice as fast, a whole shot's heat each, its own radiator shedding more (see TWIN_RADIATE)
     const twin = this.twin ? 2 : 1;
     if (!controls.fire) this.triggerHeld = false;
     // a hull without a laser (the campaign's scrap) fires nothing
     if (controls.fire && this.perks.laser && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
-      this.heat += (HEAT_PER_SHOT * this.perks.laserHeat) / twin;
+      this.heat += HEAT_PER_SHOT * this.perks.laserHeat;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       // a held trigger keeps the cadence exactly, however the steps fall: a shot that was due
       // within this step counts from when it was due; a fresh press counts from now, so tapping
@@ -1172,9 +1203,35 @@ export class Ship {
 
   /** The repair item: hull, drive and thrusters as new, the holes patched. */
   repair() {
-    this.hull = MAX_HULL;
-    this.drive = this.thrusters = 1;
     this.holes.length = 0;
+    this.repairLeft = REPAIR_SECONDS;
+  }
+
+  /** A repair under way (see REPAIR_SECONDS): hull, drive and thrusters a step nearer whole, so they are whole when it ends. */
+  private mend(dt: number) {
+    if (this.repairLeft <= 0) return;
+    const share = Math.min(1, dt / this.repairLeft);
+    this.hull += (MAX_HULL - this.hull) * share;
+    this.drive += (1 - this.drive) * share;
+    this.thrusters += (1 - this.thrusters) * share;
+    this.repairLeft = Math.max(0, this.repairLeft - dt);
+  }
+
+  /**
+   * Plating takes a blow of `points` hull points first (see PLATES): its plates burn away as far
+   * as they take it, outer first; returns what passes on into the hull.
+   */
+  absorb(points: number): number {
+    while (points > 0 && this.plating > 0) {
+      const take = Math.min(points, this.plateLeft);
+      this.plateLeft -= take;
+      points -= take;
+      if (this.plateLeft <= 1e-9) {
+        this.plating--;
+        this.plateLeft = PLATE_POINTS;
+      }
+    }
+    return points;
   }
 
   /**

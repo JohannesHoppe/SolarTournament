@@ -1,6 +1,6 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE, SINK_SECONDS } from '../ship/ship';
+import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, REPAIR_SECONDS, SILENT_AFTER, SILENT_RANGE, SINK_SECONDS } from '../ship/ship';
 import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
@@ -163,6 +163,7 @@ export const FROM_CODE: Record<string, number> = {
   selfDestruct: meters(SELF_DESTRUCT_RADIUS),
   silentAfter: SILENT_AFTER,
   sinkSeconds: Math.round(SINK_SECONDS),
+  repairSeconds: REPAIR_SECONDS,
   silentRange: km(SILENT_RANGE),
   selfDestructHold: SELF_DESTRUCT_HOLD,
   hookPrice: GEAR.find((gear) => gear.id === 'hook')!.price,

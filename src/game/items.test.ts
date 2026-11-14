@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { contents, fieldSolid, packItems, placeBucket, PROBE_STEADY, PROBE_THRUST, Probes, unpackItems, type Solid } from './items';
+import { contents, DOCK_ACCEL, fieldSolid, packItems, placeBucket, PROBE_FRAME, PROBE_STEADY, probeMass, Probes, unpackItems, type Solid } from './items';
 import { floorOf, pullOn, type Anchor } from './hook';
 import { MASS, type Body } from '../world/bodies';
 import { MAX_SPEED } from '../ship/flight';
 import { BOOST_PUSH } from './race';
-import type { Ship } from '../ship/ship';
+import { TORPEDOES_PER_PROBE } from './torpedoes';
+import { ARMOR_DAMAGE, PLATE_POINTS, PLATES, Ship as ShipClass, type Ship } from '../ship/ship';
 import { ARENAS, arenaById } from '../world/arenas';
 import { driftProbes, testField } from '../test/field';
 
@@ -233,6 +234,69 @@ function reel(state: ReturnType<typeof hooked>, ship: Body, length: number, t: n
   return next;
 }
 
+describe('a probe met at speed', () => {
+  it('matches the velocity of a ship flying through it, so the ship meets it gently, and goes back to its slot when the ship turns away', () => {
+    for (const offset of [0, 400]) {
+      const field = testField();
+      const probes = new Probes();
+      probes.drop('x', 0, ['torpedoes'], new THREE.Vector3(20000, offset, 0), new THREE.Vector3(), 0);
+      const probe = probes.list[0];
+      probes.park(probe, probe.position);
+      probe.until = Infinity;
+      const ship = { alive: true, radius: RADIUS, flight: { position: new THREE.Vector3(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) } };
+      let met: number | null = null;
+      for (let t = 0; t < 8 && met === null; t += DT) {
+        probes.dock([ship], DT);
+        driftProbes(probes, DT, t, field);
+        ship.flight.position.addScaledVector(ship.flight.velocity, DT);
+        if (probes.touching(ship.flight.position, RADIUS)) met = probe.velocity.distanceTo(ship.flight.velocity);
+      }
+      // a ship at the limit meets it at a few meters a second, not at 250
+      expect(met).not.toBeNull();
+      expect(met! * 0.05).toBeLessThan(10);
+    }
+    // a ship that turns away leaves it astray, and it flies back to its slot
+    const field = testField();
+    const probes = new Probes();
+    probes.drop('y', 0, ['repair'], new THREE.Vector3(20000, 0, 0), new THREE.Vector3(), 0);
+    const probe = probes.list[0];
+    probes.park(probe, probe.position);
+    probe.until = Infinity;
+    const ship = { alive: true, radius: RADIUS, flight: { position: new THREE.Vector3(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) } };
+    let t = 0;
+    for (; t < 8 && !probe.astray; t += DT) {
+      probes.dock([ship], DT);
+      driftProbes(probes, DT, t, field);
+      ship.flight.position.addScaledVector(ship.flight.velocity, DT);
+    }
+    expect(probe.astray).toBe(true);
+    ship.flight.velocity.set(0, MAX_SPEED, 0);
+    for (const end = t + 30; t < end && probe.astray; t += DT) {
+      probes.dock([ship], DT);
+      driftProbes(probes, DT, t, field);
+      ship.flight.position.addScaledVector(ship.flight.velocity, DT);
+    }
+    expect(probe.astray).toBe(false);
+    expect(probe.position.toArray()).toEqual([20000, 0, 0]);
+  });
+
+  it('brings plating that burns away as it takes hits by their energy, armor and no shield', () => {
+    const ship = Object.assign(Object.create(ShipClass.prototype) as ShipClass, { plating: PLATES, plateLeft: PLATE_POINTS });
+    // four beams into the drive, at what each costs the armor, and the plates are gone
+    for (let i = 0; i < 4; i++) expect(ship.absorb(ARMOR_DAMAGE)).toBe(0);
+    expect(ship.plating).toBe(0);
+    // fresh plates take a torpedo's first PLATES × PLATE_POINTS, the rest goes on into the hull
+    Object.assign(ship, { plating: PLATES, plateLeft: PLATE_POINTS });
+    expect(ship.absorb(64)).toBe(64 - PLATES * PLATE_POINTS);
+    expect(ship.plating).toBe(0);
+  });
+
+  it('weighs what it carries: four torpedoes of a tonne, the heaviest', () => {
+    expect(probeMass('torpedoes')).toBe(PROBE_FRAME + TORPEDOES_PER_PROBE * MASS.torpedo);
+    for (const kind of ['twin', 'plating', 'overdrive', 'repair', 'nova', 'decoys'] as const) expect(probeMass(kind)).toBeLessThan(probeMass('torpedoes'));
+  });
+});
+
 describe('a probe on the hook', () => {
   it('is reeled in to the ship over time and taken only when it arrives', () => {
     const { body, ship } = shipAt('a');
@@ -318,10 +382,10 @@ describe('a probe on the hook', () => {
     const { probe, probes, field } = state;
     const speed = probe.velocity.clone();
     expect(speed.length()).toBeGreaterThan(1000);
-    // the hooker is shot: the cable is gone, the probe keeps its speed for the moment
+    // the hooker is shot: the cable is gone, the probe brakes the speed it has far off what brings it home, its drive in full
     probes.letGo(probe, ship);
     driftProbes(probes, DT, (t += DT), field);
-    expect(probe.velocity.distanceTo(speed)).toBeLessThan(PROBE_THRUST * DT * 1.01);
+    expect(probe.velocity.distanceTo(speed)).toBeLessThan(DOCK_ACCEL * DT * 1.01);
     expect(probe.astray).toBe(true);
     // then its thrusters bring it back to its slot, where every browser has it
     for (const end = t + 20; t < end && probe.astray; t += DT) driftProbes(probes, DT, t, field);

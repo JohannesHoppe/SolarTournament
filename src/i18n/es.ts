@@ -354,7 +354,6 @@ export const ES: Catalog = {
   'NOVA CORE ACTIVATED · {distance} · GET OUT': 'NÚCLEO NOVA ACTIVADO · {distance} · SAL DE AHÍ',
   'TORPEDO DOWN +{points}': 'TORPEDO DERRIBADO +{points}',
   'OWN GOAL': 'AUTOGOL',
-  'Plating took the torpedo': 'El blindaje ha absorbido el torpedo',
   'Torpedo hit': 'Impacto de torpedo',
   'CLOSE CALL +{points}': 'POR LOS PELOS +{points}',
   'DRIVE PLUME · {name} · GET OUT': 'CHORRO DEL MOTOR · {name} · SAL DE AHÍ',
@@ -461,10 +460,10 @@ export const ES: Catalog = {
   Repair: 'Reparación',
   'Nova core': 'Núcleo nova',
   'fires twice as fast': 'dispara el doble de rápido',
-  'stops two hits': 'aguanta dos impactos',
+  'soaks up four hits into the drive': 'absorbe cuatro impactos en el motor',
   'extra torpedoes': 'torpedos extra',
   'ready now': 'listo ya',
-  'ship as new': 'nave como nueva',
+  'ship as new in seconds': 'nave como nueva en segundos',
   'next shot blows up everything around': 'el próximo disparo lo revienta todo alrededor',
 
   // the satire ads
@@ -1423,13 +1422,13 @@ export const ES: Catalog = {
   "A cable never passes through anything solid: it wraps around it. When rock, ice, junk or a hull comes between you and what you hooked, the cable lies on its edge and you swing around that edge; swing back, and it comes off again. Let go before it winds onto the rock: the winch keeps you clear of it by paying out cable, and that eats your swing. It snaps on a planet's or a black hole's body, on the battleship's hull, on a rock that sweeps right through it, and once it has wound a whole turn round a rock.":
     'Un cable nunca atraviesa nada sólido: se enrolla a su alrededor. Cuando una roca, hielo, chatarra o un casco se interpone entre tú y lo que enganchaste, el cable se apoya en su borde y te balanceas alrededor de ese borde; si te balanceas de vuelta, se suelta otra vez. Suelta antes de que se enrolle en la roca: el cabrestante te mantiene lejos de ella soltando cable, y eso se come tu balanceo. Se rompe contra el cuerpo de un planeta o de un agujero negro, contra el casco del acorazado, contra una roca que lo atraviesa de golpe, y en cuanto ha dado una vuelta entera a una roca.',
   Probes: 'Sondas',
-  'From {probeFirst} s into a round a sponsor probe shows up every {probeEvery} s, each carrying one thing. Fly within {probeReach} m of it to take it. Its color says what it holds:':
-    'Desde los {probeFirst} s de una ronda aparece una sonda de patrocinador cada {probeEvery} s, cada una con una sola cosa. Vuela a menos de {probeReach} m de ella para cogerla. Su color dice lo que lleva:',
-  "Twin laser (pink): twice as fast, half the heat per shot, for the clone's life.": 'Láser doble (rosa): el doble de rápido, la mitad de calor por disparo, mientras viva el clon.',
-  'Plating (blue): two hits into the drive bounce off, or one torpedo.': 'Blindaje (azul): dos impactos en el motor rebotan, o un torpedo.',
+  'From {probeFirst} s into a round a sponsor probe shows up every {probeEvery} s, each carrying one thing. Fly within {probeReach} m of it to take it: it is a drone of its sponsor, and as you come it matches your speed with its own drive and clamps on, so you take it without a blow at any speed. Its color says what it holds:':
+    'Desde los {probeFirst} s de una ronda aparece una sonda de patrocinador cada {probeEvery} s, cada una con una sola cosa. Vuela a menos de {probeReach} m de ella para cogerla: es un dron del patrocinador que, cuando llegas, iguala tu velocidad con su propio motor y se acopla, así la tomas sin un golpe a cualquier velocidad. Su color dice lo que lleva:',
+  "Twin laser (pink): a second gun with its own radiator: twice as fast, every shot at full heat, cooling twice as fast, for the clone's life.": 'Láser doble (rosa): un segundo cañón con su propio radiador: el doble de rápido, cada disparo con todo su calor, que se enfría el doble de rápido, mientras viva el clon.',
+  'Plating (blue): two ablative plates over your stern burn away instead of your hull: they stop four hits into the drive, and a little of a torpedo.': 'Blindaje (azul): dos placas ablativas sobre tu popa se queman en lugar de tu casco: detienen cuatro impactos en el motor y un poco de un torpedo.',
   'Torpedoes (orange): {probeTorpedoes} more.': 'Torpedos (naranja): {probeTorpedoes} más.',
   'Overdrive (yellow): charged at once.': 'Overdrive (amarillo): cargado al instante.',
-  'Repair (green): hull, drive and thrusters as new.': 'Reparación (verde): casco, motor y propulsores como nuevos.',
+  'Repair (green): nanobots make hull, drive and thrusters whole within {repairSeconds} s.': 'Reparación (verde): los nanobots dejan casco, motor y propulsores enteros en {repairSeconds} s.',
   'Nova core (white): see below.': 'Núcleo nova (blanco): ver más abajo.',
   "A dead clone's twin laser, plating and nova core fly out again as probes, for whoever gets there first.":
     'El láser doble, el blindaje y el núcleo nova de un clon muerto vuelven a salir como sondas, para quien llegue primero.',

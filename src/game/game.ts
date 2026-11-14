@@ -59,7 +59,7 @@ import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaig
 import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
-import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
+import { ARMOR_DAMAGE, detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, PLATE_POINTS, PLATES, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
 import { StrainHand } from '../ship/strainhand';
 import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -294,8 +294,6 @@ const NOVA_FLEE = 1.5;
 const NOVA_FLASH_MS = 1600;
 /** An idle bot goes for a probe within this distance (units, 1.5 km). */
 const PROBE_LURE = 30000;
-/** Plating (an item) turns this many hits into the drive, or one torpedo. */
-const PLATING_CHARGES = 2;
 /** A bot the sun burns (see Game.shadeFor) heads for a rock's shadow once its heat passes SHADE_HOT (of 100), to a point SHADE_OFF (units, 75 m) beyond the rock's far side from the sun, and stays until it has cooled to SHADE_COOL. */
 const SHADE_HOT = 70;
 const SHADE_COOL = 25;
@@ -8066,6 +8064,8 @@ export class Game implements OnlineGame {
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points, this.venue.probeAt);
     const shared = (this.slotSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, SLOT_BOUNCES)]);
+    // a probe a ship is about to fly through matches its velocity, so the ship docks it without a blow
+    this.probes.dock(this.ships, dt);
     this.probes.update(dt, now, this.field, (this.probeSolids ??= [...shared, ...pushesOf(this.solids, PROBE_BOUNCES.filter((kind) => !SLOT_BOUNCES.includes(kind)))]), shared);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
@@ -8105,7 +8105,8 @@ export class Game implements OnlineGame {
         ship.twin = true;
         break;
       case 'plating':
-        ship.plating = PLATING_CHARGES;
+        ship.plating = PLATES;
+        ship.plateLeft = PLATE_POINTS;
         break;
       case 'torpedoes':
         ship.torpedoes += this.probeTorpedoes();
@@ -8361,14 +8362,14 @@ export class Game implements OnlineGame {
    */
   applyTorpedoHit(ship: Ship, shooter: Ship | null, torpedo: Torpedo) {
     const now = this.time;
-    // plating (an item) takes a whole torpedo and is gone
+    let damage = torpedoDamage(closingOf.subVectors(torpedo.velocity, ship.flight.velocity).length(), ship.body.mass);
+    // plating (an item) burns away first as far as it takes the blast (see PLATES)
     if (ship.plating > 0 && now >= ship.protectedUntil) {
-      ship.plating = 0;
+      damage = ship.absorb(damage);
       this.effects.sparks(ship.flight.position, PLATING_COLOR, 160);
-      if (ship.isLocal) this.hud.flashMessage(now, t('Plating took the torpedo'), 1.5);
-      return;
+      if (ship.isLocal) this.hud.flashMessage(now, ship.plating ? t('Plating holds') : t('Plating gone'), 1.5);
     }
-    const status = ship.structural(torpedoDamage(closingOf.subVectors(torpedo.velocity, ship.flight.velocity).length(), ship.body.mass), now);
+    const status = ship.structural(damage, now);
     if (status === 'protected') return;
     if (shooter?.isLocal) this.torpedoesHit++;
     // the blast shakes the thrusters too
@@ -8870,11 +8871,11 @@ export class Game implements OnlineGame {
    * side the shooter is on (friendly fire). Also called for beams from other peers.
    */
   applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null, weight = 1) {
-    // plating (an item) takes a hit into the drive
     // where the beam meets the ship
     const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
+    // plating (an item) takes a hit into the drive: a plate burns away what the armor would lose (see PLATES)
     if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
-      ship.plating--;
+      ship.absorb(ARMOR_DAMAGE * weight);
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
