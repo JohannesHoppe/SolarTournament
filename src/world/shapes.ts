@@ -461,6 +461,7 @@ function plating(color: THREE.ColorRepresentation): THREE.MeshStandardMaterial {
 /** What a hull template is built of before it is merged: plating, the runs of windows (steady and on the two failing circuits), the domes' glass and gardens, beacons, paint. */
 interface HullParts {
   parts: THREE.BufferGeometry[];
+  inside: THREE.BufferGeometry[];
   livery: THREE.BufferGeometry[];
   lights: THREE.BufferGeometry[];
   failing: [THREE.BufferGeometry[], THREE.BufferGeometry[]];
@@ -468,6 +469,119 @@ interface HullParts {
   garden: THREE.BufferGeometry[];
   beacons: number[];
   decals: THREE.Mesh[];
+}
+
+/**
+ * A torn section's breach (template units, as a share of its half length): whole up to a bulkhead
+ * BREACH_BULKHEAD from its middle, from there on open, its plating torn off between
+ * BREACH_EDGE[0] and BREACH_EDGE[1] of the way to the end of its box, its decks broken off between
+ * BREACH_DECKS[0] and BREACH_DECKS[1]. The core's cross-section is BREACH_CORE of the box's.
+ */
+export const BREACH_BULKHEAD = -0.05;
+export const BREACH_EDGE = [0.62, 0.99] as const;
+const BREACH_DECKS = [0.3, 0.92] as const;
+export const BREACH_CORE = 0.8;
+/** Decks inside a section: the floor and the ceiling and BREACH_DECK_COUNT - 1 between them. */
+export const BREACH_DECK_COUNT = 5;
+/** The plating's thickness (template units, 2.8 m on the derelict's 7-fold sections). */
+const SKIN = 8;
+const BREACH_SEED = DEBRIS_SEED + 6;
+
+/** A wall's outward side and the axis across it: up, down, and the two flanks. */
+const WALLS = [
+  { normal: new THREE.Vector3(0, 1, 0), across: new THREE.Vector3(0, 0, 1), turn: 0 },
+  { normal: new THREE.Vector3(0, -1, 0), across: new THREE.Vector3(0, 0, 1), turn: Math.PI },
+  { normal: new THREE.Vector3(0, 0, 1), across: new THREE.Vector3(0, 1, 0), turn: Math.PI / 2 },
+  { normal: new THREE.Vector3(0, 0, -1), across: new THREE.Vector3(0, 1, 0), turn: -Math.PI / 2 },
+] as const;
+
+/**
+ * A plate of a wall `wall` (see WALLS), `thick` through, `width` across, from `from` on for
+ * `length` along the hull, `out` from the middle along the wall's normal and `at` across it, its
+ * far end bent by `bend` (rad) towards the wall's outside (negative: inwards).
+ */
+function plate(wall: (typeof WALLS)[number], from: number, length: number, thick: number, width: number, out: number, at: number, bend = 0): THREE.BufferGeometry {
+  const geometry = new THREE.BoxGeometry(length, thick, width).translate(length / 2, 0, 0);
+  rotateZ(geometry, bend);
+  rotateX(geometry, wall.turn);
+  return geometry.translate(from + wall.normal.x * out, wall.normal.y * out + wall.across.y * at, wall.normal.z * out + wall.across.z * at).toNonIndexed();
+}
+
+/**
+ * The open end of a torn section, within its box (`half`, template units): the hull's walls torn
+ * off in strips of plating at uneven lengths, many of their ends bent out by the blast of the air
+ * leaving or curled in, its linings, decks, partitions, frames and pipes bared and broken off
+ * deeper inside, a bulkhead closing the dark at the back. The section stays solid as its box.
+ */
+function breach(half: THREE.Vector3, into: HullParts) {
+  const r = new Randomizer(BREACH_SEED);
+  const back = half.x * BREACH_BULKHEAD;
+  const hy = half.y * BREACH_CORE;
+  const hz = half.z * BREACH_CORE;
+  const { parts, inside } = into;
+  // the bulkhead at the back, dark where the light hardly reaches
+  inside.push(block(SKIN, hy * 2, hz * 2, back + SKIN / 2));
+  for (const wall of WALLS) {
+    const span = wall.normal.y ? hz : hy - SKIN;
+    const out = (wall.normal.y ? hy : hz) - SKIN / 2;
+    for (let at = -span; at < span; ) {
+      const width = Math.min(r.range(30, 80), span - at);
+      const middle = at + width / 2;
+      at += width;
+      const end = half.x * r.range(BREACH_EDGE[0], BREACH_EDGE[1]);
+      const tip = r.nextFloat() < 0.6 ? r.range(25, 60) : 0;
+      parts.push(plate(wall, back, end - tip - back, SKIN, width, out, middle));
+      // the lining inside it, torn short of the plating
+      inside.push(plate(wall, back, end - tip - back - r.range(10, 80), 3, width - 2, out - SKIN / 2 - 2, middle));
+      if (tip) parts.push(plate(wall, end - tip, tip, SKIN, width * r.range(0.6, 1), out, middle + r.range(-0.15, 0.15) * width, (r.nextFloat() < 0.75 ? 1 : -0.7) * r.range(0.25, 0.9)));
+    }
+  }
+  // the decks, each broken off in pieces across, some bent down where they broke
+  const storey = (hy * 2) / BREACH_DECK_COUNT;
+  for (let k = 1; k < BREACH_DECK_COUNT; k++) {
+    const y = -hy + k * storey;
+    for (let at = -hz + SKIN; at < hz - SKIN; ) {
+      const width = Math.min(r.range(110, 220), hz - SKIN - at);
+      const middle = at + width / 2;
+      at += width;
+      const end = half.x * r.range(BREACH_DECKS[0], BREACH_DECKS[1]);
+      const tip = r.nextFloat() < 0.4 ? r.range(30, 70) : 0;
+      inside.push(plate(WALLS[0], back, end - tip - back, 6, width, y, middle));
+      if (tip) inside.push(plate(WALLS[0], end - tip, tip, 6, width, y, middle, -r.range(0.2, 0.7)));
+    }
+    // partitions between this deck and the one below, torn short
+    for (let p = 0; p < 3; p++) {
+      const length = r.range(0.15, 0.6) * half.x;
+      inside.push(block(length, storey - 6, 4, back + length / 2, y - storey / 2, r.range(-0.9, 0.9) * hz));
+    }
+  }
+  // the frames inside, bare rings of girders, and outside, as on the rest of the hull
+  for (let x = back + 70; x < half.x * 0.5; x += 150) {
+    inside.push(block(24, 20, hz * 2 - SKIN * 2, x, hy - SKIN - 10), block(24, 20, hz * 2 - SKIN * 2, x, -hy + SKIN + 10));
+    for (const side of [1, -1]) inside.push(block(24, hy * 2 - SKIN * 2, 20, x, 0, side * (hz - SKIN - 10)));
+  }
+  const rib = (half.z * 0.98 - hz) / 2;
+  for (let x = back + 90; x < half.x * 0.55; x += (half.x * 2) / 7) {
+    for (const side of [1, -1]) {
+      parts.push(block(60, half.y - hy, half.z * 1.96, x, side * (hy + (half.y - hy) / 2)));
+      parts.push(block(60, hy * 2, rib * 2, x, 0, side * (hz + rib)));
+    }
+  }
+  // the livery's band along each flank, torn off with the plating
+  for (const side of [1, -1]) {
+    const end = half.x * r.range(0.3, 0.75);
+    into.livery.push(block(end - back, half.y * 0.72, half.z * 0.1, (end + back) / 2, half.y * 0.45, side * half.z * 0.95));
+  }
+  // pipes and cable runs along the ceiling and the flanks, broken off and sagging out of the breach
+  for (let p = 0; p < 8; p++) {
+    const wall = WALLS[p % 4];
+    const span = wall.normal.y ? hz : hy;
+    const end = half.x * r.range(0.5, 0.97);
+    const sag = r.range(40, 70);
+    const out = (wall.normal.y ? hy : hz) - SKIN - 12;
+    const at = r.range(-0.8, 0.8) * span;
+    inside.push(plate(wall, back, end - sag - back, 8, 8, out, at), plate(wall, end - sag, sag, 8, 8, out, at, -r.range(0.3, 1)));
+  }
 }
 
 /**
@@ -484,6 +598,8 @@ interface HullParts {
 export function hullSet(): TemplateSet {
   const metal = plating(0xb8bec8);
   const dark = plating(0x4a4e57);
+  // the inside of the ship, bared at its torn ends: decks, frames and linings in dull paint
+  const inner = plating(0x34373d);
   const uvs = new Randomizer(DEBRIS_SEED + 5);
   const windows = windowMaterials(windowTexture(DEBRIS_SEED + 2));
   const glass = domeGlass();
@@ -532,12 +648,9 @@ export function hullSet(): TemplateSet {
   const builds: ((half: THREE.Vector3, into: HullParts) => void)[] = [
     (half, into) => section(half, half.x, into, true),
     (half, into) => {
-      // the hull ends at 40 % of the length, torn plates reach on to the end of the box
-      section(half, half.x * 0.4, into, false);
-      for (let k = 0; k < 9; k++) {
-        const length = r.range(0.2, 0.6) * half.x;
-        into.parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
-      }
+      // whole up to a bulkhead short of the middle, torn open from there to the end of the box
+      section(half, half.x * BREACH_BULKHEAD, into, false);
+      breach(half, into);
     },
     (half, { parts }) => {
       parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
@@ -577,10 +690,11 @@ export function hullSet(): TemplateSet {
       }),
     );
   const near = HULL_BOXES.map((half, i) => {
-    const into: HullParts = { parts: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
+    const into: HullParts = { parts: [], inside: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
     builds[i](half, into);
     const group = new THREE.Group();
     group.add(new THREE.Mesh(plated(into.parts), half.y < L * 0.05 ? dark : metal));
+    if (into.inside.length) group.add(new THREE.Mesh(plated(into.inside), inner));
     if (into.livery.length) group.add(new THREE.Mesh(boxUv(flat(into.livery), TILE), livery));
     if (into.lights.length) group.add(new THREE.Mesh(boxUv(flat(into.lights), 400), windows.steady));
     into.failing.forEach((runs, i) => runs.length && group.add(new THREE.Mesh(boxUv(flat(runs), 400), windows.failing[i])));
