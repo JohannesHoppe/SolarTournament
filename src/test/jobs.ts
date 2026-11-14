@@ -11,7 +11,7 @@ import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
 import { blastOn, Charges } from '../game/charges';
 import { approachGate, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
-import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
+import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, harpoonClosing, harpoonDamage, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
 import { DRILL_TORPEDOES, Torpedoes, torpedoDamage, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
@@ -638,6 +638,9 @@ export class JobWorld implements SchoolContext {
     if (fresh) {
       tether.cable.follow(this.field, at, owner.flight.position, false);
       tether.length = tether.cable.length(at, owner.flight.position);
+      // the harpoon's bite takes its kinetic energy from a ship's hull (see Game.harpooned)
+      const bitten = tether.anchor.ship;
+      if (bitten?.alive && bitten.structural(harpoonDamage(harpoonClosing(owner, bitten)), this.now) === 'destroyed') this.destroyed(bitten, owner, 'harpoon');
     }
     if (!tether.cable.follow(this.field, at, owner.flight.position, !fresh)) {
       this.dropHook();

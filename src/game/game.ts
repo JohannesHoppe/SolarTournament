@@ -20,7 +20,7 @@ import { ReferencePlane } from '../view/plane';
 import { OrbitPath } from '../view/orbitpath';
 import { referencesOf } from '../world/reference';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, CABLE_BREAK, cableEnd, Cables, cablePull, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, CABLE_BREAK, cableEnd, Cables, cablePull, clearOf, flightTime, floorOf, harpoonClosing, harpoonDamage, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters, type OnTarget, type TorpedoMark } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
@@ -1518,6 +1518,8 @@ export class Game implements OnlineGame {
   private readonly shownReferences: Reference[] = [];
   /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
   private readonly tethers = new Map<Ship, Tether>();
+  /** When each ship's harpoon last bit a ship this browser runs (game time, s; see harpooned). */
+  private readonly harpoonedAt = new Map<Ship, number>();
   private readonly cables = new Cables();
   private hookReadyAt = 0;
   private hookHeld = false;
@@ -7853,6 +7855,7 @@ export class Game implements OnlineGame {
   private hooked(owner: Ship, anchor: Anchor, length: number) {
     if (owner.owner !== null || anchor.mark) return;
     this.online?.sendHook(owner, anchor.rock ? { rock: anchor.rock.id, local: anchor.local } : { target: anchor.ship }, length);
+    if (anchor.ship) this.harpooned(owner, anchor.ship);
     if (owner !== this.me) return;
     this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
     this.sound.beep(523, 0.08, 0.12);
@@ -7871,6 +7874,25 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(this.time, t('Hooked by {name}', { name: owner.name }), 2);
       this.linkHit(0.3, 0.2);
     }
+    if (target) this.harpooned(owner, target);
+  }
+
+  /**
+   * A harpoon bit a ship: on the browser that runs that ship, the hull takes its kinetic energy
+   * (see harpoonDamage), whichever side the hooker is on; a ship it kills is the hooker's kill.
+   */
+  private harpooned(owner: Ship, target: Ship) {
+    if (target.owner !== null || !target.alive) return;
+    // a hook bites again only after it was reeled back (HOOK_RECHARGE); a browser that says so
+    // faster, even by half, deals no damage with it (the messages' lag bunches a few)
+    const last = this.harpoonedAt.get(owner) ?? -Infinity;
+    if (this.time - last < HOOK_RECHARGE / 2) return;
+    this.harpoonedAt.set(owner, this.time);
+    const status = target.structural(harpoonDamage(harpoonClosing(owner, target)), this.time);
+    if (status === 'protected') return;
+    this.effects.sparks(target.flight.position, owner.color, 80);
+    if (target.isLocal) this.hud.damaged();
+    if (status === 'destroyed') this.shipDestroyed(target, owner, null, 'harpoon');
   }
 
   remoteUnhook(owner: Ship) {
