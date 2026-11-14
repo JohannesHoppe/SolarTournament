@@ -5,7 +5,7 @@ import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { showMagpie, THRUSTER_LAYOUTS } from './models';
 import { JOLT_TIME, MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
-import { CLOG_LOSS } from '../world/air';
+import { CLOG_LOSS, REACTOR_WASTE } from '../world/air';
 import { ramDamage, type RamZone } from './impact';
 import { HULL_LENGTH } from './blow';
 import type { Controls } from '../input/input';
@@ -199,10 +199,21 @@ export const LOCK_RANGE = 60000;
  * has not fired for SILENT_AFTER seconds shows no heat the sensors pick up from afar. The radar,
  * the HUD's marks, a torpedo's lock and the bots find it only within SILENT_RANGE (units, 1 km;
  * the radar reaches 2.5 km, a lock 3 km); the eye still sees it where nothing hides it.
+ *
+ * It runs silent on its heat sink: its radiators close, so their warmth no longer shows, and the
+ * reactor's waste heat goes into a tank of 2 t of water ice instead, which takes some 1.5 GJ
+ * melting and warming to 100 °C, the heat gauge's MAX_HEAT (the laser's). With the drive cold
+ * the reactor idles (the clone's link, the sensors, the life support, the reactor kept hot) at a
+ * sixth of the waste heat it makes at work (REACTOR_WASTE, which the radiators shed at full,
+ * some 300 MW): SINK_FILL a second, some 50 MW, full in SINK_SECONDS, with the shots' heat on
+ * top. Once it is full the ship must vent (see venting): its radiators open, it shows on every
+ * sensor again and the laser stays locked until the heat is down to OVERHEAT_RESUME.
  */
 export const SILENT_AFTER = 2;
 export const SILENT_THROTTLE = 0.05;
 export const SILENT_RANGE = 20000;
+export const SINK_FILL = REACTOR_WASTE / 6;
+export const SINK_SECONDS = MAX_HEAT / SINK_FILL;
 
 /** Whether the sensors at `from` find `ship` (its line of sight is the caller's): always within SILENT_RANGE, beyond it only while it does not run silent. */
 export function detectable(ship: Ship, from: THREE.Vector3, now: number): boolean {
@@ -366,6 +377,8 @@ export type ShipState = {
   to?: number;
   /** remaining spawn protection (s) */
   pr: number;
+  /** present while its heat sink vents (see Ship.venting): it shows on every sensor */
+  ve?: 1;
 };
 
 const force = new THREE.Vector3();
@@ -460,6 +473,8 @@ export class Ship {
   overheated = false;
   /** When it last burned its drive or fired (game time, s), as every browser sees it: since SILENT_AFTER it runs silent (see silent). */
   loudAt = -Infinity;
+  /** Its heat sink ran full while it ran silent, and it vents until its heat is down to OVERHEAT_RESUME, seen by every sensor (see SINK_SECONDS); its browser tells the others with its state. */
+  venting = false;
   /** The radiators' skin and how hot it glows, 0..1 of the laser's limit (see radiate). */
   private readonly radiators: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   private glow = 0;
@@ -723,6 +738,7 @@ export class Ship {
     this.nova = false;
     this.decoys = 0;
     this.heat = 0;
+    this.venting = false;
     this.clog = 0;
     this.mending = false;
     this.hurtAt = -Infinity;
@@ -810,6 +826,7 @@ export class Ship {
       dr: +this.drive.toFixed(2),
       tr: +this.thrusters.toFixed(2),
       pr:+Math.max(0, this.protectedUntil - now).toFixed(1),
+      ...(this.venting ? { ve: 1 as const } : {}),
     };
   }
 
@@ -827,6 +844,9 @@ export class Ship {
     this.flight.throttle = state.th;
     // its flame seen: loud (see silent)
     if (state.th > SILENT_THROTTLE) this.loudAt = now;
+    // its heat sink venting: loud too
+    this.venting = state.ve === 1;
+    if (this.venting) this.loudAt = now;
     this.hull = state.h;
     this.drive = state.dr;
     this.thrusters = state.tr;
@@ -851,6 +871,7 @@ export class Ship {
       // the owner booted a new clone
       this.alive = true;
       this.heat = 0;
+      this.venting = false;
       this.glow = 0;
       this.holes.length = 0;
       this.root.visible = true;
@@ -987,6 +1008,21 @@ export class Ship {
     this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT / (this.twin ? 2 : 1));
   }
 
+  /**
+   * The ship's heat over a step: the radiators shed it, or, running silent, they are closed and
+   * the heat sink fills (see SINK_SECONDS); full, it vents, loud until its heat is down to
+   * OVERHEAT_RESUME, its laser locked as long.
+   */
+  cool(dt: number, now: number) {
+    if (this.silent(now)) {
+      this.heat = Math.min(MAX_HEAT, this.heat + SINK_FILL * dt);
+      if (this.heat >= MAX_HEAT) this.venting = this.overheated = true;
+    } else this.heat = Math.max(0, this.heat - this.cooling * dt);
+    if (this.venting && this.heat <= OVERHEAT_RESUME) this.venting = false;
+    if (this.venting) this.loudAt = now;
+    if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
+  }
+
   /** Advances flight and laser; returns true when the ship fires this frame. */
   update(dt: number, now: number, controls: Controls, gravity: THREE.Vector3): boolean {
     if (!this.alive) {
@@ -1007,8 +1043,7 @@ export class Ship {
     this.show(dt, now);
     this.nanobots(dt, now);
 
-    this.heat = Math.max(0, this.heat - this.cooling * dt);
-    if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
+    this.cool(dt, now);
     // a twin laser (an item) fires twice as fast at half the heat per shot
     const twin = this.twin ? 2 : 1;
     if (!controls.fire) this.triggerHeld = false;

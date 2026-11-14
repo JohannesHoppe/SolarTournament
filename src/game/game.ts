@@ -1520,6 +1520,8 @@ export class Game implements OnlineGame {
   private readonly tethers = new Map<Ship, Tether>();
   /** When each ship's harpoon last bit a ship this browser runs (game time, s; see harpooned). */
   private readonly harpoonedAt = new Map<Ship, number>();
+  /** Whether the own ship's heat sink vented last frame (see Ship.venting). */
+  private wasVenting = false;
   private readonly cables = new Cables();
   private hookReadyAt = 0;
   private hookHeld = false;
@@ -5344,6 +5346,9 @@ export class Game implements OnlineGame {
     // the own ship runs silent: the sensors find it only up close (see Ship.silent)
     const silent = me.alive && me.silent(this.time);
     if ($('hud-silent').hidden === silent) $('hud-silent').hidden = !silent;
+    // its heat sink ran full: it vents, and every sensor sees it again
+    if (me.venting && !this.wasVenting) this.hud.flashMessage(now, t('Heat sink full · venting'), 2);
+    this.wasVenting = me.venting;
     this.hud.setStrain(me.alive ? me.strain : 0);
     this.showJets();
   }
