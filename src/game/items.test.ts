@@ -234,21 +234,30 @@ function reel(state: ReturnType<typeof hooked>, ship: Body, length: number, t: n
   return next;
 }
 
+/** A probe of `kind` parked 1 km off on the x axis (`offset` off it), a ship racing at it from the origin at the limit, and one frame of both. */
+function approach(kind: 'torpedoes' | 'repair', offset = 0) {
+  const field = testField();
+  const probes = new Probes();
+  probes.drop(kind, 0, [kind], new THREE.Vector3(20000, offset, 0), new THREE.Vector3(), 0);
+  const probe = probes.list[0];
+  probes.park(probe, probe.position);
+  probe.until = Infinity;
+  const ship = { alive: true, radius: RADIUS, flight: { position: new THREE.Vector3(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) } };
+  const step = (t: number) => {
+    probes.dock([ship], DT);
+    driftProbes(probes, DT, t, field);
+    ship.flight.position.addScaledVector(ship.flight.velocity, DT);
+  };
+  return { probes, probe, ship, step };
+}
+
 describe('a probe met at speed', () => {
   it('matches the velocity of a ship flying through it, so the ship meets it gently, and goes back to its slot when the ship turns away', () => {
     for (const offset of [0, 400]) {
-      const field = testField();
-      const probes = new Probes();
-      probes.drop('x', 0, ['torpedoes'], new THREE.Vector3(20000, offset, 0), new THREE.Vector3(), 0);
-      const probe = probes.list[0];
-      probes.park(probe, probe.position);
-      probe.until = Infinity;
-      const ship = { alive: true, radius: RADIUS, flight: { position: new THREE.Vector3(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) } };
+      const { probes, probe, ship, step } = approach('torpedoes', offset);
       let met: number | null = null;
       for (let t = 0; t < 8 && met === null; t += DT) {
-        probes.dock([ship], DT);
-        driftProbes(probes, DT, t, field);
-        ship.flight.position.addScaledVector(ship.flight.velocity, DT);
+        step(t);
         if (probes.touching(ship.flight.position, RADIUS)) met = probe.velocity.distanceTo(ship.flight.velocity);
       }
       // a ship at the limit meets it at a few meters a second, not at 250
@@ -256,26 +265,12 @@ describe('a probe met at speed', () => {
       expect(met! * 0.05).toBeLessThan(10);
     }
     // a ship that turns away leaves it astray, and it flies back to its slot
-    const field = testField();
-    const probes = new Probes();
-    probes.drop('y', 0, ['repair'], new THREE.Vector3(20000, 0, 0), new THREE.Vector3(), 0);
-    const probe = probes.list[0];
-    probes.park(probe, probe.position);
-    probe.until = Infinity;
-    const ship = { alive: true, radius: RADIUS, flight: { position: new THREE.Vector3(), velocity: new THREE.Vector3(MAX_SPEED, 0, 0) } };
+    const { probe, ship, step } = approach('repair');
     let t = 0;
-    for (; t < 8 && !probe.astray; t += DT) {
-      probes.dock([ship], DT);
-      driftProbes(probes, DT, t, field);
-      ship.flight.position.addScaledVector(ship.flight.velocity, DT);
-    }
+    for (; t < 8 && !probe.astray; t += DT) step(t);
     expect(probe.astray).toBe(true);
     ship.flight.velocity.set(0, MAX_SPEED, 0);
-    for (const end = t + 30; t < end && probe.astray; t += DT) {
-      probes.dock([ship], DT);
-      driftProbes(probes, DT, t, field);
-      ship.flight.position.addScaledVector(ship.flight.velocity, DT);
-    }
+    for (const end = t + 30; t < end && probe.astray; t += DT) step(t);
     expect(probe.astray).toBe(false);
     expect(probe.position.toArray()).toEqual([20000, 0, 0]);
   });
