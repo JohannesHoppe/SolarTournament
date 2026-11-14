@@ -1175,7 +1175,7 @@ const terminatorRun = race({
   marks: TERMINATOR_COURSE,
   laps: TERMINATOR_LAPS,
   pipes: null,
-  rivals: { names: ['Glare', 'Noonday', 'Sunspot', 'Scorch', 'Dazzle'], skills: [0.55, 0.5, 0.45, 0.4, 0.4] },
+  rivals: { names: ['Glare', 'Noonday', 'Sunspot', 'Scorch', 'Dazzle'], skills: [0.45, 0.4, 0.35, 0.35, 0.3] },
   podium: 2,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
