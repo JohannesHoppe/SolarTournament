@@ -78,7 +78,7 @@ import { Arena, ARENA_GRACE, ARENA_LIMIT, outsideArena } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
-import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
+import { Wrecks, WRECK_CRUMPLE, type Wreck, type WreckState } from '../world/wrecks';
 import { arenaById, arenasFor, ARENAS, DEFAULT_ARENA, arenaByKey, arenaOfRound, FIGHT_WORLDS, PREVIEW_FROM, RACE_WORLDS, TOURNAMENT_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { JET_WELDS } from '../world/derelict';
@@ -97,7 +97,7 @@ import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/a
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
 import { knockShare, ramShare, strikeShare, syncShare } from '../net/plausible';
 import { bendRadius, RacingLine } from './racingline';
-import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
+import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
@@ -880,6 +880,8 @@ const STILL = new THREE.Vector3();
 /** Two ships in contact: the way from the first to the second, and where they touch. */
 const ramApart = new THREE.Vector3();
 const ramPoint = new THREE.Vector3();
+/** A piece of wreckage as a body for a bump with a ship (see hitWreckage). */
+const wreckBody = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
@@ -1078,6 +1080,8 @@ export class Game implements OnlineGame {
   private roundCut = false;
   /** This browser's Host was last told it is the game master. */
   private toldGameMaster = false;
+  /** How the owner of a ship another browser runs saw it break up (see remoteDestroyed, Wrecks.spawn), for the wreckage spawned now; null for a ship this browser runs. */
+  private remoteBlast: boolean | null = null;
   /** What the game master as the round's DJ put on air (see music/dj): online the lead browser's, followed by the others from its round state. */
   private dj: DjState = { ...DJ_IDLE };
   /** The DJ's plate is open over the pause menu. */
@@ -3084,7 +3088,16 @@ export class Game implements OnlineGame {
       this.flags.dispose();
     }
     this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
-    if (this.flags) this.scene.add(this.flags.root);
+    if (this.flags) {
+      this.scene.add(this.flags.root);
+      // a core bumped hurts the ship as any body of its mass (see feltBlow)
+      this.flags.struck = (flier, closing, mass) => {
+        const ship = this.ships.find((s) => s.id === flier.id);
+        if (!ship) return;
+        normal.copy(ship.flight.velocity).normalize().negate();
+        this.bounceHurts(ship, feltBlow(closing, ship.body.mass, mass), this.time, 'core');
+      };
+    }
     // the rings the bots steer clear of: the race's gates on every way, the bases
     const course = this.course;
     this.rings = course ? course.allRings().map((ring) => ({ ...ring, radius: GATE_RADIUS })) : (this.flags?.bases.map((center) => ({ center, facing: center.clone().normalize(), radius: BASE_RADIUS })) ?? []);
@@ -3904,7 +3917,7 @@ export class Game implements OnlineGame {
     this.killcam.recordBeam(this.time, from, to, shooter.color);
   }
 
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean) {
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean, blast = false) {
     victim.alive = false;
     victim.root.visible = false;
     // the owner counted this death already; its wreckage is seeded with that count and flies
@@ -3912,6 +3925,7 @@ export class Game implements OnlineGame {
     victim.deaths = deaths;
     if (position) victim.flight.position.copy(position);
     if (velocity) victim.flight.velocity.copy(velocity);
+    this.remoteBlast = blast;
     this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null, 'remote');
   }
 
@@ -4777,6 +4791,8 @@ export class Game implements OnlineGame {
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
     if (this.state !== 'paused' || this.online) {
       this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      // in an arena's air an explosion billows, in vacuum it flashes (see Effects.inAir)
+      this.effects.inAir = !!this.field.air;
       this.effects.update(dt);
     }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
@@ -8517,10 +8533,13 @@ export class Game implements OnlineGame {
     if (struck && shooter === this.me && struck.allyOf(shooter)) this.warnFriend(COMPUTER.friendHit);
     if (shooter === this.me) this.countShot(struck);
 
+    // a beam holes a plate and shoves it, its next shatters it; the hulk takes a burst
     if (wreckHit) {
       this.effects.sparks(end, shooter.color, 40);
-      this.online?.sendWreck(wreckHit.wreck.id);
-      this.shatterWreck(wreckHit.wreck);
+      if (this.wrecks.hit(wreckHit.wreck, direction)) {
+        this.online?.sendWreck(wreckHit.wreck.id);
+        this.shatterWreck(wreckHit.wreck);
+      }
     }
     if (fleetHit) {
       if (fleetHit.zone >= 0) this.hitFleet(this.fleet!, fleetHit.zone, shooter, end);
@@ -8747,7 +8766,10 @@ export class Game implements OnlineGame {
       this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Nova kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints() + bonus}`, 'kill');
       this.kick = 2;
     }
-    this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
+    // a reactor gone critical, a warhead, a self-destruct or a nova blows the ship apart; anything else breaks it up slowly (see Wrecks.spawn)
+    const blast = this.remoteBlast ?? (cause === 'self' || cause === 'nova' || cause === 'blast' || cause === 'battery' || what === 'torpedo' || victim.drive <= 1e-6);
+    this.remoteBlast = null;
+    this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time, blast);
     // what the clone held flies out again, as probes for whoever gets there first
     const held: ItemKind[] = [];
     if (victim.twin) held.push('twin');
@@ -8767,7 +8789,7 @@ export class Game implements OnlineGame {
       this.hearDebris(victim.flight.position, victim.radius);
     }
     // online, the owner of the victim announces the destruction; each peer scores its own ships
-    if (victim.owner === null) this.online?.sendDestroyed(victim, killer, cause === 'nova');
+    if (victim.owner === null) this.online?.sendDestroyed(victim, killer, cause === 'nova', blast);
     // a nova's second kill comes out of the victim's pocket: whoever lets novas catch it again
     // and again goes below zero (each browser scores the victims it runs)
     if (scored && cause === 'nova' && victim.owner === null) {
@@ -9070,7 +9092,7 @@ export class Game implements OnlineGame {
   }
 
   /** What a blow `approach` hard (units/s; against a body that gives way, the ship's own share of it) does to a ship struck on `what`, with the outward `normal` of this frame: sparks, a crash through the hull, and the impact's damage. */
-  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk') {
+  private bounceHurts(ship: Ship, approach: number, now: number, what: 'rock' | 'hull' | 'gate' | 'junk' | 'core') {
     if (approach < SAFE_IMPACT * 0.4) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 40 + approach * 0.05);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, approach / 800), rate: 1.9 });
@@ -9160,16 +9182,41 @@ export class Game implements OnlineGame {
     if (status === 'destroyed') this.shipDestroyed(ship, by, 'ram');
   }
 
-  /** Ship vs debris: the piece is pulverized, the hull takes damage by the impact speed. */
+  /**
+   * Ship vs debris: the two bump as bodies of their masses (see world/bodies), the hull takes the
+   * blow its own share of the closing speed deals (see feltBlow: a plate of a few tonnes barely
+   * scratches a 60 t hull, the 24 t hulk at speed wrecks it), and a plate struck at WRECK_CRUMPLE
+   * or faster crumples and is gone on every browser.
+   */
   private hitWreckage(ship: Ship, now: number) {
     if (!ship.alive) return;
-    const wreck = this.wrecks.overlap(ship.flight.position, ship.radius * 0.8);
+    const reach = ship.radius * 0.8;
+    const wreck = this.wrecks.overlap(ship.flight.position, reach);
     if (!wreck) return;
-    const impact = relative.subVectors(ship.flight.velocity, wreck.velocity).length();
-    this.effects.sparks(wreck.mesh.position, SCRAPE_COLOR, 60);
-    this.online?.sendWreck(wreck.id);
-    this.wrecks.remove(wreck);
-    const status = ship.structural(impactDamage(impact) * 0.6, now);
+    normal.subVectors(ship.flight.position, wreck.mesh.position);
+    const distance = normal.length();
+    if (distance > 1e-6) normal.divideScalar(distance);
+    else normal.set(0, 1, 0);
+    // out of the piece, the ship moved: the piece weighs a share of its mass at most
+    ship.flight.position.addScaledVector(normal, Math.max(0, reach + wreck.radius - distance));
+    wreckBody.position.copy(wreck.mesh.position);
+    wreckBody.velocity.copy(wreck.velocity);
+    wreckBody.mass = wreck.mass;
+    const impact = bump(ship.body, wreckBody, normal);
+    if (impact <= 0) return;
+    wreck.velocity.copy(wreckBody.velocity);
+    ship.syncTransform();
+    this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 30 + impact * 0.05);
+    if (!wreck.hulk && impact >= WRECK_CRUMPLE) {
+      this.online?.sendWreck(wreck.id);
+      this.wrecks.remove(wreck);
+    }
+    const felt = feltBlow(impact, ship.body.mass, wreck.mass);
+    if (felt < SAFE_IMPACT) {
+      if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(0.8, 0.2 + impact / 2000), rate: 2.4 });
+      return;
+    }
+    const status = ship.structural(impactDamage(felt), now);
     if (ship.isLocal && status !== 'protected') {
       this.sound.play('explosion', { volume: Math.min(1.4, 0.3 + impact / 1000), rate: 2.1 });
       this.hud.damaged();
