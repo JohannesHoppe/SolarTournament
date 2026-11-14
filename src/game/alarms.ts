@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Well } from '../world/asteroids';
-import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove } from '../ship/flight';
+import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { angleTo } from '../detthree';
 
@@ -197,7 +197,7 @@ export function escapeLoad(well: Well, position: THREE.Vector3, velocity: THREE.
  * (the tournament's speed limit on the ship's own push included): ESCAPE_REACTION for the Host
  * to act, the nose turned at the full rate to straight away from the well, then the full drive
  * away (from the start when the Host burns away already, `burning`); with the overdrive its
- * shove once the nose is turned and then OVERDRIVE_DRIVE_COOLDOWN seconds without thrust, as the
+ * shove once the nose is turned (over OVERDRIVE_SECONDS) and then OVERDRIVE_DRIVE_COOLDOWN seconds without thrust, as the
  * game has it. Out is where the drive outpulls the well, climbing, with the drive
  * burning again; in is the body. `drive` is the share of the drive's thrust the ship has (damage and upgrades), `cold`
  * the seconds its drive still gives none (after an overdrive), `overdrive` whether it is ready.
@@ -246,6 +246,7 @@ function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, 
   const strength = well.surfaceGravity * well.radius * well.radius;
   let coldUntil = cold;
   let fired = false;
+  let shoving = 0;
   for (let t = 0; t < ESCAPE_HORIZON; t += ESCAPE_STEP) {
     awayFrom.subVectors(flight.position, well.position);
     const r = awayFrom.length();
@@ -257,10 +258,13 @@ function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, 
     if (overdrive && !fired && t >= turned) {
       // nothing on the crosshair out there: the shove puts the flight onto the nose's line, at rest (see overdriveShove)
       shoveMark.position.copy(flight.position).addScaledVector(awayFrom, OVERDRIVE_PUSH);
-      flight.velocity.add(overdriveShove(flight, shoveMark, shove));
+      overdriveShove(flight, shoveMark, shove);
+      shoving = OVERDRIVE_SECONDS;
       coldUntil = Math.max(coldUntil, t + OVERDRIVE_DRIVE_COOLDOWN);
       fired = true;
     }
+    // the shove reaches the hull over its seconds, as in the game (see overdriveStep)
+    shoving = overdriveStep(flight.velocity, shove, shoving, ESCAPE_STEP);
     // the nose straight away from the well, the drive on it while it burns
     probeTarget.copy(flight.position).add(awayFrom);
     flight.orientation.setFromRotationMatrix(probeLook.lookAt(flight.position, probeTarget, Math.abs(awayFrom.y) > 0.9 ? PROBE_SIDE : PROBE_UP));

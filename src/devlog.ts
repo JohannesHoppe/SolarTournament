@@ -131,6 +131,7 @@ const LOG_CAPACITY = 20000;
 const DECISION_WINDOW = 3;
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
 export class DevLog {
   private readonly buffer: LogEvent[] = [];
@@ -140,14 +141,42 @@ export class DevLog {
   arena = '';
   /** The last decision of each ship, so only a change is logged. */
   private readonly current = new Map<string, string>();
+  /** The g-force strain of every clone this browser runs, over the round (see Ship.strain): seconds alive, strain summed over them, seconds over half strain, the most. */
+  private readonly strains = new Map<string, { seconds: number; sum: number; over: number; most: number }>();
 
   /** A new round: an empty log. */
   begin(mode: string, arena: string) {
     this.buffer.length = 0;
     this.next = 0;
     this.current.clear();
+    this.strains.clear();
     this.mode = mode;
     this.arena = arena;
+  }
+
+  /** A living clone's strain over `dt` seconds of the round. */
+  strain(ship: string, strain: number, dt: number) {
+    let s = this.strains.get(ship);
+    if (!s) this.strains.set(ship, (s = { seconds: 0, sum: 0, over: 0, most: 0 }));
+    s.seconds += dt;
+    s.sum += strain * dt;
+    if (strain > 0.5) s.over += dt;
+    s.most = Math.max(s.most, strain);
+  }
+
+  /** The strain of all clones together and of each: mean strain, share of the time over half strain, the most (see strain). */
+  strainSummary() {
+    const all = { seconds: 0, sum: 0, over: 0, most: 0 };
+    const byShip: Record<string, { mean: number; over: number; most: number }> = Object.create(null);
+    const sum = (s: typeof all) => ({ mean: round2(s.seconds > 0 ? s.sum / s.seconds : 0), over: round2(s.seconds > 0 ? s.over / s.seconds : 0), most: round2(s.most) });
+    for (const [ship, s] of this.strains) {
+      all.seconds += s.seconds;
+      all.sum += s.sum;
+      all.over += s.over;
+      all.most = Math.max(all.most, s.most);
+      byShip[ship] = sum(s);
+    }
+    return { ...sum(all), byShip };
   }
 
   add(event: LogEvent) {
@@ -221,7 +250,7 @@ export class DevLog {
       else if (e.kind === 'shove') shoves++;
     }
     const fleet = this.mode === 'fleet' ? { hits: fleetHits, broken, sunk } : undefined;
-    return { mode: this.mode, arena: this.arena, deaths, byShip, whileDoing, afterDecision, contacts, shoves, knockouts: deaths.knockout ?? 0, torpedoes, fleet };
+    return { mode: this.mode, arena: this.arena, deaths, byShip, whileDoing, afterDecision, contacts, shoves, knockouts: deaths.knockout ?? 0, torpedoes, fleet, strain: this.strainSummary() };
   }
 
   /** The whole log as JSON, to save or attach. */

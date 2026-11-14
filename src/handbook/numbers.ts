@@ -13,7 +13,7 @@ import { bendRadius, RacingLine } from '../game/racingline';
 import { EUROPA_FALL } from '../world/europa';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
-import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
+import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
@@ -125,6 +125,7 @@ export const FROM_CODE: Record<string, number> = {
   fling: FLING_CREDIT,
   hookRange: km(HOOK_RANGE),
   hookPull: g(HOOK_PULL),
+  cableBreak: g(CABLE_BREAK),
   hookReady: HOOK_RECHARGE,
   shipMass: MASS.ship / 1000,
   probeEvery: PROBE_EVERY,

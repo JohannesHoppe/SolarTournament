@@ -9,9 +9,9 @@ import { firstHull, LASER_RANGE, MAX_HEAT, Ship } from '../ship/ship';
 import { bounceOff, impactDamage, ram, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
 import { blastOn, Charges } from '../game/charges';
-import { approachGate, BOOST_STRAIN, coilPush } from '../game/race';
+import { approachGate, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
-import { aimHook, anchorPoint, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
+import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
 import { DRILL_TORPEDOES, Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
@@ -621,6 +621,7 @@ export class JobWorld implements SchoolContext {
 
   private readonly bite = new THREE.Vector3();
   private readonly rockBody: Body & { mass: number } = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
+  private readonly hookBefore = new THREE.Vector3();
 
   private updateHook() {
     const tether = this.tether;
@@ -651,8 +652,11 @@ export class JobWorld implements SchoolContext {
     }
     const path = tether.cable.path(true);
     const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
+    this.hookBefore.copy(owner.flight.velocity);
     const length = pullOn(owner.body, target ? target.body : this.rockBody, tether.length, true, floor, MAX_SPEED + 800, JOB_STEP, target ? 'moved' : 'fixed', path, path ? clearOf(owner, path.farRock) : 0);
-    if (length === null) this.dropHook();
+    // past its breaking load the cable snaps, as in the game (see CABLE_BREAK)
+    tether.pull = cablePull(tether.pull, this.hookBefore, owner.flight.velocity, owner.body.mass, JOB_STEP);
+    if (length === null || tether.pull > CABLE_BREAK) this.dropHook();
     else tether.length = length;
   }
 
@@ -842,7 +846,6 @@ export class JobWorld implements SchoolContext {
 
   boost(through: THREE.Vector3) {
     coilPush(this.me.flight.velocity, through, MAX_SPEED);
-    this.me.strain = Math.max(this.me.strain, BOOST_STRAIN);
   }
 
   arm(item: 'torpedo' | 'nova') {
