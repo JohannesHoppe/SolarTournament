@@ -5121,10 +5121,10 @@ export class Game implements OnlineGame {
         bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
-        // to a solar flare's safe pocket; a race world has no edge to turn back at, its track runs where it runs
+        // to a solar flare's safe pocket; a racer follows the course out as far as it reaches (see Course.home)
         // under an edge of its own over a world, the bot keeps inside it across the ground and under its ceiling
         const bounds = this.venue.bounds;
-        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course?.track ? Infinity : HOME_RADIUS;
+        bot.home = bounds ? bounds.radius * BOUNDS_HOME : this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : this.course ? this.course.home : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         bot.flat = !!bounds;
         bot.roof = bounds?.ceiling ?? Infinity;

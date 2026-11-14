@@ -5,7 +5,7 @@ import { Randomizer } from '../random';
 
 /**
  * The land around a place of the campaign beyond its own near ground (Vesta's basin, Ceres's
- * crater), drawn behind everything that flies: one mesh on a grid of rings and spokes round the
+ * crater), drawn behind everything that flies: a grid of rings and spokes round the
  * field, its rings farther apart the farther out, at the heights and in the colors the place
  * gives, lit by the sun; scenery only.
  */
@@ -87,8 +87,16 @@ export function moonBeyond(half: number, reach: number, height: Horizon['height'
   return new THREE.Group().add(horizonMesh({ rings: 140, spokes: 360, first: half * 0.85, reach, height, paint, glow }));
 }
 
-/** The land of `horizon` as one mesh, drawn behind everything with what is see-through, after the sky. */
-export function horizonMesh(horizon: Horizon): THREE.Mesh {
+/**
+ * The land is cut into SECTORS of spokes and BANDS of rings, each piece a mesh of its own, so the
+ * pieces out of the camera's view are not drawn; the inner band is drawn before the outer one, as
+ * the rings are in one piece.
+ */
+const SECTORS = 12;
+const BANDS = 2;
+
+/** The land of `horizon` in pieces (see SECTORS), drawn behind everything with what is see-through, after the sky. */
+export function horizonMesh(horizon: Horizon): THREE.Group {
   const { rings, spokes } = horizon;
   const positions = new Float32Array((rings + 1) * spokes * 3);
   const colors = new Float32Array((rings + 1) * spokes * 3);
@@ -106,23 +114,41 @@ export function horizonMesh(horizon: Horizon): THREE.Mesh {
       color.toArray(colors, k);
     }
   }
-  const index: number[] = [];
-  for (let ring = 0; ring < rings; ring++) {
-    for (let spoke = 0; spoke < spokes; spoke++) {
-      const a = ring * spokes + spoke;
-      const b = ring * spokes + ((spoke + 1) % spokes);
-      // wound so each face looks up, away from the body
-      index.push(a, b, a + spokes, b, b + spokes, a + spokes);
-    }
-  }
+  // wound so each face looks up, away from the body
+  const quads = (index: number[], ring: number, spoke: number) => {
+    const a = ring * spokes + spoke;
+    const b = ring * spokes + ((spoke + 1) % spokes);
+    index.push(a, b, a + spokes, b, b + spokes, a + spokes);
+  };
+  const whole: number[] = [];
+  for (let ring = 0; ring < rings; ring++) for (let spoke = 0; spoke < spokes; spoke++) quads(whole, ring, spoke);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.setIndex(index);
+  geometry.setIndex(whole);
   geometry.computeVertexNormals();
-  const surface = new THREE.Mesh(geometry, behindAll(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, emissive: horizon.glow, transparent: true, depthWrite: false })));
-  surface.renderOrder = -2;
-  surface.frustumCulled = false;
-  surface.userData.shadowless = true;
-  return surface;
+  const material = behindAll(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, emissive: horizon.glow, transparent: true, depthWrite: false }));
+  const group = new THREE.Group();
+  const corner = new THREE.Vector3();
+  for (let band = 0; band < BANDS; band++) {
+    const [ringFrom, ringTo] = [Math.round((band * rings) / BANDS), Math.round(((band + 1) * rings) / BANDS)];
+    for (let sector = 0; sector < SECTORS; sector++) {
+      const [spokeFrom, spokeTo] = [Math.round((sector * spokes) / SECTORS), Math.round(((sector + 1) * spokes) / SECTORS)];
+      const index: number[] = [];
+      const box = new THREE.Box3();
+      for (let ring = ringFrom; ring < ringTo; ring++) for (let spoke = spokeFrom; spoke < spokeTo; spoke++) quads(index, ring, spoke);
+      for (const i of index) box.expandByPoint(corner.fromArray(positions, i * 3));
+      const piece = new THREE.BufferGeometry();
+      for (const name of ['position', 'color', 'normal']) piece.setAttribute(name, geometry.getAttribute(name));
+      piece.setIndex(index);
+      piece.boundingBox = box;
+      piece.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+      const surface = new THREE.Mesh(piece, material);
+      // the outer band after the inner one, as one mesh draws its rings
+      surface.renderOrder = -2 + band * 0.1;
+      surface.userData.shadowless = true;
+      group.add(surface);
+    }
+  }
+  return group;
 }

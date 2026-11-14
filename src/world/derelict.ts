@@ -6,6 +6,7 @@ import { MASS } from './bodies';
 import { BREACH_CORE, BREACH_DECK_COUNT, BREACH_EDGE, HULL_BOXES } from './shapes';
 import { cos, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
+import { FALL_STEP, FreeFall, hullClearance, METERS, rodDistance, wreckPotential, wreckPull } from './wreckgravity';
 import { FROZEN_NEAR, frostMaterial, frostShader, frozenSurface, frozenUv, loadFrozen, type FrozenCell } from '../view/frozen';
 
 /**
@@ -13,9 +14,9 @@ import { FROZEN_NEAR, frostMaterial, frostShader, frozenSurface, frozenUv, loadF
  * from both torn ends as a slow mist, and the ship's dead around the two breaches, settlers in
  * everyday clothes and crew in coveralls, and as many of the crew in the ship's light emergency
  * suits, who fought the leak from inside until the hull broke and blew them out with the air:
- * caught on the torn plating and the broken decks, and drifting out of the breaches, thick right
- * outside them and thinning with the distance, rimed with frost that glints in the sun, turning
- * slowly. Scenery: the mist only patters on a hull flying through it (see mistDensity), and a ship
+ * most of them caught on the torn plating and the broken decks, still where they snagged, a few
+ * dozen falling freely on slow loops about the wreck, bound by its gravity (see world/wreckgravity),
+ * tumbling, all of them rimed with frost that glints in the sun. Scenery: the mist only patters on a hull flying through it (see mistDensity), and a ship
  * that meets one of the dead knocks it away by the two masses (see Derelict.meet), on every
  * browser by its own reckoning, nothing of it shared or scored.
  */
@@ -175,49 +176,28 @@ const MOUTH = TORN_HALF.x * 0.6;
 const EDGE_FROM = (1 - BREACH_EDGE[0]) * TORN_HALF.x;
 const CORE_UP = TORN_HALF.y * BREACH_CORE;
 const CORE_ACROSS = TORN_HALF.z * BREACH_CORE;
-/** The hull's boxes as laid out, for keeping the dead out of them (see clearOfHull). */
-const HULL = ARENAS.find((arena) => arena.id === 'derelict')!.layout.placements!.map((piece) => ({
-  center: piece.position,
-  inverse: piece.orientation.clone().invert(),
-  half: HULL_BOXES[piece.type].clone().multiplyScalar(piece.scale),
-}));
-
 /**
  * How the dead lie about the breaches, reckoned from the break (see README, "The Derelict"): the
- * air rushing out of a torn deck carried its people out at a few m/s, and the ship broke long
- * ago, so whoever left that fast is thousands of kilometers away by now. What is left is what
- * left slowly. A half of the hull of some 50 million tonnes holds on to a body that leaves it
- * slower than its escape speed, about 0.1 m/s a few hundred meters off its torn end (its mass
- * spread along its 2 km; the sun's tide only pulls apart what strays tens of kilometers off):
- * those swing out and back on slow loops about their
- * half, hours long, each passing again where it set out, so they lie thickest right outside the
- * breach and thin out with the distance, a few out to a kilometer. CAUGHT of the dead (SUITED_CAUGHT
- * of the suited crew, who were at the leak) never left: they hang on the torn plating, in the
- * mouth of the breach and on the broken decks inside. Of the rest, NEAR_SHARE lie within NEAR_OUT
- * (units, 60 m) of the mouth, MID_SHARE out to MID_OUT (units, 250 m) and the rest out to FAR_OUT
- * (units, 1 km); TOGETHER of them were blown out of a deck with another, within GROUP_REACH
- * (units, 15 m) of it.
+ * air rushing out of a torn deck carried its people out at a few m/s, faster than the wreck holds
+ * anything (its escape speed is about 0.1 m/s near the hull, see world/wreckgravity), and the ship
+ * stranded long ago, so whoever left that fast is gone. What is left is settled: CAUGHT of the
+ * dead (SUITED_CAUGHT of the suited crew, who were at the leak) never left and hang where they
+ * snagged, on the torn plating, in the mouth of the breach and on the broken decks inside, fixed to
+ * their half; the rest fell into loops about the wreck, bound by its gravity, and fall freely along
+ * them (see FreeFall): each starts, at field time 0, FREE_NEAR to FREE_FAR (m) off the hull out of
+ * a breach's mouth, moving across the pull at 1 to 1.4 times the speed that would hold it going
+ * round its half's nearest rod, and is kept only if it is bound and its path stays CLEAR (m) off
+ * every box of the hull for SETTLED (s) of field time (a round's field time starts at 0 and lasts
+ * five minutes). TOGETHER of them fall beside another one, a few meters off, at its speed.
  */
-const CAUGHT = 0.18;
-const SUITED_CAUGHT = 0.4;
-const NEAR_SHARE = 0.6;
-const MID_SHARE = 0.28;
-const NEAR_OUT = 1200;
-const MID_OUT = 5000;
-const FAR_OUT = 20000;
-const TOGETHER = 0.45;
-const GROUP_REACH = 300;
-/**
- * Within a round their slow loops are slow drifts: a body sways about its place by up to
- * DEAD_DRIFT (units, 25 m) at DEAD_RATE (rad/s: once in half an hour to an hour), at most about
- * 0.1 m/s, as fast as a body bound to its half moves this close to it; the caught ones sway
- * CAUGHT_SWAY (units, 1.5 m) on
- * the plating. They tumble at up to DEAD_SPIN (rad/s), the spin the blast gave them never
- * damped in vacuum; the caught ones turn a tenth as fast.
- */
-const DEAD_DRIFT = 500;
-const DEAD_RATE = [0.0018, 0.0035] as const;
-const CAUGHT_SWAY = 30;
+const CAUGHT = 0.7;
+const SUITED_CAUGHT = 0.85;
+const FREE_NEAR = 150;
+const FREE_FAR = 600;
+const CLEAR = 20;
+const SETTLED = 2 * 3600;
+const TOGETHER = 0.4;
+/** The free dead tumble at up to DEAD_SPIN (rad/s), the spin the blast gave them never damped in vacuum. */
 const DEAD_SPIN = 0.12;
 /** A body as the ships meet it: a ball of DEAD_RADIUS (units, 0.9 m) of DEAD_MASS (kg) against a ship of MASS.ship. */
 const DEAD_RADIUS = 18;
@@ -339,17 +319,15 @@ const DEAD_COLOR = `#include <color_vertex>
 #endif`;
 
 /**
- * Where one of the dead is: by its breach (`breach` 0 the bow's, 1 the stern's), `at` from the
- * mouth along the breach's axis out of the hull, across and up (see breachFrames), and how it
- * sways (`drift` in the same frame) and turns. Once a ship knocked it away it flies off from where
+ * Where one of the dead is, riding with its half (`half` 0 the bow, 1 the stern): caught, at `at`
+ * (units, as laid out), turned `turn` for good; or falling freely (`fall`, in meters as laid out),
+ * tumbling from `turn` about `axis` at `spin`. Once a ship knocked it away it flies off from where
  * it was (`shoved`, at field time `since`).
  */
 interface Dead {
-  breach: 0 | 1;
+  half: 0 | 1;
   at: THREE.Vector3;
-  drift: THREE.Vector3;
-  rate: number;
-  phase: number;
+  fall: FreeFall | null;
   turn: THREE.Quaternion;
   axis: THREE.Vector3;
   spin: number;
@@ -358,29 +336,22 @@ interface Dead {
 
 const UP = new THREE.Vector3(0, 1, 0);
 const ACROSS = new THREE.Vector3(1, 0, 0);
-/** Each breach's frame, as the mist's shader builds its jet's: its mouth, a side across its axis, and up (see breachFrames). */
-const mouths = [new THREE.Vector3(), new THREE.Vector3()];
-const sides = [new THREE.Vector3(), new THREE.Vector3()];
-const ups = [new THREE.Vector3(), new THREE.Vector3()];
-function breachFrames(jets: readonly Jet[]) {
-  jets.forEach((jet, i) => {
-    mouths[i].copy(jet.from).addScaledVector(jet.along, MOUTH);
-    sides[i].crossVectors(jet.along, Math.abs(jet.along.y) < 0.9 ? UP : ACROSS).normalize();
-    ups[i].crossVectors(sides[i], jet.along);
-  });
-}
-/** A point `at` of breach `b`'s frame in the world, into `out`. */
-function framed(jets: readonly Jet[], b: number, at: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-  return out.copy(mouths[b]).addScaledVector(jets[b].along, at.x).addScaledVector(sides[b], at.y).addScaledVector(ups[b], at.z);
+/** Each breach's frame as laid out, as the mist's shader builds its jet's: its mouth, a side across its axis, and up. */
+const mouths = JETS.map((jet) => jet.from.clone().addScaledVector(jet.along, MOUTH));
+const sides = JETS.map((jet) => new THREE.Vector3().crossVectors(jet.along, Math.abs(jet.along.y) < 0.9 ? UP : ACROSS).normalize());
+const ups = JETS.map((jet, i) => new THREE.Vector3().crossVectors(sides[i], jet.along));
+/** A point `at` of breach `b`'s frame as laid out, into `out`. */
+function framed(b: number, at: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(mouths[b]).addScaledVector(JETS[b].along, at.x).addScaledVector(sides[b], at.y).addScaledVector(ups[b], at.z);
 }
 
-const inBox = new THREE.Vector3();
-/** Whether a body at `point` (as laid out) lies clear of every box of the hull. */
-function clearOfHull(point: THREE.Vector3): boolean {
-  return HULL.every(({ center, inverse, half }) => {
-    inBox.subVectors(point, center).applyQuaternion(inverse);
-    return Math.abs(inBox.x) > half.x + DEAD_RADIUS || Math.abs(inBox.y) > half.y + DEAD_RADIUS || Math.abs(inBox.z) > half.z + DEAD_RADIUS;
-  });
+/** Whether a fall stays CLEAR (m) off every box of the hull for SETTLED (s) of field time. */
+function settles(fall: FreeFall): boolean {
+  for (let t = 0; t < SETTLED; t += FALL_STEP) {
+    fall.advance();
+    if (hullClearance(fall.position) < CLEAR) return false;
+  }
+  return true;
 }
 
 /** One kind's instanced bodies: its whole figure for the nearest (`dressed` once it has loaded, else the one built in code), its low one for the rest (see Derelict.draw). */
@@ -415,6 +386,9 @@ export class Derelict {
   private readonly whole = new Uint8Array(DEAD_TOTAL);
   private readonly nearest: number[] = [];
   private viewport = 1000;
+  /** Each half's motion since the layout, and its turn (see moveJets). */
+  private readonly motions = [new THREE.Matrix4(), new THREE.Matrix4()];
+  private readonly turns = [new THREE.Quaternion(), new THREE.Quaternion()];
 
   constructor(light: THREE.Color) {
     const r = new Randomizer(7101);
@@ -437,8 +411,7 @@ export class Derelict {
       frostShader(shader);
     };
     material.customProgramCacheKey = () => 'derelict-dead';
-    breachFrames(this.jets);
-    const last: (THREE.Vector3 | null)[] = [null, null];
+    const last: (FreeFall | null)[] = [null, null];
     DEAD_KINDS.forEach((kind, k) => {
       const level = (detail: number) => {
         const mesh = new THREE.InstancedMesh(bodyOf(kind, detail), material, kind.count);
@@ -486,19 +459,16 @@ export class Derelict {
 
   /**
    * Where one of the dead lies (see Dead and CAUGHT), drawn from `r`: caught on the torn plating,
-   * in the breach's mouth or on a broken deck, or blown out of the mouth (from anywhere across it)
-   * and drifting about its breach, alone or with the last one blown out there (`last`, by breach),
-   * never in the hull wherever it sways.
+   * in the breach's mouth or on a broken deck; or falling freely about the wreck from a start out
+   * of a breach's mouth, alone or beside the last one that fell out of it (`last`, by breach), on a
+   * path that is bound and stays clear of the hull (see settles).
    */
-  private place(r: Randomizer, suited: boolean, last: (THREE.Vector3 | null)[]): Dead {
+  private place(r: Randomizer, suited: boolean, last: (FreeFall | null)[]): Dead {
     const breach = r.nextFloat() < 0.5 ? 0 : 1;
     const axis = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
     const turn = setFromEuler(new THREE.Quaternion(), r.range(0, 6.3), r.range(0, 6.3), r.range(0, 6.3));
     const spin = r.range(0.25, 1) * DEAD_SPIN * (r.nextFloat() < 0.5 ? -1 : 1);
-    const toward = () => v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-    const phase = r.range(0, 6.3);
     if (r.nextFloat() < (suited ? SUITED_CAUGHT : CAUGHT)) {
-      const drift = toward().multiplyScalar(CAUGHT_SWAY);
       const where = r.nextFloat();
       const wall = r.nextInt() % 4;
       const sign = wall % 2 === 0 ? 1 : -1;
@@ -516,36 +486,39 @@ export class Derelict {
         const along = r.range(-500, 100);
         at = wall < 2 ? v(along, r.range(-0.9, 0.9) * CORE_ACROSS, sign * (CORE_UP - 60)) : v(along, sign * (CORE_ACROSS - 60), r.range(-0.9, 0.9) * CORE_UP);
       }
-      return { breach, at, drift, rate: r.range(0.05, 0.12), phase, turn, axis, spin: spin / 10, shoved: null };
+      return { half: breach, at: framed(breach, at, new THREE.Vector3()), fall: null, turn, axis, spin: 0, shoved: null };
     }
-    const drift = toward().multiplyScalar(r.range(0.2, 1) * DEAD_DRIFT);
-    const rate = r.range(DEAD_RATE[0], DEAD_RATE[1]);
-    const world = new THREE.Vector3();
-    const swayed = new THREE.Vector3();
-    const clear = (at: THREE.Vector3) =>
-      [1, -1].every((s) => clearOfHull(framed(JETS, breach, swayed.copy(at).addScaledVector(drift, s), world))) && clearOfHull(framed(JETS, breach, at, world));
     const prev = last[breach];
-    if (prev && r.nextFloat() < TOGETHER) {
-      for (let tries = 0; tries < 20; tries++) {
-        const at = prev.clone().addScaledVector(toward(), r.range(0.3, 1) * GROUP_REACH);
-        if (clear(at)) return { breach, at, drift, rate, phase, turn, axis, spin, shoved: null };
+    const start = new THREE.Vector3();
+    const speed = new THREE.Vector3();
+    const pull = new THREE.Vector3();
+    for (let tries = 0; ; tries++) {
+      if (prev && tries === 0 && r.nextFloat() < TOGETHER) {
+        // beside the last one, at its speed
+        start.copy(prev.start).add(v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(r.range(3, 12)));
+        speed.copy(prev.speed);
+      } else {
+        // out of the mouth, up to 75° off its axis
+        const tilt = r.range(0, 1.3);
+        const around = r.range(0, 6.2832);
+        framed(breach, v(cos(tilt), sin(tilt) * cos(around), sin(tilt) * sin(around)).multiplyScalar(r.range(FREE_NEAR, FREE_FAR) / METERS), start).multiplyScalar(METERS);
+        const off = hullClearance(start);
+        if (off < FREE_NEAR || off > FREE_FAR) continue;
+        // across the pull, at about the speed that holds a body going round its half's nearest rod
+        const g = wreckPull(start, pull).length();
+        speed.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1));
+        speed.addScaledVector(pull, -speed.dot(pull) / (g * g));
+        if (speed.lengthSq() < 1e-4) continue;
+        speed.setLength(Math.sqrt(g * rodDistance(start, breach)) * r.range(1, 1.4));
       }
-    }
-    for (;;) {
-      // how far out of the mouth: thick close by, thinning with the distance
-      const share = r.nextFloat();
-      const x = r.nextFloat();
-      const [out, cone] = share < NEAR_SHARE ? [20 + (NEAR_OUT - 20) * x * x, 1] : share < NEAR_SHARE + MID_SHARE ? [NEAR_OUT + (MID_OUT - NEAR_OUT) * x * x, 1.3] : [MID_OUT + (FAR_OUT - MID_OUT) * x, 1.9];
-      const tilt = cone * r.nextFloat();
-      const around = r.range(0, 6.2832);
-      const at = v(cos(tilt), sin(tilt) * cos(around), sin(tilt) * sin(around))
-        .multiplyScalar(out)
-        .add(v(0, r.range(-0.9, 0.9) * CORE_ACROSS, r.range(-0.9, 0.9) * CORE_UP));
-      if (!clear(at)) continue;
-      last[breach] = at;
-      return { breach, at, drift, rate, phase, turn, axis, spin, shoved: null };
+      if (speed.lengthSq() / 2 + wreckPotential(start) >= 0) continue;
+      const fall = new FreeFall(start.clone(), speed.clone());
+      if (!settles(fall)) continue;
+      last[breach] = fall;
+      return { half: breach, at: new THREE.Vector3(), fall, turn, axis, spin, shoved: null };
     }
   }
+
 
   /** The crystals of both jets (see mistVertex): where each starts on its way, where across, which jet. */
   private buildMist(r: Randomizer, light: THREE.Color): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {
@@ -580,6 +553,8 @@ export class Derelict {
     this.jets.forEach((jet, i) => {
       jet.from.copy(JETS[i].from).applyMatrix4(motions[i]);
       jet.along.copy(JETS[i].along).transformDirection(motions[i]);
+      this.motions[i].copy(motions[i]);
+      this.turns[i].setFromRotationMatrix(motions[i]);
     });
   }
 
@@ -629,29 +604,40 @@ export class Derelict {
   private static readonly spun = new THREE.Quaternion();
   private static readonly matrix = new THREE.Matrix4();
   private static readonly one = new THREE.Vector3(1, 1, 1);
-  private static readonly swayed = new THREE.Vector3();
   private static readonly normal = new THREE.Vector3();
   private static readonly gone = new THREE.Vector3();
 
-  /** The mist drifting and the dead swaying and turning, at field time `time` (s). */
+  /** The mist drifting, the caught dead where they hang and the free ones falling and tumbling, at field time `time` (s), all of them riding with their halves. */
   update(time: number) {
     this.mist.material.uniforms.time.value = time;
-    const { spun, swayed } = Derelict;
-    breachFrames(this.jets);
+    const { spun } = Derelict;
     this.dead.forEach((d, k) => {
       const at = this.where[k];
-      // a new round (the field's clock run back) finds the dead where they drifted before
+      // a new round (the field's clock run back) finds the dead where they were before
       if (d.shoved && time < d.shoved.since) d.shoved = null;
       if (d.shoved) {
         const t = time - d.shoved.since;
         at.copy(d.shoved.from).addScaledVector(d.shoved.velocity, t);
         setFromAxisAngle(spun, d.shoved.axis, t * d.shoved.spin).multiply(d.shoved.turn);
+      } else if (d.fall) {
+        d.fall.at(time, at).multiplyScalar(1 / METERS).applyMatrix4(this.motions[d.half]);
+        setFromAxisAngle(spun, d.axis, time * d.spin).multiply(d.turn).premultiply(this.turns[d.half]);
       } else {
-        framed(this.jets, d.breach, swayed.copy(d.at).addScaledVector(d.drift, sin(time * d.rate + d.phase)), at);
-        setFromAxisAngle(spun, d.axis, time * d.spin).multiply(d.turn);
+        at.copy(d.at).applyMatrix4(this.motions[d.half]);
+        spun.copy(d.turn).premultiply(this.turns[d.half]);
       }
       this.turned[k].copy(spun);
     });
+  }
+
+  /** Whether the `i`-th of the dead falls freely about the wreck (else it hangs where it snagged). */
+  falls(i: number): boolean {
+    return this.dead[i].fall !== null;
+  }
+
+  /** The `i`-th of the dead's free fall (see FreeFall), null for one caught. */
+  fallOf(i: number): FreeFall | null {
+    return this.dead[i].fall;
   }
 
   /**
