@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, easesOff, evenSkills, flyGently, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, strainHold, TORPEDO_CLEARANCE } from './bots';
+import { IDLE } from '../input/input';
 import { debrisSet } from '../world/shapes';
 import type { JunkBuild } from '../world/junk';
 import { pow } from '../detmath';
-import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
-import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
+import { FlightModel, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from './flight';
+import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
 import { junkField, testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -32,6 +33,8 @@ function field(rock: boolean): AsteroidField {
 }
 
 const at = (x: number, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+/** Drive plus thrusters (as shares) a bot easing off its strain stays under. */
+const EASY_LIMIT = 0.3;
 
 describe('bots fly by the Hosts\' rules', () => {
   it('only command what a Host\'s stick, drive and thrusters can, and never touch their flight themselves', () => {
@@ -612,6 +615,42 @@ describe('the clone\'s body and sensors, the same for every ship', () => {
     // the thrusters alone (4 g) barely strain it
     for (let t = 0; t < 5; t += STEP) strain = strainAfter(strain, 800, STEP);
     expect(strain).toBeLessThan(0.15);
+  });
+
+  it('flies its strain as a pilot does: eases off at its hold until it has recovered, the daring holding on longer', () => {
+    // the hold rises with daring; past it a bot eases off, and stays easy until well under it
+    expect(strainHold(0.9)).toBeGreaterThan(strainHold(0.1));
+    const hold = strainHold(0.5);
+    expect(easesOff(false, hold - 0.05, 0.5)).toBe(false);
+    expect(easesOff(false, hold, 0.5)).toBe(true);
+    expect(easesOff(true, hold - 0.2, 0.5)).toBe(true);
+    expect(easesOff(true, hold - 0.4, 0.5)).toBe(false);
+    // gently: the drive rests and the thrusters push under the 3 g a clone recovers below
+    const c = { ...IDLE, thrust: 1, strafeX: 1, strafeY: -1, strafeZ: 0.5 };
+    flyGently(c);
+    expect(c.thrust).toBe(0);
+    expect(Math.hypot(c.strafeX, c.strafeY, c.strafeZ) * RCS_THRUST).toBeLessThan(3 * G);
+    // in the round: a bot burning for a far goal lets its drive rest once its clone is strained,
+    // until it has recovered, while one in danger (a nova close by) spends the strain to get away
+    const f = field(false);
+    const roamer = ship('Kessler', at(0), at(1));
+    const bot = new Bot(roamer, skillsOf('Kessler'));
+    roamer.flight.velocity.set(0, 0, 6000);
+    let clock = 0;
+    const thrustAt = (strain: number) => {
+      let c = IDLE;
+      for (const end = clock + 2; clock < end; clock += STEP) {
+        roamer.strain = strain;
+        c = bot.think(clock, [roamer], f);
+      }
+      return c.thrust + Math.hypot(c.strafeX, c.strafeY, c.strafeZ);
+    };
+    const fresh = thrustAt(0);
+    const strained = thrustAt(0.95);
+    expect(strained).toBeLessThan(fresh);
+    expect(strained).toBeLessThan(EASY_LIMIT);
+    bot.flee = at(0, 0, 3000);
+    expect(thrustAt(0.95)).toBeGreaterThan(EASY_LIMIT);
   });
 
   it('sees a nose locked, tracking or off, within the sensors\' reach', () => {
