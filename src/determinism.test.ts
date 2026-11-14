@@ -98,7 +98,8 @@ describe('the shared world on every machine', () => {
       giant: '5ed64e8bb6f5a82b',
       corona: '3951ba12f6973dda',
       hole: 'ce4777de180ea143',
-      derelict: '0839e7690da6f693',
+      // the Derelict's wreck held as one body by its keel's girder, its segments in the field
+      derelict: '5753e40190f4afe9',
       crack: 'f08ab2d988e99ebc',
       throat: '33d679b53815922a',
       valhalla: 'ccfdfa724f2e5966',

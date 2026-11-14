@@ -4,19 +4,19 @@ import { ARENAS } from './arenas';
 import { HULL_BOXES } from './shapes';
 import { testField } from '../test/field';
 import { DISTANT_DETAIL } from './rocks';
-import { FALL_STEP, FreeFall, GRAVITATION, HALF_MASS, hullClearance, METERS, WRECK, wreckPotential, wreckPull } from './wreckgravity';
+import { FALL_STEP, FreeFall, GRAVITATION, hullClearance, PART_MASS, METERS, WRECK, wreckPotential, wreckPull } from './wreckgravity';
 
 describe("the Derelict's gravity", () => {
-  it('weighs each half as the field does: its boxes by the hull density', () => {
+  it('weighs the wreck as the field does: its boxes by the hull density, one body', () => {
     const field = testField(DISTANT_DETAIL, HULL_BOXES);
     field.generate(ARENAS.find((arena) => arena.id === 'derelict')!.layout);
-    for (const weld of [0, 1]) {
-      const piece = [...field.asteroids.values()].find((a) => a.weld === weld)!;
-      expect(HALF_MASS[weld] / field.bodyMass(piece)).toBeCloseTo(1, 12);
-    }
-    // the bow 49.8 million tonnes, the stern 45.1
-    expect(HALF_MASS[0] / 1e9).toBeCloseTo(49.8, 0);
-    expect(HALF_MASS[1] / 1e9).toBeCloseTo(45.1, 0);
+    const pieces = [...field.asteroids.values()];
+    expect(pieces.every((piece) => piece.weld === 0)).toBe(true);
+    expect((PART_MASS[0] + PART_MASS[1] + PART_MASS[2]) / field.bodyMass(pieces[0])).toBeCloseTo(1, 12);
+    // the bow 49.8 million tonnes, the stern 45.1, the keel's girder some 0.09
+    expect(PART_MASS[0] / 1e9).toBeCloseTo(49.8, 0);
+    expect(PART_MASS[1] / 1e9).toBeCloseTo(45.1, 0);
+    expect(PART_MASS[2] / 1e9).toBeLessThan(0.1);
   });
 
   it('pulls as its rods do: the potential falls along the pull, and a rod is the sum of its slices', () => {

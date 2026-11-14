@@ -22,7 +22,7 @@ describe('the derelict', () => {
     expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
   });
 
-  it('lets the mist follow its half of the hull when a comet shoves it', () => {
+  it('lets the mist follow the wreck when a comet shoves it, the keel holding both halves together', () => {
     const field = testField();
     field.generate(ARENAS.find((arena) => arena.id === 'derelict')!.layout);
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
@@ -34,13 +34,12 @@ describe('the derelict', () => {
     settle();
     const start = wreck.jets.map((jet) => jet.from.clone());
     expect(start[0].distanceTo(new THREE.Vector3(-14200, 0, 0))).toBeLessThan(1e-6);
-    // a comet strikes the bow: the whole half drifts on at 171 units/s for two minutes
+    // a comet strikes the bow: the whole wreck drifts on at 171 units/s for two minutes, the stern with it
     const hull = [...field.asteroids.values()].find((rock) => rock.weld === 0)!;
     field.shove(hull.id, 0, new THREE.Vector3(0, 0, 171), new THREE.Vector3(0, 1, 0), 0, 3);
     field.setClock(120);
     settle();
-    expect(wreck.jets[0].from.distanceTo(start[0].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
-    expect(wreck.jets[1].from.distanceTo(start[1])).toBeLessThan(1e-6);
+    for (const i of [0, 1]) expect(wreck.jets[i].from.distanceTo(start[i].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
     // the mist thickens at the end where it is now and is gone from where it was
     expect(wreck.mistAt(wreck.jets[0].from.clone().add(new THREE.Vector3(1200, 0, 0)))).toBeGreaterThan(0.5);
     expect(wreck.mistAt(new THREE.Vector3(-13000, 0, 0))).toBe(0);

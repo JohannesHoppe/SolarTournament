@@ -26,8 +26,8 @@ const CHECK = 3;
 const DAY = 86400;
 
 /** Each half's centre of mass (m). */
-const centers = [0, 1].map((weld) => {
-  const rods = WRECK.filter((rod) => rod.weld === weld);
+const centers = [0, 1].map((part) => {
+  const rods = WRECK.filter((rod) => rod.part === part);
   const mass = rods.reduce((sum, rod) => sum + rod.mass, 0);
   return rods.reduce((sum, rod) => sum.addScaledVector(rod.center, rod.mass / mass), new THREE.Vector3());
 });

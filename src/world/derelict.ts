@@ -52,8 +52,8 @@ const VEIL_PIXELS = 160;
 /** How thick a jet's mist is at `s`, the share of its reach (0 at its torn end): swelling in, thinning out. */
 const along = (s: number) => THREE.MathUtils.smoothstep(s, 0, 0.08) * (1 - s);
 
-/** The welded structures the torn ends belong to (see world/arenas, derelict): the bow 0, the stern 1. The jets ride with them. */
-export const JET_WELDS = [0, 1] as const;
+/** The welded structure the torn ends belong to (see world/arenas, derelict): the whole wreck, its halves held by the keel's girder. The jets ride with it. */
+export const JET_WELDS = [0, 0] as const;
 
 /** A jet in the world: where it leaves its torn end and the way it drifts. */
 export interface Jet {

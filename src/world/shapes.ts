@@ -24,7 +24,7 @@ import {
 } from '../view/surfaces';
 import type { Lettering } from '../view/lettering';
 import { beacons, biodome, domeGlass, FAILING_SHARE, frosted, paint, rimed, windowMaterials } from './worldship';
-import { cos, hypot, pow, sin } from '../detmath';
+import { atan2, cos, hypot, pow, sin } from '../detmath';
 import { rotateX, rotateY, rotateZ } from '../detthree';
 import { BUS_DENSITY, CUBIC, ENGINE_SHARE, FAIRING_SHEET, SQUARE, STACK_DENSITY, TANK_WALL, WING_SHEET, type JunkBuild } from './junk';
 
@@ -45,7 +45,10 @@ const DEBRIS_COUNT = 8;
 const DEBRIS_SIZE = 900;
 /** Hull templates are as long as this (units, 100 m) before an arena scales them up. */
 const HULL_LENGTH = 2000;
-/** The half extents of each hull template's collider box (units, before an arena scales it), in the order of hullSet: a section, a torn section, an engine block, a bridge tower, a truss, and the three painted sections. */
+/** A segment of the keel's girder (see keel): its type among the hull's templates, its half extents (units, laid out unscaled: 60 m long, 12 m square). */
+export const KEEL_TYPE = 8;
+export const KEEL_HALF = new THREE.Vector3(600, 120, 120);
+/** The half extents of each hull template's collider box (units, before an arena scales it), in the order of hullSet: a section, a torn section, an engine block, a bridge tower, a truss, the three painted sections, and the keel's segments, whole and ravaged. */
 const SECTION_HALF = new THREE.Vector3(HULL_LENGTH * 0.5, HULL_LENGTH * 0.16, HULL_LENGTH * 0.14);
 export const HULL_BOXES: readonly THREE.Vector3[] = [
   SECTION_HALF,
@@ -56,6 +59,8 @@ export const HULL_BOXES: readonly THREE.Vector3[] = [
   SECTION_HALF,
   SECTION_HALF,
   SECTION_HALF,
+  KEEL_HALF,
+  KEEL_HALF,
 ];
 
 /** An invisible box whose `fill` (90 % for rock-like pieces, all of it for a box piece) is the collision shape with these semi-axes. */
@@ -585,6 +590,101 @@ function breach(half: THREE.Vector3, into: HullParts) {
 }
 
 /**
+ * The keel's girder that still spans the gap between the halves (see README, The Derelict): laid
+ * out at its true size (scale 1, units) in segments of KEEL_HALF, a square lattice 12 m across of
+ * four chords, a ring of girders every 10 m and a diagonal across each face of each bay, 60 m a
+ * segment; HULL_BOXES from KEEL_TYPE on, whole and ravaged (a chord broken through and bent,
+ * members missing, its plating torn). The sections are grown SECTION_SCALE-fold.
+ */
+const SECTION_SCALE = 7;
+/** A chord's thickness and a lattice member's (units, 1.1 m and 0.7 m). */
+const CHORD = 22;
+const MEMBER = 14;
+const KEEL_BAYS = 6;
+
+/** The keel's four chords along a segment (`half`, units); a ravaged one has one broken through, its ends bent off line. */
+function keelChords(half: THREE.Vector3, ravaged: boolean): THREE.BufferGeometry[] {
+  const chords: THREE.BufferGeometry[] = [];
+  const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
+  corners.forEach(([y, z], k) => {
+    const cy = y * (half.y - CHORD / 2);
+    const cz = z * (half.z - CHORD / 2);
+    if (!ravaged || k !== 3) {
+      chords.push(block(half.x * 2, CHORD, CHORD, 0, cy, cz));
+      return;
+    }
+    // broken a little off the middle, both stubs bent inwards where they tore
+    chords.push(block(half.x - 70, CHORD, CHORD, -half.x / 2 - 35, cy, cz));
+    chords.push(rotateZ(new THREE.BoxGeometry(60, CHORD, CHORD).translate(30, 0, 0), 0.5).translate(-70, cy, cz).toNonIndexed());
+    chords.push(block(half.x - 110, CHORD, CHORD, half.x / 2 + 55, cy, cz));
+    chords.push(rotateZ(new THREE.BoxGeometry(50, CHORD, CHORD).translate(-25, 0, 0), -0.6).translate(110, cy, cz).toNonIndexed());
+  });
+  return chords;
+}
+
+/**
+ * A segment of the keel's girder (`half`, units), whole or `ravaged`: chords, rings and a
+ * diagonal across each face of each bay, plating over part of it, pipes and a cable run inside,
+ * carrying nothing; all of it within the segment's box, its collider.
+ */
+function keel(half: THREE.Vector3, into: HullParts, ravaged: boolean) {
+  const r = new Randomizer(BREACH_SEED + (ravaged ? 2 : 1));
+  const { parts, inside } = into;
+  parts.push(...keelChords(half, ravaged));
+  const bay = (half.x * 2 - MEMBER) / KEEL_BAYS;
+  const ring = (k: number) => -half.x + MEMBER / 2 + k * bay;
+  const y = half.y - CHORD / 2;
+  const z = half.z - CHORD / 2;
+  for (let k = 0; k <= KEEL_BAYS; k++) {
+    const x = ring(k);
+    parts.push(block(MEMBER, MEMBER, z * 2, x, y), block(MEMBER, MEMBER, z * 2, x, -y));
+    parts.push(block(MEMBER, y * 2, MEMBER, x, 0, z), block(MEMBER, y * 2, MEMBER, x, 0, -z));
+  }
+  for (let k = 0; k < KEEL_BAYS; k++) {
+    const middle = (ring(k) + ring(k + 1)) / 2;
+    const zig = k % 2 ? 1 : -1;
+    for (let face = 0; face < 4; face++) {
+      // a ravaged segment lost some of its members
+      if (ravaged && r.nextFloat() < 0.3) continue;
+      const side = face % 2 ? 1 : -1;
+      if (face < 2) {
+        // across a flank: in its x-y plane
+        const angle = atan2(zig * y * 2, bay);
+        parts.push(rotateZ(new THREE.BoxGeometry(hypot(bay, y * 2), MEMBER, MEMBER), angle).translate(middle, 0, side * z).toNonIndexed());
+      } else {
+        // across the top or the bottom: in its x-z plane
+        const angle = atan2(zig * z * 2, bay);
+        parts.push(rotateY(new THREE.BoxGeometry(hypot(bay, z * 2), MEMBER, MEMBER), -angle).translate(middle, side * y, 0).toNonIndexed());
+      }
+    }
+  }
+  if (ravaged) {
+    // plating torn off but for a few plates, one bent off the face
+    parts.push(block(bay * 1.6, 6, z * 1.6, ring(1), y + 4, r.range(-0.2, 0.2) * z));
+    parts.push(rotateZ(new THREE.BoxGeometry(bay, 6, z * 1.2).translate(bay / 2, 0, 0), -0.35).translate(ring(4), y - 10, 0).toNonIndexed());
+  } else {
+    // a deck's worth of plating on top, a run of it down one flank
+    parts.push(block(bay * 4.2, 6, z * 2 + CHORD, ring(1) + bay * 2.1, y + 4));
+    parts.push(block(bay * 2.5, y * 1.4, 6, ring(3) + bay * 1.25, -y * 0.2, z + 4));
+  }
+  // two pipes and a cable run, sagging between the rings where its hangers tore
+  for (const side of [1, -1]) inside.push(block(half.x * 2 - 20, 9, 9, 0, -y + 30, side * 45));
+  for (let k = 0; k < KEEL_BAYS; k++) {
+    const sag = r.range(20, 60);
+    const from = ring(k);
+    const angle = atan2(sag, bay / 2);
+    const length = hypot(bay / 2, sag);
+    inside.push(rotateZ(new THREE.BoxGeometry(length, 5, 5).translate(length / 2, 0, 0), -angle).translate(from, y - 20, -40).toNonIndexed());
+    inside.push(rotateZ(new THREE.BoxGeometry(length, 5, 5).translate(-length / 2, 0, 0), angle).translate(from + bay, y - 20, -40).toNonIndexed());
+  }
+}
+
+/** The keel's segment from afar: its chords and a plate over its top. */
+function keelFar(half: THREE.Vector3, ravaged: boolean): THREE.BufferGeometry[] {
+  return [...keelChords(half, ravaged), block(half.x * 1.2, 6, half.z * 2 - 4, 0, half.y - 4)];
+}
+
+/**
  * The hull sections of the world ship PAAA 01 (see README, "The universe"), industrial and
  * angular: boxes of plating on frames, a spine, containers along the flanks, a smooth band of
  * plating on each flank carrying the livery, rows of windows below it, all within the section's
@@ -677,24 +777,28 @@ export function hullSet(): TemplateSet {
     painted(5),
     painted(6),
     painted(7),
+    (half, into) => keel(half, into, false),
+    (half, into) => keel(half, into, true),
   ];
   const flat = (geometries: THREE.BufferGeometry[]) => mergeGeometries(geometries.map((p) => (p.hasAttribute('uv') ? p.deleteAttribute('uv') : p)));
   // each part takes the plating at its own place, mirrored or not, so neighbors never show the same stretch of it
-  const plated = (geometries: THREE.BufferGeometry[]) =>
+  const plated = (geometries: THREE.BufferGeometry[], tile: number) =>
     mergeGeometries(
       geometries.map((p) => {
-        const uv = boxUv(p, PLATING_TILE).getAttribute('uv');
+        const uv = boxUv(p, tile).getAttribute('uv');
         const [du, dv, mirror] = [uvs.nextFloat(), uvs.nextFloat(), uvs.nextFloat() < 0.5 ? -1 : 1];
         for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * mirror + du, uv.getY(i) + dv);
         return p;
       }),
     );
+  // the keel's girder is laid out at its true size, the sections grown 7-fold: the plating keeps its true scale on both
+  const tileOf = (i: number) => (i >= KEEL_TYPE ? PLATING_TILE * SECTION_SCALE : PLATING_TILE);
   const near = HULL_BOXES.map((half, i) => {
     const into: HullParts = { parts: [], inside: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
     builds[i](half, into);
     const group = new THREE.Group();
-    group.add(new THREE.Mesh(plated(into.parts), half.y < L * 0.05 ? dark : metal));
-    if (into.inside.length) group.add(new THREE.Mesh(plated(into.inside), inner));
+    group.add(new THREE.Mesh(plated(into.parts, tileOf(i)), half.y < L * 0.05 ? dark : metal));
+    if (into.inside.length) group.add(new THREE.Mesh(plated(into.inside, tileOf(i)), inner));
     if (into.livery.length) group.add(new THREE.Mesh(boxUv(flat(into.livery), TILE), livery));
     if (into.lights.length) group.add(new THREE.Mesh(boxUv(flat(into.lights), 400), windows.steady));
     into.failing.forEach((runs, i) => runs.length && group.add(new THREE.Mesh(boxUv(flat(runs), 400), windows.failing[i])));
@@ -709,5 +813,12 @@ export function hullSet(): TemplateSet {
     group.add(collider(half.clone().round(), 1));
     return group;
   });
-  return { near, far: [], box: true };
+  // the keel's girder from afar: its chords and its plating, no lattice (see keelFar)
+  const far: THREE.Object3D[] = [];
+  for (let i = KEEL_TYPE; i < HULL_BOXES.length; i++) {
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(plated(keelFar(HULL_BOXES[i], i > KEEL_TYPE), tileOf(i)), metal));
+    far[i] = group;
+  }
+  return { near, far, box: true };
 }
