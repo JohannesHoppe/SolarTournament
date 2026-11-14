@@ -5,7 +5,7 @@ import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids
 import type { Ship } from '../ship/ship';
 import type { Torpedo } from './torpedoes';
 import type { Probe } from './items';
-import { MASS, rope, ropeFrom, ropeOver, share, type Body } from '../world/bodies';
+import { JOLT_TIME, MASS, rope, ropeFrom, ropeOver, share, type Body } from '../world/bodies';
 import { Cable, WRAP_MAX, type CablePath } from './cable';
 
 /**
@@ -68,10 +68,33 @@ export interface Tether {
   line: THREE.Line;
   /** Where the cable lies on the field's pieces, from the anchor to the owner. */
   readonly cable: Cable;
+  /** How hard the cable pulls the owner now (units/s², see cablePull), on the browser that runs it. */
+  pull: number;
 }
 
 /** A tether for `owner` (see Tether), with a cable that lies on nothing yet. */
-export const newTether = (owner: Ship, anchor: Anchor | null, flying: number, end: THREE.Vector3, length: number, line: THREE.Line): Tether => ({ owner, anchor, flying, end, length, line, cable: new Cable() });
+export const newTether = (owner: Ship, anchor: Anchor | null, flying: number, end: THREE.Vector3, length: number, line: THREE.Line): Tether => ({ owner, anchor, flying, end, length, line, cable: new Cable(), pull: 0 });
+
+/**
+ * The cable's breaking load, as the pull it gives an interceptor (units/s², 30 g: 18 MN on its
+ * 60 t, a fibre cable a few centimetres thick): beyond it the cable snaps. The cable stretches a
+ * little, so a jerk (a taut cable stopping a ship flying off) pulls over JOLT_TIME rather than
+ * at once (see cablePull): a ship hooked flying away at more than about 60 m/s, or swung round
+ * on a cable too short for its speed (30 g: 250 m/s on 210 m, 150 m/s on 76 m), tears it.
+ */
+export const CABLE_BREAK = 5886;
+
+/**
+ * How hard the cable pulls an end of mass `mass` that its step changed from `before` to `after`
+ * (units/s²; the speed the step gave it over `dt`, held over the cable's stretch, JOLT_TIME), from
+ * the pull before, `pull`: a swing's steady pull as it is, a jerk spread out as the stretch takes
+ * it. In an interceptor's units: the pull on a lighter end (a probe) weighs by its mass.
+ */
+export function cablePull(pull: number, before: THREE.Vector3, after: THREE.Vector3, mass: number, dt: number): number {
+  if (dt <= 0) return pull;
+  const now = (before.distanceTo(after) / dt) * (mass / MASS.ship);
+  return pull + (now - pull) * Math.min(1, dt / JOLT_TIME);
+}
 
 const point = new THREE.Vector3();
 const toAnchor = new THREE.Vector3();

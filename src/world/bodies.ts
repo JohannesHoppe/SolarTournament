@@ -63,6 +63,14 @@ export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'> & { junk?: A
   return ((4 / 3) * Math.PI * radius * radius * radius) * DENSITY[piece.kind];
 }
 
+/**
+ * A jolt (the speed a blow, a cable's jerk, a coil, a shove or the dodge gives a hull at once)
+ * reaches what it carries over about this long (s): the clone through its seat's gel, a cable
+ * through its stretch. Its peak is the jolt's speed over this time, falling off as it passes; a
+ * push that lasts (the overdrive's, a cable's swing) passes on as it comes.
+ */
+export const JOLT_TIME = 0.2;
+
 /** The share of an impulse between two bodies that the one of mass `mass` takes against one of mass `other`: its inverse mass over both. */
 export function share(mass: number, other: number): number {
   const mine = 1 / mass;

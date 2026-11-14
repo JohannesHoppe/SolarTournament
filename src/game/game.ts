@@ -20,7 +20,7 @@ import { ReferencePlane } from '../view/plane';
 import { OrbitPath } from '../view/orbitpath';
 import { referencesOf } from '../world/reference';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, CABLE_BREAK, cableEnd, Cables, cablePull, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters, type OnTarget, type TorpedoMark } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
@@ -60,7 +60,7 @@ import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, T
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
 import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, overdriveShove, type Ground } from '../ship/flight';
+import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS, TROPHY_MARKS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -102,7 +102,7 @@ import { shoveSpin } from '../ship/blow';
 import { blastOn, CHARGE_BLAST, CHARGE_FUSE, Charges } from './charges';
 import { blastBreaks, blastEnergy, blastTime } from './blasts';
 import { setGlint } from '../ship/models';
-import { approachGate, BOOST_PUSH, BOOST_RADIUS, BOOST_STRAIN, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
@@ -521,8 +521,9 @@ const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove (OVERDRIVE_PUSH,
  * 200 m/s), past the tournament's limit, that puts the ship onto the crosshair's line: a ram
- * course at whatever lies there (see crosshairMark, overdriveShove). It leaves the clone at the edge of
- * blacking out (OVERDRIVE_STRAIN) and the main drive glowing: no thrust for
+ * course at whatever lies there (see crosshairMark, overdriveShove). It reaches the hull over
+ * OVERDRIVE_SECONDS, about 25 g that press the clone hard into its seat (see Ship.felt), and
+ * leaves the main drive glowing: no thrust for
  * OVERDRIVE_DRIVE_COOLDOWN seconds, while the thrusters still turn the ship and the laser
  * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again. In a race it is a boost
  * with a risk instead (see ship/driveheat): it recharges in BOOST_RECHARGE, the drive burns on,
@@ -530,7 +531,6 @@ const KICK_FADE = 9;
  * BOOST_CAP (units/s, the limit plus one shove, 450 m/s), as a coil's throw never does. Bots use
  * it as Hosts do (see botBoost).
  */
-const OVERDRIVE_STRAIN = 0.9;
 const OVERDRIVE_RECHARGE = 20;
 const BOOST_CAP = MAX_SPEED + OVERDRIVE_PUSH;
 /** A racing bot's line ahead is measured for its boost over this much to either side of each point (units, 60 m), as the racing line measures its bends (see botBoost). */
@@ -549,13 +549,12 @@ const ESCAPE_EVERY = 0.2;
  * a line of fire, and to throw the ship back onto a racing line after a missed ring. The autopilot
  * lets the drift be for DODGE_DRIFT seconds, so the ship plainly leaves the line of fire (about
  * 70 m, two ship lengths, before the autopilot takes the drift out), and the thrusters
- * need DODGE_RECHARGE seconds before the next one. It presses the clone into the side of the
- * seat (DODGE_STRAIN).
+ * need DODGE_RECHARGE seconds before the next one. It throws the clone against the side of its
+ * seat, a jolt it feels (see Ship.felt).
  */
 const DODGE_SPEED = 1200;
 const DODGE_DRIFT = 1.2;
 const DODGE_RECHARGE = 1.5;
-const DODGE_STRAIN = 0.15;
 /**
  * A close call: passing a rock faster than CLOSE_CALL_SPEED (units/s, 60 m/s) within
  * CLOSE_CALL_REACH ship radii of its surface, without touching it, earns CLOSE_CALL_POINTS.
@@ -604,7 +603,7 @@ const LIFT_FULL = 1000;
 const LIFT_RISE = 200;
 const LIFT_SEEN = 80000;
 const LIFT_COLOR = new THREE.Color(0.32, 0.3, 0.27);
-/** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s), and presses the clone into the seat (BOOST_STRAIN in race.ts). */
+/** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s) (the clone feels the coil's throw as a jolt, see Ship.felt). */
 const BOOST_FOV = 9;
 const BOOST_FADE = 2.5;
 /** Hosts who ask for less motion get no camera shake. */
@@ -934,6 +933,7 @@ function rockBody(mass: number, at: THREE.Vector3, velocity: THREE.Vector3): Bod
 }
 /** A hook's anchor, the owner's nose and the cable's far end this frame. */
 const hookPoint = new THREE.Vector3();
+const hookBefore = new THREE.Vector3();
 const hookNose = new THREE.Vector3();
 const hookVelocity = new THREE.Vector3();
 const hookEnd = new THREE.Vector3();
@@ -5140,12 +5140,18 @@ export class Game implements OnlineGame {
       // a raider who spares clones fires only into a drive (see jumpers); the Loose, harpooning tugs, never into the Magpie's
       const holds = steered.fire && ((this.sparesClones(ship) && !this.onDrive(ship)) || (this.sparesDrives(ship) && this.onDrive(ship)));
       const controls = holds ? Object.assign(this.heldFire, steered, NO_FIRE) : steered;
+      // an overdrive's shove under way reaches the hull over its seconds (see shove)
+      if (ship.overdriveLeft > 0) {
+        ship.overdriveLeft = overdriveStep(ship.flight.velocity, ship.overdrivePending, ship.overdriveLeft, dt);
+        if (ship.flight.velocity.length() > ship.overdriveCap) ship.flight.velocity.setLength(ship.overdriveCap);
+      }
       this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
       ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, false, shadeHit) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
+      if (!clamped) devlog?.strain(ship.name, ship.strain, dt);
       this.friction(ship, dt, now);
       if (this.course && !this.roundOver) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
@@ -6300,7 +6306,6 @@ export class Game implements OnlineGame {
   private coilPush(ship: Ship, axis: THREE.Vector3) {
     // the coil's field runs at the tournament's limit plus its push: it pushes no ship beyond that
     coilPush(ship.flight.velocity, axis, MAX_SPEED);
-    ship.strain = Math.max(ship.strain, BOOST_STRAIN);
     if (ship !== this.me) return;
     this.boostKick = 1;
     this.effects.sparks(ship.flight.position, BOOST_COLOR, 120);
@@ -7306,7 +7311,7 @@ export class Game implements OnlineGame {
   }
   private readonly markAhead = { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
 
-  /** E: the overdrive, a last resort, at whatever the crosshair shows; see OVERDRIVE_STRAIN. */
+  /** E: the overdrive, a last resort, at whatever the crosshair shows; see OVERDRIVE_RECHARGE. */
   private overdrive() {
     const me = this.me!;
     if (me.alive && me.perks.overdrive && this.time >= me.overdriveReadyAt) this.shove(me, this.crosshairMark());
@@ -7345,21 +7350,19 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A ship's overdrive fires (see OVERDRIVE_STRAIN): its shove onto the line to `mark` (null: along
+   * A ship's overdrive fires (see OVERDRIVE_RECHARGE): its shove onto the line to `mark` (null: along
    * the nose), and in a race the boost's heat and its cap (see BOOST_CAP), and a burnout past the
    * gauge's limit: the drive dark, the hull hurt.
    */
   private shove(ship: Ship, mark: { position: THREE.Vector3; velocity: THREE.Vector3 } | null) {
     const race = this.roundMode === 'race' && !this.school;
     ship.overdriveReadyAt = this.time + (race ? BOOST_RECHARGE : OVERDRIVE_RECHARGE);
-    const before = ship.flight.velocity.length();
-    ship.flight.velocity.add(overdriveShove(ship.flight, mark, forward));
-    if (race) {
-      const cap = Math.max(before, BOOST_CAP);
-      if (ship.flight.velocity.length() > cap) ship.flight.velocity.setLength(cap);
-    } else ship.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
-    // about sixty g at once: the clone is pressed to the edge of blacking out
-    ship.strain = Math.max(ship.strain, OVERDRIVE_STRAIN);
+    // the shove onto the line, through the drive over OVERDRIVE_SECONDS (see overdriveSteps),
+    // which the clone feels as it comes
+    overdriveShove(ship.flight, mark, ship.overdrivePending);
+    ship.overdriveLeft = OVERDRIVE_SECONDS;
+    ship.overdriveCap = race ? Math.max(ship.flight.velocity.length(), BOOST_CAP) : Infinity;
+    if (!race) ship.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     const burnt = race && ship.driveHeat.shove(this.time);
     devlog?.add({ kind: 'act', t: this.time, ship: ship.name, act: 'overdrive', detail: race ? `heat ${Math.round(ship.driveHeat.read(this.time))}${burnt ? ' burnt out' : ''}` : '' });
     this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), ship.toWorld(relative.set(0, 0, ship.radius * 4)), ship.flight.velocity, 1);
@@ -7643,8 +7646,13 @@ export class Game implements OnlineGame {
       // thrusters burn against its swing (see PROBE_STEADY)
       const limit = MAX_SPEED + BOOST_PUSH;
       const steady = probe ? PROBE_STEADY : 0;
-      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor, steady);
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor, steady);
+      if (owns) {
+        hookBefore.copy(owner.flight.velocity);
+        length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor, steady);
+        // past its breaking load the cable snaps (see CABLE_BREAK), on the browser that runs the hook
+        tether.pull = cablePull(tether.pull, hookBefore, owner.flight.velocity, owner.body.mass, dt);
+        if (tether.pull > CABLE_BREAK) length = null;
+      } else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor, steady);
       if (length === null) {
         this.cableSnapped(owner);
         continue;
@@ -8254,7 +8262,6 @@ export class Game implements OnlineGame {
     // a damaged thruster kicks weaker
     const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
     ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
-    ship.strain = Math.min(1, ship.strain + DODGE_STRAIN);
     ship.kickJets(scratch.set(direction.x, direction.y, 0));
   }
 
