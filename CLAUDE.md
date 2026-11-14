@@ -312,7 +312,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/plane.ts` | The reference plane's grid and the drop lines to it, an overlay over everything in the HUD's azure |
 | `view/orbitpath.ts` | The orbit the readout sees, drawn into space: the ellipse free drift would fly about the well, an azure line over everything |
 | `view/wide.ts` | The flight computer's lines in space 3 pixels wide (GL draws one): each segment a quad facing the screen, cut at the near plane |
-| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze; an explosion a flash, a gas shell going clear and sparks flying straight in vacuum, fire and smoke billowing only in an arena's air; the maneuvering thrusters' puffs at their firing nozzles |
+| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze; an explosion a flash, a gas shell going clear and sparks flying straight in vacuum, fire and smoke billowing only in an arena's air; the maneuvering thrusters' hot jets at their firing nozzles |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/clip.ts` | The kill clip: the canvas's picture and the game's sound recorded in the browser for a few seconds (MP4 or WebM), handed to the device's share sheet or saved |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
