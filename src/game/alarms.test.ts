@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { AlarmTones, Alarms, ESCAPE_REACTION, escapeLoad, WELL_CAUTION, WELL_CRITICAL, WELL_LOST, WELL_WARNING, wellEscape, wellLevel } from './alarms';
 import { arenaById } from '../world/arenas';
-import { MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH } from '../ship/flight';
+import { MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS } from '../ship/flight';
 
 /** One frame of the game's alarms: raise, rank, start the next. */
 function frame(alarms: Alarms, raise: () => void) {
@@ -138,7 +138,7 @@ describe("the overdrive's last chance at a well", () => {
    * A fall flown straight out, 1D and on its own, as the alarm's flight ahead must agree with,
    * the nose away from the hole: the drive at `drive` of its thrust (from the start when the Host
    * burns away already, else after the reaction), which the speed limit stops from pushing faster
-   * away; with the overdrive the shove after the reaction and the drive cold for its cooldown;
+   * away; with the overdrive the shove after the reaction, over its seconds, and the drive cold for its cooldown;
    * out where the burning drive outpulls the pull, climbing.
    */
   const flownOut = (distance: number, inward: number, drive: number, overdrive: boolean, burning = false) => {
@@ -153,7 +153,7 @@ describe("the overdrive's last chance at a well", () => {
       // out once the burning drive outpulls the pull, climbing: a cold drive lets the ship fall back
       if (r >= free && v >= 0 && warm && (!overdrive || t >= ESCAPE_REACTION)) return true;
       if (r <= hole.radius) return false;
-      if (overdrive && t >= ESCAPE_REACTION && t < ESCAPE_REACTION + step) v += OVERDRIVE_PUSH;
+      if (overdrive && t >= ESCAPE_REACTION && t < ESCAPE_REACTION + OVERDRIVE_SECONDS) v += (OVERDRIVE_PUSH / OVERDRIVE_SECONDS) * step;
       const push = warm && !(v >= MAX_SPEED) ? thrust : 0;
       v += (push - (hole.surfaceGravity * hole.radius * hole.radius) / (r * r)) * step;
       r += v * step;

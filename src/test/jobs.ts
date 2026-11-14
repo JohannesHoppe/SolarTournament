@@ -8,9 +8,10 @@ import { cos, sin } from '../detmath';
 import { firstHull, LASER_RANGE, MAX_HEAT, Ship } from '../ship/ship';
 import { bounceOff, impactDamage, ram, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
-import { approachGate, BOOST_STRAIN, coilPush } from '../game/race';
+import { blastOn, Charges } from '../game/charges';
+import { approachGate, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
-import { aimHook, anchorPoint, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
+import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
 import { DRILL_TORPEDOES, Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
@@ -103,6 +104,8 @@ export interface Hands {
   selfDestruct: boolean;
   /** A torpedo fired this step. */
   torpedo: boolean;
+  /** The mining charge's key held (see game/charges). */
+  charge?: boolean;
   /** The autopilot as the Host wants it: its key pressed where it is otherwise (left out: as it is). */
   autopilot?: boolean;
 }
@@ -212,6 +215,8 @@ export class JobWorld implements SchoolContext {
   dt = JOB_STEP;
   drone: Ship | null = null;
   rocksBroken = 0;
+  /** The clone's mining charges (see game/charges). */
+  readonly charges = new Charges();
   rigBeams = 0;
   torpedoesDown = 0;
   torpedoesHit = 0;
@@ -247,12 +252,13 @@ export class JobWorld implements SchoolContext {
     const now = (this.now += JOB_STEP);
     this.voice = Math.max(0, this.voice - JOB_STEP);
     this.ease = Math.max(0, this.ease - JOB_STEP / EASE_FADE);
-    const hands = this.me.alive && !this.scene ? this.host(this) : { controls: IDLE, brake: false, hook: false, selfDestruct: false, torpedo: false };
+    const hands: Hands = this.me.alive && !this.scene ? this.host(this) : { controls: IDLE, brake: false, hook: false, selfDestruct: false, torpedo: false };
     this.selfDestructing = hands.selfDestruct;
     this.braking = hands.brake && this.me.alive;
     const mine = this.flightComputer(hands);
     if (hands.hook && this.me.alive) this.pressHook();
     if (hands.torpedo && this.me.alive) this.fireTorpedo(this.me);
+    this.mine(!!hands.charge && this.me.alive);
     if (this.jumpers) pressOn(this.jumpers.bots, this.me);
     for (const ship of [...this.ships]) {
       if (!ship.alive) {
@@ -479,13 +485,33 @@ export class JobWorld implements SchoolContext {
       raid.hits++;
       return;
     }
-    if (asteroid.solid) return;
-    const broken = this.field.hit(asteroid.id);
-    if (broken && shooter === this.me) {
-      this.rocksBroken++;
-      this.brokenAt.copy(broken.object.position);
-      this.brokenId = broken.id;
+  }
+
+  /** The clone's mining charges this step (see Game.mine): set with the key held close to a rock, going off on their fuse, breaking rock and hurting a hull too close. */
+  private mine(holding: boolean) {
+    const { blasts } = this.charges.update(this.now, JOB_STEP, holding, this.me.flight.position, this.me.radius, this.field);
+    for (const blast of blasts) {
+      if (blast.broken) {
+        this.rocksBroken++;
+        this.brokenAt.copy(blast.broken.object.position);
+        this.brokenId = blast.broken.id;
+      }
+      for (const ship of [...this.ships]) {
+        if (!ship.alive) continue;
+        const { hurt, shove } = blastOn(ship.flight.position.distanceTo(blast.position) - ship.radius);
+        if (!hurt) continue;
+        ship.flight.velocity.addScaledVector(scratch.subVectors(ship.flight.position, blast.position).normalize(), shove);
+        if (ship.structural(hurt, this.now) === 'destroyed') this.destroyed(ship, null, 'blast');
+      }
     }
+  }
+
+  mining(count: number) {
+    this.charges.arm(count);
+  }
+
+  get chargesLeft() {
+    return this.charges.carried;
   }
 
   /** A beam through a ship (see Game.applyLaserHit): a raider who spares clones only scorches a hull worn down. */
@@ -596,6 +622,7 @@ export class JobWorld implements SchoolContext {
 
   private readonly bite = new THREE.Vector3();
   private readonly rockBody: Body & { mass: number } = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
+  private readonly hookBefore = new THREE.Vector3();
 
   private updateHook() {
     const tether = this.tether;
@@ -626,8 +653,11 @@ export class JobWorld implements SchoolContext {
     }
     const path = tether.cable.path(true);
     const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
+    this.hookBefore.copy(owner.flight.velocity);
     const length = pullOn(owner.body, target ? target.body : this.rockBody, tether.length, true, floor, MAX_SPEED + 800, JOB_STEP, target ? 'moved' : 'fixed', path, path ? clearOf(owner, path.farRock) : 0);
-    if (length === null) this.dropHook();
+    // past its breaking load the cable snaps, as in the game (see CABLE_BREAK)
+    tether.pull = cablePull(tether.pull, this.hookBefore, owner.flight.velocity, owner.body.mass, JOB_STEP);
+    if (length === null || tether.pull > CABLE_BREAK) this.dropHook();
     else tether.length = length;
   }
 
@@ -817,7 +847,6 @@ export class JobWorld implements SchoolContext {
 
   boost(through: THREE.Vector3) {
     coilPush(this.me.flight.velocity, through, MAX_SPEED);
-    this.me.strain = Math.max(this.me.strain, BOOST_STRAIN);
   }
 
   arm(item: 'torpedo' | 'nova') {

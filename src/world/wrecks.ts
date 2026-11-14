@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { raySphere, type AsteroidField } from './asteroids';
+import { raySphere, type Asteroid, type AsteroidField } from './asteroids';
 import { Randomizer, textSeed } from '../random';
 import { BELT_INNER } from './belt';
 import { surfaced, wornSurface, wreckInnards, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
-import { contact, MASS } from './bodies';
-import { cos, exp, hypot, sin } from '../detmath';
+import { contact } from './bodies';
+import { atan2, cos, exp, hypot, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
 
 /** A wreck's plating: the old paint of a fighter torn off, blackened, scored and rusting (see wornSurface). */
@@ -15,14 +15,52 @@ const WRECK_TILE = 0.9;
 /** The innards' tile spans its piece: two or three frames across, besides the ones built under it. */
 const INNARDS_TILE = 2;
 
-/** Pieces a destroyed ship breaks into. */
+/**
+ * Pieces a destroyed ship breaks into: its hulk (the first, see HULK_MASS) and four plates torn
+ * off its skin. The rest of its 60 t (fuel, the reactor's mass burnt, a cloud of small bits that
+ * only glint) leaves nothing to collide with.
+ */
 const PIECES_PER_SHIP = 5;
 /** Pieces in the arena at most (twelve ships' worth); the oldest go first. */
 const MAX_WRECKS = 60;
 /** Glowing edges of fresh wreckage cool down with this time constant (s). */
 const GLOW_TIME = 4;
-/** Speed the pieces fly apart with (units/s, 20 m/s), on top of the ship's own. */
-const SPREAD_SPEED = 400;
+/**
+ * The hulk: the drive and the frame it hangs in, torn off behind the cockpit (kg, 24 t, two
+ * fifths of the 60 t interceptor), a crumpled section of the hull about 10 m across with the
+ * drive's bell on it (its radius HULK_REACH of the ship's).
+ */
+const HULK_MASS = 24_000;
+const HULK_REACH = 0.3;
+/** A plate's radius as a share of the ship's: 1.7 to 3.5 m, a few square meters to 40 of its skin. */
+const PLATE_REACH = [0.1, 0.2] as const;
+/**
+ * A plate's mass per square meter of its area (kg/m²): the armored skin, about 2.5 cm of
+ * steel's worth, 200 kg a square meter; a plate weighs 2 to 8 t. Its drawn skin is that thin
+ * (PLATE_SKIN, m), the frames torn off with it deeper under it.
+ */
+const PLATE_AREAL = 200;
+const PLATE_SKIN = [0.03, 0.06] as const;
+/**
+ * How fast the pieces fly apart, on top of the ship's own velocity (units/s): a ship that dies
+ * whole (crushed on rock, rammed, its hull breached by the laser, burnt) breaks up slowly, its
+ * plates drifting off at 2 to 8 m/s; one whose reactor goes critical, a warhead, a self-destruct
+ * or a nova throws them at 20 to 40 m/s. The hulk takes a sixth of a plate's kick. The kicks are
+ * evened out by the pieces' masses, so their momentum together stays the ship's.
+ */
+const DRIFT_SPREAD = [40, 160] as const;
+const BLAST_SPREAD = [400, 800] as const;
+const HULK_KICK = 1 / 6;
+/** Laser hits a plate takes before it shatters, and the hulk (a beam holes a plate, the hulk is the drive's own block). */
+const PLATE_HITS = 2;
+const HULK_HITS = 6;
+/** A plate or the hulk meeting rock (or a world's ground) this fast or faster crumples there and is gone (units/s, 30 m/s); slower it clangs off it, keeping WRECK_ON_ROCK of the speed it met it at. */
+export const WRECK_CRUMPLE = 600;
+const WRECK_ON_ROCK = 0.2;
+/** What a laser's hit gives a piece it does not shatter (kg·units/s: a plate of 4 t about 1 m/s): the metal it boils off pushes it along the beam. */
+const LASER_SHOVE = 80_000;
+/** Meters per world unit. */
+const METERS = 0.05;
 /** A piece flies in fixed steps of its own age (s), so its path is the same at any frame rate. */
 const WRECK_STEP = 1 / 30;
 
@@ -35,6 +73,12 @@ export interface Wreck {
   spinAxis: THREE.Vector3;
   spinRate: number;
   radius: number;
+  /** Its mass (kg): the hulk HULK_MASS, a plate by its area (see PLATE_AREAL). */
+  mass: number;
+  /** Whether it is the hulk (the first piece of a ship). */
+  hulk: boolean;
+  /** Laser hits it still takes before it shatters (see PLATE_HITS). */
+  hits: number;
   bornAt: number;
   /** Where its flight stands after `steps` fixed steps of WRECK_STEP since it was born (the mesh shows it on to the frame's moment). */
   at: THREE.Vector3;
@@ -117,13 +161,12 @@ const RINGS = [
  * and the frames' ends glow with the heat of the break. It reaches about as far as the radius
  * its collisions take (a little beyond, at its teeth), as a plate thinner than it is wide.
  */
-function pieceGeometry(r: Randomizer): THREE.BufferGeometry {
+function pieceGeometry(r: Randomizer, thick: number): THREE.BufferGeometry {
   const shape = new Shape();
   const [skin, innards] = shape.parts;
   const corners = 11 + Math.floor(r.range(0, 4));
   const stretch = r.range(0.85, 1.1);
   const bow = r.range(0.04, 0.09);
-  const thick = r.range(0.07, 0.11);
   const outline = Array.from({ length: corners }, (_, i) => {
     const angle = ((i + r.range(-0.3, 0.3)) / corners) * Math.PI * 2;
     // every other corner a tooth's root, now and then a notch torn deep
@@ -209,6 +252,98 @@ function beam(part: Part, along: 'x' | 'z', at: number, half: number, top: numbe
   }
 }
 
+/** Faces around the hulk's crumpled hull, and its rings along it from the drive's end to the torn one (x, its soot and its glow). */
+const HULK_SIDES = 12;
+const HULK_RINGS = [
+  { x: -0.72, soot: 0.9, heat: 0 },
+  { x: -0.2, soot: 1, heat: 0 },
+  { x: 0.35, soot: 0.7, heat: 0 },
+  { x: 0.62, soot: 0.3, heat: 0.4 },
+  { x: 0.78, soot: 0.15, heat: 1 },
+];
+
+/**
+ * A fighter's hulk, of unit size (scaled to its radius): the drive and the frame it hangs in,
+ * the aft section of the hull torn off behind the cockpit. A crumpled tube of the fighter's
+ * worn paint, dented in where it was struck, its innards on the inside, the forward end torn
+ * jagged and glowing where it broke, the drive's bell flaring from the other end; it reaches
+ * about as far as the radius its collisions take.
+ */
+function hulkGeometry(r: Randomizer): THREE.BufferGeometry {
+  const shape = new Shape();
+  const [skin, innards] = shape.parts;
+  const radius = r.range(0.42, 0.5);
+  // the crumple: each face's corner pushed in or out a little, one side dented deep
+  const dent = r.range(0, Math.PI * 2);
+  const crumple = HULK_RINGS.map((ring, k) => Array.from({ length: HULK_SIDES }, (_, i) => {
+    const angle = (i / HULK_SIDES) * Math.PI * 2;
+    const toward = cos(angle - dent);
+    const dented = toward > 0.6 ? 1 - 0.35 * (toward - 0.6) * (k / (HULK_RINGS.length - 1)) * 2.5 : 1;
+    return { x: ring.x + (k === HULK_RINGS.length - 1 ? r.range(-0.14, 0.1) : r.range(-0.02, 0.02)), reach: radius * r.range(0.9, 1.06) * dented };
+  }));
+  const corner = (k: number, i: number, side: number): Corner => {
+    const angle = (i / HULK_SIDES) * Math.PI * 2;
+    const c = crumple[k][i % HULK_SIDES];
+    const reach = c.reach + (side > 0 ? 0 : -0.04);
+    const ring = HULK_RINGS[k];
+    return {
+      p: new THREE.Vector3(c.x, cos(angle) * reach, sin(angle) * reach),
+      n: new THREE.Vector3(0, cos(angle) * side, sin(angle) * side),
+      u: c.x / WRECK_TILE,
+      v: (angle * radius) / (side > 0 ? WRECK_TILE : INNARDS_TILE),
+      soot: ring.soot,
+      heat: ring.heat,
+    };
+  };
+  for (const [part, side] of [[skin, 1], [innards, -1]] as const) {
+    for (let k = 1; k < HULK_RINGS.length; k++) {
+      for (let i = 0; i < HULK_SIDES; i++) part.quad(corner(k - 1, i, side), corner(k, i, side), corner(k, i + 1, side), corner(k - 1, i + 1, side));
+    }
+  }
+  // the torn end's rim between skin and innards, glowing
+  const last = HULK_RINGS.length - 1;
+  for (let i = 0; i < HULK_SIDES; i++) {
+    const quad = [corner(last, i, 1), corner(last, i + 1, 1), corner(last, i + 1, -1), corner(last, i, -1)];
+    for (const c of quad) {
+      c.n.set(1, 0, 0);
+      c.heat = 1;
+      c.soot = 0.4;
+    }
+    skin.quad(quad[0], quad[1], quad[2], quad[3]);
+  }
+  // the drive's bell: from a throat inside the aft end, flaring out behind it, sooted from its fire
+  const throat = radius * 0.45;
+  const mouth = radius * 0.8;
+  const bell = (x: number, reach: number, i: number, inside: boolean): Corner => {
+    const angle = (i / HULK_SIDES) * Math.PI * 2;
+    const flare = atan2(mouth - throat, 0.22);
+    const side = inside ? -1 : 1;
+    return {
+      p: new THREE.Vector3(x, cos(angle) * reach, sin(angle) * reach),
+      n: new THREE.Vector3(-sin(flare) * side, cos(angle) * cos(flare) * side, sin(angle) * cos(flare) * side),
+      u: x / WRECK_TILE,
+      v: (angle * reach) / WRECK_TILE,
+      soot: inside ? 0.25 : 0.6,
+      heat: 0,
+    };
+  };
+  for (let i = 0; i < HULK_SIDES; i++) {
+    for (const inside of [false, true]) skin.quad(bell(-0.7, throat, i, inside), bell(-0.95, mouth, i, inside), bell(-0.95, mouth, i + 1, inside), bell(-0.7, throat, i + 1, inside));
+  }
+  // the aft bulkhead closing the hull round the bell's throat
+  for (let i = 0; i < HULK_SIDES; i++) {
+    const a = corner(0, i, 1);
+    const b = corner(0, i + 1, 1);
+    const ta = bell(-0.72, throat, i, false);
+    const tb = bell(-0.72, throat, i + 1, false);
+    for (const c of [a, b, ta, tb]) c.n.set(-1, 0, 0);
+    skin.quad(a, ta, tb, b);
+  }
+  // two frames across the inside, their torn ends glowing at the break
+  for (const at of [r.range(-0.4, -0.1), r.range(0.1, 0.4)]) beam(innards, 'z', at, radius * 0.85, radius * 0.2, r.range(0.08, 0.12));
+  return shape.geometry();
+}
+
 /**
  * The glow of a fresh break, only where its `heat` attribute says (the torn edges and the
  * frames' ends, fading over a thin rim of the plating): the material's emissive times the
@@ -230,8 +365,8 @@ function heated<M extends THREE.MeshStandardMaterial>(material: M): M {
 
 const gravity = new THREE.Vector3();
 const apart = new THREE.Vector3();
-const plateA = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.wreck };
-const plateB = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.wreck };
+const plateA = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
+const plateB = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
 /** Two torn plates meeting keep this share of the speed they met at: bent steel, not rubber. */
 const WRECK_RESTITUTION = 0.3;
 /** The pieces of one ship pass each other this long after it broke (s), flying apart from the same spot. */
@@ -255,6 +390,11 @@ function at(wreck: Wreck, time: number, target: THREE.Vector3): THREE.Vector3 {
 }
 const position = new THREE.Vector3();
 const velocity = new THREE.Vector3();
+const normal = new THREE.Vector3();
+const surface = new THREE.Vector3();
+const surfacePoint = new THREE.Vector3();
+const relativeVelocity = new THREE.Vector3();
+const touching = new THREE.Vector3();
 const spin = new THREE.Quaternion();
 /** The glow of a break as it cools (linear colors): orange the moment it tore, a dull red as it fades, never white. */
 const HOT = new THREE.Color(1, 0.26, 0.03);
@@ -280,7 +420,13 @@ export class Wrecks {
   readonly group = new THREE.Group();
   readonly list: Wreck[] = [];
 
-  spawn(id: string, deaths: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, now: number) {
+  /**
+   * Breaks the ship `id` (its `deaths`th clone) up at `position`, flying at `velocity`, its hit
+   * radius `shipRadius`: the hulk and the plates (see PIECES_PER_SHIP), seeded alike on every
+   * browser, flying apart slowly or, `blast` (its reactor gone critical, a warhead, a
+   * self-destruct, a nova), fast and glowing bright; their momentum together is the ship's.
+   */
+  spawn(id: string, deaths: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, now: number, blast = false) {
     const r = new Randomizer(textSeed(`${id}#${deaths}`));
     // the pieces of one ship cool down together: they share their materials
     const materials = [
@@ -288,30 +434,59 @@ export class Wrecks {
       heated(new THREE.MeshStandardMaterial({ ...surfaced(wreckInnards(), 1), emissive: HOT, vertexColors: true })),
     ];
     materials[0].userData.pieces = PIECES_PER_SHIP;
+    // a ship crushed whole tears cold, one blown apart hot
+    for (const material of materials) material.userData.heat = blast ? 1 : 0.35;
+    const [slow, fast] = blast ? BLAST_SPREAD : DRIFT_SPREAD;
+    const born: Wreck[] = [];
     for (let i = 0; i < PIECES_PER_SHIP; i++) {
-      const radius = shipRadius * r.range(0.1, 0.3);
+      const hulk = i === 0;
+      const radius = shipRadius * (hulk ? HULK_REACH : r.range(PLATE_REACH[0], PLATE_REACH[1]));
       // its shape and how it is turned from a stream of its own: how a piece looks never moves where it flies
       const look = new Randomizer(textSeed(`${id}#${deaths}.${i}`));
-      const mesh = new THREE.Mesh(pieceGeometry(look), materials);
+      const meters = radius * METERS;
+      const geometry = hulk ? hulkGeometry(look) : pieceGeometry(look, look.range(PLATE_SKIN[0], PLATE_SKIN[1]) / meters);
+      const mesh = new THREE.Mesh(geometry, materials);
       setFromEuler(mesh.quaternion, look.range(0, Math.PI * 2), look.range(0, Math.PI * 2), look.range(0, Math.PI * 2));
       mesh.scale.setScalar(radius);
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-      mesh.position.copy(position).addScaledVector(direction, shipRadius * 0.4);
+      mesh.position.copy(position).addScaledVector(direction, hulk ? 0 : shipRadius * 0.4);
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
-      this.list.push({
+      const piece: Wreck = {
         id: `${id}.${deaths}.${i}`,
         mesh,
-        velocity: direction.multiplyScalar(SPREAD_SPEED * r.range(0.3, 1)).add(velocity),
+        velocity: direction.multiplyScalar(r.range(slow, fast) * (hulk ? HULK_KICK : 1)),
         spinAxis: new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize(),
-        spinRate: r.range(0.5, 3),
+        spinRate: r.range(0.5, 3) * (hulk ? 0.2 : 1),
         radius,
+        mass: hulk ? HULK_MASS : Math.PI * meters * meters * PLATE_AREAL,
+        hulk,
+        hits: hulk ? HULK_HITS : PLATE_HITS,
         bornAt: now,
         at: mesh.position.clone(),
         steps: 0,
-      });
+      };
+      born.push(piece);
+      this.list.push(piece);
     }
+    // the kicks evened out by mass: together the pieces keep the ship's momentum
+    const mean = apart.set(0, 0, 0);
+    let mass = 0;
+    for (const piece of born) {
+      mean.addScaledVector(piece.velocity, piece.mass);
+      mass += piece.mass;
+    }
+    mean.divideScalar(mass);
+    for (const piece of born) piece.velocity.sub(mean).add(velocity);
     while (this.list.length > MAX_WRECKS) this.remove(this.list[0]);
+  }
+
+  /** A laser hit on `wreck`: whether it shatters now (a plate after PLATE_HITS, the hulk after HULK_HITS); a hit that does not shatters it shoves it a little along the beam's `direction` (unit). */
+  hit(wreck: Wreck, direction: THREE.Vector3): boolean {
+    wreck.hits--;
+    if (wreck.hits <= 0) return true;
+    wreck.velocity.addScaledVector(direction, LASER_SHOVE / wreck.mass);
+    return false;
   }
 
   update(dt: number, now: number, field: AsteroidField, solid: (position: THREE.Vector3, radius: number) => boolean = () => false) {
@@ -319,11 +494,17 @@ export class Wrecks {
     // they meet at the same moments and places whatever the frames; a long gap (a tab in the
     // background) only on its last steps
     const last = Math.floor(now / WRECK_STEP);
-    if (this.tick === null || last < this.tick || last - this.tick > MEET_STEPS) this.tick = last - 1;
+    if (this.tick === null || last < this.tick || last - this.tick > MEET_STEPS) {
+      // from the step a fresh piece was born on, so the first frame's length never skips its first steps
+      const born = this.list.reduce((first, wreck) => Math.min(first, Math.floor(wreck.bornAt / WRECK_STEP)), last - 1);
+      this.tick = Math.max(last - MEET_STEPS, born);
+    }
     for (let k = this.tick + 1; k <= last; k++) {
       const time = k * WRECK_STEP;
       for (const wreck of this.list) fly(wreck, time, field);
       this.meet(time);
+      // a piece that meets rock (or a world's ground) clangs off it slowly and crumples there fast
+      for (let i = this.list.length - 1; i >= 0; i--) if (this.onRock(this.list[i], time, field)) this.remove(this.list[i]);
     }
     this.tick = last;
     // backwards, so removing a piece does not skip the next
@@ -331,29 +512,51 @@ export class Wrecks {
       const wreck = this.list[i];
       const { mesh } = wreck;
       const age = now - wreck.bornAt;
-      fly(wreck, now, field);
+      // flown on the grid alone (see above), shown on to the frame's moment
+      fly(wreck, last * WRECK_STEP, field);
       at(wreck, now, mesh.position);
       mesh.quaternion.premultiply(setFromAxisAngle(spin, wreck.spinAxis, wreck.spinRate * dt));
       // the break cools: its glow fades and reddens
       const glow = exp(-age / GLOW_TIME);
       for (const material of mesh.material) {
         material.emissive.lerpColors(DULL, HOT, glow);
-        material.emissiveIntensity = GLOW * glow;
+        material.emissiveIntensity = GLOW * glow * (material.userData.heat ?? 1);
       }
-      // debris that hits a rock grinds to dust, and so does debris that hits the armor of what
-      // else stands in the field (the President's battleship, 900,000 times its mass: a
-      // torn plate crumples on it as on rock); debris that falls into the arena's massive body
-      // is gone, and so is debris that drifts off into the belt
-      // and so does debris that hits what `solid` says (a ring's housing, a sponsor core, a comet's head)
-      if (field.overlap(mesh.position, wreck.radius) || field.obstacle?.touches(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER || solid(mesh.position, wreck.radius)) this.remove(wreck);
+      // a piece that hits the armor of what else stands in the field (the President's
+      // battleship, millions of times its mass) crumples on it; one that falls into the
+      // arena's massive body is gone, and so is one that drifts off into the belt, and one that
+      // hits what `solid` says (a ring's housing, a sponsor core, a comet's head)
+      if (field.obstacle?.touches(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER || solid(mesh.position, wreck.radius)) this.remove(wreck);
     }
+  }
+
+  /**
+   * A piece where its flight stands at `time` (on the grid of WRECK_STEP) touching the field's
+   * rock or a world's ground: pushed out onto its surface, it clangs off it keeping
+   * WRECK_ON_ROCK of the speed it met it at (the surface's own motion counted); met at
+   * WRECK_CRUMPLE or faster, it crumples (true: it is gone).
+   */
+  private onRock(wreck: Wreck, time: number, field: AsteroidField): boolean {
+    if (wreck.bornAt > time) return false;
+    at(wreck, time, touching);
+    const rock: Asteroid | null = field.overlap(touching, wreck.radius);
+    if (!rock) return false;
+    position.copy(touching);
+    if (!field.resolve(rock, position, wreck.radius, normal)) return false;
+    field.surfaceVelocity(rock, surfacePoint.copy(position).addScaledVector(normal, -wreck.radius), surface);
+    const into = relativeVelocity.subVectors(wreck.velocity, surface).dot(normal);
+    if (-into >= WRECK_CRUMPLE) return true;
+    // out by as much as it lay in, along its flight's fixed steps
+    wreck.at.add(position.sub(touching));
+    if (into < 0) wreck.velocity.addScaledVector(normal, -(1 + WRECK_ON_ROCK) * into);
+    return false;
   }
 
   /** The last step of the grid the plates met on (see update), null before the first. */
   private tick: number | null = null;
 
   /**
-   * Two pieces of wreckage that touch bounce off each other as two bodies of the same mass
+   * Two pieces of wreckage that touch bounce off each other as two bodies of their masses
    * (see world/bodies, contact), keeping WRECK_RESTITUTION of the speed they met at: torn plates
    * clang and tumble on. The pieces of one ship fly apart from where it broke and pass each
    * other for SIBLING_SECONDS.
@@ -373,6 +576,8 @@ export class Wrecks {
         if (distance >= reach || distance < 1e-6) continue;
         if (now - Math.max(a.bornAt, b.bornAt) < SIBLING_SECONDS && a.id.slice(0, a.id.lastIndexOf('.')) === b.id.slice(0, b.id.lastIndexOf('.'))) continue;
         apart.divideScalar(distance);
+        plateA.mass = a.mass;
+        plateB.mass = b.mass;
         plateA.velocity.copy(a.velocity);
         plateB.velocity.copy(b.velocity);
         if (contact(plateA, plateB, apart, WRECK_RESTITUTION, 0) <= 0) continue;

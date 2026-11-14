@@ -6,7 +6,7 @@ import { ANNOUNCER_MOMENT } from '../music/lines';
  * the biggest the announcer. A moment itself changes no score; a streak's kills earn their
  * bonus by game/streaks, every ship's alike.
  */
-export type Moment = 'double' | 'triple' | 'multi' | 'supernova' | 'revenge' | 'torpedo' | 'interception' | 'pass' | 'lead' | 'capture' | 'sunk' | 'knockout';
+export type Moment = 'double' | 'triple' | 'multi' | 'supernova' | 'revenge' | 'torpedo' | 'interception' | 'pass' | 'lead' | 'capture' | 'sunk' | 'knockout' | 'shattered';
 
 /**
  * Each moment: its banner, how loud the crowd gets (0..1; 1 erupts), the announcer's lines (for
@@ -17,6 +17,7 @@ export const MOMENTS: Record<Moment, { banner: string; crowd: number; lines?: re
   supernova: { banner: msg('SUPERNOVA'), crowd: 1, lines: ANNOUNCER_MOMENT.supernova, rank: 9 },
   triple: { banner: msg('TRIPLE KILL'), crowd: 1, lines: ANNOUNCER_MOMENT.triple, rank: 8 },
   sunk: { banner: msg('BATTLESHIP DOWN'), crowd: 1, rank: 8 },
+  shattered: { banner: msg('COMET SHATTERED'), crowd: 1, rank: 8 },
   capture: { banner: msg('CORE CAPTURED'), crowd: 1, rank: 7 },
   revenge: { banner: msg('REVENGE'), crowd: 0.9, lines: ANNOUNCER_MOMENT.revenge, rank: 6 },
   knockout: { banner: msg('KNOCKOUT'), crowd: 0.95, lines: ANNOUNCER_MOMENT.knockout, rank: 6 },

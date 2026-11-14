@@ -236,6 +236,8 @@ class Jets extends PointCloud {
 const FIRE = new THREE.Color(0.9, 0.42, 0.12);
 const SMOKE = new THREE.Color(0.12, 0.11, 0.11);
 const VAPOR = new THREE.Color(0.35, 0.38, 0.42);
+/** The flash of an explosion in vacuum: white-hot, gone in a tenth of a second. */
+const FLASH = new THREE.Color(1, 0.85, 0.6);
 const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 /** The drive's exhaust: a faint, cool blue, added on top of whatever is behind it. */
 const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
@@ -268,8 +270,29 @@ export class Effects {
     this.jets.add(mouth, exhaust, strength);
   }
 
+  /**
+   * Whether explosions billow in air (an arena's air, under a planet's cloud deck): fire and
+   * smoke that hang. In vacuum there is nothing for smoke to hang in: an explosion is a flash,
+   * a shell of hot gas that expands at once and goes clear within a fraction of a second, and
+   * sparks flying straight on, cooling.
+   */
+  inAir = false;
+
   explosion(center: THREE.Vector3, radius: number, drift: THREE.Vector3) {
     const count = Math.min(90, 24 + radius / 30);
+    if (!this.inAir) {
+      // the flash, the gas shell going clear, and hot sparks flying straight
+      this.fire.emit(center, drift, 0.12, radius * 1.4, radius * 2.6, FLASH);
+      for (let i = 0; i < count; i++) {
+        scratchVelocity.randomDirection().multiplyScalar(radius * (3 + Math.random() * 3)).add(drift);
+        this.smoke.emit(center, scratchVelocity, 0.25 + Math.random() * 0.15, radius * 0.4, radius * 1.2, VAPOR);
+      }
+      for (let i = 0; i < count * 1.5; i++) {
+        scratchVelocity.randomDirection().multiplyScalar(radius * (1 + Math.random() * 6)).add(drift);
+        this.fire.emit(center, scratchVelocity, 0.6 + Math.random() * 1.4, radius * 0.06, radius * 0.01, FIRE);
+      }
+      return;
+    }
     for (let i = 0; i < count; i++) {
       scratchVelocity.randomDirection().multiplyScalar(radius * (0.4 + Math.random() * 1.6)).add(drift);
       scratch.copy(center).addScaledVector(scratchVelocity, 0.05);

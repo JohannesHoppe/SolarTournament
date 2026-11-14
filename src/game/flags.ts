@@ -554,8 +554,9 @@ export class Flags {
 
   /**
    * A core that touches a ship bounces off it (CORE_RESTITUTION), both taking their shares of
-   * the bump by their masses (see world/bodies); the ship on the browser that runs it. A bump
-   * only shoves: it harms neither the ship nor the core.
+   * the bump by their masses (see world/bodies); the ship on the browser that runs it, which
+   * hears of the bump's closing speed (see struck): it hurts the ship as any body of the core's
+   * mass would (see ship/impact, feltBlow). The armored canister itself takes no harm.
    */
   private bump(core: Core, ships: readonly Flier[]) {
     for (const ship of ships) {
@@ -569,9 +570,13 @@ export class Flags {
       const toCore = share(core.mass, ship.body.mass);
       core.position.addScaledVector(apart, (reach - distance) * toCore);
       if (local) ship.flight.position.addScaledVector(apart, -(reach - distance) * (1 - toCore));
-      bump(core, ship.body, apart, CORE_RESTITUTION, true, local);
+      const closing = bump(core, ship.body, apart, CORE_RESTITUTION, true, local);
+      if (local && closing > 0) this.struck(ship, closing, core.mass);
     }
   }
+
+  /** A ship this browser runs bumped a core at `closing` (units/s), the core of `mass` (kg): the game hurts it (see bump). */
+  struck: (ship: Flier, closing: number, mass: number) => void = () => {};
 
   /** A core touching rock or a base's ring is pushed out onto its surface, and its velocity bounces off it (CORE_RESTITUTION). */
   private collide(position: THREE.Vector3, velocity: THREE.Vector3) {

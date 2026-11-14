@@ -15,7 +15,7 @@ import { PSYCHE_FALL } from '../world/yard';
 import { cushion } from '../world/hover';
 import { CALLISTO_FALL } from '../world/callisto';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
-import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
+import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
@@ -25,7 +25,7 @@ import { COMET_WARNING } from '../game/comet';
 import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
-import { ASTEROID_POINTS, CRUMBLE_AFTER } from '../world/asteroids';
+import { CRUMBLE_AFTER } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
 import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
@@ -130,6 +130,7 @@ export const FROM_CODE: Record<string, number> = {
   fling: FLING_CREDIT,
   hookRange: km(HOOK_RANGE),
   hookPull: g(HOOK_PULL),
+  cableBreak: g(CABLE_BREAK),
   hookReady: HOOK_RECHARGE,
   shipMass: MASS.ship / 1000,
   probeEvery: PROBE_EVERY,
@@ -187,9 +188,6 @@ export const FROM_CODE: Record<string, number> = {
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
-  rock1: ASTEROID_POINTS[0],
-  rock2: ASTEROID_POINTS[1],
-  rock3: ASTEROID_POINTS[2],
   // Jupiter's air (see world/air): what the eye sees just under the deck, a kilometer and two
   // kilometers down (rounded to 10 m); its drag at the deck at the limit; where the limit starts
   // to heat the hull (to 100 m), and what is safe a kilometer and two kilometers down
@@ -282,8 +280,9 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },
   shoveSpeed: { value: 39, readme: 'flies off at about # m/s' },
-  ramNose: { value: 30, readme: 'on the armored nose # % of the blow' },
-  ramFlank: { value: 50, readme: 'on a flank # %' },
+  ramNose: { value: 70, readme: 'on the armored nose # % of the blow' },
+  ramFlank: { value: 100, readme: 'on a flank # %' },
+  ramDrive: { value: 130, readme: 'into the open drive # %' },
   plume: { value: 1000, readme: 'a hundredth at a kilometer' },
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },

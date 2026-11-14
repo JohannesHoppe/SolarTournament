@@ -5,6 +5,9 @@ import { host } from './jobhost';
 import { BEHAVIORS } from './jobbehaviors';
 import { Randomizer, textSeed } from '../random';
 
+/** How long the warm-up world may take to build (ms): seconds alone, far longer with six shards and other work on the machine. */
+const WARM_UP = 300000;
+
 /**
  * The campaign's jobs flown by a simulated Host of middling skill (see jobhost), drill by drill,
  * through the drills' own code (see jobs.ts): what a Host is asked to fly, a middling bot must
@@ -54,8 +57,8 @@ export const OUTMATCHED: Readonly<Record<string, string>> = {
   theHunter: 'Perihelion (0.7) and two escorts (0.5), two pressing at once: won or lost as the run’s chance falls, lost in the whole run',
   // bounties: the face and its escorts at once (the other 46 are won)
   // the face and its escorts, two pressing at once, are won or lost as the run's chance falls: a
-  // change anywhere shifts which of them the whole run loses (these five lost, others won)
-  ...Object.fromEntries(['bounty:occator:1', 'bounty:occator:3', 'bounty:io:2', 'bounty:iapetus:3', 'bounty:ballroom:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
+  // change anywhere shifts which of them the whole run loses (these three lost, others won)
+  ...Object.fromEntries(['bounty:rheasilvia:2', 'bounty:lantern:3', 'bounty:ballroom:3'].map((id) => [id, 'the face and its escorts, two pressing at once: won or lost as the run’s chance falls, lost in the whole run'])),
   'bounty:rheasilvia:1': 'the face (0.45) and an escort with the cutter (400 m)',
   'bounty:rheasilvia:3': 'the face (0.65) and three escorts with the cutter (400 m)',
   'bounty:titan:2': 'the face (0.55) and two escorts in Titan’s haze',
@@ -121,10 +124,11 @@ export function flyJobs(from: number, to: number) {
     // a world built once before any job fills what the game builds on first use (the rock shapes of
     // a detail, ...): three.js names every object it makes with Math.random, so a job flown first,
     // or alone (JOB), would otherwise draw other dice than the same job flown after others
+    // (building it bakes the shapes' meshes: on a busy machine far longer than a hook's default 10 s, WARM_UP)
     beforeAll(() => {
       const first = MISSIONS[0];
       new JobWorld(first, campaignFor(first), host(BEHAVIORS[first.id]));
-    });
+    }, WARM_UP);
     beforeEach(() => {
       vi.spyOn(Math, 'random').mockImplementation(() => random.nextFloat());
     });

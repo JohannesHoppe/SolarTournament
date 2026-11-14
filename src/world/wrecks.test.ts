@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Wrecks } from './wrecks';
 import { ARENAS } from './arenas';
 import { testField } from '../test/field';
+import { MASS } from './bodies';
 
 describe('wreckage', () => {
   it('breaks into the same pieces on every browser and travels to a browser that joins', () => {
@@ -44,6 +45,65 @@ describe('wreckage', () => {
       }
       expect(turned).toBe(0);
     }
+  });
+
+  it('weighs what it is: a hulk and plates by their area, never more than the ship, keeping its momentum', () => {
+    for (const blast of [false, true]) {
+      for (let deaths = 0; deaths < 20; deaths++) {
+        const wrecks = new Wrecks();
+        const velocity = new THREE.Vector3(3000, -400, 200);
+        wrecks.spawn('p:abc', deaths, new THREE.Vector3(), velocity, 350, 0, blast);
+        const [hulk, ...plates] = wrecks.list;
+        expect(hulk.hulk).toBe(true);
+        expect(hulk.mass).toBe(24_000);
+        for (const plate of plates) {
+          expect(plate.hulk).toBe(false);
+          // a plate of 1.7 to 3.5 m radius at 200 kg/m²: 1.8 to 7.7 t
+          expect(plate.mass).toBeGreaterThan(1_500);
+          expect(plate.mass).toBeLessThan(8_000);
+        }
+        const mass = wrecks.list.reduce((sum, piece) => sum + piece.mass, 0);
+        expect(mass).toBeLessThan(MASS.ship);
+        // their momentum together is the ship's at its death
+        const momentum = wrecks.list.reduce((sum, piece) => sum.addScaledVector(piece.velocity, piece.mass), new THREE.Vector3());
+        expect(momentum.distanceTo(velocity.clone().multiplyScalar(mass))).toBeLessThan(1e-6 * mass * velocity.length());
+        // a ship crushed whole drifts apart slowly, one blown apart fast
+        const fastest = Math.max(...plates.map((plate) => plate.velocity.distanceTo(velocity)));
+        if (blast) expect(fastest).toBeGreaterThan(300);
+        else expect(fastest).toBeLessThan(250);
+      }
+    }
+  });
+
+  it('clangs off rock slowly and crumples on it fast', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const rock = [...field.asteroids.values()].find((piece) => !piece.ground)!;
+    const meet = (speed: number) => {
+      const wrecks = new Wrecks();
+      const from = rock.object.position.clone().add(new THREE.Vector3(rock.radius + 600, 0, 0));
+      wrecks.spawn('p:abc', 1, from, new THREE.Vector3(-speed, 0, 0), 350, 0);
+      for (let now = 1 / 60; now < 8; now += 1 / 60) wrecks.update(1 / 60, now, field);
+      return wrecks;
+    };
+    // at 5 m/s the pieces that reach it bounce off and fly on; at 60 m/s they are gone on it
+    const slow = meet(100);
+    expect(slow.list.length).toBe(5);
+    expect(slow.list.some((piece) => piece.velocity.x > 0)).toBe(true);
+    expect(meet(1200).list.length).toBeLessThan(5);
+  });
+
+  it('takes laser hits: a plate shatters on its second, the hulk on its sixth, a hit short of that shoves it', () => {
+    const wrecks = new Wrecks();
+    wrecks.spawn('p:abc', 1, new THREE.Vector3(), new THREE.Vector3(), 350, 0);
+    const [hulk, plate] = wrecks.list;
+    const along = new THREE.Vector3(1, 0, 0);
+    const before = plate.velocity.x;
+    expect(wrecks.hit(plate, along)).toBe(false);
+    expect(plate.velocity.x).toBeGreaterThan(before);
+    expect(wrecks.hit(plate, along)).toBe(true);
+    for (let i = 0; i < 5; i++) expect(wrecks.hit(hulk, along)).toBe(false);
+    expect(wrecks.hit(hulk, along)).toBe(true);
   });
 
   it('flies the same path at any frame rate, falling towards a massive body', () => {

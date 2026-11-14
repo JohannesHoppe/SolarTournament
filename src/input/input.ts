@@ -27,7 +27,7 @@ type ActionHandler = (action: Action) => void;
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
-export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo' | 'decoy' | 'selfDestruct';
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo' | 'decoy' | 'selfDestruct' | 'charge';
 
 /**
  * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
@@ -51,6 +51,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     torpedo: ['G'],
     decoy: ['Z'],
     selfDestruct: ['B'],
+    charge: ['K'],
   },
   gamepad: {
     turn: [msg('Left stick')],
@@ -68,6 +69,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     torpedo: [msg('D-pad up')],
     decoy: [msg('D-pad right')],
     selfDestruct: [msg('D-pad left')],
+    charge: [msg('D-pad left')],
   },
   touch: {
     turn: [msg('Left stick')],
@@ -85,6 +87,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     torpedo: [msg('TORPEDO')],
     decoy: [msg('DECOY')],
     selfDestruct: [msg('SELF-DESTRUCT')],
+    charge: [msg('CHARGE')],
   },
 };
 
@@ -278,6 +281,15 @@ export class Input {
   /** The self-destruct's button is held: B, the D-pad left, or SELF-DESTRUCT on touch; held long enough, it goes off (see Game.selfDestructOwn). */
   get selfDestructing(): boolean {
     return this.keys.has('KeyB') || this.touch.selfDestruct || this.padHeld(PAD.left);
+  }
+
+  /**
+   * The mining charge's button is held: K, the D-pad left, or CHARGE on touch; held close to a
+   * rock it sets one (see Game.mineOwn). Charges are carried only in the campaign's mining jobs,
+   * where the self-destruct never is, so the D-pad left serves both.
+   */
+  get charging(): boolean {
+    return this.keys.has('KeyK') || this.touch.charge || this.padHeld(PAD.left);
   }
 
   /** A button of the gamepad (standard layout) is held. */

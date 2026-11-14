@@ -10,7 +10,7 @@ import type { FractureSet } from './fracture';
 import type { Branch } from './crack';
 import { massOf } from './bodies';
 import type { JunkBuild } from './junk';
-import { cbrt, cos, hypot, sin } from '../detmath';
+import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
@@ -20,7 +20,7 @@ export const SPIN_RATE = 0.04;
 /** The fragments of a piece that breaks into smaller copies of whole shapes (the junk of the Satellite Junkyard) are this much smaller than their parent; rock and ice split into pieces of themselves instead (see world/fracture). */
 const FRAGMENT_SCALE = 0.55;
 /** A rock breaks twice at most: rock, fragments, and their fragments, which are gone when they break. */
-const MAX_GENERATION = 2;
+export const MAX_GENERATION = 2;
 /**
  * The smallest pieces (MAX_GENERATION) crumble to dust this long after they broke off (s of
  * field time): rubble does not pile up over a round, so the field keeps track of few pieces,
@@ -30,8 +30,25 @@ const MAX_GENERATION = 2;
 export const CRUMBLE_AFTER = 90;
 /** How long a crumbled piece is still seen, shrinking into its dust (s): it collides with nothing any more. */
 export const CRUMBLE_SECONDS = 2;
-/** Speed fragments fly apart with (units/s, 7.5 m/s, 60 % to 140 % of it), on top of the parent's drift and its spin. */
+/**
+ * Speed fragments fly apart with (units/s, 60 % to 140 % of it), on top of the parent's drift
+ * and its spin: the energy a break puts into a rock is about the same whatever its size, so its
+ * pieces part slower the heavier it was, by the inverse square root of its mass. A piece of
+ * FRAGMENT_REFERENCE (20 m) flies apart at FRAGMENT_SPEED (7.5 m/s), a smaller one no faster, a
+ * 30 m one at 4 m/s; none slower than FRAGMENT_SLOWEST (3 m/s), which every rock from about 38 m
+ * up gets. The floor is the game's: a real pile of a hundred meters would part at centimeters a
+ * second, and pieces that slow lie in each other while their orbits carry them about (see
+ * world/contacts), where 3 m/s takes them clear within seconds.
+ */
 const FRAGMENT_SPEED = 150;
+const FRAGMENT_REFERENCE = 400;
+const FRAGMENT_SLOWEST = 60;
+
+/** How fast the pieces of a rock of `meanRadius` (units) fly apart (see FRAGMENT_SPEED). */
+export function fragmentSpeed(meanRadius: number): number {
+  const ratio = FRAGMENT_REFERENCE / Math.max(meanRadius, FRAGMENT_REFERENCE);
+  return Math.max(FRAGMENT_SLOWEST, FRAGMENT_SPEED * ratio * Math.sqrt(ratio));
+}
 /** How fast a piece of a broken rock tumbles besides its parent's spin: up to this share of the layout's spin, about an axis of its own. */
 const FRAGMENT_TUMBLE = 1;
 /** Rocks farther than this many of their mean radii from the camera are drawn in less detail (about 5° of the view). */
@@ -56,8 +73,13 @@ export function impostorDistance(meanRadius: number): number {
   return Math.max(meanRadius * IMPOSTOR_LEVEL, IMPOSTOR_MIN);
 }
 
-/** Points for breaking a rock, by generation: the big one is worth most, its fragments less. */
-export const ASTEROID_POINTS = [200, 120, 80];
+/**
+ * A mining charge breaks a rock up to this mean radius at once (units, 80 m): a few hundred
+ * kilograms of the Rockborn's blasting gel in a borehole crack a loose pile of rubble held
+ * together by its own weak gravity. A bigger rock takes more of them, by its volume (see
+ * AsteroidField.charge).
+ */
+export const CHARGE_CRACKS = 1600;
 /** Hit points of a solid piece (the hulk of a wreck): beyond any number of shots in a round, and never counted down. */
 const SOLID = 1000;
 /**
@@ -945,13 +967,38 @@ export class AsteroidField {
   }
 
   /**
-   * One laser hit, at a field time (by default now; online, the shooter's). Returns the
-   * asteroid when it breaks apart (its fragments are already in the field), otherwise undefined.
+   * A mining charge goes off on a rock at a field time (see game/charges): a rock up to
+   * CHARGE_CRACKS (units) across its mean radius breaks at once; a bigger one takes more charges
+   * by its volume, (meanRadius / CHARGE_CRACKS)³ of them, each wearing its strength (hitPoints)
+   * down by that share. Returns the rock when it breaks apart (its pieces already in the field),
+   * otherwise undefined. A solid piece (a hulk, a rack, a world's ground) never breaks.
    */
-  hit(id: string, at = this.clock): Asteroid | undefined {
+  charge(id: string, at = this.clock): Asteroid | undefined {
+    const asteroid = this.asteroids.get(id);
+    if (!asteroid || asteroid.ground) return undefined;
+    return this.hit(id, at, this.chargeWear(asteroid));
+  }
+
+  /** How many mining charges a rock still takes to break (see charge), 0 for one none breaks. */
+  chargesFor(asteroid: Asteroid): number {
+    if (asteroid.solid || asteroid.ground) return 0;
+    return Math.ceil(asteroid.hitPoints / this.chargeWear(asteroid));
+  }
+
+  /** What one charge wears off a rock's strength (see charge). */
+  private chargeWear(asteroid: Asteroid): number {
+    const strength = Math.round(4 + asteroid.meanRadius / (this.layout?.toughness ?? 800));
+    return Math.max(1, Math.ceil(strength / Math.max(1, Math.ceil(pow(asteroid.meanRadius / CHARGE_CRACKS, 3)))));
+  }
+
+  /**
+   * Wears `amount` off a rock's strength at a field time; returns the rock when it breaks apart
+   * (its fragments already in the field), otherwise undefined. A solid piece never breaks.
+   */
+  hit(id: string, at = this.clock, amount = 1): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid || asteroid.solid) return undefined;
-    asteroid.hitPoints--;
+    asteroid.hitPoints -= amount;
     asteroid.lastHit = Math.max(asteroid.lastHit, at);
     return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
   }
@@ -1020,7 +1067,7 @@ export class AsteroidField {
   }
 
   /**
-   * A comet (seeded `by`) shoves a solid piece at a field time: from where it stands then, it
+   * A comet (seeded `by`) shoves a piece at a field time: from where it stands then, it
    * drifts on with `kick` (units/s) added to its drift, keeps circling with its orbit, and turns
    * about `axis` at `rate` (rad/s) from its orientation then. A welded piece takes its whole
    * structure along with the same kick, without a turn: the pieces of a body turning about its
@@ -1028,7 +1075,7 @@ export class AsteroidField {
    */
   shove(id: string, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number): Asteroid | undefined {
     const struck = this.asteroids.get(id);
-    if (!struck?.solid) return undefined;
+    if (!struck) return undefined;
     for (const a of this.welded(struck)) this.push(a, at, kick, struck.weld === null ? axis : a.spinAxis, struck.weld === null ? rate : a.spinRate, by);
     return struck;
   }
@@ -1098,7 +1145,7 @@ export class AsteroidField {
     for (let i = 0; i < count; i++) {
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
       const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-      const speed = FRAGMENT_SPEED * r.range(0.6, 1.4);
+      const speed = fragmentSpeed(asteroid.meanRadius) * r.range(0.6, 1.4);
       const type = r.nextInt() % templates.length;
       // a fragment starts within the piece's own reach, so a ship close by (in its shadow, on
       // a hook) never finds itself inside a fragment of it
@@ -1138,7 +1185,7 @@ export class AsteroidField {
       const template = this.pieceTemplate(rock.kind, type, own);
       const arm = template.centroid.clone().sub(parent.centroid).multiplyScalar(s).applyQuaternion(turn);
       const away = arm.lengthSq() > 1 ? arm.clone().normalize() : new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-      const velocity = new THREE.Vector3().crossVectors(spin, arm).add(drift).addScaledVector(away, FRAGMENT_SPEED * r.range(0.6, 1.4));
+      const velocity = new THREE.Vector3().crossVectors(spin, arm).add(drift).addScaledVector(away, fragmentSpeed(rock.meanRadius) * r.range(0.6, 1.4));
       const turning = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).multiplyScalar(tumble).add(spin);
       const rate = turning.length();
       const axis = rate > 1e-9 ? turning.divideScalar(rate) : new THREE.Vector3(0, 1, 0);

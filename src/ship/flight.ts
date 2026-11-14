@@ -14,7 +14,7 @@ export const MAX_SPEED = 5000;
 /**
  * The overdrive's shove (units/s, 200 m/s): past the tournament's limit, see Game.overdrive. Rammed
  * from behind at that much faster, a drive or a flank goes down and the rammer's armored nose holds
- * (see impact's RAM_SCALE).
+ * (see impact's RAM_ZONE).
  */
 export const OVERDRIVE_PUSH = 4000;
 /** After the overdrive the main drive glows and gives no thrust for this long (s). */
@@ -41,8 +41,10 @@ export const LIFT = 2943;
 const LIFT_SINE = 0.5;
 /**
  * The flight computer trims the fins to no more lift than this (units/s², 20 g, twice the
- * thrusters): deep in a dense air the air would give far more, which no fin's hinge and no clone
- * bears; there the lift costs ever less drag for it (see INDUCED).
+ * thrusters): deep in a dense air the air would give far more, which no fin's hinge bears; there
+ * the lift costs ever less drag for it (see INDUCED). With thrusters and drive on top a carve
+ * reaches 35 to 40 g, past what a clone's gel holds (see Ship's HARSH_G): it greys out within
+ * half a second of it.
  */
 export const LIFT_MOST = 3924;
 /**
@@ -105,6 +107,10 @@ export class FlightModel {
 
   /** Acceleration from the own engines in the last update (units/s²), what the pilot feels. */
   properAcceleration = 0;
+  /** The push on the hull in the last update from its own engines, the air's lift and drag of a carve and a disturbance (`push`), in ship space (units/s²; the nose along −z): what the clone feels of the step (see Ship.felt). */
+  readonly felt = new THREE.Vector3();
+  /** Gravity's pull alone where the ship is, as the field's outside pulls were last reckoned (units/s², see world/hover's outside): the part of them the clone never feels, falling with its hull. */
+  readonly fall = new THREE.Vector3();
 
   /**
    * Advances one step. Disturbances (e.g. venting air) are given in ship space: a push in
@@ -148,6 +154,7 @@ export class FlightModel {
     else this.aero.set(0, 0, 0);
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
+    this.felt.copy(acceleration);
     acceleration.applyQuaternion(this.orientation);
     before.copy(this.velocity);
     this.velocity.addScaledVector(acceleration, dt);
@@ -164,6 +171,7 @@ export class FlightModel {
       const share = pushed > 1e-9 ? Math.min(1, this.velocity.distanceTo(before) / pushed) : 0;
       this.limited = true;
       this.properAcceleration *= share;
+      this.felt.multiplyScalar(share);
       drive *= share;
     }
     // gravity is no push of the ship's: the limit holds only against its own, so a well pulls
@@ -657,4 +665,24 @@ export function overdriveShove(flight: FlightModel, target: { readonly position:
   const drift = sideways.length();
   if (drift >= OVERDRIVE_PUSH) return out.copy(sideways).multiplyScalar(-OVERDRIVE_PUSH / drift);
   return out.copy(sideways).negate().addScaledVector(sight, Math.sqrt(OVERDRIVE_PUSH * OVERDRIVE_PUSH - drift * drift));
+}
+
+/**
+ * The overdrive's shove reaches the hull over this long (s): the reactor's dump burns through
+ * the drive at about 25 g, which a clone in its gel bears (see Ship.felt), where the shove at
+ * once would be a blow of hundreds.
+ */
+export const OVERDRIVE_SECONDS = 0.8;
+
+/**
+ * One step of `dt` of an overdrive's shove still under way: of `pending` (units/s, what is left of
+ * it), `left` seconds to go (see OVERDRIVE_SECONDS), the step's even share goes into `velocity`
+ * and comes off `pending`. Returns the seconds left after the step.
+ */
+export function overdriveStep(velocity: THREE.Vector3, pending: THREE.Vector3, left: number, dt: number): number {
+  if (left <= 0) return 0;
+  const share = Math.min(1, dt / left);
+  velocity.addScaledVector(pending, share);
+  pending.multiplyScalar(1 - share);
+  return Math.max(0, left - dt);
 }

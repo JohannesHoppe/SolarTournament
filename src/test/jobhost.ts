@@ -117,6 +117,8 @@ export interface Intent {
   brake?: boolean;
   hook?: boolean;
   selfDestruct?: boolean;
+  /** The mining charge's key held (see game/charges). */
+  charge?: boolean;
   /** Extra stick and thrusters on top of the flight (a jink: strafe). */
   strafe?: THREE.Vector3;
   /** Hands off. */
@@ -158,7 +160,7 @@ export class Pilot {
     const hook = !!intent.hook && !this.hookWas;
     this.hookWas = !!intent.hook;
     // it flies in free drift, as the bots do: the autopilot's key pressed off where a drill switched it on
-    const hands: Hands = { controls: this.hand, brake: !!intent.brake, hook, selfDestruct: !!intent.selfDestruct, torpedo: false, autopilot: false };
+    const hands: Hands = { controls: this.hand, brake: !!intent.brake, hook, selfDestruct: !!intent.selfDestruct, charge: !!intent.charge, torpedo: false, autopilot: false };
     if (intent.idle || intent.brake) return { ...hands, controls: this.ease({ ...IDLE }, world.dt) };
     // a hull of the drill's ahead on its way (Patience, the barge it escorts), soon to be struck: the brake
     const flight = this.me.flight;

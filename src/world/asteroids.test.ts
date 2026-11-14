@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS, RING_SHEET } from './arenas';
 import { ARENA_LIMIT } from './arena';
-import { CRUMBLE_AFTER, CRUMBLE_SECONDS, impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
+import { CRUMBLE_AFTER, CRUMBLE_SECONDS, fragmentSpeed, impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
 import { cbrt, cos, sin } from '../detmath';
@@ -188,12 +188,13 @@ describe('a rock that breaks', () => {
       expect(touched(field, center, points, 1.08), `${type}`).toBeLessThan(0.05);
       // a piece's mass from its share of the rock's volume: the pieces weigh what the rock did
       expect(pieces.reduce((sum, p) => sum + p.meanRadius * p.meanRadius * p.meanRadius, 0) / mass).toBeCloseTo(1, 2);
-      // they fly apart from the rock's center, at a few meters a second over what its drift and spin gave them
+      // they fly apart from the rock's center, over what its drift and spin gave them, the slower
+      // the heavier the rock was (see fragmentSpeed): 60 % to 140 % of its speed
       for (const piece of pieces) {
         const own = field.surfaceVelocity(rock, piece.object.position);
         const push = piece.velocity.clone().sub(own);
-        expect(push.length()).toBeGreaterThan(80);
-        expect(push.length()).toBeLessThan(220);
+        expect(push.length()).toBeGreaterThan(fragmentSpeed(rock.meanRadius) * 0.55);
+        expect(push.length()).toBeLessThan(fragmentSpeed(rock.meanRadius) * 1.45);
         expect(push.dot(piece.object.position.clone().sub(center))).toBeGreaterThan(0);
       }
     }
@@ -345,8 +346,19 @@ describe('collision with a box piece', () => {
   it('never breaks a solid piece', () => {
     const field = testField();
     field.generate(layout);
-    for (let i = 0; i < 2000; i++) field.hit('h0');
+    for (let i = 0; i < 2000; i++) field.charge('h0');
     expect(field.asteroids.has('h0')).toBe(true);
+  });
+});
+
+describe('the speed a rock breaks apart at', () => {
+  it("falls with the rock's size by the same energy a break puts in: 7.5 m/s for the small, never under 3 m/s", () => {
+    expect(fragmentSpeed(400)).toBe(150);
+    expect(fragmentSpeed(100)).toBe(150);
+    // half again the size: (3/2)³ the mass, the speed by its square root
+    expect(fragmentSpeed(600)).toBeCloseTo(150 / Math.sqrt(3.375), 6);
+    expect(fragmentSpeed(2200)).toBe(60);
+    expect(fragmentSpeed(7000)).toBe(60);
   });
 });
 

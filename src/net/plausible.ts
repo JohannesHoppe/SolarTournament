@@ -47,9 +47,9 @@ const TAKE_WINDOW = 5;
  * their spins, off by at most NOSE_SLACK (rad, about 6°, rounding and the steps of a frame) and
  * by what the spin changed and SPIN_KICK over the time between them. SPIN_KICK (rad/s) is what a
  * blow adds to the spin at once: a shove up to 6 rad/s, the decompression of a hit about
- * 2.4 rad/s. The spin itself grows by at most SPIN_ACCEL (rad/s²) and SPIN_KICK between two
+ * 0.5 rad/s. The spin itself grows by at most SPIN_ACCEL (rad/s²) and SPIN_KICK between two
  * states: the flight computer's thrusters reach 24 rad/s² (26 with the upgrade allowed online)
- * and escaping air spins a hull with its thrusters shot to pieces by up to about 17 rad/s².
+ * and escaping air spins a hull with its thrusters shot to pieces by up to about 3 rad/s².
  * At 15 states a second a nose may swing round some 40° more than its spin says, never half way.
  */
 const NOSE_SLACK = 0.1;

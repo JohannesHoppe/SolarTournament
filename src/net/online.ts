@@ -28,12 +28,8 @@ export interface OnlineGame {
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3): void;
   /** A beam from another peer hit a ship this browser simulates. */
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
-  /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up; `nova` when the killer's nova core did it. */
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean): void;
-  /** Another peer hit an asteroid at a field time, in an online round. */
-  remoteRock(id: string, at: number, round: number): void;
-  /** Where a rock of the running round is and how far it reaches: one in the field, or one this browser broke a moment ago; null for none. */
-  rockAt(id: string): { position: THREE.Vector3; radius: number } | null;
+  /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up; `nova` when the killer's nova core did it; `blast` when it was blown apart (see Wrecks.spawn). */
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean, blast: boolean): void;
   /** Where a part of the President's battleship is, while it is in the arena; null before it arrives, once it went down, and for a part it does not have. */
   fleetZoneAt(zone: number): THREE.Vector3 | null;
   /** The hits a nova core going off this far from a part's center (units) deals it (see Fleet.novaHit). */
@@ -80,7 +76,8 @@ export interface OnlineGame {
   /** Whether a ship is close enough to a probe to take it, as this browser sees them (true for a probe it does not have). */
   probeWithin(id: string, ship: Ship): boolean;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
-  novaBlast(holder: Ship, position: THREE.Vector3): void;
+  /** A nova goes off at field time `at` on its holder's browser: the comet's head and the rock it breaks break then (see comet breakHead, game/blasts). */
+  novaBlast(holder: Ship, position: THREE.Vector3, at: number): void;
   selfDestruct(holder: Ship, position: THREE.Vector3): void;
   remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
@@ -214,7 +211,7 @@ export class Online {
       // let one slip in, so a blocked beam is only lost, not a cheat
       if (game.field.lineOfSight(origin, ship.flight.position)) game.applyLaserHit(ship, origin, direction, gun);
     };
-    session.onDestroyed = (victim, killer, deaths, p, u, nova) => {
+    session.onDestroyed = (victim, killer, deaths, p, u, nova, blast) => {
       const ship = this.find(victim);
       // a ship dies once per clone: only a ship that is here and alive, its count of deaths going
       // up; any other report changes nothing, and credits no killer either
@@ -230,14 +227,7 @@ export class Online {
       const counted = killer !== null && gun !== null && !gun.allyOf(ship) && (credited !== null || ownerOf(killer) !== ownerOf(victim)) ? killer : null;
       this.credit(victim, counted, nova && counted !== null);
       this.plausible.died(victim, wall());
-      game.remoteDestroyed(ship, credited ? gun : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);
-    };
-    session.onRock = (id, at, round, shooter) => {
-      // a rock of the running round breaks only for a beam of the shooter that ended on it (a
-      // browser that has only just come, without the beams before, takes it on trust)
-      const rock = round === game.roundId ? game.rockAt(id) : null;
-      if (rock && !this.session.justJoined && !this.evidence.beamEnded(shooter, rock.position, rock.radius + EVIDENCE_REACH, wall())) return;
-      game.remoteRock(id, at, round);
+      game.remoteDestroyed(ship, credited ? gun : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null, blast);
     };
     session.onWreck = (id) => game.remoteWreck(id);
     session.onFleetHit = (zone, round, shooter, count, nova) => {
@@ -338,13 +328,13 @@ export class Online {
       game.remoteHook(owner, hold.rock, hold.local ? from.fromArray(hold.local) : null, target, length);
     };
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
-    session.onNova = (ship, p) => {
+    session.onNova = (ship, p, at) => {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       this.novas.set(ship, wall());
       // the evidence for the hits it counts on the battleship's parts
       this.evidence.nova(ship, from.fromArray(p), wall());
-      game.novaBlast(holder, from);
+      game.novaBlast(holder, from, at);
     };
     // a self-destruct only from a living ship, where it is; it is gear bought, which no other browser can see
     session.onSelfDestruct = (ship, p) => {
@@ -473,13 +463,9 @@ export class Online {
     if (target.owner) this.session.sendHit(target.owner, target.id, round(o), d.toArray().map((x) => +x.toFixed(5)), shooter.id);
   }
 
-  sendDestroyed(victim: Ship, killer: Ship | null, nova: boolean) {
+  sendDestroyed(victim: Ship, killer: Ship | null, nova: boolean, blast: boolean) {
     this.credit(victim.id, killer?.id ?? null, nova);
-    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity), nova);
-  }
-
-  sendRock(id: string, at: number, round: number, shooter: Ship) {
-    this.session.sendRock(id, at, round, shooter.id);
+    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity), nova, blast);
   }
 
   sendWreck(id: string) {
@@ -518,8 +504,8 @@ export class Online {
     this.session.sendSelfDestruct(ship.id, round(position));
   }
 
-  sendNova(ship: Ship, position: THREE.Vector3) {
-    this.session.sendNova(ship.id, round(position));
+  sendNova(ship: Ship, position: THREE.Vector3, at: number) {
+    this.session.sendNova(ship.id, round(position), at);
   }
 
   /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) a torpedo (by id: this browser decides where it goes off from now on) or a sponsor probe (by id: every browser reels it in on that cable), or let go (null). */

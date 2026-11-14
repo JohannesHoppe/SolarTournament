@@ -215,21 +215,23 @@ const canisterSweep: Drill = {
 };
 
 /**
- * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the cutter and fly through
+ * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the Rockborn's mining charges
+ * (FIRST_CUT_CHARGES of them, see game/charges) and fly through
  * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints from where it stood,
  * drifting away at GLINT_SPEED (units/s, 3 to 8 m/s); one is taken within GLINT_REACH (units,
  * 25 m). The marker leads to the nearest glint, else to the nearest rock.
  */
 const FIRST_CUT = 3;
+const FIRST_CUT_CHARGES = 8;
 const ORE_NEEDED = 20;
 const GLINTS_PER_ROCK = 7;
 const GLINT_SPEED = [60, 160] as const;
 const GLINT_REACH = 500;
 
-/** The glints of ore the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
-function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number) {
+/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
+function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number, count = GLINTS_PER_ROCK) {
   const r = new Randomizer(nth * 7 + 1);
-  for (let i = 0; i < GLINTS_PER_ROCK; i++) {
+  for (let i = 0; i < count; i++) {
     const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
     a.points.push(markers.glint(at, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
   }
@@ -260,10 +262,11 @@ function nearestOf(ctx: SchoolContext, points: readonly THREE.Vector3[]): THREE.
 
 const firstCut: Drill = {
   line: CAMPAIGN.firstCut,
-  keys: ['turn', 'drive', 'fire'],
+  keys: ['turn', 'drive', 'charge'],
   arena: 'boneyard',
   autopilot: true,
   enter(ctx, a) {
+    ctx.mining(FIRST_CUT_CHARGES);
     // a.count: rocks broken before the attempt, a.jinks: rocks whose glints are out, a.next: glints taken
     a.count = ctx.rocksBroken;
     a.jinks = 0;
@@ -492,12 +495,20 @@ function surveyMarkers(a: Attempt, markers: Markers) {
 
 /**
  * Cut and Haul (2.2): the claim beside a working rig (the claim without a rig nearest to one
- * with a rig, see world/mining) cut apart with the cutter, and HAUL_ORE glints of its ore flown
+ * with a rig, see world/mining) cracked with HAUL_CHARGES mining charges (see game/charges), and
+ * HAUL_ORE glints (HAUL_GLINTS a break) of its ore flown
  * through (its pieces shed them as First Cut's rocks do, see glintsOf), wherever its pieces
  * drift once it breaks. Every beam that strikes a rig or a buoy takes RIG_FINE coins off the pay;
  * it cannot fail.
  */
 const HAUL_ORE = 40;
+/**
+ * A claim's rock is rich: each break of it sheds HAUL_GLINTS glints, so the rock and its first
+ * pieces hold the haul, its smallest pieces crumbling to dust 90 s after they broke off (see
+ * world/asteroids CRUMBLE_AFTER) whether a charge reached them or not.
+ */
+const HAUL_GLINTS = 11;
+const HAUL_CHARGES = 24;
 const ORE_PAY = 35;
 const RIG_FINE = 50;
 /** The claim's rock the haul cuts in the running attempt: it and its pieces (see ofClaim). */
@@ -528,10 +539,11 @@ function haulClaim(ctx: SchoolContext): Asteroid | null {
 
 const cutAndHaul: Drill = {
   line: CAMPAIGN.cutAndHaul,
-  keys: ['turn', 'drive', 'fire'],
+  keys: ['turn', 'drive', 'charge'],
   arena: 'rheasilvia',
   autopilot: false,
   enter(ctx, a) {
+    ctx.mining(HAUL_CHARGES);
     // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
     // the claim cut before is kept while its rock or a piece of it is out there: a new attempt
     // hauls on from it, never from a claim the Host has not touched
@@ -555,7 +567,7 @@ const cutAndHaul: Drill = {
     // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
     while (a.jinks < ctx.rocksBroken - a.count) {
       a.jinks++;
-      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks);
+      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks, HAUL_GLINTS);
     }
     takeGlint(ctx, a, markers);
     ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
@@ -883,7 +895,7 @@ const pitFight: Drill = {
  * PERIHELION_BREAK (of 100) he breaks off, as he always does before his clone can die, and the
  * duel is won.
  */
-const PERIHELION_SKILL: Skills = { aim: 0.65, reflexes: 0.65, daring: 0.4 };
+const PERIHELION_SKILL: Skills = { aim: 0.6, reflexes: 0.65, daring: 0.4 };
 const PERIHELION_BREAK = 35;
 const DUEL_FIELD = point(0, -25000, 0);
 const DUEL_GONE = point(-60000, -10000, -20000);
@@ -2010,12 +2022,14 @@ function ambush(arena: ArenaId): Drill {
 
 /**
  * The mining runs (docs/campaign/STORY.md, "Side jobs on every job board"): at each place of
- * MINING_PLACES, where loose rock or ice drifts, once its first job is done: break rock and fly
+ * MINING_PLACES, where loose rock or ice drifts, once its first job is done: break rock with
+ * MINE_CHARGES mining charges (see game/charges) and fly
  * MINE_ORE glints of its ore in (they spring from what breaks, as First Cut's, see glintsOf),
  * MINE_SECONDS from the first break, before the buyer's barge leaves; the clock run out starts it
  * over.
  */
 const MINE_ORE = 12;
+const MINE_CHARGES = 12;
 const MINE_SECONDS = 90;
 /** The places with loose rock or ice near their start (measured in missions.test.ts). */
 export const MINING_PLACES: readonly ArenaId[] = ['rheasilvia', 'occator', 'ganymede', 'haumea', 'eris', 'granary'];
@@ -2025,10 +2039,11 @@ const MINE_RATINGS = 60;
 function miningRun(arena: ArenaId): Drill {
   return {
     line: CAMPAIGN.mining,
-    keys: ['turn', 'drive', 'fire'],
+    keys: ['turn', 'drive', 'charge'],
     arena,
     autopilot: false,
     enter(ctx, a) {
+      ctx.mining(MINE_CHARGES);
       // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken
       a.count = ctx.rocksBroken;
       a.jinks = 0;

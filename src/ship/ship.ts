@@ -3,10 +3,11 @@ import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, RCS_THRUST, TURN_ACCELERATION } from './flight';
 import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { showMagpie, THRUSTER_LAYOUTS } from './models';
-import { MASS, type Body } from '../world/bodies';
+import { JOLT_TIME, MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
 import { CLOG_LOSS } from '../world/air';
 import { ramDamage, type RamZone } from './impact';
+import { HULL_LENGTH } from './blow';
 import type { Controls } from '../input/input';
 import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
@@ -46,12 +47,16 @@ export const NANO_SECONDS = 20;
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
 const VENT_TIME = 2.5;
-/** Push of the escaping air right after the hit (units/s²). */
-const VENT_THRUST = 120;
-/** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. */
-const VENT_SPIN = 6;
-/** Rotation kick of the explosive decompression at the moment of the hit (rad/s). */
-const DECOMPRESSION_KICK = 1.2;
+/**
+ * Push of the escaping air right after the hit (units/s², 1 m/s²): a drive compartment's few
+ * hundred kilograms of air leaving at up to about 770 m/s give a 60 t hull about that, fading as
+ * the compartment empties (a whole hull's air on every hit would push six times as hard).
+ */
+const VENT_THRUST = 20;
+/** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. Scaled with VENT_THRUST: the same air. */
+const VENT_SPIN = 1;
+/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a 35 m hull. */
+const DECOMPRESSION_KICK = 0.25;
 /** The exit hole tears wider than the entry hole and vents more. */
 const ENTRY_HOLE = 0.4;
 const EXIT_HOLE = 1;
@@ -93,21 +98,94 @@ const LASER_COOLDOWN = 0.18;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 export const G = 9.81 / METERS_PER_UNIT;
 /**
- * The clone's body under g: above G_TOLERANCE (g) of its own engines' push it starts to grey
- * out; at the main drive's full push (13 g) it takes G_ONSET seconds to full strain, and below
- * the tolerance it recovers from full strain in G_RECOVERY seconds. Every clone alike, a Host's
- * and a bot's: a Host's screen darkens at its edges, a bot aims wider and reacts later (see
- * ship/bots).
+ * The clone's body under g, whatever pushes its hull: its own engines, the air's lift, a cable, a
+ * blow, a coil, a shove, the overdrive; never gravity, which it falls with. A clone is printed
+ * for the Games and flies in a seat of gel, and bears far more than a pilot of flesh: above
+ * G_TOLERANCE (g) it starts to grey out; at the main drive's full push (13 g) it takes G_ONSET
+ * seconds to full strain; beyond HARSH_G (a pull-up at the hardest turn still under it) its gel holds no more blood in its head, and every g
+ * beyond counts HARSH_WEIGHT times; below the tolerance it recovers from full strain in
+ * G_RECOVERY seconds. Every clone alike, a Host's and a bot's: a Host's screen darkens at its
+ * edges, a bot aims wider and reacts later (see ship/bots).
  */
 const G_TOLERANCE = 3;
 const G_ONSET = 5;
 const G_RECOVERY = 3;
+const HARSH_G = 25;
+const HARSH_WEIGHT = 4;
+/**
+ * How a push weighs on the clone by where it comes from, in the ship's frame (its nose along −z):
+ * pressed into its seat by the drive (eyeballs in), thrown against its straps by a brake
+ * (eyeballs out) or sideways, a push counts as it is; head to foot (a pull-up, a push down),
+ * where the blood leaves the head or floods it, it counts a fifth more.
+ */
+const FELT_IN = 1;
+const FELT_OUT = 1;
+const FELT_SIDE = 1;
+const FELT_UP = 1.2;
+/** How hard a push `local` on the hull (units/s², ship space) weighs on the clone, by where it comes from (see FELT_IN), in units/s². */
+export function feltLoad(local: THREE.Vector3): number {
+  return hypot(local.x * FELT_SIDE, local.y * FELT_UP, local.z * (local.z < 0 ? FELT_IN : FELT_OUT));
+}
 
-/** A clone's strain (0..1) after `dt` seconds under a push of `acceleration` (units/s²) from its own engines. */
+/** A clone's strain (0..1) after `dt` seconds under a load of `acceleration` (units/s², see feltLoad). */
 export function strainAfter(strain: number, acceleration: number, dt: number): number {
   const load = acceleration / G;
-  const next = load > G_TOLERANCE ? strain + ((load - G_TOLERANCE) / (MAIN_THRUST / G - G_TOLERANCE)) * (dt / G_ONSET) : strain - dt / G_RECOVERY;
+  const over = load - G_TOLERANCE + Math.max(0, load - HARSH_G) * (HARSH_WEIGHT - 1);
+  const next = load > G_TOLERANCE ? strain + (over / (MAIN_THRUST / G - G_TOLERANCE)) * (dt / G_ONSET) : strain - dt / G_RECOVERY;
   return THREE.MathUtils.clamp(next, 0, 1);
+}
+
+const passed = new THREE.Vector3();
+const facing = new THREE.Quaternion();
+/** Where the clone sits, ahead of the hull's middle along the nose (units, under the canopy: about 15 % of its length, see ship/models): a spin a blow sets swings it round. */
+const COCKPIT = new THREE.Vector3(0, 0, -HULL_LENGTH * 0.15);
+
+/**
+ * The clone's seat of gel: what it passes on to the clone of a hull's step. Every push on the
+ * hull but gravity's, which the clone falls with: its engines' and the air's (the flight model's
+ * `felt`), the other outside pulls (the hover field, the air's drag), and whatever changed the
+ * hull's speed between its steps, from outside its engines (a cable, a blow, a coil, a shove,
+ * the dodge, the overdrive's shove), as a jolt it passes on over JOLT_TIME.
+ */
+export class Seat {
+  /** What the clone felt in the last step (units/s², ship space; see feltLoad). */
+  readonly felt = new THREE.Vector3();
+  /** The hull's velocity and spin as its last step left them (units/s, rad/s in its own axes), or null before the first. */
+  private settled: THREE.Vector3 | null = null;
+  private readonly spun = new THREE.Vector3();
+  /** Speed given to the hull from outside that the seat has not passed on yet (units/s, world space). */
+  private readonly jolt = new THREE.Vector3();
+
+  /** A new clone, or one another browser ran: nothing to pass on. */
+  reset() {
+    this.settled = null;
+    this.jolt.set(0, 0, 0);
+    this.felt.set(0, 0, 0);
+  }
+
+  /**
+   * Before a step of `dt` under the outside pulls `pulls` (units/s², gravity's among them; the
+   * flight's `fall` alone): takes what came from outside since the last, the hull's change of
+   * speed and, at the cockpit (COCKPIT), the swing of a spin a blow set (see ship/blow).
+   */
+  before(flight: FlightModel, pulls: THREE.Vector3, dt: number) {
+    if (this.settled) {
+      this.jolt.add(passed.subVectors(flight.velocity, this.settled));
+      this.jolt.add(passed.subVectors(flight.angularVelocity, this.spun).cross(COCKPIT).applyQuaternion(flight.orientation));
+    }
+    this.jolt.addScaledVector(passed.subVectors(pulls, flight.fall), dt);
+  }
+
+  /** After the step: what the clone felt in it (units/s², ship space). */
+  after(flight: FlightModel, dt: number): THREE.Vector3 {
+    (this.settled ??= new THREE.Vector3()).copy(flight.velocity);
+    this.spun.copy(flight.angularVelocity);
+    if (dt <= 0) return this.felt.set(0, 0, 0);
+    passed.copy(this.jolt).multiplyScalar(Math.min(1, dt / JOLT_TIME));
+    this.jolt.sub(passed);
+    facing.copy(flight.orientation).invert();
+    return this.felt.copy(passed.divideScalar(dt).applyQuaternion(facing)).add(flight.felt);
+  }
 }
 
 /** Ships farther away than this never show as having their nose on another (units, 3 km): the sensors' reach for a lock warning. */
@@ -365,13 +443,19 @@ export class Ship {
   /** The radiators' skin and how hot it glows, 0..1 of the laser's limit (see radiate). */
   private readonly radiators: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   private glow = 0;
-  /** The clone's g-force strain, 0..1 (see strainAfter); a coil, a dodge or the overdrive add to it at once. */
+  /** The clone's g-force strain, 0..1 (see strainAfter), from all it feels (see Seat). */
   strain = 0;
+  /** The clone's seat, which passes on to it every push on the hull but gravity's (see Seat). */
+  readonly seat = new Seat();
   /** Game time until which the main drive cools down after an overdrive. */
   private driveOfflineUntil = 0;
   /** When its overdrive can fire again (game time, s), and the drive's heat gauge of a race's boost (see ship/driveheat); kept by the browser that runs it. */
   overdriveReadyAt = 0;
   readonly driveHeat = new DriveHeat();
+  /** An overdrive's shove under way (see flight's overdriveStep): what is left of it (units/s), the seconds it still takes, and the speed it never takes the ship past (units/s; a race's boost, see Game.shove). */
+  readonly overdrivePending = new THREE.Vector3();
+  overdriveLeft = 0;
+  overdriveCap = Infinity;
   /** Shots fired, so the muzzles alternate per ship. */
   private shots = 0;
   /** The rarely changing part of the state as last sent, and when (see toState). */
@@ -618,6 +702,9 @@ export class Ship {
     this.glow = 0;
     this.overheated = false;
     this.strain = 0;
+    this.seat.reset();
+    this.overdrivePending.set(0, 0, 0);
+    this.overdriveLeft = 0;
     this.driveOfflineUntil = 0;
     this.driveHeat.reset();
     this.shovedBy = null;
@@ -804,6 +891,8 @@ export class Ship {
    * without thrust flies straight on), blended in smoothly so corrections do not jump.
    */
   updateRemote(dt: number, now: number) {
+    // its clone's body is that peer's; run here again (a bot adopted), it feels from then on
+    this.seat.reset();
     if (!this.alive) {
       if (this.engineLight) this.engineLight.intensity = 0;
       return;
@@ -862,10 +951,11 @@ export class Ship {
     this.flight.driveFactor = this.driveOffline(now) ? 0 : this.drive * this.perks.drive;
     this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
+    this.seat.before(this.flight, gravity, dt);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
     // a burning drive is loud (see silent)
     if (this.flight.throttle > SILENT_THROTTLE) this.loudAt = now;
-    this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
+    this.strain = strainAfter(this.strain, feltLoad(this.seat.after(this.flight, dt)), dt);
     this.show(dt, now);
     this.nanobots(dt, now);
 
