@@ -263,19 +263,20 @@ export function frozenUv(geometry: THREE.BufferGeometry, cell: FrozenCell): THRE
 }
 
 /**
- * The frozen dead as MakeHuman's figures (`public/assets/people/frozen-<n>.glb`, written by
- * tools/people/frozen.py): FROZEN_FIGURES kinds, each a near and a far level of one body (or a pair
- * holding on to each other) in a pose of free fall or of the cold, its textures in two atlases, the
- * opaque parts and the hair and eyebrows cut out by their alpha. The frost lies in the shader over
- * them (see frostMaterial).
+ * The frozen dead as MakeHuman's and Quaternius's figures (`public/assets/people/frozen-<n>.glb`,
+ * written by tools/people/frozen.py): FROZEN_FIGURES kinds, each one body (or a pair holding on to
+ * each other) in a pose of free fall or of the cold, its textures in two atlases, the opaque parts
+ * and the hair and eyebrows cut out by their alpha; the game draws the file's near level (its far
+ * one stays unused: beyond FROZEN_NEAR the figure built in code stands in). The frost lies in the
+ * shader over them (see frostMaterial).
  */
 export const FROZEN_FIGURES = 14;
 /** A figure's meters in world units. */
 const UNITS_PER_METER = 20;
 /**
- * The near level is drawn within FROZEN_NEAR (units, 120 m) of the camera, the far one beyond it:
- * a body 1.75 m tall is some 15 pixels high there on a picture 1080 pixels high, too small for its
- * 3,500 triangles to show.
+ * A figure is drawn whole within FROZEN_NEAR (units, 120 m) of the camera, as the low figure
+ * built in code beyond it (see world/derelict): a body 1.75 m tall is some 15 pixels high there on
+ * a picture 1080 pixels high, too small for the figure's 3,500 triangles to show.
  */
 export const FROZEN_NEAR = 2400;
 
@@ -300,10 +301,10 @@ function levelOf(scene: THREE.Object3D, name: string): FrozenLevel {
   return { geometry, maps: meshes.map((mesh) => (mesh.material as THREE.MeshStandardMaterial).map) };
 }
 
-/** Fetches the `n`th figure of the frozen dead, its near and far level. */
-export async function loadFrozen(n: number): Promise<{ near: FrozenLevel; far: FrozenLevel }> {
+/** Fetches the `n`th figure of the frozen dead, its near level. */
+export async function loadFrozen(n: number): Promise<FrozenLevel> {
   const gltf = await figureLoader.loadAsync(`${import.meta.env.BASE_URL}assets/people/frozen-${n}.glb`);
-  return { near: levelOf(gltf.scene, 'near'), far: levelOf(gltf.scene, 'far') };
+  return levelOf(gltf.scene, 'near');
 }
 
 /** A hash of a cell of the body's own space, 0..1, the frost's grain and its glints. */
@@ -314,46 +315,58 @@ const FROST_HASH = /* glsl */ `float frostHash(vec3 p) {
 }
 `;
 
-/** The frost the shader lays over a figure, and which level it draws: the vertex shader's part. */
+/** The frost the shader lays over a figure: the vertex shader's part. */
 const FROST_VERTEX = /* glsl */ `#include <project_vertex>
 #ifdef USE_INSTANCING
-  mat4 frostModel = modelMatrix * instanceMatrix;
+  vFrostNormal = normalize(mat3(modelMatrix * instanceMatrix) * objectNormal);
 #else
-  mat4 frostModel = modelMatrix;
+  vFrostNormal = normalize(mat3(modelMatrix) * objectNormal);
 #endif
-  vFrostNormal = normalize(mat3(frostModel) * objectNormal);
-  vFrostPos = position;
-  // a body nearer or farther than its level draws collapses to a point, its triangles culled
-  float frostReach = distance((frostModel * vec4(0.0, 0.0, 0.0, 1.0)).xyz, cameraPosition);
-  if (frostReach < lodFrom || frostReach >= lodTo) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`;
+  vFrostPos = position;`;
 
 /**
- * The fragment shader's part: the colors paled and greyed blue by the cold, hoarfrost whitening
- * the faces turned to where the frost grew (patchy, by the hash of the body's own place), and its
- * grains glinting towards the eye.
+ * The fragment shader's part: the colors paled and greyed blue by the cold, and hoarfrost
+ * whitening most of the body, thickest on the faces turned to where it grew (patchy, by the hash
+ * of the body's own place). Frost throws back most of the light that falls on it, so a body in
+ * the sun reads bright against black space.
  */
 const FROST_COLOR = /* glsl */ `#include <map_fragment>
-  float frost = clamp(0.25 + 0.55 * dot(normalize(vFrostNormal), vec3(0.32, 0.86, 0.4)) + 0.35 * (frostHash(floor(vFrostPos * 9.0)) - 0.5), 0.0, 1.0);
+  float frost = clamp(0.45 + 0.45 * dot(normalize(vFrostNormal), vec3(0.32, 0.86, 0.4)) + 0.35 * (frostHash(floor(vFrostPos * 9.0)) - 0.5), 0.0, 1.0);
   float frostGrey = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
-  diffuseColor.rgb = mix(diffuseColor.rgb, frostGrey * vec3(0.8, 0.9, 1.05), 0.35);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.9, 0.96), frost * 0.45);`;
-const FROST_GLINT = /* glsl */ `#include <emissivemap_fragment>
-  totalEmissiveRadiance += vec3(0.9, 0.95, 1.0) * step(0.985, frostHash(floor(vFrostPos * 140.0))) * frost * pow(max(dot(normal, normalize(vViewPosition)), 0.0), 3.0) * 1.6;`;
-
+  diffuseColor.rgb = mix(diffuseColor.rgb, frostGrey * vec3(0.8, 0.9, 1.05), 0.4);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.91, 0.96), frost * 0.7);`;
 /**
- * The material of one part of a figure's level: its texture `map` (cut out by its alpha where
- * `cut`), the frost over it, drawn only for the bodies `lod` (units, from and to) away from the
- * camera (see FROZEN_NEAR).
+ * The frost's crystals glinting: a cell of the body's own space FROST_CELL across (units, 25 cm)
+ * is a cluster of crystals with a facet turned its own way, and half of the cells mirror the sun
+ * into the eye where that facet stands halfway between the two, FROST_SPARK times as bright as
+ * the frost's own light at its peak. Only the sun's light that reaches the body glints (the
+ * direct diffuse light over the frost's own color: its irradiance, the shadows' included), so a
+ * body in the dark never does. A tumbling body's glints come and go slowly as its facets turn.
  */
-export function frostMaterial(map: THREE.Texture | null, cut: boolean, lod: readonly [number, number]): THREE.MeshStandardMaterial {
+const FROST_CELL = 5;
+const FROST_SPARK = 24;
+const FROST_GLINT = /* glsl */ `#include <lights_fragment_end>
+#if NUM_DIR_LIGHTS > 0
+  {
+    vec3 cell = floor(vFrostPos / ${FROST_CELL.toFixed(1)});
+    vec3 facet = normalize(normal + 1.2 * (vec3(frostHash(cell), frostHash(cell + 17.1), frostHash(cell + 31.7)) - 0.5));
+    vec3 halfway = normalize(directionalLights[0].direction + normalize(vViewPosition));
+    float spark = pow(max(dot(facet, halfway), 0.0), 40.0) * step(0.5, frostHash(cell + 5.3)) * frost;
+    reflectedLight.directSpecular += spark * ${FROST_SPARK.toFixed(1)} * reflectedLight.directDiffuse / max(diffuseColor.rgb, vec3(0.05));
+  }
+#endif`;
+
+/** Lays the frost over a figure's shader (see FROST_COLOR, FROST_GLINT): its own or the figure built in code. */
+export function frostShader(shader: { vertexShader: string; fragmentShader: string }) {
+  const varyings = 'varying vec3 vFrostNormal;\nvarying vec3 vFrostPos;\n';
+  shader.vertexShader = `${varyings}${shader.vertexShader.replace('#include <project_vertex>', FROST_VERTEX)}`;
+  shader.fragmentShader = `${varyings}${FROST_HASH}${shader.fragmentShader.replace('#include <map_fragment>', FROST_COLOR).replace('#include <lights_fragment_end>', FROST_GLINT)}`;
+}
+
+/** The material of one part of a figure: its texture `map` (cut out by its alpha where `cut`), the frost over it. */
+export function frostMaterial(map: THREE.Texture | null, cut: boolean): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ map, roughness: 0.75, metalness: 0, alphaTest: cut ? 0.5 : 0, side: cut ? THREE.DoubleSide : THREE.FrontSide });
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.lodFrom = { value: lod[0] };
-    shader.uniforms.lodTo = { value: lod[1] };
-    const varyings = 'varying vec3 vFrostNormal;\nvarying vec3 vFrostPos;\n';
-    shader.vertexShader = `uniform float lodFrom;\nuniform float lodTo;\n${varyings}${shader.vertexShader.replace('#include <project_vertex>', FROST_VERTEX)}`;
-    shader.fragmentShader = `${varyings}${FROST_HASH}${shader.fragmentShader.replace('#include <map_fragment>', FROST_COLOR).replace('#include <emissivemap_fragment>', FROST_GLINT)}`;
-  };
-  material.customProgramCacheKey = () => `frozen-dead-${cut}-${lod[0]}`;
+  material.onBeforeCompile = frostShader;
+  material.customProgramCacheKey = () => `frozen-dead-${cut}`;
   return material;
 }

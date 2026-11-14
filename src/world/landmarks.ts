@@ -936,8 +936,10 @@ export class Landmarks {
    * streaking along `velocity`, the motion of whoever the camera rides with (none without), as
    * fast as it goes (see GRAIN_STREAK). The ring's sheet shows as much of the ring as the
    * camera's height gives it, each face of the slab the part of the slab beyond it (see RING_THIN).
+   * The derelict's dead as the camera sees them (see Derelict.draw).
    */
   follow(camera: THREE.Camera, velocity: THREE.Vector3 | null) {
+    if (this.shown === 'derelict' && camera instanceof THREE.PerspectiveCamera) this.wreck.draw(camera);
     const height = camera.position.y - SATURN_CENTER.y;
     this.ringClear.value = ringClear(height);
     for (const [i, face] of this.ringFaces.entries()) {
