@@ -50,6 +50,8 @@ const scratch = new THREE.Vector3();
 export class Charges {
   /** Charges the clone still carries. */
   carried = 0;
+  /** Charges the job handed the clone: none outside the campaign's mining jobs. */
+  issued = 0;
   /** Charges set and not gone off yet. */
   readonly set: Charge[] = [];
   /** How long the button has been held close to a rock (s). */
@@ -58,6 +60,7 @@ export class Charges {
   /** The clone is handed `count` charges, and nothing set is left over. */
   arm(count: number) {
     this.carried = count;
+    this.issued = count;
     this.set.length = 0;
     this.held = 0;
   }

@@ -127,6 +127,6 @@ The arena a round is fought in. Everything that every browser must build alike (
 
 `shapes.test.ts` reads the texture coordinates of the junk's livery back, triangle by triangle: on every stage and fairing, outside and lining, the texture runs the way a page does as seen from the face's own side, so no stencil shows mirrored.
 
-`junk.test.ts` checks what the junk is built of and what a ship meeting it does: every kind's mass against an interceptor, a hull punched through every sheet at full speed unharmed and the momentum kept, the plug torn out once, a light satellite's bus knocked away hurting and a large one's and a stack as rock, and two browsers' junk alike after a strike, through the wire and the lead's sync of the field.
+`junk.test.ts` checks what the junk is built of and what a ship meeting it does: every kind's mass against an interceptor, a hull punched through every sheet at full speed dented by its plug's energy, never wrecked, and the momentum kept, the plug torn out once, a light satellite's bus knocked away hurting and a large one's and a stack as rock, and two browsers' junk alike after a strike, through the wire and the lead's sync of the field.
 
 `jupiter.test.ts` reads the noise of Jupiter's cloud tops back as the GPU reads it: it repeats without a seam in every channel, its noise channels center on 0.5 so they fade to their mean where mipmapped, and about a third of its cells carry a pop-up cloud, the same every time.

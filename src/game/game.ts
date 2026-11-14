@@ -1885,7 +1885,8 @@ export class Game implements OnlineGame {
   /**
    * What the controls sheet shows grey and struck through: what the ship flown now lacks (in the
    * menu, the ship picked as the hangar fits it): gear not bought, or what the campaign's hull is
-   * not fitted with yet.
+   * not fitted with yet; mining charges only in a job that hands them out, once all are set, since
+   * nowhere else can a Host have them.
    */
   private lacking(): Set<Command> {
     const me = this.state !== 'menu' ? this.me : null;
@@ -1898,7 +1899,7 @@ export class Game implements OnlineGame {
       ['torpedo', TORPEDOES + perks.torpedoes <= 0],
       ['hook', !hook],
       ['selfDestruct', !perks.selfDestruct],
-      ['charge', this.charges.carried === 0],
+      ['charge', this.charges.issued > 0 && this.charges.carried === 0],
     ];
     return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
   }
@@ -3626,6 +3627,7 @@ export class Game implements OnlineGame {
     this.cues.length = 0;
     this.torpedoes.clear();
     this.decoys.clear();
+    this.charges.arm(0);
     this.probes.reset();
     this.wrecks.clear();
     for (const ship of this.ships) {
@@ -6312,10 +6314,11 @@ export class Game implements OnlineGame {
     }
     if (!this.course) return;
     // a bot lights its drive as a Host does, by its own timing: a perfect start within the
-    // window, a stall when too early, nothing when too late
+    // window, a stall when too early, nothing when too late; with a ship of the row ahead on its
+    // nose's line it lights late on purpose, since the perfect start's shove would ram it
     for (const bot of this.bots) {
       if (bot.ship.owner !== null || !bot.ship.alive || bot === this.sparring?.bot) continue;
-      const lit = startTiming(bot.skills.reflexes, Math.random());
+      const lit = this.shipAhead(bot.ship) ? START_LATE + 1 : startTiming(bot.skills.reflexes, Math.random());
       if (lit < -START_WINDOW) this.stall(bot.ship);
       else if (lit <= START_LATE) this.perfectStart(bot.ship);
       devlog?.add({ kind: 'act', t: this.time, ship: bot.ship.name, act: 'start', detail: lit < -START_WINDOW ? 'false start' : lit <= START_LATE ? 'perfect' : 'late' });
@@ -7393,6 +7396,18 @@ export class Game implements OnlineGame {
     if (me.alive && me.perks.overdrive && this.time >= me.overdriveReadyAt) this.shove(me, this.crosshairMark());
   }
 
+  /** Whether a ship lies on `ship`'s nose's line close ahead (see BOOST_CLEAR), where a shove along the nose would ram it. */
+  private shipAhead(ship: Ship): boolean {
+    const flight = ship.flight;
+    const nose = flight.forward(forward);
+    for (const other of this.ships) {
+      if (other === ship || !other.alive) continue;
+      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
+      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return true;
+    }
+    return false;
+  }
+
   /**
    * A racing bot's boost (see wantsBoost): ready, its nose on its flight and on its line ahead,
    * the line straight for BOOST_LOOK seconds at the boost's top speed (its bends measured over
@@ -7411,11 +7426,7 @@ export class Game implements OnlineGame {
     const aligned = nose.dot(flight.velocity) > BOOST_NOSE_COS * speed && nose.dot(along) > BOOST_NOSE_COS;
     if (!aligned || !wantsBoost(bot.skills.daring, true, true, speed, ship.driveHeat.read(now))) return;
     // never into a ship on the nose's line close ahead (the grid's row in front at the start): the shove would ram it
-    for (const other of this.ships) {
-      if (other === ship || !other.alive) continue;
-      const ahead = boostHere.copy(other.flight.position).sub(flight.position).dot(nose);
-      if (ahead > 0 && ahead < BOOST_CLEAR && boostHere.addScaledVector(nose, -ahead).length() < (ship.radius + other.radius) * 2) return;
-    }
+    if (this.shipAhead(ship)) return;
     let straight = true;
     for (let at = s + BEND_SPAN; at < s + BOOST_LOOK * BOOST_CAP && straight; at += BEND_SPAN) {
       straight = bendRadius(line.clear(at - BEND_SPAN, this.field, boostHere), line.clear(at, this.field, boostAhead), line.clear(at + BEND_SPAN, this.field, boostBeyond)) >= BOOST_BEND;

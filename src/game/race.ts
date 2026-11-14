@@ -103,8 +103,14 @@ const LINE_TRIES = 32;
  */
 const GRID_BEFORE = -6000;
 const RESPAWN_PAST = GATE_RADIUS;
-/** On a track the slots stand two abreast this far apart, and the rows as far apart along the track (units, 40 m): eight ships in a canyon 140 m wide at its floor. */
+/** On a track the slots stand two abreast this far apart (units, 40 m): eight ships in a canyon 140 m wide at its floor. */
 const TRACK_SLOT = 800;
+/**
+ * And the rows this far apart along the track (units, 70 m, as on a grid in free space): a hull's
+ * hit sphere is 34 m across, so the gap between a nose and the tail ahead is as long again, and a
+ * racer quick off the start does not ram one late off it from behind.
+ */
+const TRACK_ROW = 1400;
 /**
  * On a track a clone destroyed is printed again after TRACK_RESPAWN_SECONDS (s), without a
  * sponsor break, at the last gate it passed, flying along the track at TRACK_RESPAWN_SPEED
@@ -771,14 +777,14 @@ export class Course {
    * Where a ship (re)starts that has passed `passed` gates: on the grid before the start, or
    * RESPAWN_PAST beyond the last gate passed, so the eight slots, up to 111 m from the gate's
    * axis, stay clear of its housings. On a track the slots stand two abreast along the track's
-   * line (see TRACK_SLOT), within its canyon's walls, on the way `ways` it passed that gate on.
+   * line (see TRACK_SLOT, TRACK_ROW), within its canyon's walls, on the way `ways` it passed that gate on.
    */
   startOf(passed: number, slot: number, position: THREE.Vector3, ways = 0): THREE.Vector3 {
     const gate = passed === 0 ? 0 : (passed - 1) % this.count;
     const behind = passed === 0 ? GRID_BEFORE : RESPAWN_PAST;
     if (this.track) {
       const line = this.lineOf(ways);
-      const row = Math.floor(slot / 2) * TRACK_SLOT;
+      const row = Math.floor(slot / 2) * TRACK_ROW;
       // a racer past the finish starts again short of the line's end, never beyond it
       const s = Math.min(line.gateArc(gate) + behind + (passed === 0 ? -row : row), line.length - 2);
       line.point(s, position);
