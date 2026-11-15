@@ -103,21 +103,21 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(loud.target).toBe(rival);
   });
 
-  it('runs silent on its heat sink, the heat of its laser going into it too, then vents and is found from afar again, a bot\'s ship as a Host\'s', () => {
+  it('runs silent on its heat sink, its laser keeping its heat meanwhile, then vents and is found from afar again, a bot\'s ship as a Host\'s', () => {
     const me = ship('Kessler', at(0), at(1));
     const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
     const step = 1 / 30;
     rival.loudAt = 0;
     let t = 0;
     for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
-    // silent: two shots' heat goes into the sink as the radiators would shed it, which fills it sooner
+    // silent: two shots' heat stays in the laser module, the radiators closed; the sink takes the reactor's heat alone
     rival.heat = 40;
-    const full = SILENT_AFTER + 0.5 + (MAX_HEAT - 40) / SINK_FILL;
+    const full = SILENT_AFTER + 0.5 + MAX_HEAT / SINK_FILL;
     for (; t < full - 1; t += step) rival.cool(step, t);
-    // still silent, its sink near full, the laser cool
+    // still silent, its sink near full, the laser as hot as it was
     expect(rival.silent(t)).toBe(true);
     expect(rival.sink).toBeGreaterThan(MAX_HEAT * 0.9);
-    expect(rival.heat).toBe(0);
+    expect(rival.heat).toBe(40);
     expect(rival.venting).toBe(false);
     for (; t < full + 1; t += step) rival.cool(step, t);
     // full: it vents and shows on every sensor; its laser is free
@@ -131,6 +131,7 @@ describe('bots fly by the Hosts\' rules', () => {
     for (const end = t + 6; t < end; t += step) rival.cool(step, t);
     expect(rival.venting).toBe(false);
     expect(rival.overheated).toBe(false);
+    expect(rival.heat).toBe(0);
     for (const end = t + SILENT_AFTER + 0.1; t < end; t += step) rival.cool(step, t);
     expect(rival.silent(t)).toBe(true);
   });

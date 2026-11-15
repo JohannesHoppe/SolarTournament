@@ -228,15 +228,16 @@ export const LOCK_RANGE = 60000;
  * the radar reaches 2.5 km, a lock 3 km); the eye still sees it where nothing hides it.
  *
  * It runs silent on its heat sink: its radiators close, so their warmth no longer shows, and the
- * reactor's waste heat and the laser's go into a tank of 2 t of water ice instead, which takes
- * some 1.5 GJ melting and warming to 100 °C (`sink`, in the heat gauge's units: MAX_HEAT is the
- * tank full). With the drive cold the reactor idles (the clone's link, the sensors, the life
- * support, the reactor kept hot) at a twelfth of the waste heat it makes at work (REACTOR_WASTE,
- * which the radiators shed at full, some 300 MW): SINK_FILL a second, some 25 MW, full in
- * SINK_SECONDS, sooner by what the laser's shots put in. Once it is full the ship must vent (see
- * venting): its radiators open, and it shows on every sensor again until they have drawn the
- * sink down to SINK_RESUME, three and a half seconds. Loud, they draw it down as well. The laser
- * cools as ever, into the sink or into space: its own heat never locks it here.
+ * reactor's waste heat goes into a tank of 2 t of water ice instead, which takes some 1.5 GJ
+ * melting and warming to 100 °C (`sink`, in the heat gauge's units: MAX_HEAT is the tank full).
+ * With the drive cold the reactor idles (the clone's link, the sensors, the life support, the
+ * reactor kept hot) at a twelfth of the waste heat it makes at work (REACTOR_WASTE, which the
+ * radiators shed at full, some 300 MW): SINK_FILL a second, some 25 MW, full in SINK_SECONDS.
+ * The laser module keeps its own heat in its own mass meanwhile: with the radiators closed it
+ * sheds nothing, so a gun fired hot before the silence stays hot until they open. Once the sink
+ * is full the ship must vent (see venting): its radiators open, and it shows on every sensor
+ * again until they have drawn the sink down to SINK_RESUME, three and a half seconds. Loud, they
+ * draw it down as well, beside the laser's heat.
  */
 export const SILENT_AFTER = 2;
 export const SILENT_THROTTLE = 0.05;
@@ -1008,7 +1009,7 @@ export class Ship {
       if (this.engineLight) this.engineLight.intensity = 0;
       return;
     }
-    this.heat = Math.max(0, this.heat - this.cooling * dt);
+    if (!this.silent(now)) this.heat = Math.max(0, this.heat - this.cooling * dt);
     const r = this.remote;
     const age = Math.min(now - r.at, 1);
     local.copy(r.position).addScaledVector(r.velocity, age);
@@ -1053,18 +1054,19 @@ export class Ship {
   }
 
   /**
-   * The ship's heat over a step: the laser's heat leaves it as fast as the radiators shed it,
-   * into space, or, running silent, into the heat sink, which the reactor's waste heat fills too
-   * (see SINK_SECONDS); full, the ship vents, loud until the radiators have drawn the sink down to
-   * SINK_RESUME. Loud, the radiators draw the sink down as well.
+   * The ship's heat over a step: loud, the radiators shed the laser's heat into space and draw the
+   * heat sink down; running silent, they are closed, the laser keeps its heat in its own mass and
+   * the reactor's idle waste heat fills the sink (see SINK_SECONDS); full, the ship vents, loud
+   * until the radiators have drawn the sink down to SINK_RESUME.
    */
   cool(dt: number, now: number) {
-    const shed = Math.min(this.heat, this.cooling * dt);
-    this.heat -= shed;
     if (this.silent(now)) {
-      this.sink = Math.min(MAX_HEAT, this.sink + SINK_FILL * dt + shed);
+      this.sink = Math.min(MAX_HEAT, this.sink + SINK_FILL * dt);
       if (this.sink >= MAX_HEAT) this.venting = true;
-    } else this.sink = Math.max(0, this.sink - this.cooling * dt);
+    } else {
+      this.heat = Math.max(0, this.heat - this.cooling * dt);
+      this.sink = Math.max(0, this.sink - this.cooling * dt);
+    }
     if (this.venting && this.sink <= SINK_RESUME) this.venting = false;
     if (this.venting) this.loudAt = now;
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
