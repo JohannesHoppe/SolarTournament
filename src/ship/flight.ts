@@ -3,7 +3,7 @@ import type { Controls } from '../input/input';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
 import { angleTo, setFromAxisAngle } from '../detthree';
 
-/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
+/** Display scale: one world unit is 5 cm, a ship is about 30 to 37 m long. */
 export const METERS_PER_UNIT = 0.05;
 /** Acceleration of the main drive at full thrust (units/s²): 127.5 m/s², 13 g. Hard and quick: the speed limit is two seconds away, and so is a stop. */
 export const MAIN_THRUST = 2550;

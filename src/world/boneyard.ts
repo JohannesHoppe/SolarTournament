@@ -37,7 +37,7 @@ import { tiledGround } from './groundlod';
  * field pieces of their own kind ('rack'), solid, colliding as their box.
  */
 
-/** A dead fighter in a rack: about the interceptors' size (units, 35 m long). */
+/** A dead fighter in a rack: about the interceptors' size (units, 35 m long: between the human interceptor's 30 m and the alien's 37 m). */
 const FIGHTER_LENGTH = 700;
 /** Fighters a tier of a rack holds, its tiers and how far apart (units, 15 m). */
 const SLOTS = 6;

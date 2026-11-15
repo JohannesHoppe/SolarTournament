@@ -896,7 +896,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
   }
 }
 
-/** How far before a tunnel's mouth a ship holds to listen into it (units, 60 m: clear of the face, its hull 35 m long). */
+/** How far before a tunnel's mouth a ship holds to listen into it (units, 60 m: clear of the face, its hull up to 37 m long). */
 const TUNNEL_STANDOFF = 60 * M;
 
 /** Neon graffiti of the Rockborn on a rock: a slogan in a paint of its own, sprayed across its face, glowing faintly. */

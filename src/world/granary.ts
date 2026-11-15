@@ -3,7 +3,7 @@ import { atan2, cos, sin } from '../detmath';
 import { Randomizer } from '../random';
 import { behindAll } from './horizon';
 import { iceTug } from './barge';
-import { lightCone } from './solarwall';
+import { sensorCone } from './solarwall';
 
 /**
  * Lantern and Granary (the campaign's chapter 17, see docs/campaign/), the game's own planets X
@@ -151,26 +151,28 @@ export function lantern(): { group: THREE.Group; material: THREE.ShaderMaterial 
 /** Granary's store: the ice world below, the Feeders' tugs with their sensor cones (turned each frame, see update). */
 export class GranaryScene {
   readonly group = new THREE.Group();
-  private readonly cones: THREE.Mesh[] = [];
+  private readonly cones: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>[] = [];
   private readonly aim = new THREE.Vector3();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
 
   constructor() {
     this.group.add(ball(GRANARY_AT, GRANARY_SIZE, 0xd8dce0, 0x0c0e10));
-    const cone = lightCone(SENSOR_ANGLE, SENSOR_REACH, new THREE.Color(1, 0.6, 0.25).multiplyScalar(0.14));
     for (const at of TUGS) {
       const tug = iceTug().root.clone();
       tug.position.copy(at);
       this.group.add(tug);
-      const copy = cone.clone();
-      copy.position.copy(at);
-      this.cones.push(copy);
-      this.group.add(copy);
+      const cone = sensorCone(SENSOR_ANGLE, SENSOR_REACH);
+      cone.position.copy(at);
+      this.cones.push(cone);
+      this.group.add(cone);
     }
   }
 
-  /** The cones where their sensors look at field time `time`. */
-  update(time: number) {
-    this.cones.forEach((cone, i) => cone.quaternion.setFromUnitVectors(GranaryScene.UP, sensorAim(i, time, this.aim)));
+  /** The cones where their sensors look at field time `time`, orange where one holds `pilot` (the own ship, null for none). */
+  update(time: number, pilot: THREE.Vector3 | null) {
+    this.cones.forEach((cone, i) => {
+      cone.quaternion.setFromUnitVectors(GranaryScene.UP, sensorAim(i, time, this.aim));
+      cone.material.uniforms.held.value = pilot && inCone(i, pilot, time) ? 1 : 0;
+    });
   }
 }

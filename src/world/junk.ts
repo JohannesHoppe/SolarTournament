@@ -55,7 +55,7 @@ export const STACK_DENSITY = 150;
 export const ENGINE_SHARE = 0.15;
 
 /**
- * The cross-section an interceptor punches through a sheet with (m²): a hull 35 m long, nose
+ * The cross-section an interceptor punches through a sheet with (m²): a hull 30 to 37 m long, nose
  * on, some 25 square meters of armor; the plug it tears out is that much of the sheet.
  */
 export const FRONTAL_AREA = 25;

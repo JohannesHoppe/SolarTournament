@@ -27,7 +27,7 @@ import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/r
 import { DJ_IDLE, DJ_TITLE_MAX, djFromWire, djNewRound, djSong, djStep, djTitle, djToWire, djTune, type DjState } from '../music/dj';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, TIPS } from '../music/lines';
+import { CAMPAIGN, KESH, COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_MINISTRY, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, RASK, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
@@ -421,7 +421,7 @@ const KILL_EASE = 0.1;
 const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
-const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'sun', 'flare', 'comet']);
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'ministry', 'well', 'air', 'sun', 'flare', 'comet']);
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
  * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
@@ -704,7 +704,8 @@ const STATIC_GLITCH = 0.7;
 const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
+/** `ministry`: the Ministry's charge in every hull of the Games, gone off for a ship that stayed outside the arena (see Game.keepInArena). */
+type DeathCause = 'rock' | 'wreck' | 'ministry' | 'well' | 'air' | 'sun' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | 'burnout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -2809,7 +2810,7 @@ export class Game implements OnlineGame {
    */
   private commentOnDeath(victim: Ship, killer: Ship | null, cause: DeathCause) {
     // the flight school is on no broadcast; a death the announcer has no line for goes uncommented
-    if (this.school || (!killer && cause !== 'rock' && cause !== 'comet')) return;
+    if (this.school || (!killer && cause !== 'rock' && cause !== 'comet' && cause !== 'ministry')) return;
     if (wallClock() < this.nextAnnouncement) return;
     const roll = hash(textSeed(victim.id), victim.deaths, 7);
     // a kill of the own side he never lets pass: he scolds the killer
@@ -2818,7 +2819,7 @@ export class Game implements OnlineGame {
       return;
     }
     if (roll % 10 >= 7) return;
-    const lines = cause === 'comet' ? ANNOUNCER_COMET_KILL : victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
+    const lines = cause === 'comet' ? ANNOUNCER_COMET_KILL : cause === 'ministry' ? ANNOUNCER_MINISTRY : victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
     this.announce(lines[(roll >>> 4) % lines.length], victim);
   }
 
@@ -3958,7 +3959,9 @@ export class Game implements OnlineGame {
     if (position) victim.flight.position.copy(position);
     if (velocity) victim.flight.velocity.copy(velocity);
     this.remoteBlast = blast;
-    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null, 'remote');
+    // a ship blown apart outside the arena with nobody's kill: the Ministry's charge, as its owner saw it
+    const ministry = !killer && blast && !this.venue.open && outsideArena(victim.flight.position, this.venue.bounds);
+    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : ministry ? 'ministry' : null, 'remote');
   }
 
   remoteWreck(id: string) {
@@ -4978,7 +4981,7 @@ export class Game implements OnlineGame {
     this.arena.mesh.visible = !this.venue.open;
     this.arena.shape(this.venue.bounds ?? null);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
-    this.landmarks.update(this.field.clock);
+    this.landmarks.update(this.field.clock, this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     if (this.venue.id === 'derelict') this.moveBreak();
     this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
@@ -5248,8 +5251,8 @@ export class Game implements OnlineGame {
     } else if (this.watching()) {
       this.hud.flashMessage(now, t('Out · watching {watched} · Tab: next pilot', { watched: subject === me ? t('the field') : subject.name }), 0.2);
     } else if (outside) {
-      this.hud.flashMessage(now, this.school ? t('Return to the field') : t('Return to the field — {seconds}s', { seconds: Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1) }), 0.2);
-      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
+      this.hud.flashMessage(now, this.school ? t('Return to the field') : t('Return to the field — charge in {seconds}s', { seconds: Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1) }), 0.2);
+      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(this.school ? COMPUTER.arena : COMPUTER.charge, 'urgent');
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
     } else if (this.brakePhase !== 'off' && me.alive) {
@@ -8910,7 +8913,8 @@ export class Game implements OnlineGame {
       else if (cause === 'sun') this.deathCause = t('Burned up in the sunlight');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
-      else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
+      else if (cause === 'ministry') this.deathCause = t('Blown up by the Ministry · left the field');
+      else this.deathCause = t('Crashed');
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     // a kill of the own side (friendly fire, a shove, a plume, a ram) costs the killer as much
@@ -8930,8 +8934,8 @@ export class Game implements OnlineGame {
       this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Nova kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints() + bonus}`, 'kill');
       this.kick = 2;
     }
-    // a reactor gone critical, a warhead, a self-destruct or a nova blows the ship apart; anything else breaks it up slowly (see Wrecks.spawn)
-    const blast = this.remoteBlast ?? (cause === 'self' || cause === 'nova' || cause === 'blast' || cause === 'battery' || what === 'torpedo' || victim.drive <= 1e-6);
+    // a reactor gone critical, a warhead, a self-destruct, the Ministry's charge or a nova blows the ship apart; anything else breaks it up slowly (see Wrecks.spawn)
+    const blast = this.remoteBlast ?? (cause === 'self' || cause === 'ministry' || cause === 'nova' || cause === 'blast' || cause === 'battery' || what === 'torpedo' || victim.drive <= 1e-6);
     this.remoteBlast = null;
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time, blast);
     // what the clone held flies out again, as probes for whoever gets there first
@@ -8983,7 +8987,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' || cause === 'sun' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause === 'burnout' ? t('Burnout') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : cause === 'ministry' ? t('Ministry') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -9481,9 +9485,9 @@ export class Game implements OnlineGame {
     this.airAlarm(me);
     this.hud.setFlareHeat(Math.max(this.flareGlow, this.airGlow));
     if (me.alive && me.outsideSince !== null) {
-      // the field's edge: back towards its center before the clone is lost in deep space
+      // the field's edge: back towards its center before the Ministry's charge goes off
       const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
-      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: t('OUT OF FIELD'), direction: relative.copy(flight.position).negate(), seconds: left });
+      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: this.school ? t('OUT OF FIELD') : t('OUT OF FIELD · CHARGE ARMED'), direction: relative.copy(flight.position).negate(), seconds: left });
     }
     const well = this.wellAlarm(me);
     const hullCritical = me.alive && me.hull <= HULL_CRITICAL;
@@ -10112,7 +10116,12 @@ export class Game implements OnlineGame {
     this.hud.setCrosshair(this.camera, aimPoint.copy(flight.position).addScaledVector(direction, depth));
   }
 
-  /** Space has no walls: ships that stay outside the arena for too long are lost. */
+  /**
+   * Space has no walls, so the Games keep their own: every hull of the Games carries the
+   * Ministry's charge, armed the moment it leaves the arena and set off once it has stayed out
+   * ARENA_GRACE (s), or once it reaches the belt beyond; the flight school's trainers arm it only
+   * there. It blows the ship apart, as a self-destruct does, and harms nothing around it.
+   */
   private keepInArena(ship: Ship, now: number) {
     if (!ship.alive) return;
     // a place of the campaign has no edge: space goes on, empty, as far as a ship cares to fly
@@ -10121,11 +10130,14 @@ export class Game implements OnlineGame {
       return;
     }
     ship.outsideSince ??= now;
-    // the belt beyond is scenery: a ship that reaches it before its time is up is lost there;
+    // the belt beyond is scenery: a ship that reaches it before its time is up is blown there;
     // the flight school gives its pilot all the time it takes to find back
     if ((this.school || now - ship.outsideSince < ARENA_GRACE) && ship.flight.position.length() < BELT_INNER) return;
     ship.structural(Infinity, now);
-    if (!ship.alive) this.shipDestroyed(ship, null, 'space');
+    if (!ship.alive) {
+      this.effects.explosion(ship.flight.position, ship.radius * 4, ship.flight.velocity);
+      this.shipDestroyed(ship, null, 'ministry');
+    }
   }
 
   private updateCamera(dt: number) {

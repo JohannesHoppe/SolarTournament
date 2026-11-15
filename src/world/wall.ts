@@ -69,15 +69,18 @@ const foot = new THREE.Vector3();
 const aim = new THREE.Vector3();
 const toward = new THREE.Vector3();
 
+/** Whether a point is held in searchlight `i`'s cone at field time `time`. */
+export function lightHolds(i: number, point: THREE.Vector3, time: number): boolean {
+  toward.subVectors(point, lightAt(i, foot));
+  const along = toward.dot(lightAim(i, time, aim));
+  if (along <= 0 || along > LIGHT_REACH) return false;
+  const off = toward.addScaledVector(aim, -along).length();
+  return atan2(off, along) < LIGHT_ANGLE;
+}
+
 /** Whether a point is held in a searchlight's cone at field time `time`. */
 export function inLight(point: THREE.Vector3, time: number): boolean {
-  for (let i = 0; i < LIGHTS; i++) {
-    toward.subVectors(point, lightAt(i, foot));
-    const along = toward.dot(lightAim(i, time, aim));
-    if (along <= 0 || along > LIGHT_REACH) continue;
-    const off = toward.addScaledVector(aim, -along).length();
-    if (atan2(off, along) < LIGHT_ANGLE) return true;
-  }
+  for (let i = 0; i < LIGHTS; i++) if (lightHolds(i, point, time)) return true;
   return false;
 }
 

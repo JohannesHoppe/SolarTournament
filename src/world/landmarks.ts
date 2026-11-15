@@ -972,15 +972,16 @@ export class Landmarks {
   /** Granary's store, its tugs and their sensor cones (see world/granary). */
   private readonly granary = new GranaryScene();
 
-  update(time: number) {
+  /** The landmarks at field time `time`; `pilot` is the own ship (null for none), which a searchlight's or a sensor's cone turns orange on holding. */
+  update(time: number, pilot: THREE.Vector3 | null = null) {
     for (const material of this.timed) material.uniforms.time.value = time;
     DISK_UNIFORMS.diskTime.value = time;
     this.sun.update(time);
     // a neon sign stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
     if (this.shown === 'derelict') this.wreck.update(time);
-    if (this.shown === 'wall') this.wall.update(time);
-    if (this.shown === 'granary') this.granary.update(time);
+    if (this.shown === 'wall') this.wall.update(time, pilot);
+    if (this.shown === 'granary') this.granary.update(time, pilot);
   }
 
   /**
