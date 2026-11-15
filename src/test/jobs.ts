@@ -223,6 +223,7 @@ export class JobWorld implements SchoolContext {
   dodges = 0;
   readonly brokenAt = new THREE.Vector3();
   brokenId = '';
+  brokenReach = 0;
   selfDestructing = false;
   fined = 0;
   owed = 0;
@@ -495,6 +496,7 @@ export class JobWorld implements SchoolContext {
         this.rocksBroken++;
         this.brokenAt.copy(blast.broken.object.position);
         this.brokenId = blast.broken.id;
+        this.brokenReach = blast.broken.radius;
       }
       for (const ship of [...this.ships]) {
         if (!ship.alive) continue;

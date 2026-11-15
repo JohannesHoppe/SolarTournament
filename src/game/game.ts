@@ -1450,9 +1450,10 @@ export class Game implements OnlineGame {
   private tremorUntil = -Infinity;
   /** The running mission's time trial was flown within its gold time (see campaign/campaign, gold). */
   private goldRun = false;
-  /** Where the own clone last broke a rock (the campaign's ore glints spring from it), and which piece it was. */
+  /** Where the own clone last broke a rock (the campaign's ore glints spring from it), which piece it was and how far it reached. */
   private readonly brokenAt = new THREE.Vector3();
   private brokenId = '';
+  private brokenReach = 0;
   /** The scene in person the clone stands in (see campaign/scenes), or null in the cockpit. */
   private stage: Stage | null = null;
   /** The scene in person the clone stands in, if any (its music, see SCENE_MUSIC). */
@@ -4009,6 +4010,7 @@ export class Game implements OnlineGame {
         this.rocksBroken++;
         this.brokenAt.copy(blast.broken.object.position);
         this.brokenId = blast.broken.id;
+        this.brokenReach = blast.broken.radius;
         this.burstRock(blast.broken);
         this.speaker.say(COMPUTER.asteroid);
       }
@@ -7081,6 +7083,9 @@ export class Game implements OnlineGame {
       },
       get brokenAt() {
         return game.brokenAt;
+      },
+      get brokenReach() {
+        return game.brokenReach;
       },
       get brokenId() {
         return game.brokenId;
