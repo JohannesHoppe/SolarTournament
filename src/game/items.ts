@@ -266,6 +266,13 @@ export class Probes {
     for (const kind of KINDS) this.beacons.set(kind, nearDim(new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS[kind]).multiplyScalar(2.5), toneMapped: false })));
   }
 
+  /** A probe's parts in every one of its materials, never shown, for the shaders compiled with the round's (see Game.warmShaders), so the first probe to show up does not stall a frame. */
+  samples(): THREE.Group {
+    const { body, wing } = this.parts;
+    const neons = [this.sealed, ...this.beacons.values()].map((neon) => new THREE.Mesh(body, neon));
+    return new THREE.Group().add(new THREE.Mesh(body, this.hull), new THREE.Mesh(wing, this.panels), ...neons);
+  }
+
   /** A new round: no probes, and the arena's probes count from the start. */
   reset() {
     while (this.list.length) this.remove(this.list[0]);

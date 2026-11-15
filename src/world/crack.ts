@@ -4,7 +4,8 @@ import { setFromAxisAngle } from '../detthree';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import type { Placement } from './asteroids';
-import { bump, chaosAt, CHAOS_TOP, EUROPA_RADIUS, LAND, smooth } from './europa';
+import { bump, bumpHigh, chaosAt, chaosCeiling, CHAOS_TOP, EUROPA_RADIUS, LAND, smooth } from './europa';
+import { absHigh, absLow, blendHigh, curveLow, planeHigh, planeLow, sineHigh, sineLow, type Span } from './ceiling';
 
 /**
  * Europa's Crack as a race world (a tournament's arena, see RACE_WORLDS in world/arenas): a rift
@@ -187,12 +188,120 @@ export function riftHeight(x: number, z: number): number {
   return height;
 }
 
+/** Rates of the sines along z: the rift's sway, its floor's width. */
+const SWAY_RATE = (Math.PI * 2) / RIFT_WAVE;
+const FLOOR_RATE = (Math.PI * 2) / (3.7 * KM);
+/** Below this depth (units, 5 cm) a head of the rift is taken as not cut at all by its ceiling: there the plain stands. */
+const CUT = 1;
+const span: Span = { lo: 0, hi: 0 };
+/** The least and the most of the bow's share over [z0, z1]: a falling smoothstep times a rising one, neither below zero. */
+const bowLow = (z0: number, z1: number) => smooth((BRANCH_FROM - z1) / BOW_RUN) * smooth((z0 - BRANCH_TO) / BOW_RUN);
+const bowHigh = (z0: number, z1: number) => smooth((BRANCH_FROM - z0) / BOW_RUN) * smooth((z1 - BRANCH_TO) / BOW_RUN);
+/** The least and the most of a blend of a width in [lo, hi] towards `to` by a share in [s0, s1] (a blend is linear in both, so its extremes lie on the corners). */
+const blendLow = (lo: number, hi: number, to: number, s0: number, s1: number) => Math.min(lo + (to - lo) * s0, lo + (to - lo) * s1, hi + (to - hi) * s0, hi + (to - hi) * s1);
+const blendHighest = (lo: number, hi: number, to: number, s0: number, s1: number) => Math.max(lo + (to - lo) * s0, lo + (to - lo) * s1, hi + (to - hi) * s0, hi + (to - hi) * s1);
+
+/** The least and the most of floorHalf over [z0, z1], into `out`: its sway by its sine's slope, then each narrowing as a blend by its share's range. */
+function floorRange(z0: number, z1: number, out: Span): Span {
+  let lo = FLOOR_HALF + sineLow(z0, z1, FLOOR_SWAY, FLOOR_RATE);
+  let hi = FLOOR_HALF + sineHigh(z0, z1, FLOOR_SWAY, FLOOR_RATE);
+  const narrowLo = smooth((NARROW_FROM - z1) / NARROW_EASE) * smooth((z0 - NARROW_TO) / NARROW_EASE);
+  const narrowHi = smooth((NARROW_FROM - z0) / NARROW_EASE) * smooth((z1 - NARROW_TO) / NARROW_EASE);
+  [lo, hi] = [blendLow(lo, hi, NARROW_HALF, narrowLo, narrowHi), blendHighest(lo, hi, NARROW_HALF, narrowLo, narrowHi)];
+  for (const bridge of BRIDGES) {
+    if (bridge.gorge) continue;
+    // the bump's least at the z farthest from the bridge, its most at the nearest
+    const least = bump(absHigh(z0 - bridge.z, z1 - bridge.z), BRIDGE_EASE * 2);
+    const most = bumpHigh(z0 - bridge.z, z1 - bridge.z, BRIDGE_EASE * 2);
+    [lo, hi] = [blendLow(lo, hi, BRIDGE_FLOOR, least, most), blendHighest(lo, hi, BRIDGE_FLOOR, least, most)];
+  }
+  out.lo = lo;
+  out.hi = hi;
+  return out;
+}
+
+/** The most plainHeight gives over the rectangle (see world/ceiling), term by term. */
+function plainCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  let height = LAND + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.7, 0.7, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, EUROPA_RADIUS);
+  for (const { through, c, s } of RIDGES) {
+    const lo = planeLow(x0 - through[0], z0 - through[1], x1 - through[0], z1 - through[1], c, s);
+    const hi = planeHigh(x0 - through[0], z0 - through[1], x1 - through[0], z1 - through[1], c, s);
+    height += RIDGE * (bumpHigh(lo - RIDGE_SPAN / 2, hi - RIDGE_SPAN / 2, RIDGE_HALF) + bumpHigh(lo + RIDGE_SPAN / 2, hi + RIDGE_SPAN / 2, RIDGE_HALF));
+  }
+  const gorgeLo = sineLow(z0, z1, RIFT_SWAY, SWAY_RATE);
+  const gorgeHi = sineHigh(z0, z1, RIFT_SWAY, SWAY_RATE);
+  const middleLo = gorgeLo + BOW * bowLow(z0, z1);
+  const middleHi = gorgeHi + BOW * bowHigh(z0, z1);
+  const lineLo = absLow(x0 - middleHi, x1 - middleLo);
+  const lineHi = absHigh(x0 - middleHi, x1 - middleLo);
+  const field = smooth((z1 - CHAOS_SOUTH) / 8000) * smooth((CHAOS_NORTH - z0) / 8000) * smooth((CHAOS_REACH - lineLo) / 6000);
+  if (field > 0) {
+    // a chaos under the plain lowers it: then nothing is added
+    const chaos = chaosCeiling(x0, z0, x1, z1, CHAOS_SEED);
+    if (chaos > 0) height += chaos * field * smooth((lineHi - LANE_HALF) / 2400);
+  }
+  if (z0 < BRANCH_FROM && z1 > BRANCH_TO) {
+    const bow = bowHigh(z0, z1);
+    height += MASSIF * bow * bow * smooth((MASSIF_HALF + MASSIF_EASE - absLow(x0 - gorgeHi, x1 - gorgeLo)) / MASSIF_EASE);
+  }
+  return height;
+}
+
+/**
+ * The most riftHeight gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling). The
+ * plain's ceiling bounds it everywhere. Where the rift is cut deeper than CUT all over the
+ * rectangle, the ground is the plain blended towards the rift's floor by how far up its wall a
+ * point lies, plus the loose rubble: how far up rises with the distance beyond the floor's edge,
+ * so it lies between the rises at that distance's least and most (the distance from the rift's
+ * middle by its sine's slope and its bow's range, less the floor's widest or narrowest, the jag
+ * by its noise's lattice on either side), and the blend is largest at one of those ends. Where
+ * the gorge runs all over the rectangle, its walls bound it as well.
+ */
+function riftCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const plain = plainCeiling(x0, z0, x1, z1);
+  let height = plain;
+  const depthLo = RIFT_DEPTH * Math.max(smooth((z0 - (HEAD_A - HEAD_RUN)) / HEAD_RUN), smooth((HEAD_B - z1) / HEAD_RUN) * smooth((z0 - HEAD_C) / HEAD_RUN));
+  if (depthLo > CUT) {
+    const middleLo = sineLow(z0, z1, RIFT_SWAY, SWAY_RATE) + BOW * bowLow(z0, z1);
+    const middleHi = sineHigh(z0, z1, RIFT_SWAY, SWAY_RATE) + BOW * bowHigh(z0, z1);
+    const floor = floorRange(z0, z1, span);
+    const floorLo = floor.lo;
+    const floorHi = floor.hi;
+    // the jag on either side of the middle (its noise's y is the side's)
+    const east = jag.fractalRange(z0 / 2000, z1 / 2000, 3.1, 3.1, x0 / 6000, x1 / 6000, 3, span);
+    let jagLo = east.lo;
+    let jagHi = east.hi;
+    const west = jag.fractalRange(z0 / 2000, z1 / 2000, -3.1, -3.1, x0 / 6000, x1 / 6000, 3, span);
+    jagLo = Math.min(jagLo, west.lo);
+    jagHi = Math.max(jagHi, west.hi);
+    const beyondLo = absLow(x0 - middleHi, x1 - middleLo) - floorHi + WALL_JAG * jagLo;
+    const beyondHi = absHigh(x0 - middleHi, x1 - middleLo) - floorLo + WALL_JAG * jagHi;
+    const riseLo = wallRise(beyondLo);
+    const riseHi = wallRise(beyondHi);
+    if (riseLo < 1) {
+      const floorTop = LAND - depthLo;
+      const loose =
+        (1 - riseLo) *
+        (RUBBLE * Math.max(0, rubble.fractalRange(x0 / 1500, x1 / 1500, 0.2, 0.2, z0 / 1500, z1 / 1500, 2, span).hi) +
+          EDGE_RUBBLE * Math.max(0, rubble.fractalRange(x0 / 2400, x1 / 2400, 1.7, 1.7, z0 / 2400, z1 / 2400, 2, span).hi) * smooth((beyondHi + 1200) / 600));
+      height = Math.min(plain, blendHigh(floorTop, plain, riseLo, Math.min(1, riseHi)) + loose);
+    }
+  }
+  if (z0 > BRANCH_TO && z1 < BRANCH_FROM) {
+    const gorgeLo = sineLow(z0, z1, RIFT_SWAY, SWAY_RATE);
+    const gorgeHi = sineHigh(z0, z1, RIFT_SWAY, SWAY_RATE);
+    const beyond = absHigh(x0 - gorgeHi, x1 - gorgeLo) - GORGE_HALF + WALL_JAG * 0.6 * jag.fractalRange(z0 / 1500, z1 / 1500, 9.7, 9.7, x0 / 5000, x1 / 5000, 3, span).hi;
+    height = Math.min(height, LAND - RIFT_DEPTH + Math.max(0, beyond) * 20 + RUBBLE * Math.max(0, rubble.fractalRange(x0 / 1200, x1 / 1200, 3.3, 3.3, z0 / 1200, z1 / 1200, 2, span).hi));
+  }
+  return height;
+}
+
 /** How far the race world's ground reaches from the field's middle (units): 6 km across the rift, 23 km along it, as deep under its top as the gorge needs. */
 export const CRACK_GROUND_HALF = new THREE.Vector3(3 * KM, 12000, 11.5 * KM);
 /** Its box's top: over the highest the ground gets there, a raft of the chaos on a ridge, the gorge's block. */
 const GROUND_TOP = LAND + Math.max(MASSIF, CHAOS_TOP + 2 * RIDGE) + 2 * BUMPS;
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(riftHeight, CRACK_GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(riftHeight, CRACK_GROUND_HALF, GROUND_TOP, riftCeiling);
 export const crackRelief = piece.relief;
 export const crackGroundPlacement = piece.placement;
 

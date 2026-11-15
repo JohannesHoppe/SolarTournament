@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, hypot, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { absLow, cosineLow, curveLow, distanceHigh, distanceLow, planeHigh, planeLow } from './ceiling';
 
 /**
  * Stickney on Phobos (the campaign's chapter 4, see docs/campaign/): the inner wall and floor of
@@ -63,13 +64,34 @@ export function surfaceHeight(x: number, z: number): number {
   return LAND + bowl + rim + grooves + lumps - (x * x + z * z) / (2 * PHOBOS_RADIUS);
 }
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): the bowl rises with the
+ * distance from Stickney's middle (at the farthest), the rim falls off from its crest (at the
+ * distance nearest it), the grooves sink least where the trough is least deep and the fade least
+ * far in; the bumps by their noise's lattice, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const outLo = distanceLow(x0, z0, x1, z1, STICKNEY.x, STICKNEY.z) / STICKNEY_RADIUS;
+  const outHi = distanceHigh(x0, z0, x1, z1, STICKNEY.x, STICKNEY.z) / STICKNEY_RADIUS;
+  const bowl = outHi < 1 ? -STICKNEY_DEPTH * (1 - outHi * outHi) : 0;
+  const rimOff = absLow(outLo - 1, outHi - 1) * STICKNEY_RADIUS;
+  const rim = rimOff < RIM_WIDTH ? RIM_HEIGHT * (0.5 + 0.5 * cos((Math.PI * rimOff) / RIM_WIDTH)) : 0;
+  const c = cos(GROOVE_TURN);
+  const s = sin(GROOVE_TURN);
+  const trough = 0.5 + 0.5 * cosineLow(planeLow(x0, z0, x1, z1, c, s), planeHigh(x0, z0, x1, z1, c, s), (2 * Math.PI) / GROOVE_SPACING);
+  const grooves = -GROOVE_DEPTH * trough * trough * trough * smooth((outLo - 1.15) / 0.2);
+  const lumps = BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.3, 0.3, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi;
+  return LAND + bowl + rim + grooves + lumps - curveLow(x0, z0, x1, z1, PHOBOS_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** How far the ground's solid piece reaches from the field's middle (units, 6 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(6 * KM, 2 * KM, 6 * KM);
 /** Its box's top: the ground's highest point there, the rim's crest with its bumps. */
 const GROUND_TOP = LAND + RIM_HEIGHT + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

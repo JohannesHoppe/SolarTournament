@@ -13,6 +13,7 @@ import type { JunkBuild } from './junk';
 import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { hill, hillTide, kepler, type HillFrame } from './orbits';
+import { pyramidOf, type Ceiling } from './ceiling';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -923,6 +924,8 @@ export class AsteroidField {
       ease: null,
     };
     asteroid.crumbles = this.goneAt(asteroid);
+    // a ground's ceiling is built with the field, never in the middle of a round
+    if (template.relief?.ceiling) pyramidOf(template.relief.ceiling, template.semiAxes);
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
     object.userData.scale = scale;
@@ -1873,9 +1876,10 @@ function pieceContact(asteroid: Asteroid, center: THREE.Vector3, radius: number,
  * A ground of hills and hollows on top of a box piece (a moon's surface under a place): its
  * height (in the box's own coordinates, about its center) at each point of the box's footprint,
  * never above the box's top. The piece collides as that ground: whatever lies below it within
- * the footprint is inside.
+ * the footprint is inside. A ground with a `ceiling` (see world/ceiling) is marched by its rays
+ * only where they come near it.
  */
-export type Relief = (x: number, z: number) => number;
+export type Relief = ((x: number, z: number) => number) & { ceiling?: Ceiling };
 
 /** The step for a ground's slope (units, in the box's coordinates). */
 const RELIEF_STEP = 20;
@@ -1950,7 +1954,9 @@ const RELIEF_WALL_STEPS = 14;
  * How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's
  * ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. The march
  * stops at `max` world units along the ray (a hit within it is found as without the limit), since
- * a world's ground box spans kilometers and every step samples its relief.
+ * a world's ground box spans kilometers and every step samples its relief, but where the ground
+ * has a ceiling (see world/ceiling), a step above it samples nothing: it gives the answer the
+ * sample would, so the ray stops at the same step and the same point.
  */
 const RELIEF_MARCH = 200;
 export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief, max = Infinity): number | null {
@@ -1958,13 +1964,15 @@ export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THRE
   if (enter === null) return null;
   const length = step.length();
   const through = (2 * half.length()) / length;
+  const pyramid = relief.ceiling ? pyramidOf(relief.ceiling, half) : null;
   const under = (t: number) => {
     const x = origin.x + step.x * t;
     const z = origin.z + step.z * t;
     if (Math.abs(x) > half.x || Math.abs(z) > half.z) return false;
-    // over the box's top no ground can reach: its relief is not sampled there
+    // over the box's top no ground can reach, nor over its ceiling: its relief is not sampled there
     const y = origin.y + step.y * t;
-    return y <= half.y && y <= relief(x, z);
+    if (y > half.y || (pyramid && pyramid.above(x, y, z))) return false;
+    return y <= relief(x, z);
   };
   const stride = RELIEF_MARCH / length;
   if (under(enter)) return enter;

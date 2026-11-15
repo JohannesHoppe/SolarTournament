@@ -3,7 +3,7 @@ import { cos, exp, hypot, pow, sin } from '../detmath';
 import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
+import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import type { Assets, ShipType } from '../assets';
@@ -1510,7 +1510,7 @@ export class Game implements OnlineGame {
   private shadowFrame = 0;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
-  private readonly bloom = new Bloom(new THREE.Vector2(256, 256), 0.6, 0.4, BLOOM_THRESHOLD);
+  private readonly bloom = new Bloom(this.output);
   /** The picture's quality: the rung of the ladder, the governor, the Host's choice (see view/graphics). */
   readonly graphics: Graphics;
   /**
@@ -5078,15 +5078,16 @@ export class Game implements OnlineGame {
 
   /**
    * Compiles the shaders of everything in the scene, hidden or not (a drive's plume before it
-   * burns, a probe before it shows up), and of a wreck's materials, as the scene's own pass draws
-   * them, in the background where the browser compiles in parallel: compiled at first sight, a
-   * shader stalls its frame (a drive's plume took a second in the test browser at a race's start,
-   * a wreck's tens of milliseconds at the first kill). Once an arena is entered, before its first
-   * picture. A comet hangs in the scene only while it flies (see hang), so it is hung in for this.
+   * burns), and of a wreck's, a torpedo's and a probe's materials before the first of them is
+   * there, as the scene's own pass draws them, in the background where the browser compiles in
+   * parallel: compiled at first sight, a shader stalls its frame (a drive's plume took a second in
+   * the test browser at a race's start, a wreck's tens of milliseconds at the first kill, a
+   * torpedo's or a probe's 10 to 20 ms). Once an arena is entered, before its first picture. A
+   * comet hangs in the scene only while it flies (see hang), so it is hung in for this.
    */
   private warmShaders() {
     this.shadersWarm = true;
-    const samples = this.wrecks.samples();
+    const samples = new THREE.Group().add(this.wrecks.samples(), this.torpedoes.samples(), this.probes.samples());
     const comet = this.cometView.root.parent ? null : this.cometView.root;
     this.scene.add(samples, ...(comet ? [comet] : []));
     const target = this.renderer.getRenderTarget();

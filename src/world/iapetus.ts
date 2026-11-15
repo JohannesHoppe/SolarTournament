@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { absLow, curveLow, sineHigh, sineLow } from './ceiling';
 
 /**
  * Two Faces on Iapetus (the campaign's chapter 11, see docs/campaign/): the equatorial ridge, a
@@ -70,8 +71,24 @@ export const GROUND_HALF = new THREE.Vector3(4 * KM, 16000, 4 * KM);
 /** Its box's top: over the highest the ground gets there, the crest's highest peak and its hummocks. */
 const GROUND_TOP = LAND + RIDGE_HEIGHT + PEAKS + BUMPS;
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): the ridge rises as a point
+ * lies nearer its crest's line (wandering by its sine's slope), and its height grows with how far
+ * up the flank it lies and with its peaks' noise (RIDGE_HEIGHT outweighs twice PEAKS, so it grows
+ * with the rise whatever the noise), so both at their most; the hummocks by their noise's
+ * lattice, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const rate = (Math.PI * 2) / WIND_LENGTH;
+  const off = absLow(z0 - sineHigh(x0, x1, WIND, rate), z1 - sineLow(x0, x1, WIND, rate)) / RIDGE_HALF;
+  const rise = off >= 1 ? 0 : 1 - off * off * (3 - 2 * off);
+  const ridge = rise * (RIDGE_HEIGHT + PEAKS * peaks.fractalRange(x0 / PEAK_SCALE, x1 / PEAK_SCALE, 0.7, 0.7, 0, 0, 3, span).hi * rise);
+  return LAND + ridge + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, IAPETUS_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

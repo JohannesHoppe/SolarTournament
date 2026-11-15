@@ -23,6 +23,23 @@ const WIDE_SPOT = { x: 0.27, y: 0.46, scale: 1.05 };
 const NARROW_SPOT = { x: 0.5, y: 0.2, scale: 1.5 };
 /** The same screens CSS calls wide (see style.css, the title screen). */
 export const TITLE_WIDE = '(min-width: 900px) and (min-aspect-ratio: 5/4)';
+/**
+ * Where the canvas is drawn (see Showcase.frame): an upright prism of RIM_SIDES sides round the
+ * pad's middle (drawn round a circle, so the circle lies inside it), from PAD_BOTTOM (units,
+ * under the pad's skirt) up to over the ship, out to PAD_REACH (the pad's rim 556 units out, the
+ * lamps' glows on its step reaching some 590) or the ship's reach turning above it, whichever is
+ * larger; the ship's reach taken SHIP_SLACK larger than its parts' boxes (a flame growing, a
+ * hologram's band torn sideways), and FRAME_MARGIN pixels around the prism's picture.
+ */
+const PAD_REACH = 650;
+const PAD_BOTTOM = -200;
+const SHIP_SLACK = 1.25;
+const FRAME_MARGIN = 4;
+const RIM_SIDES = 16;
+const PRISM_CORNERS = Array.from({ length: RIM_SIDES }, (_, k) => [sin((Math.PI * 2 * k) / RIM_SIDES) / cos(Math.PI / RIM_SIDES), cos((Math.PI * 2 * k) / RIM_SIDES) / cos(Math.PI / RIM_SIDES)] as const);
+/** The corners of a box, for a ship's parts (see reachOf). */
+const BOX_CORNERS = [-1, 1].flatMap((x) => [0, 1].flatMap((y) => [-1, 1].map((z) => [x, y, z] as const)));
+const cornerPoint = new THREE.Vector3();
 
 /**
  * The pad's cross-section from its middle underneath out and up over its rim to the seal (units,
@@ -103,6 +120,7 @@ export class Showcase {
   ) {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    this.renderer.setScissorTest(true);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -165,6 +183,7 @@ export class Showcase {
     this.hologram = locked ? this.hologramOf(type) : null;
     if (this.hologram) {
       this.hologram.picture.visible = true;
+      this.reach.set(0, 0);
       return;
     }
     let ship = this.ships.get(type);
@@ -178,6 +197,7 @@ export class Showcase {
     ship.outfit(perks);
     ship.root.visible = true;
     this.shown = ship;
+    this.reach.set(0, 0);
   }
 
   /** The pad's look (see Look.showcase in view/quality): pixel ratio, the floodlight's shadow, every how many frames it is drawn. */
@@ -189,6 +209,8 @@ export class Showcase {
 
   private every = 1;
   private frames = 0;
+  /** How far out from its upright axis (x) and up over its middle (y) the ship on show has reached as it turns since it was put on show (units, see reachOf): it only grows, so the drawn rectangle keeps its size while the drive's flame flickers. */
+  private readonly reach = new THREE.Vector2();
 
   /** Draws a frame at `time` (s): the ship turned a little further on its pad. */
   render(time: number) {
@@ -222,7 +244,45 @@ export class Showcase {
     this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
     this.shown?.idle(dt, 0.35);
+    if (root) this.reach.max(reachOf(root, reachNow));
+    this.frame(width, height);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Draws only where the pad and the ship above it can show: the rectangle of the canvas around
+   * a box holding them (see reach, PAD_REACH) as the camera sees it, set as the scissor. The
+   * canvas, the camera and every pixel's place stay as they are, so what is drawn is the very
+   * picture; outside the rectangle nothing is drawn, and the canvas is clear there as before.
+   */
+  private frame(width: number, height: number) {
+    // the canvas's pixels, as the renderer rounds its viewport
+    const ratio = this.renderer.getPixelRatio();
+    const across = Math.round(width * ratio);
+    const down = Math.round(height * ratio);
+    this.camera.updateMatrixWorld();
+    let left = Infinity;
+    let right = -Infinity;
+    let top = Infinity;
+    let bottom = -Infinity;
+    const out = Math.max(PAD_REACH, this.reach.x);
+    for (const [cx, cz] of PRISM_CORNERS) {
+      for (const level of [PAD_BOTTOM, HOVER + this.reach.y]) {
+        const point = cornerPoint.set(cx * out, level, cz * out).project(this.camera);
+        const x = ((point.x + 1) / 2) * across;
+        const y = ((1 - point.y) / 2) * down;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
+    }
+    left = Math.max(0, Math.min(across - 1, Math.floor(left) - FRAME_MARGIN));
+    top = Math.max(0, Math.min(down - 1, Math.floor(top) - FRAME_MARGIN));
+    right = Math.max(left + 1, Math.min(across, Math.ceil(right) + FRAME_MARGIN));
+    bottom = Math.max(top + 1, Math.min(down, Math.ceil(bottom) + FRAME_MARGIN));
+    // the renderer takes the scissor in the canvas's own size, from its bottom edge, and scales it back by its ratio
+    this.renderer.setScissor(left / ratio, (down - bottom) / ratio, (right - left) / ratio, (bottom - top) / ratio);
   }
 
   /** The lamps around the pad: a light runs around it, the others glow low (all low when motion is reduced). */
@@ -324,6 +384,32 @@ export class Showcase {
     return { pad: group, pool, lamps };
   }
 }
+
+/**
+ * How far a ship on show reaches as it turns about the upright axis through its middle, into
+ * `out`: x the farthest out from that axis (the same at every turn), y the farthest above its
+ * middle, of the corners of its visible parts' bounding boxes, taken SHIP_SLACK larger.
+ */
+function reachOf(root: THREE.Object3D, out: THREE.Vector2): THREE.Vector2 {
+  root.updateMatrixWorld(true);
+  const middle = root.getWorldPosition(reachMiddle);
+  out.set(0, 0);
+  root.traverseVisible((object) => {
+    const geometry = (object as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+    if (!geometry) return;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    const { min, max } = geometry.boundingBox!;
+    for (const corner of BOX_CORNERS) {
+      reachCorner.set(corner[0] < 0 ? min.x : max.x, corner[1] ? max.y : min.y, corner[2] < 0 ? min.z : max.z).applyMatrix4(object.matrixWorld).sub(middle);
+      out.x = Math.max(out.x, Math.sqrt(reachCorner.x * reachCorner.x + reachCorner.z * reachCorner.z) * SHIP_SLACK);
+      out.y = Math.max(out.y, reachCorner.y * SHIP_SLACK);
+    }
+  });
+  return out;
+}
+const reachMiddle = new THREE.Vector3();
+const reachNow = new THREE.Vector2();
+const reachCorner = new THREE.Vector3();
 
 /** Every mesh of a ship on show throws its shadow onto the pad. */
 function castsShadow(root: THREE.Object3D) {

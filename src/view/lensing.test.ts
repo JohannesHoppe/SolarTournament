@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Lensing, hotSpots, lensAngles } from './lensing';
+import { Lensing, hotSpots, lensAngles, lensRegion, type Region } from './lensing';
 import { HOLE_SHADOW } from '../world/landmarks';
-import { atan, cos, pow, sin, tan } from '../detmath';
+import { acos, atan, cos, hypot, pow, sin, tan } from '../detmath';
 
 const HORIZON = 7000;
 
@@ -90,5 +90,67 @@ describe("the black hole's lens", () => {
     expect(spots.spotFlare.value).toBe(0);
     hotSpots(new THREE.Vector3(0, -1, 0), spots);
     expect(spots.spotFlare.value).toBe(0);
+  });
+
+  it('runs in full wherever it moves a pixel by half a texel or more or draws its ring, glow or hot spots, and only there', () => {
+    const width = 1280;
+    const height = 720;
+    const region: Region = { x0: 0, y0: 0, x1: 1, y1: 1 };
+    const toHole = new THREE.Vector3();
+    const ray = new THREE.Vector3();
+    const across = new THREE.Vector3();
+    const source = new THREE.Vector3();
+    const here = new THREE.Vector3();
+    let partial = 0;
+    let empty = 0;
+    let whole = 0;
+    for (const distance of [12000, 30000, 68000]) {
+      for (const degrees of [0, 40, 75, 82, 86, 90, 95, 110, 140, 180]) {
+        for (const pitch of [-0.4, 0, 0.3]) {
+          const c = camera(distance, THREE.MathUtils.degToRad(degrees));
+          c.rotateX(pitch);
+          c.updateMatrixWorld();
+          const lens = new Lensing();
+          lens.pass.setSize(width, height);
+          lens.update(c, new THREE.Vector3(), HORIZON, null);
+          const { shadow, ring } = lensAngles(HORIZON, distance, THREE.MathUtils.degToRad(c.fov));
+          const bend = lens.pass.uniforms.bend.value;
+          lensRegion(c, toHole.copy(c.position).negate().normalize(), shadow, ring, bend, width, height, region);
+          const area = Math.max(0, region.x1 - region.x0) * Math.max(0, region.y1 - region.y0);
+          if (area === 0) empty++;
+          else if (area === 1) whole++;
+          else partial++;
+          // every 8th pixel: how far the bend moves it on screen (as the shader's first step finds its source), and whether a ring, glow or spot reaches it
+          for (let px = 4; px < width; px += 8) {
+            for (let py = 4; py < height; py += 8) {
+              const x = (px / width) * 2 - 1;
+              const y = (py / height) * 2 - 1;
+              ray.set(x, y, 0.5).unproject(c).sub(c.position).normalize();
+              const theta = acos(Math.min(Math.max(ray.dot(toHole), -1), 1));
+              let moved = 0;
+              if (bend > 0 && theta > 1e-6) {
+                const beta = theta - (bend * ring * ring) / theta;
+                across.copy(ray).addScaledVector(toHole, -ray.dot(toHole)).normalize();
+                source.copy(toHole).multiplyScalar(cos(beta)).addScaledVector(across, sin(beta));
+                // a source behind the camera: as far as it gets
+                if (source.dot(c.getWorldDirection(here)) <= 0) moved = Infinity;
+                else {
+                  here.copy(c.position).add(source).project(c);
+                  moved = hypot(((here.x - x) * width) / 2, ((here.y - y) * height) / 2);
+                }
+              }
+              if (moved < 0.5 && theta >= 4 * shadow) continue;
+              const u = px / width;
+              const v = py / height;
+              expect(u >= region.x0 && u <= region.x1 && v >= region.y0 && v <= region.y1, `${distance} units, ${degrees}°, pitch ${pitch}: pixel ${px}, ${py} moved ${moved.toFixed(2)} px, ${(theta / shadow).toFixed(2)} shadows out`).toBe(true);
+            }
+          }
+        }
+      }
+    }
+    // the bend reaches all of the picture with the hole ahead; beside it the region shrinks, behind the camera it is gone
+    expect(whole).toBeGreaterThan(0);
+    expect(partial).toBeGreaterThan(0);
+    expect(empty).toBeGreaterThan(0);
   });
 });
