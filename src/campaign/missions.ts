@@ -217,7 +217,7 @@ const canisterSweep: Drill = {
 /**
  * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the Rockborn's mining charges
  * (FIRST_CUT_CHARGES of them, see game/charges) and fly through
- * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints from where it stood,
+ * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints off its surface,
  * drifting away at GLINT_SPEED (units/s, 3 to 8 m/s); one is taken within GLINT_REACH (units,
  * 25 m). The marker leads to the nearest glint, else to the nearest rock.
  */
@@ -228,12 +228,14 @@ const GLINTS_PER_ROCK = 7;
 const GLINT_SPEED = [60, 160] as const;
 const GLINT_REACH = 500;
 
-/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
-function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number, count = GLINTS_PER_ROCK) {
+/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds off its surface (see SchoolContext brokenAt, brokenReach), the same every attempt, among the attempt's points. */
+function glintsOf(a: Attempt, markers: Markers, ctx: SchoolContext, nth: number, count = GLINTS_PER_ROCK) {
   const r = new Randomizer(nth * 7 + 1);
   for (let i = 0; i < count; i++) {
     const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-    a.points.push(markers.glint(at, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
+    // blown off the rock's surface, outside all of its pieces, which part only slowly
+    const from = ctx.brokenAt.clone().addScaledVector(way, ctx.brokenReach);
+    a.points.push(markers.glint(from, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
   }
 }
 
@@ -277,7 +279,7 @@ const firstCut: Drill = {
   },
   done(ctx, a, markers) {
     // a rock just broken sheds its glints, the same ones every attempt
-    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
     takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
@@ -567,7 +569,7 @@ const cutAndHaul: Drill = {
     // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
     while (a.jinks < ctx.rocksBroken - a.count) {
       a.jinks++;
-      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks, HAUL_GLINTS);
+      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx, a.jinks, HAUL_GLINTS);
     }
     takeGlint(ctx, a, markers);
     ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
@@ -2054,7 +2056,7 @@ function miningRun(arena: ArenaId): Drill {
       ctx.me.overheated = false;
     },
     done(ctx, a, markers) {
-      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
       if (a.jinks > 0 && Number.isNaN(a.clockFrom)) a.clockFrom = a.seconds;
       takeGlint(ctx, a, markers);
       return a.next >= MINE_ORE;

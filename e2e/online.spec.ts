@@ -180,7 +180,20 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     game.me.protectedUntil = 0;
     game.me.flight.position.set(0, 62000, 0);
     game.me.flight.velocity.set(0, 0, 0);
-    game.autopilot = false;
+    // the flight computer holds it there, against a planet's pull too (Jupiter's 2.5 g would drop
+    // a ship left alone a kilometer before the torpedo comes)
+    game.autopilot = true;
+    // every blow its hull takes, frame by frame: the torpedo's is one, whatever the arena's sun
+    // burns besides out of the shadows (the Corona's)
+    const blows: number[] = [];
+    let last = game.me.hull;
+    const watch = () => {
+      if (game.me.hull < last - 1) blows.push(last - game.me.hull);
+      last = game.me.hull;
+      requestAnimationFrame(watch);
+    };
+    watch();
+    (window as unknown as { blows: number[] }).blows = blows;
     return { id: game.me.id, position: game.me.flight.position.toArray() };
   });
   // put 1 km beside it, its nose on it; it fires once the other tab has its states from
@@ -203,7 +216,11 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   await play(b, 1);
   expect(await b.evaluate(() => window.game.torpedoes.list.length)).toBe(1);
   await play(b, 8);
-  expect(await b.evaluate(() => window.game.me.hull)).toBe(40);
+  // one blow of the torpedo's 60 hull points (see TORPEDO_DAMAGE), the hull 40 but for a sun's burn
+  const blows = await b.evaluate(() => (window as unknown as { blows: number[] }).blows);
+  expect(blows.length).toBe(1);
+  expect(blows[0]).toBeCloseTo(60, 0);
+  expect(await b.evaluate(() => window.game.me.hull)).toBeLessThanOrEqual(40);
   expect(errors).toEqual([]);
 });
 
