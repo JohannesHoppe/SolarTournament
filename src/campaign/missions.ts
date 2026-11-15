@@ -2112,10 +2112,10 @@ const HAZE_PLACES: readonly ArenaId[] = ['titan'];
 /**
  * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
  * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
- * Europa's first, Blue Fenn and her escort: at the tier's own a Host of middling skill won 1 of
- * its 4 seeds.
+ * The first faces at Europa (Blue Fenn) and Io (Sulfur Pike) with their escorts: at the tier's own
+ * a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at Io.
  */
-const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }] };
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
   const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
