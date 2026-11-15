@@ -231,10 +231,11 @@ export const LOCK_RANGE = 60000;
  * reactor's waste heat goes into a tank of 2 t of water ice instead, which takes some 1.5 GJ
  * melting and warming to 100 °C (`sink`, in the heat gauge's units: MAX_HEAT is the tank full).
  * With the drive cold the reactor idles (the clone's link, the sensors, the life support, the
- * reactor kept hot) at a twelfth of the waste heat it makes at work (REACTOR_WASTE, which the
- * radiators shed at full, some 300 MW): SINK_FILL a second, some 25 MW, full in SINK_SECONDS.
+ * reactor kept hot) at a twenty-fourth of the waste heat it makes at work (REACTOR_WASTE, which the
+ * radiators shed at full, some 300 MW): SINK_FILL a second, some 12.5 MW, full in SINK_SECONDS (two minutes).
  * The laser module keeps its own heat in its own mass meanwhile: with the radiators closed it
- * sheds nothing, so a gun fired hot before the silence stays hot until they open. Once the sink
+ * sheds nothing, so a gun fired hot before the silence stays hot until they open; a gun locked by
+ * its heat opens them at once, and the ship shows until it is cool enough to fire. Once the sink
  * is full the ship must vent (see venting): its radiators open, and it shows on every sensor
  * again until they have drawn the sink down to SINK_RESUME, three and a half seconds. Loud, they
  * draw it down as well, beside the laser's heat.
@@ -242,7 +243,7 @@ export const LOCK_RANGE = 60000;
 export const SILENT_AFTER = 2;
 export const SILENT_THROTTLE = 0.05;
 export const SILENT_RANGE = 20000;
-export const SINK_FILL = REACTOR_WASTE / 12;
+export const SINK_FILL = REACTOR_WASTE / 24;
 export const SINK_SECONDS = MAX_HEAT / SINK_FILL;
 export const SINK_RESUME = 30;
 
@@ -408,7 +409,7 @@ export type ShipState = {
   to?: number;
   /** remaining spawn protection (s) */
   pr: number;
-  /** present while its heat sink vents (see Ship.venting): it shows on every sensor */
+  /** present while its radiators are open by need: its heat sink vents, or its locked laser cools (see Ship.cool); it shows on every sensor */
   ve?: 1;
 };
 
@@ -870,7 +871,7 @@ export class Ship {
       dr: +this.drive.toFixed(2),
       tr: +this.thrusters.toFixed(2),
       pr:+Math.max(0, this.protectedUntil - now).toFixed(1),
-      ...(this.venting ? { ve: 1 as const } : {}),
+      ...(this.venting || this.overheated ? { ve: 1 as const } : {}),
     };
   }
 
@@ -1057,7 +1058,8 @@ export class Ship {
    * The ship's heat over a step: loud, the radiators shed the laser's heat into space and draw the
    * heat sink down; running silent, they are closed, the laser keeps its heat in its own mass and
    * the reactor's idle waste heat fills the sink (see SINK_SECONDS); full, the ship vents, loud
-   * until the radiators have drawn the sink down to SINK_RESUME.
+   * until the radiators have drawn the sink down to SINK_RESUME. A laser locked by its heat opens
+   * them as well until it is cool enough to fire, and the ship shows meanwhile.
    */
   cool(dt: number, now: number) {
     if (this.silent(now)) {
@@ -1068,7 +1070,8 @@ export class Ship {
       this.sink = Math.max(0, this.sink - this.cooling * dt);
     }
     if (this.venting && this.sink <= SINK_RESUME) this.venting = false;
-    if (this.venting) this.loudAt = now;
+    // radiators open by need, venting the sink or cooling a locked laser: the ship shows
+    if (this.venting || this.overheated) this.loudAt = now;
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
   }
 
