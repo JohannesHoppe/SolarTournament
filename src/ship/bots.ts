@@ -11,7 +11,10 @@ import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
 import { RAM_SAFE, SAFE_IMPACT, sheetDamage } from './impact';
 import { groundBlow } from '../world/hover';
-import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH, throughAir } from '../world/air';
+
+/** A bot's flight through the air (see world/air throughAir). */
+const airFlow = new THREE.Vector3();
 import { plumeStrength } from './plume';
 import { exp, hypot } from '../detmath';
 
@@ -166,6 +169,17 @@ const AVOID_HORIZON = 5;
 /** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
 const AVOID_TUBE = 3;
 /**
+ * A piece of the field moving faster than INCOMING_SPEED (units/s, 50 m/s) is watched as it comes
+ * (the Event Horizon's rocks circle at 116 to 167 m/s, their fragments and a rammed piece faster):
+ * one whose way past the bot, as the two move, comes within its reach and AVOID_TUBE ship radii
+ * within INCOMING_SECONDS sends the bot off sideways, out of its way, as a Host sees a rock coming
+ * and pulls aside. A slower piece leaves the bot time enough with its look along its own flight
+ * (see wayAhead): swerving from the Satellite Junkyard's debris crossing at 25 m/s cost the
+ * middling bot some 200 points a deathmatch and spared it nothing (measured in its balance runs).
+ */
+const INCOMING_SPEED = 1000;
+const INCOMING_SECONDS = 4;
+/**
  * A sheet of junk whose plug would dent the hull this much at the bot's speed (hull points, see
  * sheetDamage: a stage's tank walls at speed, never a wing's panels) is worth flying round, while
  * it lies at least SHEET_ROOM seconds ahead, where a turn round it costs little; closer, the bot
@@ -222,7 +236,7 @@ const WELL_PULL = 0.3;
  * that by up to AIR_RISE (units/s, 80 m/s), in full from AIR_RISE_SPAN under it (units, 500 m),
  * and never sinks under it of its own wish, after a rival or a probe neither: it waits above. Over
  * it, it sinks no faster than it could stop at it braking with AIR_BRAKE (units/s², 1.5 g: its
- * thrusters' 10 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
+ * thrusters' 10 g, less the planet's pull of 2.5 g, with room to spare). Three exceptions:
  * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
  * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
  * a bot of AIR_DARING and more follows its target down into them; and one heading home from
@@ -313,6 +327,11 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
 const SIDE = new THREE.Vector3(1, 0, 0);
+/** A moving piece's velocity, where it is from the bot, how the two close, where it passes (see Bot.incoming). */
+const pieceVelocity = new THREE.Vector3();
+const offset = new THREE.Vector3();
+const closing = new THREE.Vector3();
+const passing = new THREE.Vector3();
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -777,6 +796,11 @@ export class Bot {
       }
       for (const ring of this.rings) this.clearRing(ring, speed, ring === this.through);
     }
+    // a piece moving into its way, however still the bot holds: out of it sideways
+    if (this.incoming(field, local)) {
+      danger = true;
+      desired.addScaledVector(local, CRUISE_SPEED * 2);
+    }
     // in a planet's air no way out of danger is worth burning the hull (see air)
     if (desired.lengthSq() > this.airLimit * this.airLimit) desired.setLength(this.airLimit);
 
@@ -886,7 +910,7 @@ export class Bot {
     const safe = heatSpeed(air, altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
     // until the hull has cooled again; and choking under the deck, it climbs out at once
-    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
+    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, throughAir(air, me.position, me.velocity, airFlow).length(), this.ship.clog) > cooling) this.climbing = true;
     else if (this.ship.heat < AIR_COOL) this.climbing = false;
     const out = this.climbing || (choking && altitude < 0);
     // on the way out the waste heat comes whatever the speed, so the quicker out the better: as
@@ -919,6 +943,38 @@ export class Bot {
       return this.shoveKick;
     }
     return null;
+  }
+
+  /**
+   * The way out of the moving piece of the field that comes soonest within reach of the hull as
+   * the two move (see INCOMING_SPEED), into `away` (unit length: from where it would pass closest
+   * towards where the bot would be then); false when none comes.
+   */
+  private incoming(field: AsteroidField, away: THREE.Vector3): boolean {
+    const me = this.ship.flight;
+    let soonest = INCOMING_SECONDS;
+    let found = false;
+    for (const piece of field.asteroids.values()) {
+      if (piece.solid) continue;
+      const moving = field.surfaceVelocity(piece, piece.object.position, pieceVelocity);
+      if (moving.lengthSq() < INCOMING_SPEED * INCOMING_SPEED) continue;
+      // the piece as the bot sees it: where it is from the bot, and how the two close
+      offset.subVectors(me.position, piece.object.position);
+      closing.subVectors(me.velocity, moving);
+      const rate = closing.lengthSq();
+      if (rate < 1) continue;
+      const when = -offset.dot(closing) / rate;
+      if (when <= 0 || when >= soonest) continue;
+      passing.copy(offset).addScaledVector(closing, when);
+      if (passing.length() > piece.radius + this.ship.radius * AVOID_TUBE) continue;
+      soonest = when;
+      found = true;
+      // square to how they close, on the side the bot passes (straight across when dead on)
+      away.copy(passing).addScaledVector(closing, -passing.dot(closing) / rate);
+      if (away.lengthSq() < 1) away.crossVectors(closing, Math.abs(closing.y) < 0.9 * Math.sqrt(rate) ? UP : SIDE);
+      away.normalize();
+    }
+    return found;
   }
 
   /**

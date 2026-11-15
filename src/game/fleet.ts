@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { acos, atan, cos, hypot, sin } from '../detmath';
+import { ROUND_SECONDS } from '../music/songs';
 import { quaternionAngleTo, rotateTowards, rotateX, rotateY, setRotation, slerp } from '../detthree';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
@@ -204,7 +205,7 @@ const LANE_STEP = 500;
  * the clear air over the deck, the batteries under its keel too.
  */
 const HOLD_OVER_DECK = 1000;
-/** How many points along a piece's orbit the lane is checked at. */
+/** How many points along a piece's orbit (or its way through a round) the lane is checked at. */
 const LANE_SAMPLES = 120;
 /** Its hull keeps this far from every piece of the field it dodges (units, 60 m, see DODGE_MASS), the piece's whole reach counted. */
 const ROCK_CLEAR = 1200;
@@ -1448,11 +1449,13 @@ export class Fleet implements Obstacle {
       low = Math.min(low, box.center.y - box.half.y);
       high = Math.max(high, box.center.y + box.half.y);
     }
-    // every piece where it goes: around its whole orbit, or where it stands
+    // every piece where it goes: around its whole orbit, along its way through a round in a field
+    // riding an orbit (see FieldLayout.hill), or where it stands
     const paths = [...field.asteroids.values()].map((piece) => {
       const turns = piece.orbitRate !== 0;
-      const period = turns ? (Math.PI * 2) / Math.abs(piece.orbitRate) : 0;
-      const at = Array.from({ length: turns ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
+      const moves = turns || (piece.hill !== null && piece.velocity.lengthSq() > 0);
+      const period = turns ? (Math.PI * 2) / Math.abs(piece.orbitRate) : moves ? ROUND_SECONDS : 0;
+      const at = Array.from({ length: moves ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
       return { at, reach: piece.radius + ROCK_CLEAR };
     });
     // the plane first, then up and down in turn; in a planet's air only those over its floor (see

@@ -5,7 +5,7 @@ import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
-import { blowSpin, MAX_GENERATION, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
+import { blowSpin, MAX_GENERATION, type Asteroid, type AsteroidField, type Obstacle, type Well, wellPull as pullAt } from '../world/asteroids';
 import { share } from '../world/bodies';
 import { anchored } from '../world/contacts';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
@@ -281,7 +281,7 @@ function wellPull(well: Well | null, point: THREE.Vector3, target: THREE.Vector3
   if (!well) return target.set(0, 0, 0);
   target.subVectors(well.position, point);
   const distance = Math.max(target.length(), well.radius);
-  return target.setLength((well.surfaceGravity * well.radius * well.radius) / (distance * distance));
+  return target.setLength(pullAt(well, distance));
 }
 
 /**

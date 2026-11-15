@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { AIR_BURN, airAround, airBurn, airKelvin, airStep, FINS, finSpin, airHeat, altitudeIn, stagnation, CLOG_LOSS, clogging, density, densityIn, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { AIR_BURN, airAround, airBurn, airKelvin, airStep, FINS, finSpin, airHeat, altitudeIn, stagnation, CLOG_LOSS, clogging, density, densityIn, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn, windIn } from './air';
 import { TITAN_AIR } from './titan';
 import { THROAT_AIR } from './throat';
 import { footOf, skyPointer } from './reference';
@@ -212,6 +212,31 @@ describe("Jupiter's air", () => {
     // clean radiators: the cold air near the deck carries heat off, no waste heat held in
     expect(heatInto(air, m(-200), 0, 0)).toBeLessThan(0);
     expect(REACTOR_WASTE).toBeLessThanOrEqual(COOLING);
+  });
+
+  it('blows east under the deck at 30 m/s, still over it, and drags what flies in it by its flight through it', () => {
+    const wind = air.wind!;
+    expect(wind.length() / 20).toBeCloseTo(30, 6);
+    expect(windIn(air, at(m(100)), new THREE.Vector3()).length()).toBe(0);
+    expect(windIn(air, at(m(-25)), new THREE.Vector3()).length()).toBeCloseTo(wind.length() / 2, 6);
+    expect(windIn(air, at(m(-1000)), new THREE.Vector3()).distanceTo(wind)).toBeLessThan(1e-9);
+    // a body riding the wind feels no drag; one at rest is pushed along with it, never past it
+    const deep = at(m(-1000));
+    expect(dragOn(air, deep, wind.clone(), 1 / 60, new THREE.Vector3()).length()).toBe(0);
+    const still = new THREE.Vector3();
+    // dv/dt = k (wind - v)²: a kilometer down, a fifth of the wind's speed within 10 s, three quarters within two minutes
+    for (let k = 0; k < 600; k++) still.addScaledVector(dragOn(air, deep, still, 1 / 60, new THREE.Vector3()), 1 / 60);
+    expect(still.dot(wind) / wind.lengthSq()).toBeGreaterThan(0.15);
+    for (let k = 600; k < 7200; k++) still.addScaledVector(dragOn(air, deep, still, 1 / 60, new THREE.Vector3()), 1 / 60);
+    expect(still.dot(wind) / wind.lengthSq()).toBeGreaterThan(0.7);
+    expect(still.dot(wind) / wind.lengthSq()).toBeLessThanOrEqual(1);
+    // the heat of a step answers to the flight through the air: with the wind, against it, in the hot air 2.2 km down
+    const hull = (velocity: THREE.Vector3) => ({ flight: { position: at(m(-2200)), velocity }, perks: { fins: FINS }, finSpin: new THREE.Vector3(), clog: 0, heat: 50, overheated: false, cooling: COOLING });
+    const downwind = hull(wind.clone().setLength(MAX_SPEED));
+    const upwind = hull(wind.clone().setLength(-MAX_SPEED));
+    airStep(downwind, air, 0.05, 100);
+    airStep(upwind, air, 0.05, 100);
+    expect(upwind.heat).toBeGreaterThan(downwind.heat);
   });
 });
 
