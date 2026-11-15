@@ -362,6 +362,8 @@ function top(x: number, z: number): number {
  * to a point is found among a few.
  */
 const CELL = 200 * M;
+/** How much nearer (square units) a sample must lie to every corner of a cell to leave another out there (see undominated): far above the rounding of square distances of kilometers. */
+const DOMINANCE = 1;
 const index = (() => {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -390,12 +392,42 @@ const index = (() => {
       for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) cells[cz * nx + cx].push(l * 1e6 + i);
     }
   });
+  cells.forEach((cell, k) => (cells[k] = undominated(cell, minX + (k % nx) * CELL, minZ + Math.floor(k / nx) * CELL)));
   const start = new Int32Array(nx * nz + 1);
   cells.forEach((cell, k) => (start[k + 1] = start[k] + cell.length));
   const items = new Int32Array(start[nx * nz]);
   cells.forEach((cell, k) => items.set(cell, start[k]));
   return { minX, minZ, nx, nz, start, items };
 })();
+
+/**
+ * A cell's samples (as the index lists them) without those that are nowhere in the cell (its
+ * corner at x0, z0) the nearest of their line: a sample is left out when another of its line lies
+ * nearer than it to all four corners by more than DOMINANCE, since the difference of the two
+ * square distances is linear across the cell and so is larger than that everywhere in it. The
+ * nearest found among the rest is the very one found among all, the order of the rest kept for
+ * ties; every step of a ray marched over the water asks for it (see world/asteroids, reliefRay).
+ */
+function undominated(cell: readonly number[], x0: number, z0: number): number[] {
+  const corners = [x0, z0, x0 + CELL, z0, x0, z0 + CELL, x0 + CELL, z0 + CELL];
+  const square = (item: number, c: number) => {
+    const l = item >= 1e6 ? 1 : 0;
+    const line = LINES[l];
+    const dx = corners[c * 2] - line.x[item - l * 1e6];
+    const dz = corners[c * 2 + 1] - line.z[item - l * 1e6];
+    return dx * dx + dz * dz;
+  };
+  // the candidates to leave others out: each line's nearest sample to each corner
+  const rivals: number[] = [];
+  for (let c = 0; c < 4; c++) {
+    for (const l of [0, 1]) {
+      let best = -1;
+      for (const item of cell) if ((item >= 1e6 ? 1 : 0) === l && (best < 0 || square(item, c) < square(best, c))) best = item;
+      if (best >= 0 && !rivals.includes(best)) rivals.push(best);
+    }
+  }
+  return cell.filter((item) => !rivals.some((rival) => rival !== item && (rival >= 1e6) === (item >= 1e6) && [0, 1, 2, 3].every((c) => square(item, c) - square(rival, c) > DOMINANCE)));
+}
 
 /** The nearest sample of each line to the last point asked (see nearest), and its square distance; -1 where none lies near. */
 const near = [-1, -1];
