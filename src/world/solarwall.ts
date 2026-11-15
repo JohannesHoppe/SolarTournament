@@ -71,10 +71,10 @@ export function wallPiece(half: THREE.Vector3): THREE.Group {
     }
   }
   group.add(new THREE.Mesh(boxUv(mergeGeometries(girders), 400), steel));
-  // the mesh between them, both faces, its wires every 2 m
+  // the mesh between them, both faces (flat: either, never both, so one pass), its wires every 2 m
   const net = meshTexture();
   net.repeat.set((half.z * 2) / 2560, (half.y * 2) / 2560);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(half.z * 2, half.y * 2).applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1)), new THREE.MeshStandardMaterial({ map: net, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.8 }));
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(half.z * 2, half.y * 2).applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1)), new THREE.MeshStandardMaterial({ map: net, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide, forceSinglePass: true, roughness: 0.6, metalness: 0.8 }));
   group.add(mesh);
   // the searchlights' housings on the top edge, their lenses lit, and red beacons between them
   const lenses: THREE.BufferGeometry[] = [];

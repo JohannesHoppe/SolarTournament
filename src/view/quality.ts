@@ -51,9 +51,10 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
  * closer range next. The title screen's pad keeps a simpler look from the middle on. Shadows off costs a
  * shader compile and comes late; the lacquer saved nothing measurable and goes last. The
  * Jupiter landmark (seen only in its own arena) sheds its segments alongside the rocks it costs
- * about as much as; the black hole's lens (seen only in its own arena) is a full-screen pass
- * whose cost goes with the picture's resolution: its whole march is a small part of it, so it
- * marches fewer steps alongside the bloom and saves mostly by the resolution coming down.
+ * about as much as; the black hole's lens (seen only in its own arena) covers the whole picture
+ * whenever the hole is ahead, its cost going with the picture's resolution: its whole march is a
+ * small part of it, so it marches fewer steps alongside the bloom and saves mostly by the
+ * resolution coming down.
  */
 const STEPS: Partial<Look>[] = [
   {},

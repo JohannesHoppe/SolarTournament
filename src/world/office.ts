@@ -104,8 +104,8 @@ export function office(): THREE.Group {
     puff.scale.setScalar(size);
     root.add(puff);
   }
-  // his sign over the lift's door, in neon gone a little dim
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(110, 22), new THREE.MeshBasicMaterial({ map: signTexture('RASK SALVAGE', '#ff9d00'), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+  // his sign over the lift's door, in neon gone a little dim (flat: either face, never both, so one pass)
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(110, 22), new THREE.MeshBasicMaterial({ map: signTexture('RASK SALVAGE', '#ff9d00'), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true }));
   sign.position.set(CAB_RADIUS - 12, 70, 0);
   setRotation(sign, 0, -Math.PI / 2, 0);
   root.add(sign);

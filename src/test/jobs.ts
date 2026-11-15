@@ -827,6 +827,9 @@ export class JobWorld implements SchoolContext {
     this.fined = coins;
   }
 
+  /** A drill's alarm: the simulated Host reads the drill's own state instead (its zone, its mark). */
+  alarm() {}
+
   claims(): Claim[] {
     return claimsIn(this.field, DETAIL);
   }

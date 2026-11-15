@@ -3,7 +3,7 @@ import { cos, exp, hypot, pow, sin } from '../detmath';
 import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
+import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import type { Assets, ShipType } from '../assets';
@@ -903,6 +903,13 @@ const wreckBody = { position: new THREE.Vector3(), velocity: new THREE.Vector3()
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
+/**
+ * A gunner's hit is a twitch of the link: a weak glitch for a frame or two (strength, seconds).
+ * Live Target's tourists fire 2.5 shots a second, so anything longer would keep the picture
+ * broken up the whole job and the Host blind to where it flies.
+ */
+const DRILL_HIT_GLITCH = 0.12;
+const DRILL_HIT_SECONDS = 0.06;
 /** A nozzle puffing less than this share of its full push shows nothing (see showJets). */
 const JET_SHOWN = 0.05;
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
@@ -1512,7 +1519,7 @@ export class Game implements OnlineGame {
   private shadowFrame = 0;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
-  private readonly bloom = new Bloom(new THREE.Vector2(256, 256), 0.6, 0.4, BLOOM_THRESHOLD);
+  private readonly bloom = new Bloom(this.output);
   /** The picture's quality: the rung of the ladder, the governor, the Host's choice (see view/graphics). */
   readonly graphics: Graphics;
   /**
@@ -1673,9 +1680,10 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.decoys = new Decoys(assets.textures.glow);
-    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.hunt.group);
+    // the comet hangs in the scene only while one flies, the belt and the Belt's mining only in their arenas (see hang)
+    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.hunt.group);
     this.hudScene.add(this.plane.group, this.orbitPath.line);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -3132,6 +3140,17 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * Hangs `object` in the scene while it is `shown`, else takes it out, kept built: what belongs
+   * to another place or to a moment that has not come (the belt, the Belt's mining, a comet) is
+   * in no scene, since three.js updates the matrix of every object in the scene every frame,
+   * drawn or hidden (see Landmarks.show, which does the same for the arenas' scenery).
+   */
+  private hang(object: THREE.Object3D, shown: boolean) {
+    if (!shown) this.scene.remove(object);
+    else if (object.parent !== this.scene) this.scene.add(object);
+  }
+
+  /**
    * Builds an arena: its field, its sun and scenery. A field restored from a snapshot is
    * built by the snapshot (see restoreField) and only takes the rest here; `keepWreckage`
    * keeps the wreckage and torpedoes in flight, for the same arena rebuilt with another course.
@@ -3147,6 +3166,7 @@ export class Game implements OnlineGame {
     this.field.generate(arena.layout);
     // the Belt's rigs and buoys stand on their rocks before a course or a lane is laid out around them
     this.mining.dress(arena.id === 'belt' || arena.id === 'rheasilvia' ? this.field : null);
+    this.hang(this.mining.group, this.mining.group.visible);
     // a race's course is laid out in the field as generated, the same on every browser
     if (this.course) {
       this.scene.remove(this.course.root);
@@ -3217,7 +3237,7 @@ export class Game implements OnlineGame {
     const air = arena.layout.air ?? null;
     this.scene.fog = air ? this.haze.fog : null;
     this.haze.setAir(air, arena.hazeLight?.deck ?? this.landmarks.jupiter.deckLight, arena.hazeLight?.deep ?? this.landmarks.jupiter.deepLight);
-    this.belt.group.visible = arena.id === 'belt';
+    this.hang(this.belt.group, arena.id === 'belt');
     this.mining.setSun(arena.sun.color, arena.sun.intensity);
     if (!keepWreckage) {
       this.wrecks.clear();
@@ -4460,7 +4480,11 @@ export class Game implements OnlineGame {
     this.edgePoint(out, edge);
     const height = this.field.groundBelow(out, groundUp);
     if (height === null || groundUp.y < LEVEL) return false;
-    out.addScaledVector(groundUp, -height);
+    // straight down onto the ground at this very spot, where its normal was measured: the height is
+    // taken along the normal (the vertical drop times its upward share), and stepping along a tilted
+    // normal from high up would land tens of meters aside, off a chaos raft's edge into the air
+    // beside it or into the raft itself
+    out.y -= height / groundUp.y;
     return true;
   }
 
@@ -5071,18 +5095,20 @@ export class Game implements OnlineGame {
    * there, as the scene's own pass draws them, in the background where the browser compiles in
    * parallel: compiled at first sight, a shader stalls its frame (a drive's plume took a second in
    * the test browser at a race's start, a wreck's tens of milliseconds at the first kill, a
-   * torpedo's or a probe's 10 to 20 ms). Once an arena is entered, before its first picture.
+   * torpedo's or a probe's 10 to 20 ms). Once an arena is entered, before its first picture. A
+   * comet hangs in the scene only while it flies (see hang), so it is hung in for this.
    */
   private warmShaders() {
     this.shadersWarm = true;
     const samples = new THREE.Group().add(this.wrecks.samples(), this.torpedoes.samples(), this.probes.samples());
-    this.scene.add(samples);
+    const comet = this.cometView.root.parent ? null : this.cometView.root;
+    this.scene.add(samples, ...(comet ? [comet] : []));
     const target = this.renderer.getRenderTarget();
     // the scene is drawn into the composer's buffers, untouched by the tone mapping: the shaders compiled for them
     this.renderer.setRenderTarget(this.composer.readBuffer);
     void this.renderer.compileAsync(this.scene, this.camera);
     this.renderer.setRenderTarget(target);
-    this.scene.remove(samples);
+    this.scene.remove(samples, ...(comet ? [comet] : []));
   }
 
   /** The parts of the scene the benchmark switched off. */
@@ -7047,6 +7073,7 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
+      alarm: (report) => this.alarms.raise(report),
       // a new print on the campaign's debt (see campaign/campaign), as far as the debt may grow
       owe: (coins) => this.keepCampaign((campaign) => (campaign.bond = Math.min(BOND_MAX, campaign.bond + coins))),
       get selfDestructing() {
@@ -7247,7 +7274,7 @@ export class Game implements OnlineGame {
     const distance = raySphere(from, direction, me.flight.position, me.radius);
     if (distance === null) return false;
     this.effects.sparks(scratch.copy(from).addScaledVector(direction, distance), DRILL_GUNNER_COLOR, 40);
-    this.glitch.trigger(0.35, 0.3);
+    this.glitch.trigger(DRILL_HIT_GLITCH, DRILL_HIT_SECONDS);
     this.sound.beep(220, 0.1, 0.2);
     return true;
   }
@@ -8371,9 +8398,9 @@ export class Game implements OnlineGame {
     return best;
   }
 
-  /** The shell of a nova: a glowing sphere that runs out to NOVA_RADIUS and fades. */
+  /** The shell of a nova: a glowing sphere that runs out to NOVA_RADIUS and fades, its near and far side added in one pass. */
   private shockwave(position: THREE.Vector3) {
-    const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, toneMapped: false }));
     mesh.position.copy(position);
     this.scene.add(mesh);
     this.shockwaves.push({ mesh, born: this.time });
@@ -9771,6 +9798,7 @@ export class Game implements OnlineGame {
     }
     this.cometView.setDetail(this.graphics.look.rocks);
     this.cometView.update(this.shower, clock, this.camera.position);
+    this.hang(this.cometView.root, this.cometView.root.visible);
     this.cometTail(me, dt);
     if (!flying) return;
     const whole = flying.broken === Infinity;

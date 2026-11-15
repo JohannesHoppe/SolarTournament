@@ -121,6 +121,8 @@ export interface Intent {
   charge?: boolean;
   /** Extra stick and thrusters on top of the flight (a jink: strafe). */
   strafe?: THREE.Vector3;
+  /** The slide keys held (a jink): the thrusters pushed along these axes of the ship (x right, y up, each -1 to 1), whatever the flight wants there. */
+  slide?: THREE.Vector3;
   /** Hands off. */
   idle?: boolean;
   /** Silent: the thrusters alone, the drive cold (a patrol in sight sees a burning drive). */
@@ -192,6 +194,11 @@ export class Pilot {
     if (intent.strafe) {
       wanted.strafeX = THREE.MathUtils.clamp(wanted.strafeX + intent.strafe.x, -1, 1);
       wanted.strafeY = THREE.MathUtils.clamp(wanted.strafeY + intent.strafe.y, -1, 1);
+    }
+    // the slide keys held: those axes are the hand's alone, as the autopilot leaves them (see flight.ts, autopilot)
+    if (intent.slide) {
+      if (intent.slide.x) wanted.strafeX = intent.slide.x;
+      if (intent.slide.y) wanted.strafeY = intent.slide.y;
     }
     const out = this.ease(wanted, world.dt);
     out.fire = !!intent.fire;

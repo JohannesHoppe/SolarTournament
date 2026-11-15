@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js';
 import { DISK_UNIFORMS, HOLE_SHADOW, diskGas } from '../world/landmarks';
-import { atan, pow, tan } from '../detmath';
+import { acos, atan, cos, pow, tan } from '../detmath';
 
 /**
  * The black hole bends light: a pass over the rendered picture that moves every pixel around
@@ -80,177 +80,216 @@ const VEIL_FLOOR = 0.003;
 const VEIL_STRETCHES = 3;
 /** ...and that fade spans no fewer pixels on screen than this. */
 const EDGE_PIXELS = 60;
+/**
+ * The lens runs in full only inside the rectangle of the picture where it changes anything (see
+ * lensRegion): where it moves a pixel's light by BEND_TEXELS of a texel or more, and where the
+ * photon ring, its glow and the hot spots reach (within SPOT_REACH times the shadow's angle of the
+ * hole; the glow is down to a millionth of its strength there). The rest of the picture only takes
+ * the disk's veil (see seen in the shader).
+ */
+const BEND_TEXELS = 0.5;
+/** The picture is tested for that rectangle in REGION_COLUMNS × REGION_ROWS cells. */
+const REGION_COLUMNS = 48;
+const REGION_ROWS = 27;
+/** A rectangle covering more than this share of the picture is drawn as the whole picture: the bands around it would save too little. */
+const REGION_WHOLE = 0.75;
 
-const shader = {
-  uniforms: {
-    ...DISK_UNIFORMS,
-    /** Each pixel's ray, for the disk's near side in front of the shadow: the camera's frame, its projection undone, and where it is seen from the hole. */
-    cameraWorld: { value: new THREE.Matrix4() },
-    projectionInverse: { value: new THREE.Matrix4() },
-    eye: { value: new THREE.Vector3() },
-    /** A direction back onto the picture (the camera's projection and view), for where a bent ray's source is seen. */
-    viewProjection: { value: new THREE.Matrix4() },
-    /** The camera's axis in the world, and its near and far planes (units), to read the scene's depth as a distance ahead of it. */
-    axis: { value: new THREE.Vector3(0, 0, -1) },
-    nearPlane: { value: 1 },
-    farPlane: { value: 1000 },
-    /** The sphere the shadow is (units): the gas behind it is hidden. */
-    shadowRadius: { value: 0 },
-    tDiffuse: { value: null as THREE.Texture | null },
-    /** The scene's depth: only what lies beyond the hole along a ray is bent. */
-    tDepth: { value: null as THREE.Texture | null },
-    /** The shadow and the Einstein ring, as the angles they span around the line to the hole (rad). */
-    shadowAngle: { value: 0 },
-    ringAngle: { value: 0 },
-    /** How much of the bend is drawn: 1 with the hole ahead, fading to 0 as it comes abeam (see BEND_FADE). */
-    bend: { value: 1 },
-    /** The hot spots (see SPOT_AT): the way along the disk's plane across the line to the hole, the way out of the plane, each side's Doppler boost (along +lateral, along -lateral) and how much of them shows. */
-    spotLateral: { value: new THREE.Vector3(1, 0, 0) },
-    spotNormal: { value: new THREE.Vector3(0, 1, 0) },
-    spotBoost: { value: new THREE.Vector2(1, 1) },
-    spotFlare: { value: 0 },
-    /** How many steps the ray is marched outward looking for its source (see Look.lens, view/quality): fewer leaves the bend coarser, never unbent. */
-    samples: { value: 6 },
-  },
-  vertexShader: /* glsl */ `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse;
-    uniform sampler2D tDepth;
-    uniform float shadowAngle;
-    uniform float ringAngle;
-    uniform float bend;
-    uniform vec3 spotLateral;
-    uniform vec3 spotNormal;
-    uniform vec2 spotBoost;
-    uniform float spotFlare;
-    uniform int samples;
-    uniform mat4 cameraWorld;
-    uniform mat4 projectionInverse;
-    uniform mat4 viewProjection;
-    uniform vec3 axis;
-    uniform float nearPlane;
-    uniform float farPlane;
-    uniform vec3 eye;
-    uniform float shadowRadius;
-    varying vec2 vUv;
-    ${diskGas}
-    // whether what is drawn at uv, seen along the ray r, lies beyond the hole: farther ahead of
-    // the camera than the point of r closest to the hole (the sky, never drawn, at the far plane)
-    float ahead(vec2 uv) {
-      return nearPlane * farPlane / (farPlane - (farPlane - nearPlane) * texture2D(tDepth, uv).x);
-    }
-    bool beyond(float depth, vec3 r) {
-      return depth > -dot(r, eye) * dot(r, axis);
-    }
-    // what is drawn at uv, seen along r and lying depth ahead of the camera, with the disk's gas in
-    // front of it where it lies inside the gas's slab: the disk's own mesh is depth-tested at the
-    // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks);
-    // held faint against the surface's own light (see VEIL_SHARE)
-    vec4 seen(vec2 uv, float depth, vec3 r) {
-      vec4 color = texture2D(tDiffuse, uv);
-      float at = depth / dot(r, axis);
-      if (at < diskExit(eye, r)) {
-        float near = diskEntry(eye, r);
-        if (at > near) {
-          vec3 veil = diskGasIn(eye, r, near, at, ${VEIL_STRETCHES.toFixed(1)}, -1.0);
-          float cap = ${VEIL_FLOOR} + ${VEIL_SHARE} * dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-          color.rgb += veil * cap / (cap + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
-        }
-      }
-      return color;
-    }
-    void main() {
-      vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
-      vec3 rd = normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
-      float depth = ahead(vUv);
-      // a ship or rock in front of the hole is seen as it is
-      if (!beyond(depth, rd)) {
-        gl_FragColor = seen(vUv, depth, rd);
-        return;
-      }
-      vec3 toHole = -normalize(eye);
-      float c = dot(rd, toHole);
-      float theta = acos(clamp(c, -1.0, 1.0));
-      if (theta < shadowAngle) {
-        // black, but for the disk's gas in front of the hole: along the pixel's ray up to the
-        // shadow's sphere (or, past its edge, the hole's nearest point), seen as from a camera
-        // brought towards the disk's plane (see NEAR_FLAT): a thin bright streak across the shadow
-        vec3 flatEye = vec3(eye.x, eye.y * ${NEAR_FLAT}, eye.z);
-        vec3 flatRay = normalize(rd - toHole - normalize(flatEye));
-        float b = dot(flatEye, flatRay);
-        float h = b * b - dot(flatEye, flatEye) + shadowRadius * shadowRadius;
-        float far = h > 0.0 ? -b - sqrt(h) : -b;
-        float near = diskEntry(flatEye, flatRay);
-        gl_FragColor = vec4(far > near ? diskGasIn(flatEye, flatRay, near, far, diskFine > 0.0 ? 8.0 : 5.0, 0.0) : vec3(0.0), 1.0);
-        return;
-      }
-      // the lens bends only light from beyond the hole: where a ship or rock in front of it
-      // covers the source, the light is looked for a little farther out on the same ray, and
-      // where none is found (or it lies behind the camera) the pixel shows unbent; so nothing
-      // near is ever seen twice
-      vec2 shown = vUv;
-      vec3 ray = rd;
-      float shownDepth = depth;
-      // how far beyond the picture's edge the source lies (a share of the picture, less than 0
-      // inside it): nothing is known beyond, so the bent light fades back to the pixel's own
-      // unbent light about the edge (see EDGE_FADE) instead of smearing the edge's pixels across
-      // the picture, and a thing the edge cuts off fades out instead of showing the cut
-      float outside = -1.0;
-      if (bend > 0.0) {
-        float beta = theta - bend * ringAngle * ringAngle / theta;
-        vec3 across = normalize(rd - toHole * c);
-        for (int i = 0; i < 6; i++) {
-          if (i >= samples) break;
-          float angle = beta * (1.0 + 0.2 * float(i));
-          vec3 r = toHole * cos(angle) + across * sin(angle);
-          vec4 clip = viewProjection * vec4(r, 0.0);
-          // behind the camera: as far beyond the edge as it gets
-          if (clip.w <= 0.0) {
-            outside = 1.0;
-            break;
-          }
-          vec2 raw = clip.xy / clip.w * 0.5 + 0.5;
-          vec2 source = clamp(raw, 0.0, 1.0);
-          float there = ahead(source);
-          if (beyond(there, r)) {
-            shown = source;
-            ray = r;
-            shownDepth = there;
-            outside = max(max(-raw.x, raw.x - 1.0), max(-raw.y, raw.y - 1.0));
-            break;
-          }
-        }
-      }
-      vec4 color = seen(shown, shownDepth, ray);
-      // (over at least EDGE_PIXELS on screen: near the Einstein ring the source races across the
-      // picture as the pixel moves, and a fade over its own distance alone would be a hard seam)
-      float span = max(${EDGE_FADE}, fwidth(outside) * ${EDGE_PIXELS.toFixed(1)});
-      if (outside > -0.5 * span) color = mix(color, seen(vUv, depth, rd), smoothstep(-0.5 * span, span, outside));
-      // the light that grazes the shadow piles up into a thin bright ring
-      // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
-      float ring = (theta - shadowAngle * 1.04) / (shadowAngle * 0.045 + 0.0007);
-      float photon = exp(-ring * ring);
-      // and, as the disk's light bent all the way round the hole, a warm glow hugging the ring
-      // outside it, fading out over a fifth of the shadow's angle (see RING_GLOW)
-      float skirt = exp(-max(theta - shadowAngle * 1.04, 0.0) / (shadowAngle * 0.2));
-      // the hot spots where the edge-on disk meets the halo's sides, and the band running on from them
-      float lateral = dot(rd, spotLateral) / shadowAngle;
-      float offPlane = dot(rd, spotNormal) / (shadowAngle * ${SPOT_THIN});
-      float spotAcross = exp(-offPlane * offPlane);
-      float spotAlong = (abs(lateral) - ${SPOT_AT}) / ${SPOT_LONG};
-      // (only towards the hole: within SPOT_REACH times the shadow's angle of it)
-      float flare = (exp(-spotAlong * spotAlong) + 0.06 * exp(-max(abs(lateral) - ${SPOT_AT}, 0.0) * 1.2)) * spotAcross * spotFlare
-        * (1.0 - smoothstep(${(SPOT_REACH * 0.6).toFixed(2)}, ${SPOT_REACH.toFixed(2)}, theta / shadowAngle)) * (lateral > 0.0 ? spotBoost.x : spotBoost.y);
-      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75 + vec3(1.0, 0.68, 0.42) * skirt * ${RING_GLOW} + vec3(1.0, 0.86, 0.68) * flare * ${SPOT_LIGHT}, 0.0);
-    }
-  `,
+const uniforms = {
+  ...DISK_UNIFORMS,
+  /** Each pixel's ray, for the disk's near side in front of the shadow: the camera's frame, its projection undone, and where it is seen from the hole. */
+  cameraWorld: { value: new THREE.Matrix4() },
+  projectionInverse: { value: new THREE.Matrix4() },
+  eye: { value: new THREE.Vector3() },
+  /** A direction back onto the picture (the camera's projection and view), for where a bent ray's source is seen. */
+  viewProjection: { value: new THREE.Matrix4() },
+  /** The camera's axis in the world, and its near and far planes (units), to read the scene's depth as a distance ahead of it. */
+  axis: { value: new THREE.Vector3(0, 0, -1) },
+  nearPlane: { value: 1 },
+  farPlane: { value: 1000 },
+  /** The sphere the shadow is (units): the gas behind it is hidden. */
+  shadowRadius: { value: 0 },
+  tDiffuse: { value: null as THREE.Texture | null },
+  /** The scene's depth: only what lies beyond the hole along a ray is bent. */
+  tDepth: { value: null as THREE.Texture | null },
+  /** The shadow and the Einstein ring, as the angles they span around the line to the hole (rad). */
+  shadowAngle: { value: 0 },
+  ringAngle: { value: 0 },
+  /** How much of the bend is drawn: 1 with the hole ahead, fading to 0 as it comes abeam (see BEND_FADE). */
+  bend: { value: 1 },
+  /** The hot spots (see SPOT_AT): the way along the disk's plane across the line to the hole, the way out of the plane, each side's Doppler boost (along +lateral, along -lateral) and how much of them shows. */
+  spotLateral: { value: new THREE.Vector3(1, 0, 0) },
+  spotNormal: { value: new THREE.Vector3(0, 1, 0) },
+  spotBoost: { value: new THREE.Vector2(1, 1) },
+  spotFlare: { value: 0 },
+  /** How many steps the ray is marched outward looking for its source (see Look.lens, view/quality): fewer leaves the bend coarser, never unbent. */
+  samples: { value: 6 },
 };
+
+const vertexShader = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+/** What both of the lens's shaders share: the uniforms, the disk's gas, the depth and the veil. */
+const common = /* glsl */ `
+  uniform sampler2D tDiffuse;
+  uniform sampler2D tDepth;
+  uniform float shadowAngle;
+  uniform float ringAngle;
+  uniform float bend;
+  uniform vec3 spotLateral;
+  uniform vec3 spotNormal;
+  uniform vec2 spotBoost;
+  uniform float spotFlare;
+  uniform int samples;
+  uniform mat4 cameraWorld;
+  uniform mat4 projectionInverse;
+  uniform mat4 viewProjection;
+  uniform vec3 axis;
+  uniform float nearPlane;
+  uniform float farPlane;
+  uniform vec3 eye;
+  uniform float shadowRadius;
+  varying vec2 vUv;
+  ${diskGas}
+  // whether what is drawn at uv, seen along the ray r, lies beyond the hole: farther ahead of
+  // the camera than the point of r closest to the hole (the sky, never drawn, at the far plane)
+  float ahead(vec2 uv) {
+    return nearPlane * farPlane / (farPlane - (farPlane - nearPlane) * texture2D(tDepth, uv).x);
+  }
+  bool beyond(float depth, vec3 r) {
+    return depth > -dot(r, eye) * dot(r, axis);
+  }
+  // what is drawn at uv, seen along r and lying depth ahead of the camera, with the disk's gas in
+  // front of it where it lies inside the gas's slab: the disk's own mesh is depth-tested at the
+  // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks);
+  // held faint against the surface's own light (see VEIL_SHARE)
+  vec4 seen(vec2 uv, float depth, vec3 r) {
+    vec4 color = texture2D(tDiffuse, uv);
+    float at = depth / dot(r, axis);
+    if (at < diskExit(eye, r)) {
+      float near = diskEntry(eye, r);
+      if (at > near) {
+        vec3 veil = diskGasIn(eye, r, near, at, ${VEIL_STRETCHES.toFixed(1)}, -1.0);
+        float cap = ${VEIL_FLOOR} + ${VEIL_SHARE} * dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+        color.rgb += veil * cap / (cap + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
+      }
+    }
+    return color;
+  }
+  vec3 pixelRay() {
+    vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
+    return normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
+  }
+`;
+
+/**
+ * The picture outside the lens's region (see lensRegion): each pixel as it is, with the disk's
+ * veil where a surface lies inside the slab; a ray that misses the slab reads no depth.
+ */
+const veilShader = /* glsl */ `
+  ${common}
+  void main() {
+    vec3 rd = pixelRay();
+    gl_FragColor = diskExit(eye, rd) > 0.0 ? seen(vUv, ahead(vUv), rd) : texture2D(tDiffuse, vUv);
+  }
+`;
+
+/** The lens in full, inside its region. */
+const lensShader = /* glsl */ `
+  ${common}
+  void main() {
+    vec3 rd = pixelRay();
+    float depth = ahead(vUv);
+    // a ship or rock in front of the hole is seen as it is
+    if (!beyond(depth, rd)) {
+      gl_FragColor = seen(vUv, depth, rd);
+      return;
+    }
+    vec3 toHole = -normalize(eye);
+    float c = dot(rd, toHole);
+    float theta = acos(clamp(c, -1.0, 1.0));
+    if (theta < shadowAngle) {
+      // black, but for the disk's gas in front of the hole: along the pixel's ray up to the
+      // shadow's sphere (or, past its edge, the hole's nearest point), seen as from a camera
+      // brought towards the disk's plane (see NEAR_FLAT): a thin bright streak across the shadow
+      vec3 flatEye = vec3(eye.x, eye.y * ${NEAR_FLAT}, eye.z);
+      vec3 flatRay = normalize(rd - toHole - normalize(flatEye));
+      float b = dot(flatEye, flatRay);
+      float h = b * b - dot(flatEye, flatEye) + shadowRadius * shadowRadius;
+      float far = h > 0.0 ? -b - sqrt(h) : -b;
+      float near = diskEntry(flatEye, flatRay);
+      gl_FragColor = vec4(far > near ? diskGasIn(flatEye, flatRay, near, far, diskFine > 0.0 ? 8.0 : 5.0, 0.0) : vec3(0.0), 1.0);
+      return;
+    }
+    // the lens bends only light from beyond the hole: where a ship or rock in front of it
+    // covers the source, the light is looked for a little farther out on the same ray, and
+    // where none is found (or it lies behind the camera) the pixel shows unbent; so nothing
+    // near is ever seen twice
+    vec2 shown = vUv;
+    vec3 ray = rd;
+    float shownDepth = depth;
+    // how far beyond the picture's edge the source lies (a share of the picture, less than 0
+    // inside it): nothing is known beyond, so the bent light fades back to the pixel's own
+    // unbent light about the edge (see EDGE_FADE) instead of smearing the edge's pixels across
+    // the picture, and a thing the edge cuts off fades out instead of showing the cut
+    float outside = -1.0;
+    if (bend > 0.0) {
+      float beta = theta - bend * ringAngle * ringAngle / theta;
+      vec3 across = normalize(rd - toHole * c);
+      for (int i = 0; i < 6; i++) {
+        if (i >= samples) break;
+        float angle = beta * (1.0 + 0.2 * float(i));
+        vec3 r = toHole * cos(angle) + across * sin(angle);
+        vec4 clip = viewProjection * vec4(r, 0.0);
+        // behind the camera: as far beyond the edge as it gets
+        if (clip.w <= 0.0) {
+          outside = 1.0;
+          break;
+        }
+        vec2 raw = clip.xy / clip.w * 0.5 + 0.5;
+        vec2 source = clamp(raw, 0.0, 1.0);
+        float there = ahead(source);
+        if (beyond(there, r)) {
+          shown = source;
+          ray = r;
+          shownDepth = there;
+          outside = max(max(-raw.x, raw.x - 1.0), max(-raw.y, raw.y - 1.0));
+          break;
+        }
+      }
+    }
+    vec4 color = seen(shown, shownDepth, ray);
+    // (over at least EDGE_PIXELS on screen: near the Einstein ring the source races across the
+    // picture as the pixel moves, and a fade over its own distance alone would be a hard seam)
+    float span = max(${EDGE_FADE}, fwidth(outside) * ${EDGE_PIXELS.toFixed(1)});
+    if (outside > -0.5 * span) color = mix(color, seen(vUv, depth, rd), smoothstep(-0.5 * span, span, outside));
+    // the ring, its glow and the hot spots reach no farther than SPOT_REACH times the shadow's angle
+    if (theta > ${SPOT_REACH.toFixed(1)} * shadowAngle) {
+      gl_FragColor = color;
+      return;
+    }
+    // the light that grazes the shadow piles up into a thin bright ring
+    // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
+    float ring = (theta - shadowAngle * 1.04) / (shadowAngle * 0.045 + 0.0007);
+    float photon = exp(-ring * ring);
+    // and, as the disk's light bent all the way round the hole, a warm glow hugging the ring
+    // outside it, fading out over a fifth of the shadow's angle (see RING_GLOW)
+    float skirt = exp(-max(theta - shadowAngle * 1.04, 0.0) / (shadowAngle * 0.2));
+    // the hot spots where the edge-on disk meets the halo's sides, and the band running on from them
+    float lateral = dot(rd, spotLateral) / shadowAngle;
+    float offPlane = dot(rd, spotNormal) / (shadowAngle * ${SPOT_THIN});
+    float spotAcross = exp(-offPlane * offPlane);
+    float spotAlong = (abs(lateral) - ${SPOT_AT}) / ${SPOT_LONG};
+    // (only towards the hole: within SPOT_REACH times the shadow's angle of it)
+    float flare = (exp(-spotAlong * spotAlong) + 0.06 * exp(-max(abs(lateral) - ${SPOT_AT}, 0.0) * 1.2)) * spotAcross * spotFlare
+      * (1.0 - smoothstep(${(SPOT_REACH * 0.6).toFixed(2)}, ${SPOT_REACH.toFixed(2)}, theta / shadowAngle)) * (lateral > 0.0 ? spotBoost.x : spotBoost.y);
+    gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75 + vec3(1.0, 0.68, 0.42) * skirt * ${RING_GLOW} + vec3(1.0, 0.86, 0.68) * flare * ${SPOT_LIGHT}, 0.0);
+  }
+`;
 
 const toHole = new THREE.Vector3();
 const forward = new THREE.Vector3();
@@ -299,8 +338,140 @@ export function lensAngles(horizon: number, distance: number, fov: number): { sh
   return { shadow: atan(middle * share * HOLE_SHADOW), ring: atan(middle * share * EINSTEIN) };
 }
 
+const local = new THREE.Vector3();
+
+/** A rectangle of the picture as shares of its width and height, from (x0, y0) to (x1, y1); empty where x1 ≤ x0. */
+export interface Region {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * The rectangle of the picture where the lens changes anything (see BEND_TEXELS), for a camera
+ * whose picture is `width` × `height` pixels, a hole along `toHole` (unit, in the world), drawn
+ * with the shadow's angle `shadow` and the bend `bend` times the Einstein ring's angle `ring`
+ * squared over a pixel's angle from the hole (rad), as the shader bends it. Written into `out`.
+ *
+ * The bend moves a pixel θ from the hole by bend · ring² / θ; a pixel spans an angle no smaller
+ * than cos²φ / f radially, φ its angle off the camera's axis and f the focal length in pixels, so
+ * every pixel farther from the hole than the angle where the bend falls to half of that is left as
+ * it is. The angle is found from above: φ first at the picture's corner, then at the hole's own
+ * angle off the axis plus the reach found, never below what the reach needs. The rectangle holds
+ * every cell of a grid over the picture whose middle lies within that reach plus the cell's own
+ * angular radius.
+ */
+export function lensRegion(camera: THREE.PerspectiveCamera, toHole: THREE.Vector3, shadow: number, ring: number, bend: number, width: number, height: number, out: Region): Region {
+  const half = tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const focal = height / (2 * half);
+  local.copy(toHole).transformDirection(camera.matrixWorldInverse);
+  const offAxis = acos(Math.min(Math.max(-local.z, -1), 1));
+  const corner = atan(Math.sqrt(width * width + height * height) / 2 / focal);
+  let reach = SPOT_REACH * shadow;
+  const bent = bend * ring * ring;
+  if (bent > 0) {
+    let theta = Infinity;
+    for (let i = 0; i < 8; i++) {
+      const c = cos(Math.min(offAxis + theta, corner));
+      theta = Math.max(reach, bent / ((BEND_TEXELS * c * c) / focal));
+    }
+    reach = theta;
+  }
+  // a cell's middle may lie this far (rad) from its farthest pixel: no pixel spans more than 1 / f
+  const cell = Math.sqrt((width / REGION_COLUMNS) * (width / REGION_COLUMNS) + (height / REGION_ROWS) * (height / REGION_ROWS)) / 2 / focal;
+  out.x0 = out.y0 = 0;
+  out.x1 = out.y1 = 1;
+  if (reach + cell >= Math.PI) return out;
+  const least = cos(reach + cell);
+  let i0 = REGION_COLUMNS;
+  let j0 = REGION_ROWS;
+  let i1 = -1;
+  let j1 = -1;
+  const across = half * camera.aspect;
+  for (let j = 0; j < REGION_ROWS; j++) {
+    const y = ((j + 0.5) / REGION_ROWS) * 2 - 1;
+    for (let i = 0; i < REGION_COLUMNS; i++) {
+      const x = ((i + 0.5) / REGION_COLUMNS) * 2 - 1;
+      const rx = x * across;
+      const ry = y * half;
+      if ((rx * local.x + ry * local.y - local.z) / Math.sqrt(rx * rx + ry * ry + 1) <= least) continue;
+      i0 = Math.min(i0, i);
+      i1 = Math.max(i1, i);
+      j0 = Math.min(j0, j);
+      j1 = Math.max(j1, j);
+    }
+  }
+  out.x0 = i0 / REGION_COLUMNS;
+  out.x1 = (i1 + 1) / REGION_COLUMNS;
+  out.y0 = j0 / REGION_ROWS;
+  out.y1 = (j1 + 1) / REGION_ROWS;
+  return out;
+}
+
+/**
+ * The lens's pass: the picture outside its region (see lensRegion) with the veil alone, in up to
+ * four bands around it, and the lens in full inside it, each a draw clipped to its rectangle.
+ */
+class LensPass extends Pass {
+  readonly uniforms = uniforms;
+  readonly region: Region = { x0: 0, y0: 0, x1: 1, y1: 1 };
+  width = 1;
+  height = 1;
+  private readonly lens = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader: lensShader, depthTest: false, depthWrite: false });
+  private readonly veil = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader: veilShader, depthTest: false, depthWrite: false });
+  private readonly quad = new FullScreenQuad();
+
+  setSize(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+  }
+
+  render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget) {
+    uniforms.tDiffuse.value = readBuffer.texture;
+    renderer.setRenderTarget(writeBuffer);
+    const { width, height, region } = this;
+    // in whole pixels, a pixel wider on every side
+    const x0 = Math.max(0, Math.floor(region.x0 * width) - 1);
+    const y0 = Math.max(0, Math.floor(region.y0 * height) - 1);
+    const x1 = Math.min(width, Math.ceil(region.x1 * width) + 1);
+    const y1 = Math.min(height, Math.ceil(region.y1 * height) + 1);
+    const inside = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+    if (inside > REGION_WHOLE * width * height) {
+      this.draw(renderer, this.lens);
+      return;
+    }
+    renderer.setScissorTest(true);
+    if (inside === 0) {
+      this.draw(renderer, this.veil, 0, 0, width, height);
+    } else {
+      this.draw(renderer, this.veil, 0, 0, width, y0);
+      this.draw(renderer, this.veil, 0, y1, width, height - y1);
+      this.draw(renderer, this.veil, 0, y0, x0, y1 - y0);
+      this.draw(renderer, this.veil, x1, y0, width - x1, y1 - y0);
+      this.draw(renderer, this.lens, x0, y0, x1 - x0, y1 - y0);
+    }
+    renderer.setScissorTest(false);
+  }
+
+  private draw(renderer: THREE.WebGLRenderer, material: THREE.ShaderMaterial, x = 0, y = 0, w = 0, h = 0) {
+    if (renderer.getScissorTest()) {
+      if (w <= 0 || h <= 0) return;
+      renderer.setScissor(x, y, w, h);
+    }
+    this.quad.material = material;
+    this.quad.render(renderer);
+  }
+
+  dispose() {
+    this.lens.dispose();
+    this.veil.dispose();
+    this.quad.dispose();
+  }
+}
+
 export class Lensing {
-  readonly pass = new ShaderPass(shader);
+  readonly pass = new LensPass();
 
   constructor() {
     this.pass.enabled = false;
@@ -332,9 +503,10 @@ export class Lensing {
     uniforms.ringAngle.value = ring;
     uniforms.bend.value = THREE.MathUtils.smoothstep(toHole.dot(forward) / distance, 0, BEND_FADE);
     hotSpots(toHole.divideScalar(distance), uniforms as unknown as SpotUniforms);
+    camera.updateMatrixWorld();
+    lensRegion(camera, toHole, shadow, ring, uniforms.bend.value, this.pass.width, this.pass.height, this.pass.region);
     uniforms.shadowRadius.value = horizon * HOLE_SHADOW;
     // the camera as this frame draws it, so the near side in the shadow sits on the disk around it
-    camera.updateMatrixWorld();
     uniforms.cameraWorld.value.copy(camera.matrixWorld);
     uniforms.projectionInverse.value.copy(camera.projectionMatrixInverse);
     uniforms.viewProjection.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);

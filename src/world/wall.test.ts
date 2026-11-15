@@ -56,7 +56,9 @@ describe('the Solar Wall', () => {
     expect(inLight(lightAt(7, new THREE.Vector3()).add(new THREE.Vector3(0, LIGHT_REACH * 2, 0)), 0)).toBe(false);
   });
 
-  it('lets a barge led low over the edge through most of the time, and sees one led high over it', () => {
+  // some two million looks of the searchlights: about 40 s on a quiet machine, so it gets three
+  // minutes, room for a machine busy with other test runs
+  it('lets a barge led low over the edge through most of the time, and sees one led high over it', { timeout: 180_000 }, () => {
     expect(made(1000)).toBeGreaterThan(0.6);
     expect(made(6000)).toBeLessThan(0.15);
   });

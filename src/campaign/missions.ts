@@ -110,60 +110,108 @@ const lamplighter: Drill = {
 
 /**
  * Live Target (1.2): tourists pay to shoot at the hull. Three gunners on a ring around the yard
- * fire, each every TARGET_INTERVAL seconds, at where the ship was TARGET_LAG ago (as the slide
- * drill's gunner does); the ship lives TARGET_SECONDS inside TARGET_ZONE of the yard's middle
+ * fire, each every TARGET_INTERVAL seconds; their sights show the ship as it was TARGET_LAG ago
+ * and lead it along the flight it had then, so they hit a ship that sits still or flies straight
+ * and miss one that changed its flight since (a jink with the thrusters, a turn, a burn of the
+ * drive); the ship lives TARGET_SECONDS inside TARGET_ZONE of the yard's middle
  * (units, 1.5 km: the racks, the lane and the depot's bay with its pad, where the job starts) by
  * jinking, with the autopilot, as every job of chapter 1 is flown. Out of the zone the mark
- * counts down TARGET_GRACE seconds to fly back in; longer starts it over. Every hit takes
- * TARGET_FINE coins off the pay (see complete), as the attempt stands.
+ * counts down TARGET_GRACE seconds to fly back in, under a warning with the same countdown;
+ * longer starts it over. Every hit takes TARGET_FINE coins off the pay (see complete), as the
+ * attempt stands, and the hit past TARGET_HITS has the tourists want their money back: the
+ * attempt starts over. The zone's edge lights up as the ship nears it (within TARGET_EDGE),
+ * orange once the ship is out.
  */
 const TARGET_SECONDS = 90;
 export const TARGET_ZONE = 30000;
 const TARGET_GRACE = 3;
 const TARGET_INTERVAL = 1.2;
-const TARGET_LAG = 0.4;
-const TARGET_FINE = 10;
+/**
+ * How old the sights' picture of the ship is (s): a tourist's reaction and aim. A jink dodges the
+ * shot once it has moved the hull a hit radius (17 m) off the line it was flying: the welded
+ * thrusters of the scrap hull (70 m/s², 7 g) held to one side move it 35 m off in that second.
+ */
+const TARGET_LAG = 1;
+/** The sights take the ship's place and flight every SIGHT_STEP seconds and keep them TARGET_LAG long. */
+const SIGHT_STEP = 0.05;
+const SIGHTED = Math.round(TARGET_LAG / SIGHT_STEP) + 1;
+const TARGET_FINE = 5;
+/**
+ * The hits an attempt may take, measured with the job harness (src/test/jobbehaviors.ts, jink): a
+ * middling Host jinking about the yard took 19 to 33 hits in the 90 s on twelve seeds, flying the
+ * same legs without the slide keys some 170, sitting still 211, nearly every shot.
+ * Past TARGET_HITS a ship at rest is out after some 17 s, one flying straight soon after.
+ */
+export const TARGET_HITS = 40;
+/** The zone's edge lights up within this of it (units, 300 m), and its caution sounds while the ship flies outwards there. */
+const TARGET_EDGE = 6000;
 const GUNNERS = [point(0, 6000, -24000), point(20000, 3000, 12000), point(-20000, 4000, 12000)];
 /** The yard's middle, the zone's center (see TARGET_ZONE). */
 export const YARD_MIDDLE = OFFICE;
 
-const liveTarget: Drill = {
+const towardYard = new THREE.Vector3();
+const lead = new THREE.Vector3();
+/** What the sights saw of the ship (see TARGET_LAG): a ring of its places and velocities, when each was taken, and the slot taken next (the oldest). */
+const sighted = Array.from({ length: SIGHTED }, () => ({ at: 0, position: new THREE.Vector3(), velocity: new THREE.Vector3() }));
+let sightNext = 0;
+
+/** The sights take the ship as it is now (attempt seconds `at`); at the attempt's start, the whole ring. */
+function sight(ship: Ship, at: number, all = false) {
+  for (let k = 0; k < SIGHTED; k++) {
+    if (!all && k !== sightNext) continue;
+    sighted[k].at = at;
+    sighted[k].position.copy(ship.flight.position);
+    sighted[k].velocity.copy(ship.flight.velocity);
+  }
+  sightNext = (sightNext + 1) % SIGHTED;
+}
+
+export const liveTarget: Drill = {
   line: CAMPAIGN.liveTarget,
   keys: ['slide', 'turn', 'drive'],
   arena: 'boneyard',
   autopilot: true,
   enter(ctx, a, markers) {
     stop(ctx);
-    a.points = [ctx.me.flight.position.clone()];
-    markers.zone(OFFICE, TARGET_ZONE);
+    sight(ctx.me, a.seconds, true);
+    markers.zone(OFFICE, TARGET_ZONE, true);
     a.lastShot = 0;
     // a.jinks: the hits taken in this attempt
     a.jinks = 0;
     a.next = 0;
     ctx.fine(0);
   },
-  done(ctx, a) {
+  done(ctx, a, markers) {
     // a.held: the seconds out of the zone without a break, counted once the clone has been in it
     // this attempt (a.next 1): an attempt begun again out where the last one failed fails no sooner
     // than the Host is back inside
-    const out = ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE;
+    const position = ctx.me.flight.position;
+    const distance = position.distanceTo(OFFICE);
+    const out = distance > TARGET_ZONE;
     if (!out) a.next = 1;
     a.held = out && a.next ? a.held + ctx.dt : 0;
-    a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / TARGET_LAG));
+    markers.zoneEdge(out ? 1 : Math.max(0, 1 - (TARGET_ZONE - distance) / TARGET_EDGE), out);
+    towardYard.subVectors(OFFICE, position);
+    if (a.held > 0) ctx.alarm({ id: 'zone', level: 'warning', text: t('OUT OF THE YARD · BACK INSIDE'), direction: towardYard, seconds: Math.max(0, TARGET_GRACE - a.held) });
+    else if (a.next && distance > TARGET_ZONE - TARGET_EDGE && ctx.me.flight.velocity.dot(towardYard) < 0) ctx.alarm({ id: 'zone', level: 'caution', text: t('YARD EDGE'), direction: towardYard });
+    if (a.seconds - sighted[(sightNext + SIGHTED - 1) % SIGHTED].at >= SIGHT_STEP) sight(ctx.me, a.seconds);
     if (a.seconds - a.lastShot > TARGET_INTERVAL / GUNNERS.length) {
       a.lastShot = a.seconds;
       a.count = (a.count + 1) % GUNNERS.length;
-      if (ctx.fireAt(GUNNERS[a.count], a.points[0])) ctx.fine(++a.jinks * TARGET_FINE);
+      // the oldest the sights keep, led on along its flight to now
+      const seen = sighted[sightNext];
+      lead.copy(seen.position).addScaledVector(seen.velocity, a.seconds - seen.at);
+      if (ctx.fireAt(GUNNERS[a.count], lead)) ctx.fine(++a.jinks * TARGET_FINE);
     }
-    return a.seconds >= TARGET_SECONDS;
+    return a.seconds >= TARGET_SECONDS && a.jinks <= TARGET_HITS;
   },
-  fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : null),
+  fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : a.jinks > TARGET_HITS ? RASK.liveTargetRefund : null),
   mark: (_, a) =>
     !a.next
       ? t('Back into the yard')
       : a.held > 0
       ? t('Out of the yard: back inside in {seconds} s', { seconds: Math.max(0, Math.ceil(TARGET_GRACE - a.held)) })
-      : t('Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
+      : t('Stay alive: {seconds} s · hits {hits}/{limit} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, limit: TARGET_HITS, fine: a.jinks * TARGET_FINE }),
   waypoint: () => null,
 };
 
