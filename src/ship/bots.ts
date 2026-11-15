@@ -1287,8 +1287,8 @@ export class Bot {
         if (local.lengthSq() < 1) local.set(0, 1, 0).addScaledVector(backward, -backward.y);
         desired.addScaledVector(local.normalize(), CRUISE_SPEED);
       }
-      // a ship outside its view it does not see coming; a plume it sits in it feels by the heat (above)
-      if (!this.inView(ship.flight.position)) continue;
+      // a ship outside its view it does not see coming, unless its last glance at the radar showed it; a plume it sits in it feels by the heat (above)
+      if (!this.inView(ship.flight.position) && !this.recalled(ship)) continue;
       // where the other ship is, and how fast the two close, as the bot sees it
       local.subVectors(me.position, ship.flight.position);
       line.subVectors(me.velocity, ship.flight.velocity);
