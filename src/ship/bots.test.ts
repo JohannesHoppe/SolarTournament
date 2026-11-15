@@ -6,7 +6,7 @@ import { debrisSet } from '../world/shapes';
 import type { JunkBuild } from '../world/junk';
 import { hypot, pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from './flight';
-import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_AFTER, SILENT_RANGE, SINK_SECONDS, strainAfter } from './ship';
+import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_AFTER, SILENT_RANGE, SINK_FILL, strainAfter } from './ship';
 import { junkField, testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -20,7 +20,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, venting: false, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, sink: 0, venting: false, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -103,26 +103,31 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(loud.target).toBe(rival);
   });
 
-  it('runs silent on its heat sink for half a minute, then vents and is found from afar again, a bot\'s ship as a Host\'s', () => {
+  it('runs silent on its heat sink, the heat of its laser going into it too, then vents and is found from afar again, a bot\'s ship as a Host\'s', () => {
     const me = ship('Kessler', at(0), at(1));
     const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
     const step = 1 / 30;
     rival.loudAt = 0;
     let t = 0;
-    for (; t < SILENT_AFTER + SINK_SECONDS - 1; t += step) rival.cool(step, t);
-    // still silent, its heat near the top, its radiators shedding nothing
+    for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
+    // silent: two shots' heat goes into the sink as the radiators would shed it, which fills it sooner
+    rival.heat = 40;
+    const full = SILENT_AFTER + 0.5 + (MAX_HEAT - 40) / SINK_FILL;
+    for (; t < full - 1; t += step) rival.cool(step, t);
+    // still silent, its sink near full, the laser cool
     expect(rival.silent(t)).toBe(true);
-    expect(rival.heat).toBeGreaterThan(MAX_HEAT * 0.9);
+    expect(rival.sink).toBeGreaterThan(MAX_HEAT * 0.9);
+    expect(rival.heat).toBe(0);
     expect(rival.venting).toBe(false);
-    for (; t < SILENT_AFTER + SINK_SECONDS + 1; t += step) rival.cool(step, t);
-    // full: it vents, shows on every sensor, and its laser is locked
+    for (; t < full + 1; t += step) rival.cool(step, t);
+    // full: it vents and shows on every sensor; its laser is free
     expect(rival.venting).toBe(true);
     expect(rival.silent(t)).toBe(false);
-    expect(rival.overheated).toBe(true);
+    expect(rival.overheated).toBe(false);
     const sees = new Bot(me, evenSkills(0.5));
     sees.think(t, [me, rival], field(false));
     expect(sees.target).toBe(rival);
-    // its radiators bring it down to the laser's resume, and it can run silent again
+    // its radiators draw the sink down, and it can run silent again
     for (const end = t + 6; t < end; t += step) rival.cool(step, t);
     expect(rival.venting).toBe(false);
     expect(rival.overheated).toBe(false);

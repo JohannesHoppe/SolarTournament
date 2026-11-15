@@ -1525,6 +1525,8 @@ export class Game implements OnlineGame {
   private readonly harpoonedAt = new Map<Ship, number>();
   /** Whether the own ship's heat sink vented last frame (see Ship.venting). */
   private wasVenting = false;
+  /** The heat sink's share last shown beside SILENT RUNNING (%). */
+  private sinkShown = -1;
   /** Every ship as the battleship's fire control tracks it: its velocity a step ago and how hard it jinks (see trackJinks). */
   private readonly jinks = new Map<Ship, { velocity: THREE.Vector3; jink: number }>();
   private readonly cables = new Cables();
@@ -5355,6 +5357,9 @@ export class Game implements OnlineGame {
     // the own ship runs silent: the sensors find it only up close (see Ship.silent)
     const silent = me.alive && me.silent(this.time);
     if ($('hud-silent').hidden === silent) $('hud-silent').hidden = !silent;
+    // how full its heat sink is (see SINK_SECONDS)
+    const sink = Math.round((me.sink / MAX_HEAT) * 100);
+    if (silent && sink !== this.sinkShown) $('hud-sink').textContent = `${(this.sinkShown = sink)} %`;
     // its heat sink ran full: it vents, and every sensor sees it again
     if (me.venting && !this.wasVenting) this.hud.flashMessage(now, t('Heat sink full · venting'), 2);
     this.wasVenting = me.venting;
