@@ -193,10 +193,10 @@ export const ES: Catalog = {
   '{coins} Solar Coins · upgrade your ships': '{coins} Solar Coins · mejora tus naves',
   '{coins} Solar Coins. Every point of a round pays one.': '{coins} Solar Coins. Cada punto de una ronda te paga una.',
   '{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.': '{coins} Solar Coins. La cartera está llena: las rondas no pagan nada hasta que gastes.',
-  'The Sovereign flies with every upgrade, and wears every look.': 'La Sovereign vuela con todas las mejoras y luce toda la estética.',
+  'The Sovereign flies with every upgrade and takes no trimmings: it needs none.': 'La Sovereign vuela con todas las mejoras y no lleva adornos: no los necesita.',
   'The Sovereign is the President’s gift for both interceptors made complete.': 'La Sovereign es el regalo del Presidente por completar los dos interceptores.',
   'Bring Lot 7731 through the campaign, and it is yours.': 'Lleva a Lot 7731 hasta el final de la campaña y será tuya.',
-  'The Magpie flies with every upgrade, and wears every look.': 'La Magpie vuela con todas las mejoras y luce toda la estética.',
+  'The Magpie flies with every upgrade, and wears everything Pim welded on.': 'La Magpie vuela con todas las mejoras y lleva todo lo que Pim le soldó.',
   'The Magpie is Lot 7731 as Pim finished it, yours once the campaign is done.': 'La Magpie es Lot 7731 tal como Pim la terminó; será tuya cuando acabes la campaña.',
   '{note} · looks only': '{note} · solo estética',
   Complete: 'Completo',
@@ -451,9 +451,9 @@ export const ES: Catalog = {
   Plating: 'Blindaje',
   'Every hit hurts less': 'Cada impacto duele menos',
   'Neon trim': 'Franjas de neón',
-  'Neon tubes in your color, more each step': 'Tubos de neón en tu color, más en cada nivel',
+  'Neon racing stripes in your color': 'Franjas de carreras de neón en tu color',
   'Drive flame': 'Llama del motor',
-  'Azure, violet, white-hot': 'Azur, violeta, al rojo blanco',
+  'Xenon, argon, hydrogen': 'Xenón, argón, hidrógeno',
 
   // probes
   'Sealed probe': 'Sonda sellada',
@@ -1456,6 +1456,9 @@ export const ES: Catalog = {
     'Un rival en tu cable no puede escapar de ti mientras su motor lucha contra tu cabrestante. Recógelo y dale láser, o un torpedo, a quemarropa.',
   'The grill': 'La parrilla',
   'A main drive burning hard throws its exhaust {plume} m behind it, deadly close up and fading with distance: three seconds right behind a burning drive kill. Whoever tails you too closely gets grilled, and a clone that burns up counts as your kill. Overtake beside a plume, never through it.': 'Un motor principal a pleno empuje lanza su chorro {plume} m por detrás, mortal de cerca y cada vez más débil con la distancia: tres segundos justo detrás de un motor encendido matan. Quien te sigue demasiado pegado acaba a la parrilla, y un clon que se calcina cuenta como tu baja. Adelanta junto a un chorro, nunca a través de él.',
+  'A main drive upgraded in the hangar throws its plume a little farther and grills a little harder.': 'Un motor principal mejorado en el hangar lanza su chorro un poco más lejos y abrasa un poco más.',
+  'Every upgrade shows on the ship: radiator fins and tube racks bolted on, larger thruster puffs, a longer and brighter drive flame, racing stripes and the flame’s colors. Point at an upgrade in the hangar, and the pad shows you the parts it changes. The Sovereign takes no trimmings, it needs none; the Magpie keeps everything Pim welded on.':
+    'Cada mejora se ve en la nave: aletas de radiador y bastidores de tubos atornillados, chorros más grandes en los propulsores, una llama del motor más larga y brillante, franjas de carreras y los colores de la llama. Señala una mejora en el hangar y la plataforma te muestra las piezas que cambia. La Sovereign no lleva adornos, no los necesita; la Magpie conserva todo lo que Pim le soldó.',
   'A plume glows as far as it burns, white-hot behind the bell and orange along its length, so you see where not to sit. In one, the HUD warns you with an arrow towards the burning drive.': 'Un chorro brilla hasta donde quema, al rojo blanco tras la tobera y naranja a lo largo, para que veas dónde no meterte. Si estás dentro, el HUD te avisa con una flecha hacia el motor encendido.',
   'Deathmatch: The Purest Show': 'Todos contra todos: el espectáculo más puro',
   "Five minutes, everyone against everyone. A kill scores {kill}, a close call past a rock {closeCall}. The laser only scorches rock: it is the sponsors', and breaks for nobody's points. The best score wins.":

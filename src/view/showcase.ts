@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Assets, ShipType } from '../assets';
-import type { Perks } from '../game/hangar';
+import type { Perks, UpgradeId } from '../game/hangar';
 import { Ship } from '../ship/ship';
 import { SOVEREIGN_GOLD } from '../ship/tints';
 import { showMagpie } from '../ship/models';
@@ -179,6 +179,7 @@ export class Showcase {
   show(type: ShipType, perks: Perks, locked: boolean) {
     this.locked = locked;
     this.flood.intensity = locked ? FLOOD * 0.2 : FLOOD;
+    this.highlight(null);
     for (const ship of this.ships.values()) ship.root.visible = false;
     for (const { picture } of this.holograms.values()) picture.visible = false;
     this.shown = null;
@@ -200,6 +201,43 @@ export class Showcase {
     ship.root.visible = true;
     this.shown = ship;
     this.reach.set(0, 0);
+  }
+
+  /** The marks over the parts an upgrade changes (see highlight), and when they were put there (s, the pad's clock). */
+  private readonly marks: THREE.Mesh[] = [];
+  private markedAt = 0;
+
+  /**
+   * Points at the parts of the ship on show an upgrade changes (see Ship.partsOf), as the hangar's
+   * row of it is hovered, focused or tapped: a glow in the HUD's azure over them, rising at once
+   * and fading within MARK_SECONDS; held steady while the row is, with reduced motion. Null takes
+   * them off. The marks share the parts' shapes and one material; nothing is drawn without them.
+   */
+  highlight(upgrade: UpgradeId | null) {
+    for (const mark of this.marks) mark.removeFromParent();
+    this.marks.length = 0;
+    const ship = this.shown;
+    if (!upgrade || !ship) return;
+    ship.model.updateWorldMatrix(true, true);
+    const inverse = markInverse.copy(ship.model.matrixWorld).invert();
+    for (const part of ship.partsOf(upgrade)) {
+      const mark = new THREE.Mesh(part.geometry, MARK_MATERIAL);
+      mark.matrixAutoUpdate = false;
+      mark.matrix.multiplyMatrices(inverse, part.matrixWorld);
+      mark.renderOrder = 3;
+      ship.model.add(mark);
+      this.marks.push(mark);
+    }
+    this.markedAt = this.last;
+  }
+
+  /** The marks' glow at `time` (s): a pulse that fades, or steady with reduced motion. */
+  private glowMarks(time: number) {
+    if (this.marks.length === 0) return;
+    const age = time - this.markedAt;
+    const glow = this.still.matches ? 1 : Math.max(0, 1 - age / MARK_SECONDS) * (0.75 + 0.25 * cos(age * Math.PI * 4));
+    MARK_MATERIAL.uniforms.strength.value = glow;
+    if (glow === 0) this.highlight(null);
   }
 
   /** The pad's look (see Look.showcase in view/quality): pixel ratio, the floodlight's shadow, every how many frames it is drawn. */
@@ -246,6 +284,7 @@ export class Showcase {
     this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
     this.shown?.idle(dt, SHOW_THROTTLE);
+    this.glowMarks(time);
     if (root) this.reach.max(reachOf(root, reachNow));
     this.frame(width, height);
     this.renderer.render(this.scene, this.camera);
@@ -412,6 +451,45 @@ function reachOf(root: THREE.Object3D, out: THREE.Vector2): THREE.Vector2 {
 const reachMiddle = new THREE.Vector3();
 const reachNow = new THREE.Vector2();
 const reachCorner = new THREE.Vector3();
+
+/** How long the hangar's marks over a ship's parts glow before they are gone (s, see Showcase.highlight). */
+const MARK_SECONDS = 1.2;
+const markInverse = new THREE.Matrix4();
+/**
+ * The marks' light: the HUD's azure (information, not a call to act) laid over the parts, brightest
+ * along their outline where they turn away from the eye, added onto the picture; its alpha as bright
+ * as it is, so it shows over the scene behind the see-through pad.
+ */
+const MARK_MATERIAL = new THREE.ShaderMaterial({
+  uniforms: { strength: { value: 0 }, color: { value: new THREE.Color(0x4d91ff) } },
+  vertexShader: /* glsl */ `
+    varying float vFacing;
+    void main() {
+      vec4 view = modelViewMatrix * vec4(position, 1.0);
+      vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-view.xyz)));
+      gl_Position = projectionMatrix * view;
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform float strength;
+    uniform vec3 color;
+    varying float vFacing;
+    void main() {
+      float rim = pow(1.0 - vFacing, 2.0);
+      vec3 light = color * strength * (0.35 + 1.6 * rim);
+      gl_FragColor = vec4(light, clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0));
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  premultipliedAlpha: true,
+  side: THREE.DoubleSide,
+  toneMapped: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+});
 
 /** Every solid mesh of a ship on show throws its shadow onto the pad; light (glows, jets, neon) throws none. */
 function castsShadow(root: THREE.Object3D) {

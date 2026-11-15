@@ -11,14 +11,14 @@ import { HULL_LENGTH } from './blow';
 import type { Controls } from '../input/input';
 import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
-import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
-import { brightGlow, FLAMES, FlameLook, type FlameLevel } from '../view/flame';
+import { packLooks, shownLooks, STOCK, unpackLooks, type Looks, type Perks, type UpgradeId } from '../game/hangar';
+import { brightGlow, driveLength, driveLight, FLAMES, FlameLook, MAGPIE_FLAME, type FlameLevel } from '../view/flame';
 import { NeonLook } from '../view/neon';
 import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
 import { BURNOUT_DAMAGE, BURNOUT_SECONDS, DriveHeat } from './driveheat';
-import { PLUME_CORE, PLUME_REACH, PLUME_SPREAD, PLUME_THROTTLE } from './plume';
+import { PLUME_CORE, PLUME_REACH, PLUME_SPREAD, PLUME_THROTTLE, plumeReach } from './plume';
 import { PlumeLook } from '../view/plume';
 import { extremeAfter } from './strainhand';
 
@@ -304,11 +304,13 @@ const GLOW_IDLE = 0.25;
 const ENGINE_LIGHT_OFFSET = 400;
 /**
  * Beyond these distances from the camera (units) the looks' finest parts are not drawn: the neon
- * trim's tubes (2 km, where a 35 cm tube is far below a pixel and the hull a few pixels long) and
+ * trim's racing stripes (2 km, where a 40 cm stripe is far below a pixel and the hull a few pixels long) and
  * the drive flame's jets (4 km; the plume carries the flame's color farther).
  */
 const TRIM_SEEN = 40000;
 const JET_SEEN = 80000;
+/** How much larger the maneuvering thrusters' puffs are drawn a step of the thrusters (more gas a second for their 8 % more push, drawn so it shows). */
+const PUFF_STEP = 0.2;
 /** Each hull's maneuvering thrusters (see ship/thrusters), where models.ts puts them. */
 const THRUSTERS: Record<ShipType, Thrusters> = {
   human: thrustersOf(THRUSTER_LAYOUTS.human),
@@ -496,13 +498,19 @@ export class Ship {
   thrusters = 1;
   /** What the ship's upgrades make of it (see game/hangar and outfit); stock for bots and other browsers' ships. */
   perks: Perks = STOCK;
-  /** The neon trim: all of it, the rails of each step, and the light of its tubes, the ship's own (see outfit, view/neon). */
-  private readonly trim: { group: THREE.Object3D; rails: (THREE.Object3D | undefined)[]; neon: NeonLook };
+  /** The neon trim's racing stripes and their light, the ship's own (see outfit, view/neon). */
+  private readonly trim: { group: THREE.Object3D; neon: NeonLook };
+  /** What its hull shows of its upgrades (see outfit). */
+  private looks: Looks = { flame: 0, neon: 0, radiators: 0, drive: 0, thrusters: 0, tubes: 0 };
+  /** The glowing skins of the radiator fins bolted on (see models, boltOns), glowing with the radiators. */
+  private readonly radiatorExtras: THREE.Mesh[] = [];
+  /** The model file's flame at its own size, drawn longer by the main drive's step. */
+  private readonly flameScale = new THREE.Vector3(1, 1, 1);
   /** The color the trim burns in (see setTint). */
   private readonly neonTint = new THREE.Color();
   /** The jets of the drive flame's look (see outfit, view/flame). */
   private readonly flame: FlameLook;
-  /** Whether the camera is near enough for the trim's tubes and the flame's jets (see seenFrom). */
+  /** Whether the camera is near enough for the trim's stripes and the flame's jets (see seenFrom). */
   private trimSeen = true;
   private jetSeen = true;
   heat = 0;
@@ -648,17 +656,25 @@ export class Ship {
       if (o.name === 'radiator') o.material = (o.material as THREE.Material).clone();
       o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
     });
-    const trim = this.model.getObjectByName('trim')!;
-    this.trim = { group: trim, rails: [1, 2, 3].map((step) => trim.getObjectByName(`trim${step}`)), neon };
+    this.trim = { group: this.model.getObjectByName('trim')!, neon };
     this.flame = new FlameLook(this.model.userData.nozzles ?? []);
     this.model.add(this.flame.mesh);
     this.radiators = this.model.getObjectByName('radiator') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    // the bolted-on fins' skins glow as the radiators do, in their very material
+    this.model.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.name === 'radiatorExtra') {
+        o.material = this.radiators.material;
+        o.visible = o.castShadow = o.receiveShadow = false;
+        this.radiatorExtras.push(o);
+      }
+    });
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
     this.stockGlow = assets.textures.glow;
     this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
+    if (this.engine.flame) this.flameScale.copy(this.engine.flame.scale);
     this.root.name = 'ship:' + id;
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.textures.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
     this.aura.visible = false;
@@ -687,12 +703,44 @@ export class Ship {
     this.color.set(tint);
     // the neon trim burns in the pilot's tint, a trophy's in its glow (the Sovereign's gold, the Magpie's shimmer)
     this.neonTint.set(this.trophy?.glow ?? tint);
-    this.trim.neon.wear(this.perks.neon, this.neonTint);
+    this.trim.neon.wear(this.looks.neon, this.neonTint, this.perks.magpie);
   }
 
   /** How the drive burns by the flame's look (see view/flame): its colors for the plume, the trail and the thrusters' puffs. */
   get flameLook(): FlameLevel {
-    return FLAMES[this.perks.flame];
+    return this.perks.magpie ? MAGPIE_FLAME : FLAMES[this.looks.flame];
+  }
+
+  /** How large the maneuvering thrusters' puffs are drawn by the thrusters' step (more gas a second): a fifth larger a step. */
+  get puffScale(): number {
+    return 1 + PUFF_STEP * this.looks.thrusters;
+  }
+
+  /**
+   * The meshes of the hull an upgrade changes, for the hangar to point at (see view/showcase,
+   * highlight): the radiators' skin and the fins of their step (the first step's where none are
+   * fitted yet), the thrusters' clusters, the drives' bells, the tube rack of its step (the first's
+   * where none is), the plating of the whole hull, the stripes; none of the trimmings a hull does
+   * not take (the Sovereign's).
+   */
+  partsOf(upgrade: UpgradeId): THREE.Mesh[] {
+    const plain = this.type === 'sovereign';
+    const named = (...names: string[]) => names.flatMap((name) => this.model.getObjectsByProperty('name', name)).flatMap((o) => (o instanceof THREE.Mesh ? [o] : o.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh)));
+    switch (upgrade) {
+      case 'radiators':
+        return named('radiator', ...(plain ? [] : [`radiators${Math.max(1, this.looks.radiators)}`]));
+      case 'thrusters':
+        return named('markThrusters');
+      case 'drive':
+      case 'flame':
+        return named('markBells');
+      case 'tubes':
+        return plain ? [] : named(`pods${Math.max(1, this.looks.tubes)}`);
+      case 'plating':
+        return named(`${this.type === 'magpie' ? 'human' : this.type}Hull`);
+      case 'neon':
+        return plain ? [] : named('trimLight');
+    }
   }
 
   /** Leaves out the looks' finest parts while the camera at `camera` is too far to see them (see TRIM_SEEN, JET_SEEN). */
@@ -700,13 +748,14 @@ export class Ship {
     const distance = this.root.position.distanceToSquared(camera);
     this.trimSeen = distance < TRIM_SEEN * TRIM_SEEN;
     this.jetSeen = distance < JET_SEEN * JET_SEEN;
-    this.trim.group.visible = this.perks.neon > 0 && this.trimSeen;
+    this.trim.group.visible = this.looks.neon > 0 && this.trimSeen;
   }
 
   /**
-   * Fits the ship with its upgrades: how it flies and fights (read where they act), its neon
-   * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
-   * running light towards the drives) and its drive flame's color.
+   * Fits the ship with its upgrades: how it flies and fights (read where they act), and what its
+   * hull shows of them (see hangar, shownLooks): the drive flame's look, the neon trim's racing
+   * stripes, the radiator fins and the tube racks bolted on, the jet and the plume as long as the
+   * main drive's step makes them.
    */
   outfit(perks: Perks) {
     this.perks = perks;
@@ -721,24 +770,30 @@ export class Ship {
     if (panels) panels.visible = !perks.bareFlank;
     // the hull in its last stage, the Magpie, over all of it (see models, magpieHull)
     showMagpie(this.model, perks.magpie);
+    const looks = (this.looks = shownLooks(this.type, perks));
     // the drive flame's look: its jets, the glow at the nozzles (a plain light on an upgraded
-    // drive, so its tint shows), the plume (see view/flame)
-    const flame = FLAMES[perks.flame];
-    this.flame.wear(perks.flame);
+    // drive, so its tint shows), the plume (see view/flame), the plume as long as the drive's
+    // push makes it (see ship/plume)
+    const flame = this.flameLook;
+    this.flame.wear(flame);
     this.plume.tint(flame.plume);
+    this.plume.mesh.scale.setScalar(plumeReach(perks.drive) / PLUME_REACH);
     const { glowMaterial } = this.engine;
-    const glowMap = perks.flame > 0 ? brightGlow() : this.stockGlow;
+    const glowMap = flame !== FLAMES[0] ? brightGlow() : this.stockGlow;
     if (glowMaterial.map !== glowMap) {
       glowMaterial.map = glowMap;
       glowMaterial.needsUpdate = true;
     }
-    // the neon trim: each step's rails, and the tubes of the steps bought, in the pilot's tint
-    const { group, rails, neon } = this.trim;
-    group.visible = perks.neon > 0 && this.trimSeen;
-    rails.forEach((fitting, i) => {
-      if (fitting) fitting.visible = perks.neon > i;
-    });
-    neon.wear(perks.neon, this.neonTint);
+    // the neon trim: the racing stripes of the step, in the pilot's tint
+    this.trim.group.visible = looks.neon > 0 && this.trimSeen;
+    this.trim.neon.wear(looks.neon, this.neonTint, perks.magpie);
+    // the bolt-ons: the radiator fins and the tube rack of their steps (see models, boltOns)
+    for (let step = 1; step <= 3; step++) {
+      const fins = this.model.getObjectByName(`radiators${step}`);
+      if (fins) fins.visible = looks.radiators === step;
+      const rack = this.model.getObjectByName(`pods${step}`);
+      if (rack) rack.visible = looks.tubes === step;
+    }
   }
 
   /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
@@ -1073,6 +1128,7 @@ export class Ship {
     this.glow += (this.heat / MAX_HEAT - this.glow) * (1 - exp(-dt / RADIATOR_LAG));
     const t = THREE.MathUtils.smoothstep(this.glow, RADIATOR_GLOW, 1);
     this.radiators.visible = t > 0.01;
+    for (const skin of this.radiatorExtras) skin.visible = this.radiators.visible;
     if (this.radiators.visible) this.radiators.material.color.setRGB(0.95 * pow(t, 1.5), 0.22 * t * t * t, 0.03 * pow(t, 5));
   }
 
@@ -1372,21 +1428,23 @@ export class Ship {
     const sputter = this.drive < 1 ? 0.6 + 0.4 * Math.random() : 1;
     const throttle = this.flight.throttle * sputter;
     this.flameTime += dt;
-    const look = FLAMES[this.perks.flame];
+    const look = this.flameLook;
+    const drive = this.looks.drive;
     // an overdrive's shove under way draws the jets out and runs the trim's chase light (looks only)
     const shove = Math.max(0, Math.min(1, this.overdriveLeft / OVERDRIVE_SECONDS));
     if (flame && flameMaterial) {
-      // the model file's flame is the stock drive's; an upgraded one burns its jets instead
-      flame.visible = this.perks.flame === 0 && throttle > 0.02;
+      // the model file's flame is the stock look's, as long as the main drive's step draws it; a look burns its jets instead
+      flame.visible = look === FLAMES[0] && throttle > 0.02;
+      flame.scale.copy(this.flameScale).setZ(this.flameScale.z * driveLength(drive));
       flame.position.z = flameZ - FLAME_RETRACT * (1 - throttle);
       flameMaterial.map = this.frames[Math.floor(this.flameTime * 10) % this.frames.length];
-      flameMaterial.opacity = throttle;
+      flameMaterial.opacity = Math.min(1, throttle * driveLight(drive));
     }
     // the shove goes through the drive: its jets and glow blaze while it lasts
     const blaze = Math.max(throttle, shove);
-    this.flame.burn(blaze, shove, this.flameTime, this.drive > 0 && this.jetSeen);
+    this.flame.burn(dt, blaze, shove, drive, this.flameTime, this.drive > 0 && this.jetSeen);
     // the glow grows and brightens with the drive; idle it is a faint pilot light
-    const glowScale = GLOW_MAX_SCALE * look.glowScale * (0.3 + 0.7 * blaze);
+    const glowScale = GLOW_MAX_SCALE * look.glowScale * (0.3 + 0.7 * blaze) * driveLength(drive);
     glowMaterial.color.copy(look.glow).multiplyScalar(GLOW_IDLE + (1 - GLOW_IDLE) * blaze);
     for (const glow of glows) {
       glow.visible = this.drive > 0;
@@ -1397,7 +1455,7 @@ export class Ship {
       this.engineLight.color.copy(look.light);
     }
     // the plume burns, and is seen, only past PLUME_THROTTLE and with a drive left
-    this.plume.set(!this.plumeHidden && this.drive > 0 && throttle >= PLUME_THROTTLE ? throttle : 0, this.flameTime);
-    if (this.perks.neon > 0) this.trim.neon.burn(dt, shove, this.flameTime);
+    this.plume.set(!this.plumeHidden && this.drive > 0 && throttle >= PLUME_THROTTLE ? throttle * this.perks.drive : 0, this.flameTime);
+    if (this.looks.neon > 0) this.trim.neon.burn(dt, shove, this.flameTime);
   }
 }

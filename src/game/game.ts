@@ -4729,11 +4729,11 @@ export class Game implements OnlineGame {
     $('hangar-coins').textContent = this.hangar.coins >= WALLET ? t('{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.', coins) : t('{coins} Solar Coins. Every point of a round pays one.', coins);
     const list = $('hangar-upgrades');
     if (ship === 'sovereign') {
-      list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
+      list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade and takes no trimmings: it needs none.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
       return;
     }
     if (ship === 'magpie') {
-      list.textContent = this.magpieEarned() ? t('The Magpie flies with every upgrade, and wears every look.') : t('The Magpie is Lot 7731 as Pim finished it, yours once the campaign is done.');
+      list.textContent = this.magpieEarned() ? t('The Magpie flies with every upgrade, and wears everything Pim welded on.') : t('The Magpie is Lot 7731 as Pim finished it, yours once the campaign is done.');
       return;
     }
     // the ship on show: its gear, then its upgrades
@@ -4757,7 +4757,17 @@ export class Game implements OnlineGame {
         row.innerHTML = `<span class="upgrade-name">${t(upgrade.name)}<small>${upgrade.looks ? t('{note} · looks only', { note: t(upgrade.note) }) : t(upgrade.note)}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? t('Complete') : `${coinText(price)} ☉`}</span>`;
         row.addEventListener('click', () => {
           if (buy(this.hangar, ship, upgrade.id)) this.saveHangar();
+          this.showcase?.highlight(upgrade.id);
         });
+        // the pad points at the parts the upgrade changes while its row is hovered, focused or tapped
+        const point = () => this.showcase?.highlight(upgrade.id);
+        const stop = () => this.showcase?.highlight(null);
+        row.addEventListener('pointerenter', point);
+        row.addEventListener('pointerdown', point);
+        row.addEventListener('focus', point);
+        // a finger lifted leaves the row at once: its tap's glow fades by itself
+        row.addEventListener('pointerleave', (event) => event.pointerType !== 'touch' && stop());
+        row.addEventListener('blur', stop);
         return row;
       }),
     );
@@ -8544,7 +8554,7 @@ export class Game implements OnlineGame {
         const strength = ship.jets[i];
         if (strength < JET_SHOWN) continue;
         const mouth = ship.toWorld(nozzles[i].mouth, scratch);
-        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength, ship.flameLook.jet);
+        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength, ship.flameLook.jet, ship.puffScale);
       }
     }
   }
@@ -8723,7 +8733,7 @@ export class Game implements OnlineGame {
     for (const other of this.ships) {
       if (other === ship || !other.alive) continue;
       // behind the other's drive, along its axis, inside the cone the plume spreads to (see ship/plume)
-      const strength = plumeStrength(other.flight.position, other.flight.forward(forward).negate(), other.flight.throttle, ship.flight.position, ship.radius);
+      const strength = plumeStrength(other.flight.position, other.flight.forward(forward).negate(), other.flight.throttle, ship.flight.position, ship.radius, other.perks.drive);
       if (strength > hottest) {
         hottest = strength;
         burner = other;

@@ -4,7 +4,7 @@ import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces'
 import { hazeUniforms } from '../view/haze';
 import { letteringTexture, numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
-import type { Nozzle } from '../view/flame';
+import type { BellRing, Nozzle } from '../view/flame';
 import { cos, hypot, sin } from '../detmath';
 import { rotateY } from '../detthree';
 import { Randomizer } from '../random';
@@ -24,7 +24,7 @@ type Section = [number, number][];
 type End = { z: number; w: number; h: number; x?: number; y?: number };
 
 /** An octagon with flat sides, top and bottom, the cross section of most hull parts (width and height 2). */
-const OCTAGON: Section = [[-1, -0.6], [-0.6, -1], [0.6, -1], [1, -0.6], [1, 0.6], [0.6, 1], [-0.6, 1], [-1, 0.6]];
+export const OCTAGON: Section = [[-1, -0.6], [-0.6, -1], [0.6, -1], [1, -0.6], [1, 0.6], [0.6, 1], [-0.6, 1], [-1, 0.6]];
 const RECTANGLE: Section = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 /** A blade: thin and pointed at both edges. */
 const BLADE: Section = [[-1, 0], [0, -1], [1, 0], [0, 1]];
@@ -362,7 +362,7 @@ function coat({ parts, wear, seed, look, glow, rim }: Coat): THREE.Mesh {
  * A hull on the model file's engine (see keepEngine): its `coats`, each one mesh (see coat), and
  * the `glow` parts, if any, lit in their color. Every mesh carries `name`. Its drives' `nozzles`
  * are kept for the jets of the drive flame's look (`userData.nozzles`, see view/flame). The
- * `trim` comes along hidden (see lightStrips), and so do the `radiators`, one mesh named
+ * `trim` comes along hidden (see racingStripes), and so do the `radiators`, one mesh named
  * `radiator` that glows over them as the laser's heat rises (see Ship.radiate).
  */
 function hull(original: THREE.Object3D, name: string, coats: Coat[], nozzles: Nozzle[], trim: THREE.Object3D, radiators: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
@@ -396,181 +396,199 @@ function at(ends: End[], z: number): End {
   return { z, w: mix(a.w, b.w), h: mix(a.h, b.h), x: mix(a.x ?? 0, b.x ?? 0), y: mix(a.y ?? 0, b.y ?? 0) };
 }
 
+/** A racing stripe: its middle's offset from the centerline and its width (units). */
+type Stripe = { x: number; width: number };
 /**
- * The line along the right flank of an octagonal body lofted through `ends` (from the nose back),
- * at `f` of its half height above its middle (the flat flank reaches ±0.6), from depth `from` to
- * `to`. The body is straight between its ends, so the line bends only there.
+ * The racing stripes of each step of the neon trim (see racingStripes): one narrow stripe down
+ * the centerline (40 cm), one broad stripe (1.2 m), then twin stripes side by side, 1 m each with
+ * 50 cm of hull between them.
  */
-function flankLine(ends: End[], f: number, from: number, to: number): THREE.Vector3[] {
-  const depths = [from, ...ends.map((end) => end.z).filter((z) => z > from && z < to), to];
-  return depths.map((z) => {
-    const end = at(ends, z);
-    return new THREE.Vector3((end.x ?? 0) + end.w, (end.y ?? 0) + f * end.h, z);
+const STRIPES: Stripe[][] = [[{ x: 0, width: 8 }], [{ x: 0, width: 24 }], [-1, 1].map((side) => ({ x: side * 15, width: 20 }))];
+/** The stripes follow the hull's top in samples this far apart along the ship and across a stripe (units), standing this far off it (5 cm: paint under a skin of light). */
+const STRIPE_STEP = 8;
+const STRIPE_COLUMN = 2;
+const STRIPE_STAND = 1;
+/** Where the top under a stripe drops or rises by more than this between neighbouring samples (units, 2 m), the stripe breaks off there instead of hanging down a wall. */
+const STRIPE_JUMP = 40;
+const stripeRay = new THREE.Raycaster();
+const stripeFrom = new THREE.Vector3();
+const DOWN = new THREE.Vector3(0, -1, 0);
+
+/**
+ * The neon trim, a look of the hangar (see Ship.outfit, view/neon): racing stripes along the top
+ * of the hull from the nose back to the stern (depths `from` to `to`), laid on its surface as
+ * paint is, over the canopy and the spine wherever they rise: each sample the first of `surfaces`
+ * (the hull's top parts, nothing standing tall on it) straight down. Every step's stripes (STRIPES)
+ * are one mesh, `trimLight`, each vertex knowing the step it belongs to (`tier`), where along the
+ * ship it lies (`along`, 0 at the nose to 1 at the stern, so the chase light runs towards the
+ * drives), where across its stripe (`across`, -1 to 1) and which stripe it is (`seed`, for its
+ * buzz); in `trim`, hidden until a ship wears it. Laid by hand (`wobble`, units), a stripe wanders
+ * that far off its line and back along the ship, and its edges with it.
+ */
+function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: number, wobble = 0): THREE.Object3D {
+  const targets = surfaces.map((geometry) => new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
+  const top = (x: number, z: number) => {
+    stripeRay.set(stripeFrom.set(x, 1000, z), DOWN);
+    const hit = stripeRay.intersectObjects(targets, false)[0];
+    return hit ? hit.point.y + STRIPE_STAND : null;
+  };
+  const position: number[] = [];
+  const attributes: Record<'tier' | 'along' | 'across' | 'seed', number[]> = { tier: [], along: [], across: [], seed: [] };
+  const depths: number[] = [];
+  for (let z = from; z < to; z += STRIPE_STEP) depths.push(z);
+  depths.push(to);
+  let seed = 0;
+  STRIPES.forEach((stripes, step) => {
+    for (const stripe of stripes) {
+      seed++;
+      const columns = Math.ceil(stripe.width / STRIPE_COLUMN);
+      // a hand's slow drift off the line, and the edges not quite parallel
+      const drift = (z: number, c: number) => wobble * (0.6 * sin(z * 0.013 + seed) + 0.4 * sin(z * 0.041 + seed * 2.3) * (c / columns - 0.5));
+      const xs = depths.map((z) => Array.from({ length: columns + 1 }, (_, c) => stripe.x - stripe.width / 2 + (c / columns) * stripe.width + drift(z, c)));
+      const heights = depths.map((z, d) => xs[d].map((x) => top(x, z)));
+      const corner = (d: number, c: number) => {
+        position.push(xs[d][c], heights[d][c]!, depths[d]);
+        attributes.tier.push(step + 1);
+        attributes.along.push((depths[d] - from) / (to - from));
+        attributes.across.push((2 * c) / columns - 1);
+        attributes.seed.push(seed);
+      };
+      for (let d = 0; d + 1 < depths.length; d++) {
+        for (let c = 0; c < columns; c++) {
+          const quad = [heights[d][c], heights[d + 1][c], heights[d + 1][c + 1], heights[d][c + 1]];
+          if (quad.some((h) => h === null)) continue;
+          const ys = quad as number[];
+          if (Math.max(...ys) - Math.min(...ys) > STRIPE_JUMP) continue;
+          for (const [e, f] of [[d, c], [d + 1, c], [d + 1, c + 1], [d, c], [d + 1, c + 1], [d, c + 1]]) corner(e, f);
+        }
+      }
+    }
   });
-}
-
-type Size = { h: number; d: number };
-/** The trim's light tube: half its height and half its depth (units); 35 cm tall, standing 10 cm off the hull. */
-const TUBE: Size = { h: 3.5, d: 1 };
-/**
- * The rails of the channel the tube is set into, one above it and one below: 12 cm tall and
- * standing 20 cm off the hull, so the tube lies recessed between them and only glances out.
- */
-const RAIL: Size = { h: 1.2, d: 2 };
-const RAIL_OFFSET = TUBE.h + RAIL.h;
-/** The tube comes in panels 2.5 m long with a 30 cm joint between them, the way a hull takes a fitting (units). */
-const PANEL = 50;
-const JOINT = 6;
-const RAIL_METAL = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.45, metalness: 0.8, flatShading: true });
-
-/** A profile of `size` from `a` to `b` on the hull (its inner face on the line), both flanks. */
-const bar = (a: THREE.Vector3, b: THREE.Vector3, size: Size) => pair(loft(RECTANGLE, { z: b.z, w: size.d, h: size.h, x: b.x + size.d, y: b.y }, { z: a.z, w: size.d, h: size.h, x: a.x + size.d, y: a.y }));
-
-/** A rail of `size` along `line`, moved up by `dy`. */
-function rail(line: THREE.Vector3[], size: Size, dy: number): THREE.BufferGeometry[] {
-  const moved = line.map((p) => new THREE.Vector3(p.x, p.y + dy, p.z));
-  return moved.slice(1).flatMap((b, i) => bar(moved[i], b, size));
-}
-
-/** The tube along `line` in panels (see PANEL); a panel over a bend of the line takes the chord. */
-function panels(line: THREE.Vector3[]): THREE.BufferGeometry[] {
-  const lengths = line.slice(1).map((b, i) => b.distanceTo(line[i]));
-  const total = lengths.reduce((sum, length) => sum + length, 0);
-  const point = (s: number) => {
-    let i = 0;
-    while (i < lengths.length - 1 && s > lengths[i]) s -= lengths[i++];
-    return line[i].clone().lerp(line[i + 1], Math.min(1, s / lengths[i]));
-  };
-  const count = Math.max(1, Math.round((total + JOINT) / (PANEL + JOINT)));
-  const step = (total + JOINT) / count;
-  const parts: THREE.BufferGeometry[] = [];
-  for (let k = 0; k < count; k++) parts.push(...bar(point(k * step), point(k * step + step - JOINT), TUBE));
-  return parts;
-}
-
-/** A profile across the stern: `width` long, centered at `y`, its inner face on the stern's face at `z`. */
-function sternBar(width: number, y: number, z: number, size: Size): THREE.BufferGeometry {
-  return new THREE.BoxGeometry(width, size.h * 2, size.d * 2).translate(0, y, z + size.d).toNonIndexed().deleteAttribute('uv');
-}
-
-/** Where a hull's trim runs (see lightStrips): the flank's upper and lower line (right flank, from the nose back), the stern bar, and the drive nacelle (`ends` from the nose back) with the depth of its ring. */
-type TrimPlan = { upper: THREE.Vector3[]; lower: THREE.Vector3[]; stern: { width: number; y: number; z: number }; nacelle: { ends: End[]; z: number } };
-
-/** How far the tubes' light spills onto the hull on either side of them (units, 45 cm), and how far its sheet stands off the plates. */
-const SPILL = 9;
-const SPILL_STAND = 0.3;
-/** The ring of tube around each drive nacelle: half its depth and how far it stands off the nacelle (units, 30 cm deep, 10 cm proud). */
-const RING_HALF = 3;
-const RING_STAND = 2;
-
-/**
- * The spill of a tube's light on the hull: a sheet along `line` standing SPILL_STAND off the hull
- * towards `out`, reaching SPILL to either side along `up`, `across` running from -1 over 0 (the
- * tube) to 1.
- */
-function spill(line: THREE.Vector3[], out: THREE.Vector3, up: THREE.Vector3): THREE.BufferGeometry {
-  const points: THREE.Vector3[] = [];
-  const across: number[] = [];
-  const row = (p: THREE.Vector3, k: number) => p.clone().addScaledVector(out, SPILL_STAND).addScaledVector(up, k * SPILL);
-  for (let i = 0; i + 1 < line.length; i++) {
-    for (const [k, l] of [[-1, 0], [0, 1]]) {
-      points.push(row(line[i], k), row(line[i + 1], k), row(line[i + 1], l), row(line[i], k), row(line[i + 1], l), row(line[i], l));
-      across.push(k, k, l, k, l, l);
-    }
-  }
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  geometry.setAttribute('across', new THREE.Float32BufferAttribute(across, 1));
-  return geometry;
-}
-
-/** The spill of a nacelle's ring on the nacelle: a band SPILL deep on either side of the ring at depth `z`, standing SPILL_STAND off it. */
-function ringSpill(ends: End[], z: number): THREE.BufferGeometry {
-  const ring = (d: number) => {
-    const end = at(ends, d);
-    return OCTAGON.map(([x, y]) => new THREE.Vector3((end.x ?? 0) + x * (end.w + SPILL_STAND), (end.y ?? 0) + y * (end.h + SPILL_STAND), d));
-  };
-  const rings = [ring(z - SPILL - RING_HALF), ring(z), ring(z + SPILL + RING_HALF)];
-  const points: THREE.Vector3[] = [];
-  const across: number[] = [];
-  for (let i = 0; i < OCTAGON.length; i++) {
-    const j = (i + 1) % OCTAGON.length;
-    for (const [k, l] of [[0, 1], [1, 2]]) {
-      points.push(rings[k][i], rings[k][j], rings[l][j], rings[k][i], rings[l][j], rings[l][i]);
-      across.push(k - 1, k - 1, l - 1, k - 1, l - 1, l - 1);
-    }
-  }
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  geometry.setAttribute('across', new THREE.Float32BufferAttribute(across, 1));
-  return geometry;
-}
-
-/**
- * A part of the trim's light as the shader reads it (see view/neon): the look's step it comes
- * with (`tier`), where along the ship it lies (`along`, 0 at depth `front` to 1 at `back`, so the
- * chase light runs towards the drives), across its spill (`across`, 0 on the tube) and which
- * tube it is (`seed`, for its buzz). Only these and its position are kept, so all parts merge.
- */
-function lit(geometry: THREE.BufferGeometry, tier: number, front: number, back: number, seed: number): THREE.BufferGeometry {
-  const position = geometry.attributes.position;
-  const part = new THREE.BufferGeometry();
-  part.setAttribute('position', position);
-  part.setAttribute('across', geometry.attributes.across ?? new THREE.BufferAttribute(new Float32Array(position.count), 1));
-  const along = new Float32Array(position.count);
-  for (let i = 0; i < position.count; i++) along[i] = THREE.MathUtils.clamp((position.getZ(i) - front) / (back - front), 0, 1);
-  part.setAttribute('along', new THREE.BufferAttribute(along, 1));
-  part.setAttribute('tier', new THREE.BufferAttribute(new Float32Array(position.count).fill(tier), 1));
-  part.setAttribute('seed', new THREE.BufferAttribute(new Float32Array(position.count).fill(seed), 1));
-  return part;
-}
-
-/**
- * The neon trim, a look of the hangar (see Ship.outfit, view/neon), more of it with every step:
- * the first lights a tube in panels along both flanks on the flank's upper line, recessed in a
- * channel of two dark rails; the second a bar of the same make across the stern (`stern`: its
- * width, height and depth), the light a pursuer sees, and a ring of tube around each drive
- * nacelle between two collars; the third a second pair of tubes low on the flanks. Each tube
- * spills its light on the hull around it. The rails of each step are a mesh of their own
- * (`trim1` … `trim3`); the light of every step is one mesh, `trimLight`; all of it `trim`,
- * hidden until a ship wears it.
- */
-function lightStrips(plan: TrimPlan): THREE.Object3D {
-  const { upper, lower, stern, nacelle } = plan;
-  const front = Math.min(upper[0].z, lower[0].z);
-  const back = stern.z;
-  const right = new THREE.Vector3(1, 0, 0);
-  const up = new THREE.Vector3(0, 1, 0);
-  const astern = new THREE.Vector3(0, 0, 1);
-  const sternLine = [new THREE.Vector3(-stern.width / 2 - 4, stern.y, stern.z), new THREE.Vector3(stern.width / 2 + 4, stern.y, stern.z)];
-  const rails = (line: THREE.Vector3[]) => [...rail(line, RAIL, RAIL_OFFSET), ...rail(line, RAIL, -RAIL_OFFSET)];
-  const collars = [-1, 1].flatMap((side) => pair(hoop(OCTAGON, nacelle.ends, nacelle.z + side * (RING_HALF + RAIL.h), RAIL.h, RING_STAND + 1)));
-  // each step's rails, and its tubes, each tube a list of parts (a panel on both flanks, a spill)
-  const tiers: { rails: THREE.BufferGeometry[]; tubes: THREE.BufferGeometry[][] }[] = [
-    { rails: rails(upper), tubes: [...panels(upper).map((part) => [part]), pair(spill(upper, right, up))] },
-    {
-      rails: [...[-RAIL_OFFSET, RAIL_OFFSET].map((dy) => sternBar(stern.width + 8, stern.y + dy, stern.z, RAIL)), ...collars],
-      tubes: [[sternBar(stern.width, stern.y, stern.z, TUBE), spill(sternLine, astern, up)], pair(hoop(OCTAGON, nacelle.ends, nacelle.z, RING_HALF, RING_STAND)), pair(ringSpill(nacelle.ends, nacelle.z))],
-    },
-    { rails: rails(lower), tubes: [...panels(lower).map((part) => [part]), pair(spill(lower, right, up))] },
-  ];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  // for the hangar's marks over them (see view/showcase)
+  geometry.computeVertexNormals();
+  for (const [name, values] of Object.entries(attributes)) geometry.setAttribute(name, new THREE.Float32BufferAttribute(values, 1));
   const trim = new THREE.Group();
   trim.name = 'trim';
   trim.visible = false;
-  let seed = 0;
-  const light: THREE.BufferGeometry[] = [];
-  tiers.forEach((tier, i) => {
-    const fitting = new THREE.Mesh(mergeGeometries(tier.rails), RAIL_METAL);
-    fitting.name = `trim${i + 1}`;
-    trim.add(fitting);
-    for (const tube of tier.tubes) {
-      seed++;
-      for (const part of tube) light.push(lit(part, i + 1, front, back, seed));
-    }
-  });
-  const tubes = new THREE.Mesh(mergeGeometries(light), new THREE.MeshBasicMaterial());
-  tubes.name = 'trimLight';
-  tubes.renderOrder = 2;
-  trim.add(tubes);
+  const light = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  light.name = 'trimLight';
+  light.renderOrder = 2;
+  trim.add(light);
   return trim;
+}
+
+/**
+ * The bolt-ons of the hangar's steps (see Ship.outfit): what a depot's mechanic fits to an old
+ * fighter, from whatever plating is in the racks, olive of another depot, bare steel, rusty brown,
+ * welded and bolted on, cables run outside. Per step of the radiators a larger set of radiator
+ * fins (`plates`, and `skins`, the glowing skin over them as the laser's heat rises, see radiator),
+ * per step of the torpedo tubes a larger rack of tubes (`pods`). Each step's set is one coat
+ * (`radiators1` … `radiators3`, `pods1` … `pods3`, with the fins' skins `radiatorExtra`), all in
+ * `boltOns`, hidden until a ship wears them.
+ */
+type BoltOnSet = { plates: THREE.BufferGeometry[]; skins: THREE.BufferGeometry[] };
+/** The bolt-ons' worn plating: several depots' surplus, welded on and scuffed. */
+const BOLTED: Wear = { rust: 0.6, chips: 0.6, grime: 0.7, scratches: 0.7, seams: 0.8, stencils: ['SURPLUS', 'NO STEP', 'DEPOT 12'], roughness: 0.75, metalness: 0.3, relief: 'flush', dents: 0.5 };
+/** The plating the racks have: an olive of another depot, bare steel, rust brown, gunmetal. */
+const surplus = (i: number) => [0x5d6a3a, STEEL, RUST_BROWN, GUNMETAL][i % 4];
+const RUST_BROWN = 0x6b4f33;
+
+function boltOns(radiators: (step: number) => BoltOnSet, pods: (step: number) => THREE.BufferGeometry[]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'boltOns';
+  for (let step = 1; step <= 3; step++) {
+    const set = radiators(step);
+    const fins = new THREE.Group();
+    fins.name = `radiators${step}`;
+    fins.visible = false;
+    const skin = new THREE.Mesh(mergeGeometries(set.skins), new THREE.MeshBasicMaterial());
+    skin.name = 'radiatorExtra';
+    fins.add(coat({ parts: set.plates, wear: BOLTED, seed: 7750 }), skin);
+    const rack = coat({ parts: pods(step), wear: BOLTED, seed: 7750 });
+    rack.name = `pods${step}`;
+    rack.visible = false;
+    group.add(fins, rack);
+  }
+  return group;
+}
+
+/**
+ * Radiator fins bolted to a drive's nacelle or pod, both sides (`on`: where the fin's root sits on
+ * it, at the stern end; `out`: the fin standing out sideways, else up): the first step one fin 30
+ * cm thick, 1.5 m wide and 5 m long; the second one 2.2 m wide and 7 m long; the third two of
+ * those side by side, 8 m long. Each on two brackets, ribbed along its length, in mismatched
+ * plating; more fin is more area to radiate the laser's heat from.
+ */
+function radiatorFins(on: { x: number; y: number; z: number }, out: boolean): (step: number) => BoltOnSet {
+  return (step) => {
+    const span = step === 1 ? 30 : 44;
+    const length = step === 1 ? 100 : step === 2 ? 140 : 160;
+    const offsets = step === 3 ? [-12, 12] : [0];
+    const plates: THREE.BufferGeometry[] = [];
+    const skins: THREE.BufferGeometry[] = [];
+    // a profile along the fin: `reach` out from the root (its middle), `side` across its thickness
+    const profile = (z: number, reach: number, side: number, half: number, thick: number): End =>
+      out ? { z, w: half, h: thick, x: on.x + 4 + reach, y: on.y + side } : { z, w: thick, h: half, x: on.x + side, y: on.y + 4 + reach };
+    offsets.forEach((side, k) => {
+      const back = profile(on.z - 6, span / 2, side, span / 2, 1.5);
+      const front = { ...back, z: on.z - 6 - length };
+      plates.push(...pair(paint(loft(RECTANGLE, back, front), surplus(step + k))));
+      // the ribs along both faces, and the brackets that hold it to the hull
+      for (const r of [0.2, 0.5, 0.8]) plates.push(...pair(paint(loft(RECTANGLE, profile(back.z, r * span, side, 1, 2.4), profile(front.z, r * span, side, 1, 2.4)), RUST_BROWN)));
+      for (const z of [on.z - 20, on.z - length + 10]) plates.push(...pair(paint(loft(RECTANGLE, profile(z + 4, 0, side, 4, 3), profile(z - 4, 0, side, 4, 3)), GUNMETAL)));
+      skins.push(...pair(radiator(RECTANGLE, back, front, (p) => 0.4 + 0.6 * THREE.MathUtils.smoothstep(p.z, front.z, back.z))));
+    });
+    return { plates, skins };
+  };
+}
+
+/**
+ * A rack of torpedo tubes on the hull, both sides (`on`: where the rack's first tube lies, its
+ * middle, the depth of its muzzle and its length; `across`: how far apart the tubes stand): one
+ * tube on the first step, two on the second, three on the third, 90 cm across, strapped to a
+ * saddle plate, a cable run from each back into the hull.
+ */
+function tubeRack(on: { x: number; y: number; z: number; length: number }, across: number): (step: number) => THREE.BufferGeometry[] {
+  return (step) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const tubes = Array.from({ length: step }, (_, k) => on.x + k * across);
+    const back = on.z + on.length;
+    // the saddle plate under the rack
+    const middle = (tubes[0] + tubes[tubes.length - 1]) / 2;
+    const width = (tubes[tubes.length - 1] - tubes[0]) / 2 + 11;
+    parts.push(...pair(paint(loft(RECTANGLE, { z: back - 10, w: width, h: 1.5, x: middle, y: on.y - 8 }, { z: on.z + 10, w: width, h: 1.5, x: middle, y: on.y - 8 }), surplus(step))));
+    tubes.forEach((x, k) => {
+      const paintOf = surplus(k + step + 1);
+      parts.push(...pair(paint(loft(OCTAGON, { z: back, w: 9, h: 9, x, y: on.y }, { z: on.z, w: 9, h: 9, x, y: on.y }), paintOf)));
+      // the muzzle's dark cap, two straps, the cable to the hull
+      parts.push(...pair(sooty(loft(OCTAGON, { z: on.z + 0.5, w: 7, h: 7, x, y: on.y }, { z: on.z - 0.5, w: 7, h: 7, x, y: on.y }))));
+      for (const z of [on.z + 20, back - 20]) parts.push(...pair(paint(loft(OCTAGON, { z: z + 2, w: 10, h: 10, x, y: on.y }, { z: z - 2, w: 10, h: 10, x, y: on.y }), RUST_BROWN)));
+      parts.push(...pair(paint(loft(RECTANGLE, { z: back + 30, w: 0.8, h: 0.8, x: x - 4, y: on.y - 8 }, { z: back - 2, w: 0.8, h: 0.8, x, y: on.y - 3 }), GUNMETAL)));
+    });
+    return parts;
+  };
+}
+
+/**
+ * The parts of a hull the hangar points at (see view/showcase, highlight) that lie merged into its
+ * coats, as hidden meshes of their own shape: its maneuvering thrusters' clusters (`markThrusters`,
+ * from `layout`) and its drives' bells (`markBells`).
+ */
+function marks(layout: QuadLayout, bells: THREE.BufferGeometry[]): THREE.Object3D[] {
+  // their shapes alone, so parts of any paint merge
+  const bare = (parts: THREE.BufferGeometry[]) => mergeGeometries(parts.map((part) => new THREE.BufferGeometry().setAttribute('position', part.attributes.position).setAttribute('normal', part.attributes.normal)));
+  const quads = thrusterQuads(layout, 0, 0, 0);
+  return [
+    ['markThrusters', bare([...quads.housings, ...quads.nozzles])],
+    ['markBells', bare(bells)],
+  ].map(([name, geometry]) => {
+    const mesh = new THREE.Mesh(geometry as THREE.BufferGeometry, new THREE.MeshBasicMaterial());
+    mesh.name = name as string;
+    mesh.visible = false;
+    return mesh;
+  });
 }
 
 const OLIVE = 0x56663f;
@@ -649,9 +667,9 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     paint(loft(OCTAGON, HUMAN_BODY[2], HUMAN_BODY[1]), OLIVE),
     paint(loft(OCTAGON, HUMAN_BODY[1], HUMAN_BODY[0]), OLIVE),
     // canopy, dark glass
-    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
+    paint(loft(OCTAGON, ...HUMAN_CANOPY), GLASS),
     // spine and belly
-    paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8, h: 4, y: 50 }), OLIVE_DARK),
+    paint(loft(RECTANGLE, ...HUMAN_SPINE), OLIVE_DARK),
     paint(loft(RECTANGLE, { z: 160, w: 34, h: 12, y: -50 }, { z: -150, w: 22, h: 8, y: -40 }), STEEL),
     // gun under the nose
     paint(loft(OCTAGON, { z: -120, w: 9, h: 9, y: -52 }, { z: -300, w: 6, h: 6, y: -52 }), GUNMETAL),
@@ -680,7 +698,7 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: 262, w: 5, h: 5, x: 285, y: 88 }, { z: 250, w: 5, h: 5, x: 285, y: 88 })),
     ...pair(loft(RECTANGLE, { z: 264, w: 4, h: 4, x: 30, y: 30 }, { z: 256, w: 4, h: 4, x: 30, y: 30 })),
   ];
-  const trim = lightStrips(humanTrim());
+  const trim = humanStripes();
   // the radiators: the drive block's cooling ribs, hottest at the back where the coolant comes
   // from the drives, and the vents on the bulkhead over them
   const radiators = [
@@ -691,19 +709,37 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     { parts, wear: DEPOT, seed: 41 },
     { parts: fins, wear: DEPOT_FINS, seed: 42 },
   ];
-  return hull(original, 'humanHull', coats, HUMAN_NOZZLES, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  const root = hull(original, 'humanHull', coats, HUMAN_NOZZLES, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  root.add(humanBoltOns(), ...marks(THRUSTER_LAYOUTS.human, driveBells([0, 0, 0], 0)));
+  return root;
 }
+
+/** The human interceptor's bolt-ons (see boltOns): radiator fins standing on its nacelles, a rack of tubes on each strut's plate; the Magpie's too. */
+const humanBoltOns = () => boltOns(radiatorFins({ x: HUMAN_NACELLE[1].x!, y: HUMAN_NACELLE[1].y! + HUMAN_NACELLE[1].h, z: HUMAN_NACELLE[1].z }, false), tubeRack({ x: 146, y: 32, z: 10, length: 110 }, 20));
 
 /** The human interceptor's drive nacelle (the right one), from the nose back; the Sovereign's is slimmer. */
 const HUMAN_NACELLE: End[] = [{ z: 60, w: 22, h: 20, x: 75, y: 4 }, { z: 250, w: 30, h: 26, x: 87, y: 2 }];
-/** Where the jets of the human interceptor's drives start (see view/flame): the bells' mouths, inside their rims; the Sovereign's and the Magpie's too. */
-const HUMAN_NOZZLES: Nozzle[] = [1, -1].map((side) => ({ x: side * DRIVE_BELL[2].x!, y: DRIVE_BELL[2].y!, z: DRIVE_BELL[2].z, r: 24 }));
-
+/** A bell's glowing shell (see view/flame) a hair off its surface: `grow` larger than the loft through `ends` (negative: inside it). */
+const shell = (ends: End[], grow: number): BellRing[] => ends.map((end) => ({ z: end.z, w: end.w + grow, h: end.h + grow }));
+/** How far a bell's glowing shells stand off its plates (units, 2 cm). */
+const SHELL_GAP = 0.4;
+/** The thickness of the human interceptor's bells' walls (units), as driveBells builds them. */
+const BELL_WALL = 2.5;
 /**
- * The human interceptor's trim: along the fuselage's shoulders above the nacelles, across the
- * bulkhead, a ring near each nacelle's end, and low along the fuselage ahead of the nacelles.
+ * Where the jets of the human interceptor's drives start (see view/flame): the bells' mouths,
+ * inside their rims, and their bells' shells inside the liner and over the outside; the
+ * Sovereign's and the Magpie's too.
  */
-const humanTrim = (): TrimPlan => ({ upper: flankLine(HUMAN_BODY, 0.45, -230, 240), lower: flankLine(HUMAN_BODY, -0.45, -200, 40), stern: { width: 96, y: 48, z: 244 }, nacelle: { ends: HUMAN_NACELLE, z: 232 } });
+const HUMAN_NOZZLES: Nozzle[] = [1, -1].map((side) => ({ x: side * DRIVE_BELL[2].x!, y: DRIVE_BELL[2].y!, z: DRIVE_BELL[2].z, r: 24, bell: [shell(DRIVE_BELL, -BELL_WALL - SHELL_GAP), shell(DRIVE_BELL, SHELL_GAP)] }));
+
+/** The human interceptor's canopy and the spine behind it, along the top of its fuselage (the scrap hull's too). */
+const HUMAN_CANOPY: [End, End] = [{ z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }];
+const HUMAN_SPINE: [End, End] = [{ z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8, h: 4, y: 50 }];
+/** The fuselage's top the racing stripes are laid on (see racingStripes): the body, then the canopy and the spine `top` puts on it. */
+const fuselage = (body: End[], top: THREE.BufferGeometry[]) => [...body.slice(1).map((end, i) => loft(OCTAGON, end, body[i])), ...top];
+
+/** The human interceptor's racing stripes: from the nose over the canopy and the spine to the bulkhead. */
+const humanStripes = () => racingStripes(fuselage(HUMAN_BODY, [loft(OCTAGON, ...HUMAN_CANOPY), loft(RECTANGLE, ...HUMAN_SPINE)]), HUMAN_BODY[0].z + 20, HUMAN_BODY[2].z);
 
 /**
  * Lot 7731 as the yard sold it (the campaign's ship, see campaign/campaign): the depot's paint
@@ -717,8 +753,8 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
   const parts: THREE.BufferGeometry[] = [
     paint(loft(OCTAGON, HUMAN_BODY[2], HUMAN_BODY[1]), OLIVE_DARK),
     paint(loft(OCTAGON, HUMAN_BODY[1], HUMAN_BODY[0]), OLIVE_DARK),
-    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
-    paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8, h: 4, y: 50 }), STEEL),
+    paint(loft(OCTAGON, ...HUMAN_CANOPY), GLASS),
+    paint(loft(RECTANGLE, ...HUMAN_SPINE), STEEL),
     ...pair(paint(loft(OCTAGON, HUMAN_NACELLE[1], HUMAN_NACELLE[0]), STEEL)),
     ...pair(paint(loft(OCTAGON, NACELLE_CAP, NACELLE_END, 'back'), GUNMETAL)),
     // only the right flank keeps its strut and plate; the left one shows the bare frame
@@ -732,7 +768,7 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
   ];
   const fins = [pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), OLIVE))[0]];
   const lights = [...pair(loft(RECTANGLE, { z: 264, w: 4, h: 4, x: 30, y: 30 }, { z: 256, w: 4, h: 4, x: 30, y: 30 }))];
-  const trim = lightStrips(humanTrim());
+  const trim = magpieStripes();
   const radiators = RIBS.map((y) => radiator(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }, (p) => 0.55 + 0.45 * THREE.MathUtils.smoothstep(p.z, 214, 266)));
   const coats: Coat[] = [
     { parts, wear: SCRAP, seed: 7731 },
@@ -748,6 +784,7 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
   root.add(oldLivery());
   root.add(flankPanels());
   root.add(magpieHull());
+  root.add(humanBoltOns(), ...marks(THRUSTER_LAYOUTS.human, driveBells([0, 0, 0], 0)));
   return root;
 }
 
@@ -779,6 +816,17 @@ const FLIPPED: Wear = { rust: 0, chips: 0.25, grime: 0.15, scratches: 0.3, seams
 const MAGPIE_NOSE: End[] = [HUMAN_BODY[1], { z: -290, w: 24, h: 20, y: -4 }, { z: -420, w: 6, h: 5, y: -8 }];
 /** The sleeper pod's hump behind the canopy, from the canopy back. */
 const POD: [End, End] = [{ z: 150, w: 16, h: 8, y: 56 }, { z: -30, w: 24, h: 16, y: 50 }];
+/** The short spine behind the pod. */
+const MAGPIE_SPINE: [End, End] = [{ z: 230, w: 12, h: 10, y: 62 }, { z: 140, w: 10, h: 6, y: 58 }];
+/**
+ * The racing stripes of Lot 7731, laid on the Magpie's top (the only stage that flies in the Games,
+ * see MAGPIE_LOOKS): from the scout's long nose over the canopy, the pod and the spine, under the
+ * sensor mast, to the bulkhead; laid by Pim's hand, wandering up to MAGPIE_WOBBLE (units, 10 cm)
+ * off their line.
+ */
+const MAGPIE_WOBBLE = 2;
+const magpieStripes = () =>
+  racingStripes(fuselage([MAGPIE_NOSE[2], MAGPIE_NOSE[1], HUMAN_BODY[1], HUMAN_BODY[2]], [loft(OCTAGON, ...HUMAN_CANOPY), loft(OCTAGON, ...POD), loft(RECTANGLE, ...MAGPIE_SPINE)]), MAGPIE_NOSE[2].z + 20, HUMAN_BODY[2].z, MAGPIE_WOBBLE);
 /** Where the sensor mast stands on the pod (units along the ship), how tall it reaches over the pod's top (units). */
 const MAST_Z = 60;
 const MAST_TOP = 130;
@@ -798,10 +846,10 @@ function magpieHull(): THREE.Group {
     paint(loft(OCTAGON, HUMAN_BODY[2], HUMAN_BODY[1]), MAGPIE_BLACK),
     paint(loft(OCTAGON, MAGPIE_NOSE[0], MAGPIE_NOSE[1]), MAGPIE_BLACK),
     paint(loft(OCTAGON, MAGPIE_NOSE[1], MAGPIE_NOSE[2]), MAGPIE_BLACK),
-    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
+    paint(loft(OCTAGON, ...HUMAN_CANOPY), GLASS),
     // the pod's hump, and the spine behind it
     paint(loft(OCTAGON, POD[0], POD[1]), MAGPIE_BLACK),
-    paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: 140, w: 10, h: 6, y: 58 }), MAGPIE_BLACK),
+    paint(loft(RECTANGLE, ...MAGPIE_SPINE), MAGPIE_BLACK),
     // the sensor mast: a post on the pod, a crossbar, the sensor's pod on top
     paint(loft(RECTANGLE, { z: MAST_Z + 6, w: 2.5, h: (MAST_TOP - 60) / 2, y: (MAST_TOP + 60) / 2 }, { z: MAST_Z - 6, w: 2, h: (MAST_TOP - 60) / 2, y: (MAST_TOP + 60) / 2 }), GUNMETAL),
     paint(loft(RECTANGLE, { z: MAST_Z + 2, w: 18, h: 1.5, y: MAST_TOP - 18 }, { z: MAST_Z - 2, w: 18, h: 1.5, y: MAST_TOP - 18 }), GUNMETAL),
@@ -1058,13 +1106,16 @@ const SOVEREIGN_WING: [End, End] = [{ z: 230, w: 120, h: 9, x: 150, y: 0 }, { z:
 
 /** The Sovereign's arrowhead, from the nose back. */
 const SOVEREIGN_BODY: End[] = [{ z: -380, w: 4, h: 4, y: -4 }, { z: -120, w: 40, h: 26 }, { z: 250, w: 62, h: 40, y: 4 }];
+/** Its canopy, amber glass, and the gold frame over it running back to the stern. */
+const SOVEREIGN_CANOPY: [End, End] = [{ z: 20, w: 24, h: 12, y: 30 }, { z: -150, w: 12, h: 5, y: 22 }];
+const SOVEREIGN_FRAME: [End, End] = [{ z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }];
 /** Its gold drive nacelle (the right one), from the nose back. */
 const SOVEREIGN_NACELLE: End[] = [{ z: 40, w: 18, h: 16, x: 70, y: 4 }, { z: 250, w: 28, h: 24, x: 87, y: 2 }];
 
 /**
  * The Sovereign, the President's gift to a Host who has made both interceptors complete: a long
  * ivory arrowhead with a gold canopy, delta wings swept back to gold tips, forward canards. It wears
- * every look, the neon trim's light strips too. It keeps the human interceptor's drives, so its
+ * every look, the neon trim's racing stripes too. It keeps the human interceptor's drives, so its
  * flames burn where the model file has them.
  */
 export function sovereign(original: THREE.Object3D): THREE.Object3D {
@@ -1073,7 +1124,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     paint(loft(OCTAGON, SOVEREIGN_BODY[2], SOVEREIGN_BODY[1]), IVORY),
     paint(loft(OCTAGON, SOVEREIGN_BODY[1], SOVEREIGN_BODY[0]), IVORY),
     // the canopy, amber glass in a gold frame (see gold)
-    paint(loft(OCTAGON, { z: 20, w: 24, h: 12, y: 30 }, { z: -150, w: 12, h: 5, y: 22 }), AMBER_GLASS),
+    paint(loft(OCTAGON, ...SOVEREIGN_CANOPY), AMBER_GLASS),
     // delta wings swept back to gold tips
     ...pair(paint(loft(BLADE, ...SOVEREIGN_WING), IVORY)),
   ];
@@ -1081,7 +1132,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
   // near the nose, the drive nacelles with their bells where the flames burn, the thrusters
   const thrusters = thrusterQuads(THRUSTER_LAYOUTS.sovereign, GOLD, GOLD_DARK, GOLD_DARK);
   const gold: THREE.BufferGeometry[] = [
-    paint(loft(RECTANGLE, { z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }), GOLD),
+    paint(loft(RECTANGLE, ...SOVEREIGN_FRAME), GOLD),
     ...pair(paint(loft(RECTANGLE, { z: 250, w: 14, h: 30, x: 272, y: 8 }, { z: 140, w: 8, h: 14, x: 268, y: 10 }), GOLD)),
     ...pair(paint(loft(BLADE, { z: -170, w: 46, h: 5, x: 64, y: 4 }, { z: -250, w: 14, h: 3, x: 40, y: 4 }), GOLD_DARK)),
     ...pair(paint(loft(OCTAGON, SOVEREIGN_NACELLE[1], SOVEREIGN_NACELLE[0]), GOLD)),
@@ -1090,9 +1141,8 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     ...thrusters.housings,
     ...thrusters.nozzles,
   ];
-  // the trim high on the arrowhead's flanks, above the wings and the nacelles, across its stern,
-  // a ring near each nacelle's end, and low on the flanks under the wings' roots
-  const trim = lightStrips({ upper: flankLine(SOVEREIGN_BODY, 0.5, -340, 250), lower: flankLine(SOVEREIGN_BODY, -0.45, -300, 30), stern: { width: 100, y: 20, z: 250 }, nacelle: { ends: SOVEREIGN_NACELLE, z: 232 } });
+  // the racing stripes down the arrowhead's top, over the canopy and its gold frame
+  const trim = racingStripes(fuselage(SOVEREIGN_BODY, [loft(OCTAGON, ...SOVEREIGN_CANOPY), loft(RECTANGLE, ...SOVEREIGN_FRAME)]), SOVEREIGN_BODY[0].z + 30, SOVEREIGN_BODY[2].z);
   // the delta wings are its radiators, hottest at their roots towards the trailing edge
   const radiators = pair(radiator(BLADE, SOVEREIGN_WING[0], SOVEREIGN_WING[1], (p) => THREE.MathUtils.smoothstep(p.z, -40, 230) * (1 - 0.6 * THREE.MathUtils.smoothstep(Math.abs(p.x), 90, 270))));
   const coats: Coat[] = [
@@ -1100,7 +1150,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     { parts: gold, wear: GILDED, seed: 8, look: { clearcoat: GOLD_LACQUER } },
   ];
   const root = hull(original, 'sovereignHull', coats, HUMAN_NOZZLES, trim, radiators);
-  root.add(hullNumber());
+  root.add(hullNumber(), ...marks(THRUSTER_LAYOUTS.sovereign, driveBells([0, 0, 0], 0)));
   return root;
 }
 
@@ -1241,7 +1291,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(paint(loft(BLADE, ...ALIEN_FIN), VOID)),
     // the drive pods, open at the stern, black with soot inside
     ...pair(paint(loft(OCTAGON, ALIEN_POD[1], ALIEN_POD[0], 'back'), VOID)),
-    ...pair(sooty(loft(OCTAGON, { z: 410, w: 16, h: 16, x: 104, y: -44 }, { z: 385, w: 13, h: 13, x: 104, y: -44 }, 'back'))),
+    ...pair(sooty(loft(OCTAGON, ALIEN_LINER[1], ALIEN_LINER[0], 'back'))),
     ...Object.values(thrusterQuads(THRUSTER_LAYOUTS.alien, VOID_SHEEN, VOID, VOID)).flat(),
   ];
   const veins: THREE.BufferGeometry[] = [
@@ -1251,18 +1301,31 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: 360, w: 2, h: 2, x: 104, y: -18 }, { z: 60, w: 2, h: 2, x: 148, y: -50 })),
     ...pair(loft(RECTANGLE, { z: 150, w: 2, h: 2, x: 64, y: 20 }, { z: -220, w: 2, h: 2, x: 20, y: 4 })),
   ];
-  // the trim along the dart's flanks, below the veins and above the side blades, across its
-  // stern, a ring near each drive pod's end, and low on the needle's flanks ahead of the inner blades
-  const trim = lightStrips({ upper: flankLine(ALIEN_BODY, 0.1, -290, 400), lower: flankLine(ALIEN_BODY, -0.45, -280, -20), stern: { width: 56, y: 4, z: 400 }, nacelle: { ends: ALIEN_POD, z: 392 } });
+  // the racing stripes down the dart's top from the needle to the stern, the dorsal blade rising
+  // out of them (it stands on the centerline, thin where it meets the body)
+  const trim = racingStripes(fuselage(ALIEN_BODY, []), ALIEN_BODY[0].z + 30, ALIEN_BODY[2].z);
   // the inner side blades are its radiators, hottest at the body
   const radiators = pair(radiator(BLADE, ALIEN_FIN[0], ALIEN_FIN[1], (p) => 1 - 0.7 * THREE.MathUtils.smoothstep(Math.abs(p.x), 60, 130)));
-  return hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW }], ALIEN_NOZZLES, trim, radiators, { parts: veins, color: VEIN });
+  const root = hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW }], ALIEN_NOZZLES, trim, radiators, { parts: veins, color: VEIN });
+  // radiator fins standing out from the drive pods, a rack of tubes on each side blade's top
+  root.add(boltOns(radiatorFins({ x: ALIEN_POD[1].x! + ALIEN_POD[1].w, y: ALIEN_POD[1].y!, z: ALIEN_POD[1].z }, true), tubeRack({ x: 118, y: -14, z: 200, length: 110 }, 18)));
+  // its drives' ends, the pods' last stretch, for the hangar to point at
+  root.add(...marks(THRUSTER_LAYOUTS.alien, pair(loft(OCTAGON, ALIEN_POD[1], at(ALIEN_POD, ALIEN_LINER[0].z), 'back'))));
+  return root;
 }
 
 /** The alien interceptor's drive pod (the right one) at the root of its side blade, from the nose back. */
 const ALIEN_POD: End[] = [{ z: 280, w: 16, h: 16, x: 104, y: -44 }, { z: 410, w: 18, h: 18, x: 104, y: -44 }];
-/** Where the jets of its drives start (see view/flame): the pods' open ends. */
-const ALIEN_NOZZLES: Nozzle[] = [1, -1].map((side) => ({ x: side * ALIEN_POD[1].x!, y: ALIEN_POD[1].y!, z: ALIEN_POD[1].z, r: 14 }));
+/** The sooty liner at a pod's open end, from inside to the end. */
+const ALIEN_LINER: End[] = [{ z: 385, w: 13, h: 13, x: 104, y: -44 }, { z: 410, w: 16, h: 16, x: 104, y: -44 }];
+/** Where the jets of its drives start (see view/flame): the pods' open ends, with their shells inside the liner and over the pod's end. */
+const ALIEN_NOZZLES: Nozzle[] = [1, -1].map((side) => ({
+  x: side * ALIEN_POD[1].x!,
+  y: ALIEN_POD[1].y!,
+  z: ALIEN_POD[1].z,
+  r: 14,
+  bell: [shell(ALIEN_LINER, -SHELL_GAP), shell([at(ALIEN_POD, ALIEN_LINER[0].z), ALIEN_POD[1]], SHELL_GAP)],
+}));
 
 /** The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never rusting. */
 const SCARRED: Wear = { rust: 0, chips: 0.25, grime: 0.35, scratches: 0.9, seams: 0.6, stencils: [], roughness: 0.35, metalness: 0.55, relief: 'scales' };

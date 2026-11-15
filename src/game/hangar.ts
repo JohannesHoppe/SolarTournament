@@ -61,8 +61,8 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: 'drive', name: msg('Main drive'), note: msg('More push, same speed limit'), prices: [1000, 2500, 5000], looks: false },
   { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per ship'), prices: [1500, 3000, 6000], looks: false },
   { id: 'plating', name: msg('Plating'), note: msg('Every hit hurts less'), prices: [1500, 3000, 6000], looks: false },
-  { id: 'neon', name: msg('Neon trim'), note: msg('Neon tubes in your color, more each step'), prices: [500, 1500, 3000], looks: true },
-  { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },
+  { id: 'neon', name: msg('Neon trim'), note: msg('Neon racing stripes in your color'), prices: [500, 1500, 3000], looks: true },
+  { id: 'flame', name: msg('Drive flame'), note: msg('Xenon, argon, hydrogen'), prices: [500, 1500, 3000], looks: true },
 ];
 
 /**
@@ -105,6 +105,8 @@ export interface Perks {
   thrusters: number;
   drive: number;
   torpedoes: number;
+  /** The torpedo tubes' step, 0 (stock) to LEVELS, for the racks the hull shows (see shownLooks). */
+  tubes: number;
   /** Share of every damage the hull takes. */
   damage: number;
   /** The looks: neon trim and drive flame, 0 (stock) to LEVELS. */
@@ -138,6 +140,7 @@ export const STOCK: Readonly<Perks> = {
   thrusters: 1,
   drive: 1,
   torpedoes: 0,
+  tubes: 0,
   damage: 1,
   neon: 0,
   flame: 0,
@@ -178,16 +181,71 @@ export const DRIVE_STEP = 0.05;
 /** What each step of the plating takes off every hit (a share of it). */
 export const PLATING_STEP = 0.07;
 
+/** The steps of the upgrades a ship shows (see shownLooks) and other browsers are told of (see packLooks). */
+export type Looks = { flame: number; neon: number; radiators: number; drive: number; thrusters: number; tubes: number };
+/** The step a multiplier of an upgrade stands for (`per`: what a step adds), 0 to LEVELS. */
+const stepOf = (value: number, per: number) => Math.max(0, Math.min(LEVELS, Math.round((value - 1) / per)));
+/** The steps of a ship's upgrades as its perks hold them. */
+export const stepsOf = (perks: Perks): Looks => ({
+  flame: perks.flame,
+  neon: perks.neon,
+  radiators: stepOf(perks.cooling, RADIATOR_STEP),
+  drive: stepOf(perks.drive, DRIVE_STEP),
+  thrusters: stepOf(perks.thrusters, THRUSTER_STEP),
+  tubes: perks.tubes,
+});
+
 /**
- * What other browsers are told of a ship's upgrades (a ship state's `lo`): the looks, and the
- * radiators' step (online at most ONLINE_LEVEL), so they heat it in a planet's air as its own
- * browser does (see view/reentry); 16 × the radiators' step + 4 × the neon trim's + the drive
- * flame's, at most MAX_LOOKS.
+ * What a ship's hull shows of its upgrades: its steps, but the trophies' as they are built. The
+ * Sovereign takes no trimmings and needs none: no stripes, no colored flame, no bolt-ons, only
+ * what its drive and thrusters do (their jets as long and their puffs as large as its steps make
+ * them). The Magpie, Lot 7731 as Pim finished it, keeps everything she welded on over the
+ * campaign: the third step's stripes, flame, radiator fins and tube racks, fixed.
  */
-export const packLooks = (perks: Perks) => Math.min(ONLINE_LEVEL, Math.round((perks.cooling - 1) / RADIATOR_STEP)) * 16 + perks.neon * 4 + perks.flame;
-export const MAX_LOOKS = (ONLINE_LEVEL + 1) * 16 - 1;
-/** Another browser's ship as `lo` tells it (see packLooks): stock but for its looks and radiators. */
-export const unpackLooks = (looks: number, type: ShipType): Perks => hullLooks(type, { ...STOCK, cooling: 1 + RADIATOR_STEP * (looks >> 4), neon: (looks >> 2) & 3, flame: looks & 3 });
+export function shownLooks(type: ShipType, perks: Perks): Looks {
+  const steps = stepsOf(perks);
+  if (type === 'sovereign') return { ...steps, flame: 0, neon: 0, radiators: 0, tubes: 0 };
+  if (perks.magpie) return { ...steps, flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS };
+  return steps;
+}
+
+/**
+ * What other browsers are told of a ship's upgrades (a ship state's `lo`), two bits a step from
+ * the lowest in the order of LOOK_STEPS: the looks in full, and the radiators (so they heat it in a
+ * planet's air as its own browser does, see view/reentry), the main drive (its jet and its plume,
+ * which grills them, see ship/plume), the thrusters (their puffs) and the torpedo tubes (their
+ * racks), each online at most ONLINE_LEVEL; at most MAX_LOOKS, every step within its cap
+ * (fitsLooks).
+ */
+const LOOK_STEPS: readonly [keyof Looks, number][] = [
+  ['flame', LEVELS],
+  ['neon', LEVELS],
+  ['radiators', ONLINE_LEVEL],
+  ['drive', ONLINE_LEVEL],
+  ['thrusters', ONLINE_LEVEL],
+  ['tubes', ONLINE_LEVEL],
+];
+export const packLooks = (perks: Perks) => {
+  const steps = stepsOf(perks);
+  return LOOK_STEPS.reduce((packed, [key, cap], i) => packed + (Math.min(cap, steps[key]) << (2 * i)), 0);
+};
+export const MAX_LOOKS = LOOK_STEPS.reduce((packed, [, cap], i) => packed + (cap << (2 * i)), 0);
+const stepIn = (looks: number, i: number) => (looks >> (2 * i)) & 3;
+/** Whether a `lo` another browser sent holds every step within its cap. */
+export const fitsLooks = (looks: number) => looks >= 0 && looks <= MAX_LOOKS && LOOK_STEPS.every(([, cap], i) => stepIn(looks, i) <= cap);
+/** Another browser's ship as `lo` tells it (see packLooks): stock but for these steps. */
+export function unpackLooks(looks: number, type: ShipType): Perks {
+  const step = (key: keyof Looks) => stepIn(looks, LOOK_STEPS.findIndex(([name]) => name === key));
+  return hullLooks(type, {
+    ...STOCK,
+    cooling: 1 + RADIATOR_STEP * step('radiators'),
+    drive: 1 + DRIVE_STEP * step('drive'),
+    thrusters: 1 + THRUSTER_STEP * step('thrusters'),
+    tubes: step('tubes'),
+    neon: step('neon'),
+    flame: step('flame'),
+  });
+}
 
 const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.map((upgrade) => [upgrade.id, 0])) as Record<UpgradeId, number>;
 
@@ -345,6 +403,7 @@ export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): 
     thrusters: 1 + THRUSTER_STEP * step('thrusters'),
     drive: 1 + DRIVE_STEP * step('drive'),
     torpedoes: tubeTorpedoes(step('tubes')),
+    tubes: step('tubes'),
     damage: 1 - PLATING_STEP * step('plating'),
     neon: look('neon'),
     flame: look('flame'),

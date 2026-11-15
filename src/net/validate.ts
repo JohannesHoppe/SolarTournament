@@ -4,7 +4,7 @@ import { KNOCKED, rootOf, type AsteroidState, type FieldState, type ShovedState 
 import { SYNC_SLICES, type FamilyState, type FieldSlice, type HitState } from '../world/fieldsync';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
-import { MAX_LOOKS } from '../game/hangar';
+import { fitsLooks, MAX_LOOKS } from '../game/hangar';
 import { TINTS } from '../ship/tints';
 import type { FlagsState } from '../game/flags';
 import type { FleetState } from '../game/fleet';
@@ -112,7 +112,7 @@ export function shipState(x: unknown): ShipState | null {
           g: int(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
           it: int(x.it, 0, 63),
-          lo: int(x.lo, 0, MAX_LOOKS),
+          lo: int(x.lo, 0, MAX_LOOKS) !== null && fitsLooks(x.lo as number) ? (x.lo as number) : null,
           // a Host's tint is an entry of the palette, never a color of its own
           co: int(x.co, 0, TINTS.length - 1),
           to: int(x.to, 0, MAX_TORPEDOES),

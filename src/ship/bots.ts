@@ -1280,7 +1280,7 @@ export class Bot {
       if (ship === this.ship || !ship.alive) continue;
       // out of a burning drive's plume it sits in (its flame is plain to see): sideways off its axis
       const backward = ship.flight.forward(plumeBack).negate();
-      const grill = plumeStrength(ship.flight.position, backward, ship.flight.throttle, me.position, this.ship.radius);
+      const grill = plumeStrength(ship.flight.position, backward, ship.flight.throttle, me.position, this.ship.radius, ship.perks.drive);
       if (grill > PLUME_SHRUG) {
         local.subVectors(me.position, ship.flight.position);
         local.addScaledVector(backward, -local.dot(backward));

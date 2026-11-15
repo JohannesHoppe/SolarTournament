@@ -215,16 +215,16 @@ class Jets extends PointCloud {
     super(texture, JET_CAPACITY);
   }
 
-  /** A puff at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of the nozzle's full push, cooling to `cool` away from the mouth. */
-  add(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, cool: THREE.Color) {
+  /** A puff at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of the nozzle's full push, cooling to `cool` away from the mouth, `scale` times a stock thruster's size. */
+  add(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, cool: THREE.Color, scale: number) {
     const n = jetPoints();
     // fewer points glow brighter each, so the puff keeps its light on a cheaper picture
     const light = strength * Math.sqrt(3 / n);
     for (let j = 0; j < n && this.count < JET_CAPACITY; j++) {
       const along = (j + 0.5) / n;
       const i = this.count++;
-      scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
-      this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
+      scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * scale * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
+      this.size[i] = JET_WIDTH * scale * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
       const fade = light * (1 - 0.6 * along);
       jetTint.lerpColors(JET_HOT, cool, along);
       this.tint[i * 4] = jetTint.r;
@@ -278,8 +278,8 @@ export class Effects {
   }
 
   /** A maneuvering thruster's puff this frame (see Jets): at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of its push, cooling to `cool` (the drive's look, see view/flame). */
-  jet(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, cool: THREE.Color) {
-    this.jets.add(mouth, exhaust, strength, cool);
+  jet(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, cool: THREE.Color, scale: number) {
+    this.jets.add(mouth, exhaust, strength, cool, scale);
   }
 
   /**

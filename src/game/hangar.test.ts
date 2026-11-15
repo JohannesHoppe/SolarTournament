@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAGPIE_LOOKS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAGPIE_LOOKS, MAX_LOOKS, fitsLooks, shownLooks, stepsOf, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -88,6 +88,26 @@ describe('the hangar', () => {
     expect(unpackLooks(packLooks(STOCK), 'human')).toEqual(STOCK);
     // the Sovereign's too, its looks in full and its radiators at the cap
     expect(packLooks(perksOf(emptyHangar(), 'sovereign', true))).toBe(MAX_LOOKS);
+  });
+
+  it('tells other browsers the steps of its drive, thrusters and tubes online, each within its cap, and takes no step past it', () => {
+    const online = perksOf(maxed(), 'alien', true);
+    const seen = unpackLooks(packLooks(online), 'alien');
+    expect(seen.drive).toBeCloseTo(online.drive);
+    expect(seen.thrusters).toBeCloseTo(online.thrusters);
+    expect(seen.tubes).toBe(online.tubes);
+    expect(stepsOf(seen)).toEqual(stepsOf(online));
+    for (let looks = 0; looks <= MAX_LOOKS; looks++) expect(fitsLooks(looks)).toBe(packLooks(unpackLooks(looks, 'human')) === looks);
+    expect(fitsLooks(MAX_LOOKS + 1)).toBe(false);
+    // the radiators' bits at the third step, past the online cap: refused
+    expect(fitsLooks(3 << 4)).toBe(false);
+  });
+
+  it('shows the Sovereign without trimmings and the Magpie with every bolt-on Pim welded on', () => {
+    const sovereign = shownLooks('sovereign', perksOf(emptyHangar(), 'sovereign', false));
+    expect(sovereign).toEqual({ flame: 0, neon: 0, radiators: 0, tubes: 0, drive: LEVELS, thrusters: LEVELS });
+    expect(shownLooks('magpie', perksOf(emptyHangar(), 'magpie', true))).toMatchObject({ flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS });
+    expect(shownLooks('human', perksOf(maxed(), 'human', true))).toEqual(stepsOf(perksOf(maxed(), 'human', true)));
   });
 
   it('flies the Magpie as a complete interceptor, as the Sovereign, capped online, and shows it in its last stage to every browser', () => {
