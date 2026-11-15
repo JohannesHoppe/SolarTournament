@@ -1383,7 +1383,32 @@ export class AsteroidField {
    * reads it before the next cast), the others get a fresh one.
    */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
-    const distance = this.cast(origin, direction, maxDistance, false, obstacles);
+    return this.hitOf(this.cast(origin, direction, maxDistance, false, obstacles), into);
+  }
+
+  /**
+   * The pieces a tube of radius `wall` around the line from `origin` along `direction` (unit
+   * length) may meet within `length`, in the field's own order, written into `into`: those whose
+   * bounding sphere, widened by the wall (and a unit for rounding), the line enters by then. A ray
+   * inside the tube and parallel to the line, cast no farther, meets no other piece: where it
+   * enters a piece's sphere, the line runs no farther than the wall from that point.
+   */
+  piecesAlong(origin: THREE.Vector3, direction: THREE.Vector3, length: number, wall: number, into: Asteroid[]): Asteroid[] {
+    into.length = 0;
+    for (const asteroid of this.asteroids.values()) {
+      const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius + wall + 1);
+      if (enter !== null && enter <= length) into.push(asteroid);
+    }
+    return into;
+  }
+
+  /** As raycast, but among `pieces` alone (see piecesAlong): the same pieces met in the same order, so the same hit to the bit for a ray they were gathered for. */
+  raycastAmong(pieces: readonly Asteroid[], origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
+    return this.hitOf(this.cast(origin, direction, maxDistance, false, obstacles, pieces), into);
+  }
+
+  /** The last cast's hit at `distance` as a RayHit (into `into` when given), or null for none. */
+  private hitOf(distance: number | null, into?: RayHit): RayHit | null {
     if (distance === null) return null;
     const hit = into ?? { asteroid: null, distance: 0, center: castCenter! };
     hit.asteroid = castRock;
@@ -1443,9 +1468,10 @@ export class AsteroidField {
   /**
    * The distance of the nearest hit along a ray within `max` (the rock hit, if any, in castRock),
    * or with `any` of the first hit found, which is all a line of sight needs; null for none.
-   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped.
+   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped; only
+   * `pieces` are looked at (every piece of the field by default, see piecesAlong).
    */
-  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean): number | null {
+  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean, pieces: Iterable<Asteroid> = this.asteroids.values()): number | null {
     let best: number | null = null;
     castRock = null;
     castCenter = null;
@@ -1466,7 +1492,7 @@ export class AsteroidField {
         castCenter = well.position;
       }
     }
-    for (const asteroid of this.asteroids.values()) {
+    for (const asteroid of pieces) {
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
       const distance = this.rayInto(asteroid, origin, direction, best ?? max);

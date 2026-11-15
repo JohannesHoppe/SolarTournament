@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { IDLE, type Controls, type Device } from '../input/input';
-import { Bot, evenSkills, pressOn, raceSpeedOf, skillsFrom, type Skill, type Skills } from '../ship/bots';
+import { Bot, evenSkills, pressOn, raceSpeedOf, Turns, skillsFrom, type Skill, type Skills } from '../ship/bots';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, type Ground } from '../ship/flight';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
 import { cos, sin } from '../detmath';
@@ -169,6 +169,8 @@ export class JobWorld implements SchoolContext {
   readonly school: FlightSchool;
   readonly ships: Ship[] = [];
   readonly bots = new Map<Ship, Bot>();
+  /** Whose turn it is among the bots to look and decide (see ship/bots, Turns), dealt as the game deals them. */
+  private readonly turns = new Turns();
   readonly me: Ship;
   readonly deaths: Deaths = { causes: {}, total: 0 };
   readonly assets = nodeAssets();
@@ -261,6 +263,7 @@ export class JobWorld implements SchoolContext {
     if (hands.torpedo && this.me.alive) this.fireTorpedo(this.me);
     this.mine(!!hands.charge && this.me.alive);
     if (this.jumpers) pressOn(this.jumpers.bots, this.me);
+    this.turns.deal([...this.bots.values()], JOB_STEP);
     for (const ship of [...this.ships]) {
       if (!ship.alive) {
         this.reprint(ship);
@@ -712,20 +715,23 @@ export class JobWorld implements SchoolContext {
     return !!hull?.ship && hull.ship.tailToward(direction);
   }
 
-  /** A bot's thought this step, with what the game tells it first (see Game.updateRound): a raider's saw, a rival's ring. */
+  /** A bot's step, with what the game tells it first on its turn (see Game.updateRound): a raider's saw; and a rival's ring, counted every step. */
   private think(bot: Bot): Controls {
     const ship = bot.ship;
     const raid = this.jumpers;
     bot.ease = this.ease;
     const sawing = !!raid && !raid.guard && raid.bots.includes(bot);
-    bot.prey = null;
-    bot.siege = sawing ? this.sawPoint(bot, raid) : null;
-    // a raider keeps to the place it raids (see Game.updateRound)
-    bot.homeAt = raid?.bots.includes(bot) ? raid.rig : null;
-    bot.raceSpeed = raceSpeedOf(bot.skills);
+    const turn = this.turns.has(bot);
+    if (turn) {
+      bot.prey = null;
+      bot.siege = sawing ? this.sawPoint(bot, raid) : null;
+      // a raider keeps to the place it raids (see Game.updateRound)
+      bot.homeAt = raid?.bots.includes(bot) ? raid.rig : null;
+      bot.raceSpeed = raceSpeedOf(bot.skills);
+    }
     if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
     const ships = sawing ? this.ships.filter((other) => other === ship || other.flight.position.distanceTo(ship.flight.position) < JUMPER_NOTICE) : this.ships;
-    const thought = bot.think(this.now, ships, this.field);
+    const thought = bot.think(this.now, ships, this.field, turn);
     if (bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
     return thought;
   }

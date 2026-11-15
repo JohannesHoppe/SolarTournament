@@ -9,7 +9,7 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOOST_BEND, JINK_MEMORY, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOOST_BEND, JINK_MEMORY, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, Turns, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
 import { BOOST_RECHARGE } from '../ship/driveheat';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
@@ -422,8 +422,8 @@ const KNOCKOUT_SECONDS = 3;
 const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'ministry', 'well', 'air', 'sun', 'flare', 'comet']);
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
- * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
- * second or in a time-lapse as at 60.
+ * laser's cadence and a collision's sweep come out the same at 20 frames a
+ * second or in a time-lapse as at 60, and the bots take their turns by the step (see bots, Turns).
  */
 const MAX_STEP = 1 / 30;
 /** Under a planet's cloud deck that is the haze's light, darkening towards its depths' over this depth (units, 1.2 km; see view/haze). */
@@ -1147,6 +1147,8 @@ export class Game implements OnlineGame {
   private rejoinedFrom: number | null = null;
   private ships: Ship[] = [];
   private bots: Bot[] = [];
+  /** Whose turn it is among the bots to look and decide (see bots, Turns). */
+  private readonly turns = new Turns();
   private me: Ship | null = null;
   private cockpit = false;
   /** Cinema mode is on (see setCinema). */
@@ -5134,6 +5136,8 @@ export class Game implements OnlineGame {
     this.watchHabits(me, dt);
     // a mission's raiders: two press the fight, the rest held back (see bots, pressOn)
     if (this.jumpers) pressOn(this.jumpers.bots, me);
+    // the bots whose turn it is to look and decide this step (see bots, Turns)
+    this.turns.deal(this.bots, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -5165,13 +5169,17 @@ export class Game implements OnlineGame {
       }
       let bot: Bot | null = null;
       for (const b of this.bots) if (b.ship === ship) bot = b;
+      const turn = !!bot && this.turns.has(bot);
       if (bot) {
         bot.ease = this.online ? 0 : this.ease;
+        // at a branch of a track, the way its daring takes (see RISKY_DARING)
+        if (this.course?.branches) ship.ways = this.course.choose(ship.ways, ship.gates, bot.skills.daring >= RISKY_DARING, ship.flight.position);
+      }
+      // what a bot looks at and is told of, on its turn alone: it decides on nothing else
+      if (bot && turn) {
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
         bot.rings = this.rings;
-        // at a branch of a track, the way its daring takes (see RISKY_DARING)
-        if (this.course?.branches) ship.ways = this.course.choose(ship.ways, ship.gates, bot.skills.daring >= RISKY_DARING, ship.flight.position);
         const aim = this.course && ship.finish < 0 ? this.aimGate(ship, this.course) : -1;
         bot.through = this.course && aim >= 0 ? this.rings[this.course.ringIndex(aim, ship.ways)] : null;
         bot.waypoint = this.course && aim >= 0 ? this.approach(this.course, ship, this.course.lineOf(ship.ways).target(ship.flight.position, aim, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
@@ -5200,14 +5208,14 @@ export class Game implements OnlineGame {
         if (this.jumpers?.bots.includes(bot)) bot.homeAt = this.jumpers.rig;
         bot.prey = null;
         bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.sawPoint(bot, this.jumpers) : null;
-        // a mission's rival races its rings
-        if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
         // a race at the bot's own pace, by how good it is; a raid in Capture the Flag at the raiders'
         bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : raceSpeedOf(bot.skills);
         if (this.flags) this.flagRole(bot, this.flags);
       }
+      // a mission's rival races its rings, counting them every step
+      if (bot && this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
       // a claim-jumper keeps sawing until a ship comes within JUMPER_NOTICE of it; then it fights
-      const thought = bot ? bot.think(now, this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.noticed(ship) : this.ships, this.field) : null;
+      const thought = bot ? bot.think(now, this.jumpers?.bots.includes(bot) && !this.jumpers.guard ? this.noticed(ship) : this.ships, this.field, turn) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
       // a bot with a nova core saves it for a crowd of rivals or the battleship's parts, with
