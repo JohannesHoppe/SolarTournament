@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { sin } from '../detmath';
+import { cos, sin } from '../detmath';
 
 /**
  * A world's ground's ceiling: a bound that no point of the ground (see Relief in world/asteroids)
@@ -155,15 +155,23 @@ export function distanceHigh(x0: number, z0: number, x1: number, z1: number, px:
 }
 
 /**
- * The least and the most of `amplitude` × sin(`rate` × z) for z in [z0, z1]: the sine moves by
- * no more than its slope's bound (amplitude × rate) times the distance from the middle, and
- * never past its amplitude.
+ * The least and the most of `amplitude` × sin(`rate` × z + `phase`) for z in [z0, z1]: the sine
+ * moves by no more than its slope's bound (amplitude × rate) times the distance from the middle,
+ * and never past its amplitude.
  */
-export function sineLow(z0: number, z1: number, amplitude: number, rate: number): number {
-  return Math.max(-amplitude, amplitude * sin(rate * ((z0 + z1) / 2)) - amplitude * rate * ((z1 - z0) / 2));
+export function sineLow(z0: number, z1: number, amplitude: number, rate: number, phase = 0): number {
+  return Math.max(-amplitude, amplitude * sin(rate * ((z0 + z1) / 2) + phase) - amplitude * rate * ((z1 - z0) / 2));
 }
-export function sineHigh(z0: number, z1: number, amplitude: number, rate: number): number {
-  return Math.min(amplitude, amplitude * sin(rate * ((z0 + z1) / 2)) + amplitude * rate * ((z1 - z0) / 2));
+export function sineHigh(z0: number, z1: number, amplitude: number, rate: number, phase = 0): number {
+  return Math.min(amplitude, amplitude * sin(rate * ((z0 + z1) / 2) + phase) + amplitude * rate * ((z1 - z0) / 2));
+}
+
+/** The least of cos(`rate` × u) for u in [lo, hi]: −1 where the range holds a trough of it (an odd multiple of π), else the lesser of its ends (between two troughs it rises, then falls). */
+export function cosineLow(lo: number, hi: number, rate: number): number {
+  const a = rate * lo;
+  const b = rate * hi;
+  const trough = Math.PI * (2 * Math.ceil((a - Math.PI) / (2 * Math.PI)) + 1);
+  return trough <= b ? -1 : Math.min(cos(a), cos(b));
 }
 
 /** The least a moon's curve of `radius` lowers its ground over the rectangle: at the point nearest the field's middle. */

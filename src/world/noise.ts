@@ -43,7 +43,7 @@ export class Noise {
   }
 
   /**
-   * The least and the most `fractal` (not ridged) can be anywhere in the box [x0, x1] × [y0, y1] ×
+   * The least and the most `fractal` (`ridged` or not) can be anywhere in the box [x0, x1] × [y0, y1] ×
    * [z0, z1], written into `out`: each octave's sample is a blend of the eight lattice values at
    * the corners of its lattice cell with weights between 0 and 1 (the quintic fade of a fraction
    * in [0, 1)), so it lies between the least and the most lattice value of the cells the box's
@@ -54,7 +54,7 @@ export class Noise {
    * by the sample's slope about its middle (see SLOPE). For a world's ground's ceiling (see
    * world/ceiling).
    */
-  fractalRange(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, octaves: number, out: { lo: number; hi: number }): { lo: number; hi: number } {
+  fractalRange(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, octaves: number, out: { lo: number; hi: number }, ridged = false): { lo: number; hi: number } {
     let lo = 0, hi = 0, amplitude = 0.5, frequency = 1;
     for (let i = 0; i < octaves; i++) {
       const xa = Math.floor(x0 * frequency), xb = Math.floor(x1 * frequency) + 1;
@@ -94,6 +94,12 @@ export class Noise {
       const reach = SLOPE * frequency * ((x1 - x0) / 2 + (y1 - y0) / 2 + (z1 - z0) / 2);
       least = Math.max(least, middle - reach);
       most = Math.min(most, middle + reach);
+      if (ridged) {
+        // 1 - 2 |s|: at its least where |s| is largest, at its most where |s| is least
+        const far = Math.max(-least, most);
+        most = 1 - 2 * (least > 0 ? least : most < 0 ? -most : 0);
+        least = 1 - 2 * far;
+      }
       lo += amplitude * least;
       hi += amplitude * most;
       amplitude *= 0.5;
