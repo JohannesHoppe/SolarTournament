@@ -129,7 +129,8 @@ export function cruiserTower(half: THREE.Vector3): THREE.Group {
   const glass = new THREE.MeshStandardMaterial({ color: 0x0b0d10, roughness: 0.15, metalness: 0.6 });
   group.add(new THREE.Mesh(block(10, 120, half.z * 1.7, -half.x - 5, half.y * 0.55, 0), glass));
   group.add(new THREE.Mesh(mergeGeometries([block(12, 100, 160, -half.x - 6, half.y * 0.55, -200), block(12, 100, 160, -half.x - 6, half.y * 0.55, 260)]), glowing(1.6, 1.1, 0.55)));
-  const neon = new THREE.MeshBasicMaterial({ map: signTexture('STEADFAST', '#4d91ff', [2, 6]), transparent: true, toneMapped: false, side: THREE.DoubleSide });
+  // flat: either face, never both, so one pass
+  const neon = new THREE.MeshBasicMaterial({ map: signTexture('STEADFAST', '#4d91ff', [2, 6]), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true });
   const sign = new THREE.Mesh(rotateY(new THREE.PlaneGeometry(half.z * 1.8, half.z * 0.45), -Math.PI / 2).translate(-half.x - 12, half.y * 0.05, 0), neon);
   failing(neon, sign);
   group.add(sign);

@@ -103,8 +103,8 @@ export function galley(): THREE.Group {
   const lamp = new THREE.PointLight(0xffd9a8, LAMP_LIGHT, LAMP_REACH, 0);
   lamp.position.set(-20, hy * 2 - 16, 0);
   root.add(lamp);
-  // the crew's sign over the counter, painted by hand
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(60, 12), new THREE.MeshBasicMaterial({ map: signTexture('EAT · SLEEP · HAUL', '#4d91ff'), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+  // the crew's sign over the counter, painted by hand (flat: either face, never both, so one pass)
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(60, 12), new THREE.MeshBasicMaterial({ map: signTexture('EAT · SLEEP · HAUL', '#4d91ff'), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true }));
   sign.applyMatrix4(FACING_IN);
   sign.position.set(-20, hy * 2 - 10, hz - 1);
   root.add(sign);

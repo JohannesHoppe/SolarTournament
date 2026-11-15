@@ -123,7 +123,11 @@ function prepareModel(root: THREE.Object3D) {
       material.transparent = true;
       material.depthWrite = false;
       material.side = THREE.DoubleSide;
-      if (material.userData.blending === 'additive') material.blending = THREE.AdditiveBlending;
+      if (material.userData.blending === 'additive') {
+        material.blending = THREE.AdditiveBlending;
+        // added light sums the same in any order: one pass draws both faces
+        material.forceSinglePass = true;
+      }
     }
     if (material instanceof THREE.MeshStandardMaterial && material.normalMap) {
       // The normal maps were authored for a Y-down texture space.

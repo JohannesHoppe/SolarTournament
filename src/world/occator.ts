@@ -195,10 +195,10 @@ export function occatorStep(step: number, world: THREE.Vector3): THREE.Group {
   add(lit, looks.windows);
   add(cold, looks.cold);
   add(lamps, looks.lamp);
-  // the capital's neon on this step's face
+  // the capital's neon on this step's face (each sign flat: either face, never both, so one pass)
   for (const sign of NEON.filter((n) => n.step === step)) {
     const plane = new THREE.PlaneGeometry(sign.width, sign.width / 4).applyMatrix4(FACING_FIELD).translate(face - 30, top - (top - foot) * 0.3, sign.z);
-    group.add(new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ map: signTexture(sign.text, sign.color), transparent: true, toneMapped: false, side: THREE.DoubleSide })));
+    group.add(new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ map: signTexture(sign.text, sign.color), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true })));
   }
   return placed(group, world);
 }

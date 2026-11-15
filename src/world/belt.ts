@@ -75,9 +75,33 @@ export class Belt {
   }
 }
 
+/** The belt's own copy of each template material (see instancedTwin). */
+const twins = new WeakMap<THREE.Material, THREE.Material>();
+
+/**
+ * A material for drawing instanced what the field draws from `material` as plain meshes: the
+ * same in every way, but an object of its own, so three.js keeps one program for each
+ * (instancing on and off) instead of looking its program up again at every switch between the
+ * belt's rocks and the field's. Its patch of the shader (onBeforeCompile and its cache key) and
+ * a shader's uniforms are the very same, so whatever changes them changes both; its defines are
+ * the template's (a standard material's copy would reset them).
+ */
+export function instancedTwin(material: THREE.Material): THREE.Material {
+  let twin = twins.get(material);
+  if (!twin) {
+    twin = material.clone();
+    twin.defines = { ...material.defines };
+    twin.onBeforeCompile = material.onBeforeCompile;
+    twin.customProgramCacheKey = material.customProgramCacheKey;
+    if (material instanceof THREE.ShaderMaterial) (twin as THREE.ShaderMaterial).uniforms = material.uniforms;
+    twins.set(material, twin);
+  }
+  return twin;
+}
+
 /** An instanced copy of a template at every one of `matrices`. */
 function instancedOf(template: THREE.Mesh, matrices: THREE.Matrix4[]): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(template.geometry, template.material, matrices.length);
+  const mesh = new THREE.InstancedMesh(template.geometry, instancedTwin(template.material as THREE.Material), matrices.length);
   matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
   mesh.computeBoundingSphere();
   return mesh;
