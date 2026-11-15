@@ -1432,16 +1432,16 @@ export class Ship {
     const drive = this.looks.drive;
     // an overdrive's shove under way draws the jets out and runs the trim's chase light (looks only)
     const shove = Math.max(0, Math.min(1, this.overdriveLeft / OVERDRIVE_SECONDS));
+    // the shove goes through the drive: its flame, jets and glow blaze while it lasts
+    const blaze = Math.max(throttle, shove);
     if (flame && flameMaterial) {
       // the model file's flame is the stock look's, as long as the main drive's step draws it; a look burns its jets instead
-      flame.visible = look === FLAMES[0] && throttle > 0.02;
+      flame.visible = look === FLAMES[0] && blaze > 0.02;
       flame.scale.copy(this.flameScale).setZ(this.flameScale.z * driveLength(drive));
-      flame.position.z = flameZ - FLAME_RETRACT * (1 - throttle);
+      flame.position.z = flameZ - FLAME_RETRACT * (1 - blaze);
       flameMaterial.map = this.frames[Math.floor(this.flameTime * 10) % this.frames.length];
-      flameMaterial.opacity = Math.min(1, throttle * driveLight(drive));
+      flameMaterial.opacity = Math.min(1, blaze * driveLight(drive));
     }
-    // the shove goes through the drive: its jets and glow blaze while it lasts
-    const blaze = Math.max(throttle, shove);
     this.flame.burn(dt, blaze, shove, drive, this.flameTime, this.drive > 0 && this.jetSeen);
     // the glow grows and brightens with the drive; idle it is a faint pilot light
     const glowScale = GLOW_MAX_SCALE * look.glowScale * (0.3 + 0.7 * blaze) * driveLength(drive);
