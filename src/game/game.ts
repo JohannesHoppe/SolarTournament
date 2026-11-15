@@ -5065,15 +5065,15 @@ export class Game implements OnlineGame {
 
   /**
    * Compiles the shaders of everything in the scene, hidden or not (a drive's plume before it
-   * burns, a probe before it shows up), and of a wreck's materials, as the scene's own pass draws
-   * them, in the background where the browser compiles in parallel: compiled at first sight, a
-   * shader stalls its frame (a drive's plume took a second in the test browser at a race's start,
-   * a wreck's tens of milliseconds at the first kill). Once an arena is entered, before its first
-   * picture.
+   * burns), and of a wreck's, a torpedo's and a probe's materials before the first of them is
+   * there, as the scene's own pass draws them, in the background where the browser compiles in
+   * parallel: compiled at first sight, a shader stalls its frame (a drive's plume took a second in
+   * the test browser at a race's start, a wreck's tens of milliseconds at the first kill, a
+   * torpedo's or a probe's 10 to 20 ms). Once an arena is entered, before its first picture.
    */
   private warmShaders() {
     this.shadersWarm = true;
-    const samples = this.wrecks.samples();
+    const samples = new THREE.Group().add(this.wrecks.samples(), this.torpedoes.samples(), this.probes.samples());
     this.scene.add(samples);
     const target = this.renderer.getRenderTarget();
     // the scene is drawn into the composer's buffers, untouched by the tone mapping: the shaders compiled for them
