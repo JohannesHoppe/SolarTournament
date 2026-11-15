@@ -906,6 +906,13 @@ const wreckBody = { position: new THREE.Vector3(), velocity: new THREE.Vector3()
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
+/**
+ * A gunner's hit is a twitch of the link: a weak glitch for a frame or two (strength, seconds).
+ * Live Target's tourists fire 2.5 shots a second, so anything longer would keep the picture
+ * broken up the whole job and the Host blind to where it flies.
+ */
+const DRILL_HIT_GLITCH = 0.12;
+const DRILL_HIT_SECONDS = 0.06;
 /** A nozzle puffing less than this share of its full push shows nothing (see showJets). */
 const JET_SHOWN = 0.05;
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
@@ -6925,6 +6932,7 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
+      alarm: (report) => this.alarms.raise(report),
       // a new print on the campaign's debt (see campaign/campaign), as far as the debt may grow
       owe: (coins) => this.keepCampaign((campaign) => (campaign.bond = Math.min(BOND_MAX, campaign.bond + coins))),
       get selfDestructing() {
@@ -7122,7 +7130,7 @@ export class Game implements OnlineGame {
     const distance = raySphere(from, direction, me.flight.position, me.radius);
     if (distance === null) return false;
     this.effects.sparks(scratch.copy(from).addScaledVector(direction, distance), DRILL_GUNNER_COLOR, 40);
-    this.glitch.trigger(0.35, 0.3);
+    this.glitch.trigger(DRILL_HIT_GLITCH, DRILL_HIT_SECONDS);
     this.sound.beep(220, 0.1, 0.2);
     return true;
   }

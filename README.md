@@ -268,7 +268,7 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 3. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
 4. Firing until the laser overheats.
 5. Into the shadow of an asteroid, what keeps a ship alive close to the sun (see Corona): the marker stays behind the rock nearest as the drill begins.
-6. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
+6. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks and twitches the link for a frame.
 7. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°). The debris starts where its way to the ship is free of rock; one that bursts on rock anyway starts the attempt over.
 8. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
 9. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
