@@ -6,6 +6,7 @@ import type { Placement } from './asteroids';
 import type { Branch } from './crack';
 import { reliefPiece } from './horizon';
 import { Noise } from './noise';
+import { curveLow, distanceHigh, distanceLow } from './ceiling';
 import { TITAN_AIR, TITAN_RADIUS } from './titan';
 
 /**
@@ -524,13 +525,90 @@ export function throatLand(x: number, z: number): number {
 /** The ground at (x, z) (units): the sea's surface where the water lies, else the land. */
 export const throatGround = (x: number, z: number) => Math.max(throatSea(x, z), throatLand(x, z));
 
+const span = { lo: 0, hi: 0 };
+/** How far each cell of the index is widened when a rectangle is cut along them (units, 5 cm): a point on a cell's edge that rounding looks up in its neighbour still lies in the piece reckoned with that neighbour's samples. */
+const PIECE_SLACK = 1;
+/** The samples of one line an index cell lists (see bankCeiling), reused. */
+const listed: number[] = [];
+
+/** The most top gives over the rectangle (see world/ceiling): each rise at the rectangle's point nearest (or for a lowering, farthest from) its middle, the basins' low shores at the farthest from theirs, the swell by its noise's lattice. */
+function topCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  let raised = 0;
+  for (const r of RISES) {
+    const d = r.height > 0 ? distanceLow(x0, z0, x1, z1, r.x, r.z) : distanceHigh(x0, z0, x1, z1, r.x, r.z);
+    raised = Math.max(raised, r.height * (1 - THREE.MathUtils.smoothstep(d, r.flat, r.reach)));
+  }
+  let low = 1;
+  for (const b of BASINS) low = Math.min(low, THREE.MathUtils.smoothstep(distanceHigh(x0, z0, x1, z1, b.x, b.z), 1500 * M, 2600 * M));
+  const land = LAND + LAND_SWING * Math.max(0, swell.fractalRange(x0 / 15000, x1 / 15000, 0.3, 0.3, z0 / 15000, z1 / 15000, 2, span).hi);
+  return SHORE_LOW + (land - SHORE_LOW) * low + raised;
+}
+
+/**
+ * The most the land's height under the dunes (throatLand's `height`) gives over a piece of a
+ * rectangle within one cell of the index, under the land's ceiling `land`. A point's nearest
+ * sample of a line lies at most as far as the least of the samples' farthest distances from the
+ * piece, D, and so it is one of the samples whose nearest distance is no more than D; its share
+ * up the bank rises with the distance (taken at D) and its sand banked up likewise. Past either
+ * end the distance across the line's heading is no more than the distance, and the water only
+ * wider, so neither rises there.
+ */
+function bankCeiling(x0: number, z0: number, x1: number, z1: number, k: number, land: number): number {
+  let height = land;
+  for (let l = 0; l < LINES.length; l++) {
+    const line = LINES[l];
+    listed.length = 0;
+    for (let j = index.start[k]; j < index.start[k + 1]; j++) if ((index.items[j] >= 1e6 ? 1 : 0) === l) listed.push(index.items[j] - l * 1e6);
+    if (!listed.length) continue;
+    let reach = Infinity;
+    for (const i of listed) reach = Math.min(reach, distanceHigh(x0, z0, x1, z1, line.x[i], line.z[i]));
+    let share = 0;
+    let berm = 0;
+    for (const i of listed) {
+      if (distanceLow(x0, z0, x1, z1, line.x[i], line.z[i]) > reach) continue;
+      share = Math.max(share, line.bank[i] > 0 ? THREE.MathUtils.smoothstep((reach - line.width[i]) / line.bank[i], -0.3, 1) : 1);
+      const tight = THREE.MathUtils.smoothstep(Math.abs(line.curve[i]), 1 / BERM_FROM, 1 / BERM_FULL);
+      if (tight > 0) berm = Math.max(berm, -SHOAL + (SHOAL + tight * BERM) * THREE.MathUtils.smoothstep(reach - line.width[i], 0, BERM_RUN));
+    }
+    height = Math.min(height, Math.max(-SHOAL + (SHOAL + land) * share, berm));
+  }
+  return height;
+}
+
+/**
+ * The most throatGround gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling): the
+ * sea's surface, or the land, cut along the index's cells (each point takes its nearest samples
+ * from its own cell's list), each piece by its banks under the land's ceiling (outside the index
+ * the land's alone), the dunes by their noise's lattice, rising with that height.
+ */
+function throatCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const land = topCeiling(x0, z0, x1, z1);
+  let height = -Infinity;
+  for (let cx = Math.floor((x0 - index.minX) / CELL); cx <= Math.floor((x1 - index.minX) / CELL); cx++) {
+    for (let cz = Math.floor((z0 - index.minZ) / CELL); cz <= Math.floor((z1 - index.minZ) / CELL); cz++) {
+      if (cx < 0 || cz < 0 || cx >= index.nx || cz >= index.nz) {
+        height = Math.max(height, land);
+        continue;
+      }
+      const px0 = Math.max(x0, index.minX + cx * CELL - PIECE_SLACK);
+      const px1 = Math.min(x1, index.minX + (cx + 1) * CELL + PIECE_SLACK);
+      const pz0 = Math.max(z0, index.minZ + cz * CELL - PIECE_SLACK);
+      const pz1 = Math.min(z1, index.minZ + (cz + 1) * CELL + PIECE_SLACK);
+      height = Math.max(height, bankCeiling(px0, pz0, px1, pz1, cz * index.nx + cx, land));
+    }
+  }
+  const sand = DUNES * Math.max(0, dunes.fractalRange(x0 / 6000, x1 / 6000, 0.6, 0.6, z0 / 2500, z1 / 2500, 2, span).hi) * THREE.MathUtils.smoothstep(height, 0, 20 * M);
+  const curve = curveLow(x0, z0, x1, z1, TITAN_RADIUS);
+  return Math.max(SEA - curve, SEA + height + sand - curve);
+}
+
 /** How far the race world's ground reaches from the field's middle (units): past both lines and their water by a margin, as high as the Mesa's walls and the bed under the water. */
 const MARGIN = 900 * M;
 const GROUND_TOP = SEA + LAND + LAND_SWING + MESA_RISE + DUNES + BERM + 20 * M;
 const GROUND_BOTTOM = SEA - SHOAL - 60 * M;
 export const THROAT_GROUND_HALF = new THREE.Vector3((bounds.maxX - bounds.minX) / 2 + MARGIN, (GROUND_TOP - GROUND_BOTTOM) / 2, (bounds.maxZ - bounds.minZ) / 2 + MARGIN);
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(throatGround, THROAT_GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(throatGround, THROAT_GROUND_HALF, GROUND_TOP, throatCeiling);
 export const throatRelief = piece.relief;
 export const throatGroundPlacement = piece.placement;
 /** The land alone in the box's coordinates (its bed under the water), for drawing it under the sea's sheet. */

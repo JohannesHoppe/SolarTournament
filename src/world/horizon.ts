@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, exp, log, sin } from '../detmath';
 import type { Placement, Relief } from './asteroids';
+import type { Ceiling } from './ceiling';
 import { Randomizer } from '../random';
 
 /**
@@ -54,12 +55,15 @@ export function reliefTop(surface: (x: number, z: number) => number, half: THREE
  * A moon's ground as a piece of the field: a box of half extents `half` whose top is the ground
  * `surface` gives (its `relief`, see Relief), the box's top at `top` (units, over the highest the
  * ground gets there); `placement` sets it as the piece of kind 'rack' of type `type` in the
- * yards' set.
+ * yards' set. A `ceiling` of the surface (see world/ceiling) lets rays over it skip the samples
+ * high above it.
  */
-export function reliefPiece(surface: (x: number, z: number) => number, half: THREE.Vector3, top: number): { relief: Relief; placement: (type: number) => Placement } {
+export function reliefPiece(surface: (x: number, z: number) => number, half: THREE.Vector3, top: number, ceiling?: Ceiling): { relief: Relief; placement: (type: number) => Placement } {
   const middle = top - half.y;
+  const relief: Relief = (x, z) => surface(x, z) - middle;
+  if (ceiling) relief.ceiling = (x0, z0, x1, z1) => ceiling(x0, z0, x1, z1) - middle;
   return {
-    relief: (x, z) => surface(x, z) - middle,
+    relief,
     placement: (type) => ({ kind: 'rack', type, scale: 1, position: new THREE.Vector3(0, middle, 0), orientation: new THREE.Quaternion(), solid: true, ground: true }),
   };
 }
