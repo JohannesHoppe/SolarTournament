@@ -2083,7 +2083,7 @@ const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambus
  * the Games, the hook and the nanobots. The target shot down ends it.
  */
 export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
-  { target: 0.4, escorts: 1, skill: 0.35, pay: 1500, ratings: 100 },
+  { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
   { target: 0.5, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
   { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
@@ -2109,8 +2109,15 @@ const WANTED: readonly (readonly [string, string, string])[] = [
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
+/**
+ * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
+ * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
+ * Europa's first, Blue Fenn and her escort: at the tier's own a Host of middling skill won 1 of
+ * its 4 seeds.
+ */
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
-  const { target, skill } = BOUNTY_TIERS[tier];
+  const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
   // the field they guard is laid where the place's field lies, as the attempt begins
   const field = new THREE.Vector3();
