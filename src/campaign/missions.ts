@@ -2165,12 +2165,12 @@ const HAZE_PLACES: readonly ArenaId[] = ['titan'];
 /**
  * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
  * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
- * The first faces at Phobos (Corporal Nobody), Europa (Blue Fenn) and Io (Sulfur Pike) with their
- * escorts: at the tier's own a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at
- * Io; at 0.35 and 0.35 it won 4 of 9 at Phobos, at 0.4 and 0.35 2 of 7 at Europa; as eased, 6 of
- * 7 at Phobos and 6 of 9 at Europa.
+ * The first faces at Phobos (Corporal Nobody), Callisto (Mother Static), Europa (Blue Fenn) and Io
+ * (Sulfur Pike) with their escorts: at the tier's own a Host of middling skill won 1 of 4 seeds at
+ * Europa, none of 3 at Io and 2 of 7 at Callisto; Phobos at 0.2 and 0.2 4 of 9, at 0.2 and 0.1 3 of
+ * 8; Europa at 0.4 and 0.35 2 of 7. As eased: 6 of 6 at Phobos, 6 of 8 at Callisto, 6 of 9 at Europa.
  */
-const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { phobos: [{ target: 0.2, skill: 0.2 }], europa: [{ target: 0.35, skill: 0.2 }], io: [{ target: 0.4, skill: 0.35 }] };
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { phobos: [{ target: 0.1, skill: 0.1 }], callisto: [{ target: 0.3, skill: 0.2 }], europa: [{ target: 0.35, skill: 0.2 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
   const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
