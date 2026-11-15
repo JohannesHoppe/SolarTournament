@@ -808,7 +808,6 @@ const decoyVelocity = new THREE.Vector3();
 const sweep = new THREE.Vector3();
 /** A ray's hit into the field, reused: one per place that casts every step, each read before that place casts again. */
 const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.Vector3() });
-const shadeHit = rayHit();
 /** Where a bot under a burning sun comes at the battleship from, far on its shadow side, and a hold tried there (see siegePoint). */
 const siegeShade = new THREE.Vector3();
 /** Scratch: a rock's shadow spot reckoned in Game.shadeFor. */
@@ -5117,7 +5116,7 @@ export class Game implements OnlineGame {
         const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
         bot.flee = danger ?? this.cometDanger(ship, COMET_WARNING * (1 - bot.skills.daring));
         // besieging the battleship from its hull's shade, the bot cools at its hold; else, hot in a burning sun, it makes for a rock's shadow
-        const holdShaded = !!this.fleet && !!bot.siege && this.field.raycast(bot.siegeHold, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+        const holdShaded = !!this.fleet && !!bot.siege && this.field.blocked(bot.siegeHold, this.space.sunDirection, LASER_RANGE, true);
         bot.shade = holdShaded ? null : this.shadeFor(ship, bot.shade, bot.siege, bot.siegeClear);
         if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
@@ -5184,7 +5183,7 @@ export class Game implements OnlineGame {
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
       // a rock's shadow and the battleship's hull's (the field's obstacle) alike
-      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null;
+      ship.inShadow = this.underDeck(ship.flight.position) || this.field.blocked(ship.flight.position, this.space.sunDirection, LASER_RANGE, true);
       ship.sunlight = this.venue.sunlight;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (!clamped) devlog?.strain(ship.name, ship.strain, dt);
@@ -6047,7 +6046,7 @@ export class Game implements OnlineGame {
       let nearest = Infinity;
       for (const side of SIEGE_SIDES) {
         const point = siegeShade.copy(fleet.position).addScaledVector(this.space.sunDirection, side * SHADE_FAR);
-        const shaded = (part: number) => (!core || core(part)) && this.field.raycast(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true, shadeHit) !== null && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
+        const shaded = (part: number) => (!core || core(part)) && this.field.blocked(fleet.siegeFrom(part, point, SIEGE_DISTANCE, siegeProbe), this.space.sunDirection, LASER_RANGE, true) && fleet.plumeAt(siegeProbe, bot.ship.radius) === 0 && fleet.inSight(part, siegeProbe, this.field);
         const found = fleet.nearestZone(bot.ship.flight.position, shaded);
         if (found < 0) continue;
         const distance = fleet.siegeFrom(found, point, SIEGE_DISTANCE, siegeProbe).distanceTo(bot.ship.flight.position);

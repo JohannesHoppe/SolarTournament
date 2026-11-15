@@ -587,7 +587,30 @@ export class Bot {
     this.skills = on ? this.own : this.held;
   }
 
+  /**
+   * Whether the bot sees `ship` (see AsteroidField.lineOfSight, `haze` the reach through an air):
+   * the line from its own ship is cast once a thought, since one thought asks it of the same
+   * ship again and again (as a target, a hunter of another, a chaser, a ship to keep clear of)
+   * while nothing moves.
+   */
+  private sees(field: AsteroidField, ship: Ship, haze = SIGHT_DEPTH): boolean {
+    const from = this.ship.flight.position;
+    const to = ship.flight.position;
+    if (from.distanceTo(to) < 1) return true;
+    if (!field.clearAir(from, to, haze)) return false;
+    let clear = this.sightLines.get(ship);
+    if (clear === undefined) {
+      clear = field.clearLine(from, to);
+      this.sightLines.set(ship, clear);
+    }
+    return clear;
+  }
+
+  /** The lines of sight cast in this thought (see sees). */
+  private readonly sightLines = new Map<Ship, boolean>();
+
   think(now: number, ships: Ship[], field: AsteroidField): Controls {
+    this.sightLines.clear();
     const me = this.ship.flight;
     // one controls object per bot, cleared each thought, so thinking allocates nothing
     const controls = Object.assign(this.controls, IDLE);
@@ -627,7 +650,7 @@ export class Bot {
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
       // in a planet's haze the radar finds it farther off than the eye sees (see world/air)
-      if (cost < best && field.lineOfSight(me.position, ship.flight.position, RADAR_DEPTH)) {
+      if (cost < best && this.sees(field, ship, RADAR_DEPTH)) {
         best = cost;
         target = ship;
         targetDistance = distance;
@@ -636,11 +659,11 @@ export class Bot {
     // a ship the game names as prey (the thief of the own side's core, which a Host's HUD marks
     // wherever it is) is chased wherever it is, but only fired at in sight; in a planet's haze
     // so is a ship the radar shows, as the laser reaches no farther than the eye
-    let inSight = !field.air || !target || field.lineOfSight(me.position, target.flight.position);
+    let inSight = !field.air || !target || this.sees(field, target);
     if (this.prey?.alive) {
       target = this.prey;
       targetDistance = this.prey.flight.position.distanceTo(me.position);
-      inSight = targetDistance < sight && field.lineOfSight(me.position, this.prey.flight.position);
+      inSight = targetDistance < sight && this.sees(field, this.prey);
     }
     // a ship on the own tail with its nose on the bot comes first: the bot turns its armor to
     // it and jinks, because from behind the drive is open
@@ -659,7 +682,7 @@ export class Bot {
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
       const threat = i < 0 || (this.ship.tailToward(line) && noseOn(ship.flight, me.position, this.ship.radius) > 0);
-      if (threat && field.lineOfSight(me.position, ship.flight.position, i < 0 ? SIGHT_DEPTH : LOCK_DEPTH)) {
+      if (threat && this.sees(field, ship, i < 0 ? SIGHT_DEPTH : LOCK_DEPTH)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
         if (this.armed && !this.waypoint) {
@@ -994,7 +1017,7 @@ export class Bot {
       local.addScaledVector(line, when);
       const miss = local.length();
       // a ship behind rock the bot does not see coming
-      if ((miss >= clear && !into) || !field.lineOfSight(me.position, ship.flight.position)) continue;
+      if ((miss >= clear && !into) || !this.sees(field, ship)) continue;
       if (into) {
         towardShip.subVectors(ship.flight.position, me.position);
         const gap = towardShip.length() - hulls;
@@ -1087,7 +1110,7 @@ export class Bot {
       if (ship === this.ship || ship === prey || !ship.alive || ship.allyOf(prey)) continue;
       if (ship.flight.position.distanceTo(eye) >= sight) continue;
       const line = hunt.subVectors(prey.flight.position, ship.flight.position);
-      if (line.length() > FIRE_RANGE || ship.flight.noseAngleTo(line) > HUNT_ANGLE || !field.lineOfSight(eye, ship.flight.position)) continue;
+      if (line.length() > FIRE_RANGE || ship.flight.noseAngleTo(line) > HUNT_ANGLE || !this.sees(field, ship)) continue;
       hunters++;
     }
     return hunters;

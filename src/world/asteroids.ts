@@ -1300,6 +1300,11 @@ export class AsteroidField {
     return hit;
   }
 
+  /** Whether a ray meets anything within `max` that raycast would hit: the first hit found ends the search, its distance and rock unknown. */
+  blocked(origin: THREE.Vector3, direction: THREE.Vector3, max: number, obstacles = false): boolean {
+    return this.cast(origin, direction, max, true, obstacles) !== null;
+  }
+
   /**
    * True when no rock (and not the well's body, nor an obstacle) lies between two points, and
    * the haze of the arena's air between them sums up to no more than `haze` (see world/air: the
@@ -1308,7 +1313,13 @@ export class AsteroidField {
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    if (!this.clearAir(from, to, haze)) return false;
+    return this.clearAir(from, to, haze) && this.clearLine(from, to);
+  }
+
+  /** True when no rock, well body or obstacle lies between two points: the line of sight without the haze (see lineOfSight). */
+  clearLine(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const distance = from.distanceTo(to);
+    if (distance < 1) return true;
     sight.subVectors(to, from).divideScalar(distance);
     return this.cast(from, sight, distance, true, true) === null;
   }
@@ -1320,10 +1331,11 @@ export class AsteroidField {
 
   /**
    * Where a ray first meets one piece (the distance along it, null for a miss): its box, its
-   * measured surface or its ellipsoid, and what stands on it or reaches out of it.
+   * measured surface or its ellipsoid, and what stands on it or reaches out of it. A ground of
+   * hills and hollows is marched only as far as `max`: a hit beyond it may go unfound.
    */
-  rayInto(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
-    let distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+  rayInto(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3, max = Infinity): number | null {
+    let distance = asteroid.box ? rayPiece(asteroid, origin, direction, max) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
     rayPart = false;
     for (const part of this.attachments.get(asteroid.id) ?? NONE) {
       const along = rayAttachment(asteroid, part, origin, direction);
@@ -1364,7 +1376,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
-      const distance = this.rayInto(asteroid, origin, direction);
+      const distance = this.rayInto(asteroid, origin, direction, best ?? max);
       if (distance !== null && distance <= max && (best === null || distance < best)) {
         best = distance;
         castRock = asteroid;
@@ -1774,9 +1786,14 @@ export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief:
 /** Halvings of the way to a wall that rises over a sphere's center (see reliefContact): to within a 16,000th of its radius. */
 const RELIEF_WALL_STEPS = 14;
 
-/** How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. */
+/**
+ * How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's
+ * ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. The march
+ * stops at `max` world units along the ray (a hit within it is found as without the limit), since
+ * a world's ground box spans kilometers and every step samples its relief.
+ */
 const RELIEF_MARCH = 200;
-export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief): number | null {
+export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief, max = Infinity): number | null {
   const enter = rayBox(origin, step, half);
   if (enter === null) return null;
   const length = step.length();
@@ -1785,11 +1802,14 @@ export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THRE
     const x = origin.x + step.x * t;
     const z = origin.z + step.z * t;
     if (Math.abs(x) > half.x || Math.abs(z) > half.z) return false;
-    return origin.y + step.y * t <= Math.min(half.y, relief(x, z));
+    // over the box's top no ground can reach: its relief is not sampled there
+    const y = origin.y + step.y * t;
+    return y <= half.y && y <= relief(x, z);
   };
   const stride = RELIEF_MARCH / length;
   if (under(enter)) return enter;
-  for (let t = enter; t < enter + through; t += stride) {
+  const end = Math.min(enter + through, max);
+  for (let t = enter; t < end; t += stride) {
     if (!under(t + stride)) continue;
     let low = t;
     let high = t + stride;
@@ -1814,9 +1834,9 @@ function toLocalRay(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.
 }
 
 /** Distance along a normalized ray to a box piece's surface (slabs), or null. */
-function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3, max = Infinity): number | null {
   toLocalRay(asteroid, origin, direction);
-  return asteroid.relief ? reliefRay(localOrigin, localStep, asteroid.semiAxes, asteroid.relief) : rayBox(localOrigin, localStep, asteroid.semiAxes);
+  return asteroid.relief ? reliefRay(localOrigin, localStep, asteroid.semiAxes, asteroid.relief, max) : rayBox(localOrigin, localStep, asteroid.semiAxes);
 }
 
 /** Distance along a normalized ray to the asteroid's ellipsoid surface, or null. */
