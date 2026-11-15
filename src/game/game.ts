@@ -4881,7 +4881,10 @@ export class Game implements OnlineGame {
       this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
       // the camera rides behind the ship it follows, in that ship's own plume: it is not drawn
       const followed = this.me ? this.subject() : null;
-      for (const ship of this.ships) ship.plumeHidden = ship === followed;
+      for (const ship of this.ships) {
+        ship.plumeHidden = ship === followed;
+        ship.seenFrom(this.camera.position);
+      }
       // in an arena's air an explosion billows, in vacuum it flashes (see Effects.inAir)
       this.effects.inAir = !!this.field.air;
       this.effects.update(dt);
@@ -7452,7 +7455,7 @@ export class Game implements OnlineGame {
     if (!race) ship.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
     const burnt = race && ship.driveHeat.shove(this.time);
     devlog?.add({ kind: 'act', t: this.time, ship: ship.name, act: 'overdrive', detail: race ? `heat ${Math.round(ship.driveHeat.read(this.time))}${burnt ? ' burnt out' : ''}` : '' });
-    this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), ship.toWorld(relative.set(0, 0, ship.radius * 4)), ship.flight.velocity, 1);
+    this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), ship.toWorld(relative.set(0, 0, ship.radius * 4)), ship.flight.velocity, 1, ship.flameLook.trail);
     if (ship === this.me) {
       this.kick = 2;
       this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
@@ -8364,7 +8367,7 @@ export class Game implements OnlineGame {
         const strength = ship.jets[i];
         if (strength < JET_SHOWN) continue;
         const mouth = ship.toWorld(nozzles[i].mouth, scratch);
-        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength);
+        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength, ship.flameLook.jet);
       }
     }
   }
@@ -8584,7 +8587,7 @@ export class Game implements OnlineGame {
       // the exhaust is laid along the nozzle's path since the last frame, without gaps
       const nozzle = ship.toWorld(scratch.set(0, 0, ship.radius * 0.9), scratch);
       if (!ship.trailing) ship.trailFrom.copy(nozzle);
-      this.effects.engineTrail(ship.trailFrom, nozzle, flight.velocity, flight.throttle);
+      this.effects.engineTrail(ship.trailFrom, nozzle, flight.velocity, flight.throttle, ship.flameLook.trail);
       ship.trailFrom.copy(nozzle);
       ship.trailing = true;
     } else {

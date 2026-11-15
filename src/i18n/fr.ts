@@ -453,7 +453,7 @@ export const FR: Catalog = {
   'Plating': 'Surblindage',
   'Every hit hurts less': 'Chaque coup fait moins mal',
   'Neon trim': 'Liseré néon',
-  'Light strips along both flanks': 'Bandes lumineuses sur les deux flancs',
+  'Neon tubes in your color, more each step': 'Tubes néon à ta couleur, plus à chaque niveau',
   'Drive flame': 'Flamme du moteur',
   'Azure, violet, white-hot': 'Azur, violet, chauffée à blanc',
   'Sealed probe': 'Sonde scellée',

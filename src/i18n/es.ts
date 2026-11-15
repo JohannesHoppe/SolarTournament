@@ -449,7 +449,7 @@ export const ES: Catalog = {
   Plating: 'Blindaje',
   'Every hit hurts less': 'Cada impacto duele menos',
   'Neon trim': 'Franjas de neón',
-  'Light strips along both flanks': 'Franjas de luz en ambos flancos',
+  'Neon tubes in your color, more each step': 'Tubos de neón en tu color, más en cada nivel',
   'Drive flame': 'Llama del motor',
   'Azure, violet, white-hot': 'Azur, violeta, al rojo blanco',
 

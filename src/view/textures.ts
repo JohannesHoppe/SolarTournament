@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { cos, exp, pow, sin } from '../detmath';
+import { cos, sin } from '../detmath';
 
 /** A canvas to draw a texture on (square without a height), with its 2D context. */
 export function canvas(width: number, height = width): [HTMLCanvasElement, CanvasRenderingContext2D] {
@@ -90,27 +90,3 @@ export function smokeTexture(): THREE.CanvasTexture {
   return toTexture(element);
 }
 
-let runningLightTexture: THREE.DataTexture | null = null;
-
-/**
- * A running light along a strip (u runs along it, the texture repeats): the tube glows at 60 %,
- * one pulse rises to full with a short front and a long tail behind it, a light chasing on.
- * Made once and shared; a ship moves its own clone (see Ship.outfit).
- */
-export function runningLight(): THREE.DataTexture {
-  if (runningLightTexture) return runningLightTexture;
-  const width = 64;
-  const data = new Uint8Array(width * 4);
-  for (let i = 0; i < width; i++) {
-    // the pulse's head at 3/4 of the period: ahead of it the short front, behind it the tail
-    const d = i / width - 0.75;
-    const pulse = d > 0 ? exp(-pow(d / 0.04, 2)) : exp(d / 0.12);
-    const value = Math.round(255 * (0.6 + 0.4 * pulse));
-    data.set([value, value, value, 255], i * 4);
-  }
-  runningLightTexture = new THREE.DataTexture(data, width, 1);
-  runningLightTexture.wrapS = THREE.RepeatWrapping;
-  runningLightTexture.magFilter = runningLightTexture.minFilter = THREE.LinearFilter;
-  runningLightTexture.needsUpdate = true;
-  return runningLightTexture;
-}

@@ -83,7 +83,7 @@ function hullModel(): THREE.Object3D {
   const collider = new THREE.Mesh(new THREE.BoxGeometry(half * 2, half * 2, half * 2));
   collider.userData.collider = true;
   root.add(collider);
-  for (const name of ['trim', 'trimStern']) root.add(Object.assign(new THREE.Group(), { name }));
+  root.add(Object.assign(new THREE.Group(), { name: 'trim' }));
   root.add(Object.assign(new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial()), { name: 'radiator' }));
   return root;
 }

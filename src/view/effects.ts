@@ -187,8 +187,6 @@ const JET_CAPACITY = 2048;
 /** A puff at full push: how far its gas reaches from the nozzle's mouth and how wide it spreads there (units, 5.5 m and 4 m). */
 const JET_LENGTH = 110;
 const JET_WIDTH = 80;
-/** The gas of a maneuvering thruster: cold, white-blue, added on top of whatever is behind it. */
-const JET_COLOR = new THREE.Color(0.7, 0.85, 1.25);
 
 /** Points a puff is drawn with by the share of particles (see setParticleShare): a plume of three on a full picture, one on the cheapest. */
 function jetPoints() {
@@ -208,8 +206,8 @@ class Jets extends PointCloud {
     super(texture, JET_CAPACITY);
   }
 
-  /** A puff at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of the nozzle's full push. */
-  add(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number) {
+  /** A puff at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of the nozzle's full push, glowing in `color` (added on top of whatever is behind it). */
+  add(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, color: THREE.Color) {
     const n = jetPoints();
     // fewer points glow brighter each, so the puff keeps its light on a cheaper picture
     const light = strength * Math.sqrt(3 / n);
@@ -219,9 +217,9 @@ class Jets extends PointCloud {
       scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
       this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
       const fade = light * (1 - 0.6 * along);
-      this.tint[i * 4] = JET_COLOR.r;
-      this.tint[i * 4 + 1] = JET_COLOR.g;
-      this.tint[i * 4 + 2] = JET_COLOR.b;
+      this.tint[i * 4] = color.r;
+      this.tint[i * 4 + 1] = color.g;
+      this.tint[i * 4 + 2] = color.b;
       this.tint[i * 4 + 3] = fade;
     }
   }
@@ -239,8 +237,6 @@ const VAPOR = new THREE.Color(0.35, 0.38, 0.42);
 /** The flash of an explosion in vacuum: white-hot, gone in a tenth of a second. */
 const FLASH = new THREE.Color(1, 0.85, 0.6);
 const ROCK = new THREE.Color(0.22, 0.19, 0.16);
-/** The drive's exhaust: a faint, cool blue, added on top of whatever is behind it. */
-const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
 /** At most this many exhaust puffs per frame and ship, even at extreme speed. */
 const TRAIL_MAX_PUFFS = 12;
 const scratch = new THREE.Vector3();
@@ -265,9 +261,9 @@ export class Effects {
     for (const cloud of [this.fire, this.smoke, this.jets]) cloud.setViewport(heightPx, fovDeg);
   }
 
-  /** A maneuvering thruster's puff this frame (see Jets): at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of its push. */
-  jet(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number) {
-    this.jets.add(mouth, exhaust, strength);
+  /** A maneuvering thruster's puff this frame (see Jets): at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of its push, in `color` (the drive's look, see view/flame). */
+  jet(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number, color: THREE.Color) {
+    this.jets.add(mouth, exhaust, strength, color);
   }
 
   /**
@@ -352,15 +348,15 @@ export class Effects {
   /**
    * The drive's exhaust from one frame to the next: puffs laid evenly along the nozzle's path
    * from `from` to `to`, close enough to overlap, so a fast ship leaves a continuous, faint
-   * blue plume instead of a string of beads.
+   * plume in `color` (the drive's look, see view/flame) instead of a string of beads.
    */
-  engineTrail(from: THREE.Vector3, to: THREE.Vector3, velocity: THREE.Vector3, intensity: number) {
+  engineTrail(from: THREE.Vector3, to: THREE.Vector3, velocity: THREE.Vector3, intensity: number, color: THREE.Color) {
     const size = 70 * intensity;
     const steps = Math.min(TRAIL_MAX_PUFFS, Math.max(1, Math.ceil(from.distanceTo(to) / (size * 0.35))));
     scratchVelocity.copy(velocity).multiplyScalar(0.1);
     for (let i = 1; i <= steps; i++) {
       scratch.lerpVectors(from, to, i / steps);
-      this.smoke.emit(scratch, scratchVelocity, 0.45, size, size * 2.5, EXHAUST);
+      this.smoke.emit(scratch, scratchVelocity, 0.45, size, size * 2.5, color);
     }
   }
 

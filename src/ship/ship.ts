@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
-import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, RCS_THRUST, TURN_ACCELERATION } from './flight';
+import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, OVERDRIVE_SECONDS, RCS_THRUST, TURN_ACCELERATION } from './flight';
 import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { showMagpie, THRUSTER_LAYOUTS } from './models';
 import { JOLT_TIME, MASS, type Body } from '../world/bodies';
@@ -12,7 +12,8 @@ import type { Controls } from '../input/input';
 import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
-import { runningLight } from '../view/textures';
+import { brightGlow, FLAMES, FlameLook, type FlameLevel } from '../view/flame';
+import { NeonLook } from '../view/neon';
 import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
 import { setFromAxisAngle, slerp } from '../detthree';
@@ -257,21 +258,13 @@ const GLOW_MAX_SCALE = 3;
 const GLOW_IDLE = 0.25;
 /** The drive light sits this far behind the ship's center (units, 20 m), where the exhaust glows. */
 const ENGINE_LIGHT_OFFSET = 400;
-/** The drive flame's tint by the steps of its upgrade: stock, azure, violet, white-hot. */
-/** The glow of a drive's plume (see view/plume), times its flame's tint. */
-const PLUME_GLOW = new THREE.Color(1, 0.4, 0.1);
-const plumeTint = new THREE.Color();
-const FLAME_TINTS = [new THREE.Color(1, 1, 1), new THREE.Color(0.45, 0.75, 1.6), new THREE.Color(1.1, 0.45, 1.6), new THREE.Color(2, 2, 2.2)];
 /**
- * The neon trim's light strips (see ship/models) in sun orange, by the steps of its upgrade: the
- * flanks lit, then brighter with the stern bar, then brighter still with a running light.
+ * Beyond these distances from the camera (units) the looks' finest parts are not drawn: the neon
+ * trim's tubes (2 km, where a 35 cm tube is far below a pixel and the hull a few pixels long) and
+ * the drive flame's jets (4 km; the plume carries the flame's color farther).
  */
-const TRIM_COLOR = new THREE.Color(0xff9d00);
-/** Kept low enough that the tube's core stays orange instead of burning out to white; from the second step it blooms. */
-const TRIM_BRIGHTNESS = [0, 0.8, 1.25, 1.5];
-/** The running light: pulses on a strip at once, and how many strips' lengths they travel per second. */
-const TRIM_PULSES = 2;
-const TRIM_RUN = 0.5;
+const TRIM_SEEN = 40000;
+const JET_SEEN = 80000;
 /** Each hull's maneuvering thrusters (see ship/thrusters), where models.ts puts them. */
 const THRUSTERS: Record<ShipType, Thrusters> = {
   human: thrustersOf(THRUSTER_LAYOUTS.human),
@@ -445,8 +438,15 @@ export class Ship {
   thrusters = 1;
   /** What the ship's upgrades make of it (see game/hangar and outfit); stock for bots and other browsers' ships. */
   perks: Perks = STOCK;
-  /** The neon trim's light strips and their light, the ship's own (see outfit). */
-  private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
+  /** The neon trim: all of it, the rails of each step, and the light of its tubes, the ship's own (see outfit, view/neon). */
+  private readonly trim: { group: THREE.Object3D; rails: (THREE.Object3D | undefined)[]; neon: NeonLook };
+  /** The color the trim burns in (see setTint). */
+  private readonly neonTint = new THREE.Color();
+  /** The jets of the drive flame's look (see outfit, view/flame). */
+  private readonly flame: FlameLook;
+  /** Whether the camera is near enough for the trim's tubes and the flame's jets (see seenFrom). */
+  private trimSeen = true;
+  private jetSeen = true;
   heat = 0;
   overheated = false;
   /** When it last burned its drive or fired (game time, s), as every browser sees it: since SILENT_AFTER it runs silent (see silent). */
@@ -566,6 +566,8 @@ export class Ship {
   private readonly engine: EngineParts;
   private flameTime = 0;
   private readonly frames: THREE.Texture[];
+  /** The glow at the nozzles of a stock drive (see outfit). */
+  private readonly stockGlow: THREE.Texture;
 
   constructor(
     readonly id: string,
@@ -577,20 +579,22 @@ export class Ship {
     this.model = assets.ships[type].clone(true);
     this.nozzles = THRUSTERS[type];
     // Materials are shared between clones; the engine flame and the trim's light animate their own copies.
-    const light = new THREE.MeshBasicMaterial({ toneMapped: false });
+    const neon = new NeonLook();
     this.model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       if (o.name.toLowerCase().startsWith('drive')) o.material = (o.material as THREE.Material).clone();
-      if (o.name === 'trimLight') o.material = light;
+      if (o.name === 'trimLight') o.material = neon.material;
       if (o.name === 'radiator') o.material = (o.material as THREE.Material).clone();
       o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
     });
-    const running = runningLight().clone();
-    running.repeat.x = TRIM_PULSES;
-    this.trim = { strips: this.model.getObjectByName('trim')!, stern: this.model.getObjectByName('trimStern')!, light, running };
+    const trim = this.model.getObjectByName('trim')!;
+    this.trim = { group: trim, rails: [1, 2, 3].map((step) => trim.getObjectByName(`trim${step}`)), neon };
+    this.flame = new FlameLook(this.model.userData.nozzles ?? []);
+    this.model.add(this.flame.mesh);
     this.radiators = this.model.getObjectByName('radiator') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
+    this.stockGlow = assets.textures.glow;
     this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
@@ -599,7 +603,7 @@ export class Ship {
     this.aura.visible = false;
     this.root.add(this.aura);
     const stern = this.radius * 0.5;
-    this.plume = new PlumeLook(PLUME_REACH - stern, PLUME_SPREAD, PLUME_CORE, this.radius * 0.6 + stern * PLUME_SPREAD, PLUME_GLOW);
+    this.plume = new PlumeLook(PLUME_REACH - stern, PLUME_SPREAD, PLUME_CORE, this.radius * 0.6 + stern * PLUME_SPREAD, FLAMES[0].plume);
     this.plume.mesh.position.z = stern;
     this.root.add(this.plume.mesh);
   }
@@ -620,6 +624,22 @@ export class Ship {
     if (tint === this.tint) return;
     this.tint = tint;
     this.color.set(tint);
+    // the neon trim burns in the pilot's tint, a trophy's in its glow (the Sovereign's gold, the Magpie's shimmer)
+    this.neonTint.set(this.trophy?.glow ?? tint);
+    this.trim.neon.wear(this.perks.neon, this.neonTint);
+  }
+
+  /** How the drive burns by the flame's look (see view/flame): its colors for the plume, the trail and the thrusters' puffs. */
+  get flameLook(): FlameLevel {
+    return FLAMES[this.perks.flame];
+  }
+
+  /** Leaves out the looks' finest parts while the camera at `camera` is too far to see them (see TRIM_SEEN, JET_SEEN). */
+  seenFrom(camera: THREE.Vector3) {
+    const distance = this.root.position.distanceToSquared(camera);
+    this.trimSeen = distance < TRIM_SEEN * TRIM_SEEN;
+    this.jetSeen = distance < JET_SEEN * JET_SEEN;
+    this.trim.group.visible = this.perks.neon > 0 && this.trimSeen;
   }
 
   /**
@@ -640,17 +660,24 @@ export class Ship {
     if (panels) panels.visible = !perks.bareFlank;
     // the hull in its last stage, the Magpie, over all of it (see models, magpieHull)
     showMagpie(this.model, perks.magpie);
-    if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
-    this.plume.tint(plumeTint.copy(PLUME_GLOW).multiply(FLAME_TINTS[perks.flame]));
-    const { strips, stern, light } = this.trim;
-    strips.visible = perks.neon > 0;
-    stern.visible = perks.neon > 1;
-    light.color.copy(TRIM_COLOR).multiplyScalar(TRIM_BRIGHTNESS[perks.neon]);
-    const map = perks.neon > 2 ? this.trim.running : null;
-    if (light.map !== map) {
-      light.map = map;
-      light.needsUpdate = true;
+    // the drive flame's look: its jets, the glow at the nozzles (a plain light on an upgraded
+    // drive, so its tint shows), the plume (see view/flame)
+    const flame = FLAMES[perks.flame];
+    this.flame.wear(perks.flame);
+    this.plume.tint(flame.plume);
+    const { glowMaterial } = this.engine;
+    const glowMap = perks.flame > 0 ? brightGlow() : this.stockGlow;
+    if (glowMaterial.map !== glowMap) {
+      glowMaterial.map = glowMap;
+      glowMaterial.needsUpdate = true;
     }
+    // the neon trim: each step's rails, and the tubes of the steps bought, in the pilot's tint
+    const { group, rails, neon } = this.trim;
+    group.visible = perks.neon > 0 && this.trimSeen;
+    rails.forEach((fitting, i) => {
+      if (fitting) fitting.visible = perks.neon > i;
+    });
+    neon.wear(perks.neon, this.neonTint);
   }
 
   /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
@@ -1202,22 +1229,32 @@ export class Ship {
     const sputter = this.drive < 1 ? 0.6 + 0.4 * Math.random() : 1;
     const throttle = this.flight.throttle * sputter;
     this.flameTime += dt;
+    const look = FLAMES[this.perks.flame];
+    // an overdrive's shove under way draws the jets out and runs the trim's chase light (looks only)
+    const shove = Math.max(0, Math.min(1, this.overdriveLeft / OVERDRIVE_SECONDS));
     if (flame && flameMaterial) {
-      flame.visible = throttle > 0.02;
+      // the model file's flame is the stock drive's; an upgraded one burns its jets instead
+      flame.visible = this.perks.flame === 0 && throttle > 0.02;
       flame.position.z = flameZ - FLAME_RETRACT * (1 - throttle);
       flameMaterial.map = this.frames[Math.floor(this.flameTime * 10) % this.frames.length];
       flameMaterial.opacity = throttle;
     }
+    // the shove goes through the drive: its jets and glow blaze while it lasts
+    const blaze = Math.max(throttle, shove);
+    this.flame.burn(blaze, shove, this.flameTime, this.drive > 0 && this.jetSeen);
     // the glow grows and brightens with the drive; idle it is a faint pilot light
-    const glowScale = GLOW_MAX_SCALE * (0.3 + 0.7 * throttle);
-    glowMaterial.color.setScalar(GLOW_IDLE + (1 - GLOW_IDLE) * throttle);
+    const glowScale = GLOW_MAX_SCALE * look.glowScale * (0.3 + 0.7 * blaze);
+    glowMaterial.color.copy(look.glow).multiplyScalar(GLOW_IDLE + (1 - GLOW_IDLE) * blaze);
     for (const glow of glows) {
       glow.visible = this.drive > 0;
       glow.scale.set(glowScale, glowScale, 1);
     }
-    if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
+    if (this.engineLight) {
+      this.engineLight.intensity = 1.5e5 * throttle;
+      this.engineLight.color.copy(look.light);
+    }
     // the plume burns, and is seen, only past PLUME_THROTTLE and with a drive left
     this.plume.set(!this.plumeHidden && this.drive > 0 && throttle >= PLUME_THROTTLE ? throttle : 0, this.flameTime);
-    if (this.trim.light.map) this.trim.light.map.offset.x = -((this.flameTime * TRIM_RUN * TRIM_PULSES) % 1);
+    if (this.perks.neon > 0) this.trim.neon.burn(dt, shove, this.flameTime);
   }
 }

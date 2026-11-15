@@ -12,6 +12,8 @@ import { cos, sin } from '../detmath';
 
 /** The ship on show hovers level above the pad's middle and turns on the spot, once in TURN_SECONDS: an exhibit on a turntable. */
 const TURN_SECONDS = 30;
+/** Its drives burn at this share of full throttle while it is on show, so the drive flame's look shows. */
+const SHOW_THROTTLE = 0.6;
 /** The top of the pad's rim lies this high (units); the ship hovers HOVER above the pad's middle. */
 const PAD_TOP = 35;
 const HOVER = 280;
@@ -221,7 +223,7 @@ export class Showcase {
     }
     this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
-    this.shown?.idle(dt, 0.35);
+    this.shown?.idle(dt, SHOW_THROTTLE);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -325,10 +327,10 @@ export class Showcase {
   }
 }
 
-/** Every mesh of a ship on show throws its shadow onto the pad. */
+/** Every solid mesh of a ship on show throws its shadow onto the pad; light (glows, jets, neon) throws none. */
 function castsShadow(root: THREE.Object3D) {
   root.traverse((o) => {
-    if (o instanceof THREE.Mesh) o.castShadow = true;
+    if (o instanceof THREE.Mesh) o.castShadow = !(o.material as THREE.Material).transparent;
   });
 }
 

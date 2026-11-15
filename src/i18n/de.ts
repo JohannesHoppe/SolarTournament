@@ -474,7 +474,7 @@ export const DE: Catalog = {
   'Plating': 'Panzerplatten',
   'Every hit hurts less': 'Jeder Treffer schmerzt weniger',
   'Neon trim': 'Neonstreifen',
-  'Light strips along both flanks': 'Leuchtstreifen an beiden Flanken',
+  'Neon tubes in your color, more each step': 'Neonröhren in deiner Farbe, mehr mit jeder Stufe',
   'Drive flame': 'Antriebsflamme',
   'Azure, violet, white-hot': 'Azur, Violett, weißglühend',
 
