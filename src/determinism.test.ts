@@ -92,12 +92,12 @@ describe('the shared world on every machine', () => {
     const hashes: Record<string, string> = {};
     for (let i = 0; i < TOURNAMENT_ARENAS.length; i++) hashes[TOURNAMENT_ARENAS[i].id] = arenaWorld(i);
     expect(hashes).toEqual({
-      belt: '4ef24eeaa68e7d0c',
-      rings: '69fd78461bc4a7a3',
-      junkyard: '8cddd98d885b7876',
-      giant: '5ed64e8bb6f5a82b',
-      corona: '3951ba12f6973dda',
-      hole: 'ce4777de180ea143',
+      belt: '48ffab7e82791983',
+      rings: '63de11592065bb33',
+      junkyard: 'acc6d3cbb94a0e5c',
+      giant: '2847130a14fa3460',
+      corona: 'abd0ef83e0594884',
+      hole: '6e291c3a694efc42',
       // the Derelict's wreck held as one body by its keel's girder, its segments in the field
       derelict: '5753e40190f4afe9',
       crack: 'f08ab2d988e99ebc',

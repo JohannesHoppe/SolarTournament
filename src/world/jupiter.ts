@@ -98,8 +98,6 @@ const MOONS = [
 /** The deck's light from above, as a share of the lit map's (its haze: the light scattered under it); the depths', a share of that, tinted rust-brown. */
 const DECK_LIGHT = 0.7;
 const DEEP_LIGHT = new THREE.Color(0.32, 0.2, 0.13);
-/** The wind under the deck carries the clouds (the haze's and the wisps') east at WIND (units/s, 30 m/s). */
-const WIND = 600;
 /**
  * Wisps of cloud under the deck, streaming past a ship: soft streaks drawn out along the wind,
  * WISP_MIN to WISP_MAX long (units, 50 to 180 m) right under the deck, shorter deeper as the
@@ -759,9 +757,10 @@ export class Jupiter {
   private readonly sheets: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>; depth: number }[] = [];
   private readonly timed: THREE.ShaderMaterial[] = [];
   private readonly aurora: THREE.ShaderMaterial;
-  /** The wisps streaming past under the deck (see WISPS), and the way the wind blows (east, a unit vector). */
+  /** The wisps streaming past under the deck (see WISPS), and the way the air's wind blows under the deck (a unit vector) and how fast (units/s), carrying the haze's clouds and the wisps. */
   private readonly wisps: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly wind = new THREE.Vector3();
+  private readonly windSpeed: number;
   /** The depths under the sheets, and the haze around the eye that takes their place under the deck (see BACKDROP). */
   private readonly floor: THREE.Mesh;
   private readonly backdrop: THREE.Mesh;
@@ -866,8 +865,9 @@ export class Jupiter {
     this.backdrop.frustumCulled = false;
     this.backdrop.visible = false;
     this.group.add(floor, this.backdrop);
-    // the wind blows east around the planet's axis (the pole's direction turned back), over the point below the arena
-    this.wind.crossVectors(pole.clone().negate(), across.copy(air.center).negate().normalize()).normalize();
+    // the air's own wind (see world/air), which drags and heats what flies in it: the clouds show it
+    this.wind.copy(air.wind ?? across.set(0, 0, 0)).normalize();
+    this.windSpeed = air.wind?.length() ?? 0;
     this.wisps = new THREE.Mesh(
       wispGeometry(),
       new THREE.ShaderMaterial({
@@ -962,7 +962,7 @@ export class Jupiter {
     this.sky.position.copy(eye);
     // the clouds carried by the wind, the wisps around the eye while it is under the deck
     const clouds = HAZE_UNIFORMS.hazeClouds.value;
-    clouds.set(this.wind.x * WIND * time, this.wind.y * WIND * time, this.wind.z * WIND * time, this.samples);
+    clouds.set(this.wind.x * this.windSpeed * time, this.wind.y * this.windSpeed * time, this.wind.z * this.windSpeed * time, this.samples);
     const wisps = this.wisps.material.uniforms;
     this.wisps.visible = altitude < -WISP_TOP;
     this.backdrop.visible = altitude < 0;

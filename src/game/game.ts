@@ -72,7 +72,7 @@ import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '..
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { copyGround, glide, groundBlow, outside as outsideOn } from '../world/hover';
-import { airAround, airBurn, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { airAround, airBurn, airStep, altitudeIn, density, heatInto, REACTOR_WASTE, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, throughAir, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT, outsideArena } from '../world/arena';
@@ -6622,7 +6622,7 @@ export class Game implements OnlineGame {
     this.clogAlarm(me, up);
     // what the radiators shed beyond the reactor's waste heat a clog holds in is left for the air
     const cooling = Math.max(0, me.cooling - REACTOR_WASTE * me.clog);
-    if (heatInto(air, altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
+    if (heatInto(air, altitude, throughAir(air, me.flight.position, me.flight.velocity, relative).length(), me.clog) <= me.cooling) {
       if (me.heat < AIR_COOL) this.airSaid = 0;
       return;
     }
