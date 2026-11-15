@@ -863,7 +863,7 @@ export const RASK = {
   come: "Now get out of that rack and come up to the depot. Bay three, the one with the lights. We'll talk about your debt there.",
   docked: "There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.",
   lamplighter: "First job, and the first coins off your debt. Six beacons at the ends of the rows have gone dark, and the haulers can't find the yard without them. Get them lit again before the shift's over.",
-  liveTarget: 'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins. And if they hit you more than forty times, they want their money back.',
+  liveTarget: 'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you five coins. And if they hit you more than forty times, they want their money back.',
   liveTargetRefund: "That's forty-one hits, darling. Forty-one! They want their money back, and I want a moving target. Again.",
   canisterSweep: 'Salvage canisters are floating between the rows. The crusher eats them, I sell what comes out, and a bit comes off your debt. Bring me four.',
   cutter: "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your debt. My welder will fit it.",

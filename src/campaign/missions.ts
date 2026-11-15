@@ -135,7 +135,7 @@ const TARGET_LAG = 1;
 /** The sights take the ship's place and flight every SIGHT_STEP seconds and keep them TARGET_LAG long. */
 const SIGHT_STEP = 0.05;
 const SIGHTED = Math.round(TARGET_LAG / SIGHT_STEP) + 1;
-const TARGET_FINE = 10;
+const TARGET_FINE = 5;
 /**
  * The hits an attempt may take, measured with the job harness (src/test/jobbehaviors.ts, jink): a
  * middling Host jinking about the yard took 19 to 33 hits in the 90 s on twelve seeds, flying the
