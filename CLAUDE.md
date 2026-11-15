@@ -341,8 +341,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/ink.ts` | What an element shows on screen: the names at the screen's edge keep clear of the HUD's pieces by it, the layout test measures by it |
 | `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, Jupiter's cap and sheets of cloud, the black hole's lens, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device and its starting rung (lower yet on a touch screen), the Host's choice as kept, the governor that moves along the ladder with the frame rate (faster down, more cautious up on a touch screen) |
 | `view/graphics.ts` | Applies the ladder's rung to the renderer and the scene; feeds the governor; holds a knob that compiles shaders back until a hitch goes unseen |
-| `view/bloom.ts` | The bloom at a share of the picture's resolution |
-| `view/grade.ts` | The output pass with the arena's color grade in the same shader (a tint, a color in the shadows, the saturation): no pass of its own |
+| `view/bloom.ts` | The bloom at a share of the picture's resolution: the light above the threshold in a chain of small textures, halved down and spread back up (a dual filter) into one glow the output pass adds |
+| `view/grade.ts` | The output pass with the bloom's glow added and the arena's color grade in the same shader (a tint, a color in the shadows, the saturation): no pass of their own |
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls`; the radio's keys (M, and `,` `.` for the DJ's songs, so fullscreen needs no mouse for it) and the d-pad for them off the flight |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |

@@ -3,7 +3,7 @@ import { cos, exp, hypot, pow, sin } from '../detmath';
 import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
+import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import type { Assets, ShipType } from '../assets';
@@ -1510,7 +1510,7 @@ export class Game implements OnlineGame {
   private shadowFrame = 0;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
-  private readonly bloom = new Bloom(new THREE.Vector2(256, 256), 0.6, 0.4, BLOOM_THRESHOLD);
+  private readonly bloom = new Bloom(this.output);
   /** The picture's quality: the rung of the ladder, the governor, the Host's choice (see view/graphics). */
   readonly graphics: Graphics;
   /**
