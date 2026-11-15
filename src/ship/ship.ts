@@ -738,13 +738,15 @@ export class Ship {
       if (name.startsWith('drive') && o instanceof THREE.Mesh) flame = o;
       if (name.includes('glow')) glows.push(o);
     });
-    // The glow texture is baked onto black, so additive blending leaves no visible quad edges.
+    // The glow texture is baked onto black, so additive blending leaves no visible quad edges;
+    // added light sums the same in any order, so one pass draws both faces.
     const glowMaterial = new THREE.MeshBasicMaterial({
       map: glowTexture,
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      forceSinglePass: true,
     });
     for (const glow of glows) if (glow instanceof THREE.Mesh) glow.material = glowMaterial;
     const flameMesh = flame as THREE.Mesh | null;

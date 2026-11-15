@@ -75,7 +75,8 @@ function uranus(): THREE.Group {
   const planet = new THREE.Mesh(new THREE.SphereGeometry(URANUS_SIZE, 64, 32), behindAll(new THREE.MeshStandardMaterial({ color: URANUS_COLOR, roughness: 1, metalness: 0, emissive: 0x0b1416 })));
   planet.position.copy(URANUS_AT);
   planet.userData.shadowless = true;
-  const ring = new THREE.Mesh(new THREE.RingGeometry(URANUS_SIZE * RING_INNER, URANUS_SIZE * RING_OUTER, 128, 1), behindAll(new THREE.MeshBasicMaterial({ color: 0x2a2c30, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })));
+  // flat: either face, never both, so one pass
+  const ring = new THREE.Mesh(new THREE.RingGeometry(URANUS_SIZE * RING_INNER, URANUS_SIZE * RING_OUTER, 128, 1), behindAll(new THREE.MeshBasicMaterial({ color: 0x2a2c30, transparent: true, opacity: 0.35, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false })));
   // the rings' plane holds the line of sight but for a tilt (Miranda orbits close to it), and stands upright: Uranus lies on its side
   const sight = URANUS_AT.clone().normalize();
   const normal = new THREE.Vector3(0, 1, 0).cross(sight).normalize().addScaledVector(sight, RING_TILT).normalize();

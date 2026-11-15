@@ -8363,9 +8363,9 @@ export class Game implements OnlineGame {
     return best;
   }
 
-  /** The shell of a nova: a glowing sphere that runs out to NOVA_RADIUS and fades. */
+  /** The shell of a nova: a glowing sphere that runs out to NOVA_RADIUS and fades, its near and far side added in one pass. */
   private shockwave(position: THREE.Vector3) {
-    const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, toneMapped: false }));
     mesh.position.copy(position);
     this.scene.add(mesh);
     this.shockwaves.push({ mesh, born: this.time });
