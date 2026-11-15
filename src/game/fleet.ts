@@ -145,7 +145,7 @@ const SUN_PROBE = 100000;
  * pointing jitter grows with the distance: close BATTERY_AIM, at the edge of its range half of
  * that. Steady flight is easy to hit; jinking, and flying close across the hull, save a pilot.
  */
-export const BATTERY_AIM = 0.4;
+export const BATTERY_AIM = 0.6;
 export const BATTERY_SLEW = 0.5;
 /** A battery's beam is heavier than a ship's laser: on top of what a laser does where it strikes, it takes this much hull. */
 export const BATTERY_DAMAGE = 10;

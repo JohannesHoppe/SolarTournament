@@ -43,9 +43,9 @@ describe("the President's fleet", () => {
     // steady flight, however fast: the same chance (speed is not an argument at all)
     const steady = batteryChance(0, 0.1, near);
     expect(steady).toBeGreaterThan(0.3);
-    // a ship jinking at 5 g is a radius off, at 10 g two: a quarter the chance
-    expect(batteryChance(5 * 196.2, 0.1, near)).toBeCloseTo(steady, 6);
-    expect(batteryChance(10 * 196.2, 0.1, near)).toBeCloseTo(steady / 4, 2);
+    // a ship jinking at half the thrusters (5 g) is a radius off, at all of them two: a quarter the chance
+    expect(batteryChance(1000, 0.1, near)).toBeCloseTo(steady, 6);
+    expect(batteryChance(2000, 0.1, near)).toBeCloseTo(steady / 4, 6);
     // crossing at 250 m/s within 500 m: the mount cannot follow
     expect(250 / 500).toBeLessThanOrEqual(BATTERY_SLEW);
     expect(batteryChance(0, 250 / 400, near)).toBe(0);
