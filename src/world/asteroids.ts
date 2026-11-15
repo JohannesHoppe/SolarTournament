@@ -1520,6 +1520,11 @@ export class AsteroidField {
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
+  /** Whether the field lies on a world's ground (see Placement.ground). */
+  get grounded(): boolean {
+    return this.grounds.length > 0;
+  }
+
   /**
    * How high `position` lies over a world's ground (units, along the ground's normal there; see
    * Placement.ground), the nearest ground under it within its footprint, with the ground's outward

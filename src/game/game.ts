@@ -4974,6 +4974,8 @@ export class Game implements OnlineGame {
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
   private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
+    // over a world's ground, kilometers past the shadow map's reach, the map follows the eye
+    this.space.shadowAround(this.field.grounded ? this.camera.position : null);
     this.arena.mesh.visible = !this.venue.open;
     this.arena.shape(this.venue.bounds ?? null);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
