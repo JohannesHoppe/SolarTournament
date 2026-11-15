@@ -765,7 +765,10 @@ export class Ship {
     // the move to the spawn point is no flight: collisions and gates do not sweep along it
     this.previous.copy(position);
     this.holdTrigger();
-    this.repair();
+    // a fresh ship from the depot, whole at once
+    this.hull = MAX_HULL;
+    this.drive = this.thrusters = 1;
+    this.holes.length = 0;
     this.torpedoes = (this.lean ? DRILL_TORPEDOES : TORPEDOES) + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
@@ -1215,7 +1218,7 @@ export class Ship {
     return direction.dot(this.flight.forward(offset)) / direction.length() > REAR_CONE_COS;
   }
 
-  /** The repair item: hull, drive and thrusters as new, the holes patched. */
+  /** The repair item (see REPAIR_SECONDS): the holes sealed at once, hull, drive and thrusters whole over its seconds. */
   repair() {
     this.holes.length = 0;
     this.repairLeft = REPAIR_SECONDS;
