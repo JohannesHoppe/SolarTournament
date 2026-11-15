@@ -1794,7 +1794,8 @@ const grooveShoot: Drill = {
  * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
  */
 const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
-const BOUNTY_SKILL = 0.2;
+/** Measured against a Host of middling skill (see src/test/jobsuite): at 0.2 it won 1 of 4 seeds, at 0.1 6 of 8. */
+const BOUNTY_SKILL = 0.1;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
 /** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
@@ -1997,6 +1998,8 @@ function courier(arena: ArenaId): Drill {
  */
 const AMBUSHERS = 3;
 const AMBUSH_SKILL = 0.2;
+/** The places whose bandits fly weaker, as measured against a Host of middling skill (see src/test/jobsuite): at the Ballroom at 0.2 it won 1 of 4 seeds, at 0.1 3 of 3. */
+const AMBUSH_EASED: Partial<Record<ArenaId, number>> = { ballroom: 0.1 };
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2011,7 +2014,7 @@ function ambush(arena: ArenaId): Drill {
     autopilot: false,
     music: 'fight',
     enter(ctx) {
-      ctx.spawnJumpers(null, layCourier(ctx.field, arena).points[0], AMBUSHERS, AMBUSH_SKILL, AMBUSH_NAMES, AMBUSH_HOLD, true);
+      ctx.spawnJumpers(null, layCourier(ctx.field, arena).points[0], AMBUSHERS, AMBUSH_EASED[arena] ?? AMBUSH_SKILL, AMBUSH_NAMES, AMBUSH_HOLD, true);
       ctx.me.heat = 0;
       ctx.me.overheated = false;
     },
@@ -2114,10 +2117,12 @@ const HAZE_PLACES: readonly ArenaId[] = ['titan'];
 /**
  * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
  * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
- * The first faces at Europa (Blue Fenn) and Io (Sulfur Pike) with their escorts: at the tier's own
- * a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at Io.
+ * The first faces at Phobos (Corporal Nobody), Europa (Blue Fenn) and Io (Sulfur Pike) with their
+ * escorts: at the tier's own a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at
+ * Io; at 0.35 and 0.35 it won 4 of 9 at Phobos, at 0.4 and 0.35 2 of 7 at Europa; as eased, 6 of
+ * 7 at Phobos and 6 of 9 at Europa.
  */
-const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }], io: [{ target: 0.4, skill: 0.35 }] };
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { phobos: [{ target: 0.2, skill: 0.2 }], europa: [{ target: 0.35, skill: 0.2 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
   const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);

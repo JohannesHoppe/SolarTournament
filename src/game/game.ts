@@ -5625,7 +5625,7 @@ export class Game implements OnlineGame {
       bot.raceSpeed = turn > FLAG_TOW_TURN ? FLAG_RAID_SPEED : FLAG_HOME_SPEED;
       return;
     }
-    // every FLAG_GUARDS-th bot of a side guards (counted by hand: this runs every frame)
+    // every FLAG_GUARDS-th bot of a side guards (counted by hand: this runs on every bot's turn)
     let rank = 0;
     for (const other of this.bots) {
       if (other === bot) break;
