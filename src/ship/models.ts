@@ -413,19 +413,25 @@ const STRIPE_JUMP = 40;
 const stripeRay = new THREE.Raycaster();
 const stripeFrom = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
+/** How far short of a canopy and its frame the racing stripes stop, before and behind it (units, 40 cm). */
+const CANOPY_MARGIN = 8;
 
 /**
  * The neon trim, a look of the hangar (see Ship.outfit, view/neon): racing stripes along the top
  * of the hull from the nose back to the stern (depths `from` to `to`), laid on its surface as
- * paint is, over the canopy and the spine wherever they rise: each sample the first of `surfaces`
+ * paint is, over the spine wherever it rises: each sample the first of `surfaces`
  * (the hull's top parts, nothing standing tall on it) straight down. Every step's stripes (STRIPES)
  * are one mesh, `trimLight`, each vertex knowing the step it belongs to (`tier`), where along the
  * ship it lies (`along`, 0 at the nose to 1 at the stern, so the chase light runs towards the
  * drives), where across its stripe (`across`, -1 to 1) and which stripe it is (`seed`, for its
- * buzz); in `trim`, hidden until a ship wears it. Laid by hand (`wobble`, units), a stripe wanders
- * that far off its line and back along the ship, and its edges with it.
+ * buzz); in `trim`, hidden until a ship wears it. As on a race car the stripes skip the glass: they
+ * stop CANOPY_MARGIN short of the `canopy` (its two ends) and its frame, and go on behind it. Laid by
+ * hand (`wobble`, units), a stripe wanders that far off its line and back along the ship, and its
+ * edges with it.
  */
-function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: number, wobble = 0): THREE.Object3D {
+function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: number, canopy: End[] | null, wobble = 0): THREE.Object3D {
+  const glass = canopy ? [Math.min(...canopy.map((end) => end.z)) - CANOPY_MARGIN, Math.max(...canopy.map((end) => end.z)) + CANOPY_MARGIN] : null;
+  const onGlass = (z: number) => !!glass && z >= glass[0] && z <= glass[1];
   const targets = surfaces.map((geometry) => new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
   const top = (x: number, z: number) => {
     stripeRay.set(stripeFrom.set(x, 1000, z), DOWN);
@@ -454,6 +460,7 @@ function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: numbe
         attributes.seed.push(seed);
       };
       for (let d = 0; d + 1 < depths.length; d++) {
+        if (onGlass(depths[d]) || onGlass(depths[d + 1])) continue;
         for (let c = 0; c < columns; c++) {
           const quad = [heights[d][c], heights[d + 1][c], heights[d + 1][c + 1], heights[d][c + 1]];
           if (quad.some((h) => h === null)) continue;
@@ -738,8 +745,8 @@ const HUMAN_SPINE: [End, End] = [{ z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8
 /** The fuselage's top the racing stripes are laid on (see racingStripes): the body, then the canopy and the spine `top` puts on it. */
 const fuselage = (body: End[], top: THREE.BufferGeometry[]) => [...body.slice(1).map((end, i) => loft(OCTAGON, end, body[i])), ...top];
 
-/** The human interceptor's racing stripes: from the nose over the canopy and the spine to the bulkhead. */
-const humanStripes = () => racingStripes(fuselage(HUMAN_BODY, [loft(OCTAGON, ...HUMAN_CANOPY), loft(RECTANGLE, ...HUMAN_SPINE)]), HUMAN_BODY[0].z + 20, HUMAN_BODY[2].z);
+/** The human interceptor's racing stripes: from the nose to the canopy, then along the spine to the bulkhead. */
+const humanStripes = () => racingStripes(fuselage(HUMAN_BODY, [loft(RECTANGLE, ...HUMAN_SPINE)]), HUMAN_BODY[0].z + 20, HUMAN_BODY[2].z, HUMAN_CANOPY);
 
 /**
  * Lot 7731 as the yard sold it (the campaign's ship, see campaign/campaign): the depot's paint
@@ -820,13 +827,13 @@ const POD: [End, End] = [{ z: 150, w: 16, h: 8, y: 56 }, { z: -30, w: 24, h: 16,
 const MAGPIE_SPINE: [End, End] = [{ z: 230, w: 12, h: 10, y: 62 }, { z: 140, w: 10, h: 6, y: 58 }];
 /**
  * The racing stripes of Lot 7731, laid on the Magpie's top (the only stage that flies in the Games,
- * see MAGPIE_LOOKS): from the scout's long nose over the canopy, the pod and the spine, under the
+ * see MAGPIE_LOOKS): from the scout's long nose to the canopy, then over the pod and the spine, under the
  * sensor mast, to the bulkhead; laid by Pim's hand, wandering up to MAGPIE_WOBBLE (units, 10 cm)
  * off their line.
  */
 const MAGPIE_WOBBLE = 2;
 const magpieStripes = () =>
-  racingStripes(fuselage([MAGPIE_NOSE[2], MAGPIE_NOSE[1], HUMAN_BODY[1], HUMAN_BODY[2]], [loft(OCTAGON, ...HUMAN_CANOPY), loft(OCTAGON, ...POD), loft(RECTANGLE, ...MAGPIE_SPINE)]), MAGPIE_NOSE[2].z + 20, HUMAN_BODY[2].z, MAGPIE_WOBBLE);
+  racingStripes(fuselage([MAGPIE_NOSE[2], MAGPIE_NOSE[1], HUMAN_BODY[1], HUMAN_BODY[2]], [loft(OCTAGON, ...POD), loft(RECTANGLE, ...MAGPIE_SPINE)]), MAGPIE_NOSE[2].z + 20, HUMAN_BODY[2].z, HUMAN_CANOPY, MAGPIE_WOBBLE);
 /** Where the sensor mast stands on the pod (units along the ship), how tall it reaches over the pod's top (units). */
 const MAST_Z = 60;
 const MAST_TOP = 130;
@@ -1141,8 +1148,8 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     ...thrusters.housings,
     ...thrusters.nozzles,
   ];
-  // the racing stripes down the arrowhead's top, over the canopy and its gold frame
-  const trim = racingStripes(fuselage(SOVEREIGN_BODY, [loft(OCTAGON, ...SOVEREIGN_CANOPY), loft(RECTANGLE, ...SOVEREIGN_FRAME)]), SOVEREIGN_BODY[0].z + 30, SOVEREIGN_BODY[2].z);
+  // it takes no trimmings (see hangar, shownLooks): its trim is empty
+  const trim = Object.assign(new THREE.Group(), { name: 'trim', visible: false });
   // the delta wings are its radiators, hottest at their roots towards the trailing edge
   const radiators = pair(radiator(BLADE, SOVEREIGN_WING[0], SOVEREIGN_WING[1], (p) => THREE.MathUtils.smoothstep(p.z, -40, 230) * (1 - 0.6 * THREE.MathUtils.smoothstep(Math.abs(p.x), 90, 270))));
   const coats: Coat[] = [
@@ -1303,7 +1310,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
   ];
   // the racing stripes down the dart's top from the needle to the stern, the dorsal blade rising
   // out of them (it stands on the centerline, thin where it meets the body)
-  const trim = racingStripes(fuselage(ALIEN_BODY, []), ALIEN_BODY[0].z + 30, ALIEN_BODY[2].z);
+  const trim = racingStripes(fuselage(ALIEN_BODY, []), ALIEN_BODY[0].z + 30, ALIEN_BODY[2].z, null);
   // the inner side blades are its radiators, hottest at the body
   const radiators = pair(radiator(BLADE, ALIEN_FIN[0], ALIEN_FIN[1], (p) => 1 - 0.7 * THREE.MathUtils.smoothstep(Math.abs(p.x), 60, 130)));
   const root = hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW }], ALIEN_NOZZLES, trim, radiators, { parts: veins, color: VEIN });
