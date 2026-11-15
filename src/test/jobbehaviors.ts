@@ -270,11 +270,16 @@ const climb: Behavior = (world, pilot) => {
   return { goto: hatch.clone().setY(hatch.y + 900), cruise: 300 };
 };
 
-/** A smuggling run: to the drop, the drive cold while a patrol is near enough to see it burn (with room for the patrol's circle). */
+/**
+ * A smuggling run: to the drop, the drive cold while a patrol is near enough to see it burn (with
+ * room for the patrol's circle); out of their sight it empties its heat sink (see Ship.sink) with
+ * a shot whenever it holds more than SINK_LOW, so the silence lasts past the patrols.
+ */
 const PATROL_SIGHT = 48000;
+const SINK_LOW = 0.15;
 const smuggle: Behavior = (world) => {
   const near = world.formation.some((patrol) => patrol.flight.position.distanceTo(world.me.flight.position) < PATROL_SIGHT);
-  return { goto: world.waypoint, quiet: near };
+  return { goto: world.waypoint, quiet: near, fire: !near && world.me.sink > MAX_HEAT * SINK_LOW };
 };
 
 export const BEHAVIORS: Record<string, Record<number, Behavior>> = {

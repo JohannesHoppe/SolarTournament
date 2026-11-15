@@ -231,8 +231,8 @@ export const LOCK_RANGE = 60000;
  * reactor's waste heat and the laser's go into a tank of 2 t of water ice instead, which takes
  * some 1.5 GJ melting and warming to 100 °C (`sink`, in the heat gauge's units: MAX_HEAT is the
  * tank full). With the drive cold the reactor idles (the clone's link, the sensors, the life
- * support, the reactor kept hot) at a sixth of the waste heat it makes at work (REACTOR_WASTE,
- * which the radiators shed at full, some 300 MW): SINK_FILL a second, some 50 MW, full in
+ * support, the reactor kept hot) at a twelfth of the waste heat it makes at work (REACTOR_WASTE,
+ * which the radiators shed at full, some 300 MW): SINK_FILL a second, some 25 MW, full in
  * SINK_SECONDS, sooner by what the laser's shots put in. Once it is full the ship must vent (see
  * venting): its radiators open, and it shows on every sensor again until they have drawn the
  * sink down to SINK_RESUME, three and a half seconds. Loud, they draw it down as well. The laser
@@ -241,7 +241,7 @@ export const LOCK_RANGE = 60000;
 export const SILENT_AFTER = 2;
 export const SILENT_THROTTLE = 0.05;
 export const SILENT_RANGE = 20000;
-export const SINK_FILL = REACTOR_WASTE / 6;
+export const SINK_FILL = REACTOR_WASTE / 12;
 export const SINK_SECONDS = MAX_HEAT / SINK_FILL;
 export const SINK_RESUME = 30;
 
