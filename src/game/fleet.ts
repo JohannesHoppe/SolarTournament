@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { acos, atan, cos, hypot, sin } from '../detmath';
+import { ROUND_SECONDS } from '../music/songs';
 import { quaternionAngleTo, rotateTowards, rotateX, rotateY, setRotation, slerp } from '../detthree';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
@@ -14,7 +15,8 @@ import { Elevation, EMPHASES, machinery } from './machinery';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
 import { NOVA_RADIUS } from './items';
-import { SIEGE_DISTANCE } from '../ship/bots';
+import { JINK_SCATTER, JINK_SCATTER_MAX, SIEGE_DISTANCE } from '../ship/bots';
+import { METERS_PER_UNIT, RCS_THRUST } from '../ship/flight';
 import { AIR_BURN, type Air } from '../world/air';
 import { MAX_HEAT, OVERHEAT_RESUME, RADIATE, SUN_ABSORB } from '../ship/ship';
 import { PlumeLook } from '../view/plume';
@@ -133,14 +135,21 @@ const BATTERY_SHOT_HEAT = 15;
 const SUN_CHECK = 0.25;
 const SUN_PROBE = 100000;
 /**
- * A battery's beam hits with a chance that falls with the target's speed and distance: at
- * rest and close BATTERY_AIM, at full tournament speed (BATTERY_DODGE_SPEED, units/s) and the
- * edge of its range a quarter of that. Moving is what saves a pilot.
+ * A battery's beam crosses its 1.5 km in 5 µs: no ship outruns it, however fast, and what it
+ * misses by is its turret's aim. The turret aims where the target is going on the motion it
+ * tracked, as a bot does (see ship/bots, senseJink): a target that changes its motion across the
+ * line of sight scatters the aim, by a whole ship radius at half the thrusters' push (5 g), at
+ * most JINK_SCATTER_MAX radii, and the beam hits as often as the hull covers the scatter's disc
+ * (one over the scatter squared, all of it within a radius). It cannot follow a ship whose line
+ * of sight swings faster than its mount slews (BATTERY_SLEW, rad/s, about 29°/s, a heavy naval
+ * gun mount's): crossing speed over distance, 250 m/s within 500 m; such a ship it misses. Its
+ * pointing jitter grows with the distance: close BATTERY_AIM, at the edge of its range half of
+ * that. Steady flight is easy to hit; jinking, and flying close across the hull, save a pilot.
  */
-export const BATTERY_AIM = 0.7;
+export const BATTERY_AIM = 0.6;
+export const BATTERY_SLEW = 0.5;
 /** A battery's beam is heavier than a ship's laser: on top of what a laser does where it strikes, it takes this much hull. */
 export const BATTERY_DAMAGE = 10;
-const BATTERY_DODGE_SPEED = 5000;
 /** The drive plume: PLUME_REACH long (units, 1.5 km), spreading by PLUME_SPREAD per unit; PLUME_HEAT heat and PLUME_BURN hull per second within PLUME_CORE (units, 300 m) of the nozzles, then falling off with the square of the distance, a twenty-fifth at its end. */
 export const PLUME_REACH = 30000;
 const PLUME_CORE = 6000;
@@ -196,7 +205,7 @@ const LANE_STEP = 500;
  * the clear air over the deck, the batteries under its keel too.
  */
 const HOLD_OVER_DECK = 1000;
-/** How many points along a piece's orbit the lane is checked at. */
+/** How many points along a piece's orbit (or its way through a round) the lane is checked at. */
 const LANE_SAMPLES = 120;
 /** Its hull keeps this far from every piece of the field it dodges (units, 60 m, see DODGE_MASS), the piece's whole reach counted. */
 const ROCK_CLEAR = 1200;
@@ -239,6 +248,25 @@ const RAM_SPIN = 0.3;
  */
 const RAM_RESTING = 20;
 const RAM_GAP = 1;
+/**
+ * A ram costs a part it strikes (a battery, a drive, the reactor, within TORPEDO_REACH of where
+ * the piece meets the hull) hits by its energy: the energy the two lose meeting (½ μ v² (1 − e²),
+ * μ the reduced mass, v the speed they close at, e RAM_RESTITUTION), of which the softer rock,
+ * ice or junk takes the most, crushing; RAM_ARMOR of it goes into the armor, a hit for every
+ * RAM_HIT_JOULES (J), what a torpedo's warhead puts into a part for each of its TORPEDO_HITS (its
+ * 42 MJ, see game/torpedoes). Less than a hit the armor takes without harm. A chunk of ice of 20 m
+ * met at the cruising 30 m/s frees some 1.6 GJ, 38 hits: nearly as much as four torpedoes. The hull
+ * itself, between its parts, the Games keep whole (see README).
+ */
+const RAM_ARMOR = 0.1;
+const RAM_HIT_JOULES = 4.2e6;
+
+/** The hits a part takes from a piece of `mass` (kg) meeting the hull there closing at `approach` (units/s; see RAM_ARMOR). */
+export function ramHits(mass: number, approach: number): number {
+  const speed = approach * METERS_PER_UNIT;
+  const reduced = (mass * MASS.battleship) / (mass + MASS.battleship);
+  return Math.floor((0.5 * reduced * speed * speed * (1 - RAM_RESTITUTION * RAM_RESTITUTION) * RAM_ARMOR) / RAM_HIT_JOULES);
+}
 /** A piece that reaches into the hull is pushed out again at most this many times a frame, for the colliders a push moves it into. */
 const RAM_PASSES = 3;
 /** Two crossed boxes hold a round body (see Fleet's `round`): each its full width one way and this share of it the other. */
@@ -666,8 +694,16 @@ function crestTexture(): THREE.CanvasTexture | null {
   return texture;
 }
 
-/** The chance a battery's beam hits a target this fast (units/s) this far away (units). */
-export const batteryChance = (speed: number, distance: number) => BATTERY_AIM * (1 - 0.5 * Math.min(1, speed / BATTERY_DODGE_SPEED)) * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE));
+/**
+ * The chance a battery's beam hits a target that changes its motion across the line of sight by
+ * `jink` (units/s², smoothed as a bot senses it), whose line of sight swings at `crossing`
+ * (rad/s), `distance` (units) away (see BATTERY_AIM).
+ */
+export function batteryChance(jink: number, crossing: number, distance: number): number {
+  if (crossing > BATTERY_SLEW) return 0;
+  const scatter = Math.max(1, Math.min(JINK_SCATTER_MAX, jink / (RCS_THRUST * JINK_SCATTER)));
+  return (BATTERY_AIM * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE))) / (scatter * scatter);
+}
 
 /** A part of the battleship as a torpedo homes on it: where it is, and whether it can still be hit. */
 class Beacon implements Homing {
@@ -1413,11 +1449,13 @@ export class Fleet implements Obstacle {
       low = Math.min(low, box.center.y - box.half.y);
       high = Math.max(high, box.center.y + box.half.y);
     }
-    // every piece where it goes: around its whole orbit, or where it stands
+    // every piece where it goes: around its whole orbit, along its way through a round in a field
+    // riding an orbit (see FieldLayout.hill), or where it stands
     const paths = [...field.asteroids.values()].map((piece) => {
       const turns = piece.orbitRate !== 0;
-      const period = turns ? (Math.PI * 2) / Math.abs(piece.orbitRate) : 0;
-      const at = Array.from({ length: turns ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
+      const moves = turns || (piece.hill !== null && piece.velocity.lengthSq() > 0);
+      const period = turns ? (Math.PI * 2) / Math.abs(piece.orbitRate) : moves ? ROUND_SECONDS : 0;
+      const at = Array.from({ length: moves ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
       return { at, reach: piece.radius + ROCK_CLEAR };
     });
     // the plane first, then up and down in turn; in a planet's air only those over its floor (see
@@ -1619,6 +1657,7 @@ export class Fleet implements Obstacle {
     ramHull.velocity.crossVectors(this.spin, sweep.subVectors(point, this.position)).add(this.velocity);
     sweep.copy(ramHull.velocity);
     const approach = ramHull.velocity.dot(normal) - ramVelocity.dot(normal);
+    if (approach > 0) this.bruise(point, ramPiece.mass, approach);
     if (approach <= 0 || (toPiece < 0.5 && approach * (1 + RAM_RESTITUTION) * toPiece < RAM_RESTING)) {
       // parting already, or bouncing gently off a piece heavier than itself: the hull alone gives way
       if (approach > 0) this.velocity.addScaledVector(normal, -approach * (1 + RAM_RESTITUTION));
@@ -1644,6 +1683,20 @@ export class Fleet implements Obstacle {
     if (piece.weld === null) this.budge(field, piece, clock, change, push, normal, point, RAM_SPIN);
     else for (const member of field.welded(piece)) this.budge(field, member, clock, change, push, normal, point, 0);
   }
+
+  /**
+   * A piece of `mass` (kg) met the hull at `point` closing at `approach` (units/s): the parts it
+   * strikes take hits by the energy their armor takes (see RAM_ARMOR), kept in `rammed` for the
+   * game to count; the lead's state tells the other browsers.
+   */
+  private bruise(point: THREE.Vector3, mass: number, approach: number) {
+    const hits = ramHits(mass, approach);
+    if (hits <= 0) return;
+    for (const zone of this.blast(point)) this.rammed.push(zone, hits);
+  }
+
+  /** The hits rams dealt the parts since last asked (pairs of part and hits; see bruise), for the game to count as hits without a shooter (see Game.playFleet). */
+  readonly rammed: number[] = [];
 
   /** A piece takes a blow of the hull (see shove): its center's velocity changes by `change`, it is pushed `push` along `normal`, and it tumbles from `point` by at most `tumble` (rad/s); the lead tells the other browsers. */
   private budge(field: AsteroidField, piece: Asteroid, clock: number, change: THREE.Vector3, push: number, normal: THREE.Vector3, point: THREE.Vector3, tumble: number) {

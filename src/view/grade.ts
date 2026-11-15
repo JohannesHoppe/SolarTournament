@@ -26,22 +26,35 @@ const GRADE_GLSL = /* glsl */ `
 
 /** Where the grade goes into three.js's output shader: before its color space encoding. */
 const MARK = '// color space';
+/** Where the bloom goes in: on the picture's light as read, before the tone mapping. */
+const READ = 'gl_FragColor = texture2D( tDiffuse, vUv );';
 
 /**
- * The output pass (tone mapping and the screen's encoding) with the arena's grade in the same
- * shader: no pass of its own, a few operations per pixel.
+ * The output pass (tone mapping and the screen's encoding) with the bloom's glow added to the
+ * picture (see view/bloom) and the arena's grade in the same shader: no pass of their own, a few
+ * operations per pixel.
  */
 export class GradedOutputPass extends OutputPass {
   constructor() {
     super();
     const shader = this.material.fragmentShader;
     if (!shader.includes(MARK)) throw new Error('The output shader has no place for the grade');
+    if (!shader.includes(READ)) throw new Error('The output shader has no place for the bloom');
+    this.uniforms.tBloom = { value: null };
+    this.uniforms.bloomOn = { value: 0 };
     this.uniforms.gradeGain = { value: new THREE.Vector3(1, 1, 1) };
     this.uniforms.gradeLift = { value: new THREE.Vector3() };
     this.uniforms.gradeSaturation = { value: 1 };
     this.material.fragmentShader = shader
-      .replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform vec3 gradeGain;\nuniform vec3 gradeLift;\nuniform float gradeSaturation;')
+      .replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform sampler2D tBloom;\nuniform float bloomOn;\nuniform vec3 gradeGain;\nuniform vec3 gradeLift;\nuniform float gradeSaturation;')
+      .replace(READ, `${READ}\nif (bloomOn > 0.0) gl_FragColor.rgb += texture2D(tBloom, vUv).rgb;`)
       .replace(MARK, `${GRADE_GLSL}\n${MARK}`);
+  }
+
+  /** The bloom's glow to add (see view/bloom), null for none. */
+  setBloom(glow: THREE.Texture | null) {
+    this.uniforms.tBloom.value = glow;
+    this.uniforms.bloomOn.value = glow ? 1 : 0;
   }
 
   set(grade: Grade) {

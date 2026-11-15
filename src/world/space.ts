@@ -125,6 +125,10 @@ const STREAK_START = 400;
 const STREAK_FULL = 4000;
 /** Size of the area the sun's shadow map covers, centered on the field. */
 const SHADOW_REACH = 140000;
+/** The shadow camera's axes (see Space.shadowAround). */
+const shadowBack = new THREE.Vector3();
+const shadowRight = new THREE.Vector3();
+const shadowUp = new THREE.Vector3();
 /**
  * Direction towards the sun; it sits in front of the ships at spawn. Every arena's but where a
  * place's own sun stands elsewhere (ArenaProfile's `sun.direction`, Caloris's on its horizon):
@@ -266,6 +270,33 @@ export class Space {
     this.flare(0);
   }
 
+  /**
+   * Where the sun's shadow map lies: centered on `center` (the camera over a world's ground, which
+   * reaches kilometers past the map's SHADOW_REACH), or on the field's middle for null, where the
+   * map covers the whole arena. The center moves in whole texels of the map, across the sun's
+   * rays, so a shadow's edge stays where it is on the ground as the map follows.
+   */
+  shadowAround(center: THREE.Vector3 | null) {
+    const light = this.sunLight;
+    const texel = SHADOW_REACH / light.shadow.mapSize.x;
+    // the shadow camera's axes as it looks from the light at its target, the world's y up
+    shadowBack.copy(this.sunDirection);
+    shadowRight.crossVectors(THREE.Object3D.DEFAULT_UP, shadowBack);
+    // a sun straight overhead: any axis across its rays will do
+    if (shadowRight.lengthSq() < 1e-12) shadowRight.set(1, 0, 0);
+    shadowRight.normalize();
+    shadowUp.crossVectors(shadowBack, shadowRight);
+    const target = light.target.position;
+    if (!center) target.set(0, 0, 0);
+    else {
+      const right = Math.round(center.dot(shadowRight) / texel) * texel;
+      const up = Math.round(center.dot(shadowUp) / texel) * texel;
+      target.copy(shadowBack).multiplyScalar(center.dot(shadowBack)).addScaledVector(shadowRight, right).addScaledVector(shadowUp, up);
+    }
+    light.position.copy(shadowBack).multiplyScalar(SHADOW_REACH).add(target);
+    light.target.updateMatrixWorld();
+  }
+
   /** Whether the sun's shadow map exists: the renderer makes it in its next shadow pass. */
   get hasShadowMap() {
     return this.sunLight.shadow.map !== null;
@@ -344,7 +375,7 @@ export class Space {
     if (!toward.equals(this.sunDirection)) {
       this.sunDirection.copy(toward);
       this.sun.position.copy(toward).multiplyScalar(SKY_RADIUS * 0.8);
-      this.sunLight.position.copy(toward).multiplyScalar(SHADOW_REACH);
+      this.sunLight.position.copy(toward).multiplyScalar(SHADOW_REACH).add(this.sunLight.target.position);
       IMPOSTOR_SUN.direction.value.copy(toward);
       // the real sky turns with it, the sun on the ecliptic (see skyTurn)
       this.starmap?.turn(skyTurn(toward));

@@ -1,6 +1,6 @@
 import { gripAt, HOVER_HEIGHT, LEAD_TIME, leadLimit, LIFT, LIFT_MOST, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
+import { G, RADIATE, MAX_HULL, NANO_SECONDS, NANO_WAIT, REPAIR_SECONDS, SILENT_AFTER, SILENT_RANGE, SINK_SECONDS } from '../ship/ship';
 import { altitudeIn, clearOf, CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, densityIn, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED } from '../game/race';
@@ -15,8 +15,8 @@ import { PSYCHE_FALL } from '../world/yard';
 import { cushion } from '../world/hover';
 import { EXTREME_G } from '../ship/strainhand';
 import { CALLISTO_FALL } from '../world/callisto';
-import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
-import { CABLE_BREAK, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
+import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, torpedoDamage, TORPEDO_LATERAL, TORPEDO_WARHEAD, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES, TORPEDOES_PER_PROBE } from '../game/torpedoes';
+import { CABLE_BREAK, HARPOON_MASS, harpoonDamage, HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE, HOOK_SPEED } from '../game/hook';
 import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
@@ -26,7 +26,7 @@ import { COMET_WARNING } from '../game/comet';
 import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
-import { CRUMBLE_AFTER } from '../world/asteroids';
+import { CRUMBLE_AFTER, wellPull } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
 import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
@@ -120,7 +120,8 @@ export const FROM_CODE: Record<string, number> = {
   probeTorpedoes: TORPEDOES_PER_PROBE,
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
   lockRange: km(LOCK_DISTANCE),
-  torpedoDamage: TORPEDO_DAMAGE,
+  torpedoWarhead: TORPEDO_WARHEAD,
+  torpedoTail: Math.round(torpedoDamage(TORPEDO_TOP_SPEED - MAX_SPEED, MASS.ship)),
   torpedoSpeed: meters(TORPEDO_TOP_SPEED),
   torpedoTurn: g(TORPEDO_LATERAL),
   grip: g(gripAt(MAX_SPEED)),
@@ -132,6 +133,9 @@ export const FROM_CODE: Record<string, number> = {
   hookRange: km(HOOK_RANGE),
   hookPull: g(HOOK_PULL),
   cableBreak: g(CABLE_BREAK),
+  harpoonMass: HARPOON_MASS,
+  harpoonSpeed: km(HOOK_SPEED),
+  harpoonDamage: Math.round(harpoonDamage(HOOK_SPEED)),
   hookReady: HOOK_RECHARGE,
   shipMass: MASS.ship / 1000,
   probeEvery: PROBE_EVERY,
@@ -158,6 +162,8 @@ export const FROM_CODE: Record<string, number> = {
   nova: meters(NOVA_RADIUS),
   selfDestruct: meters(SELF_DESTRUCT_RADIUS),
   silentAfter: SILENT_AFTER,
+  sinkSeconds: Math.round(SINK_SECONDS),
+  repairSeconds: REPAIR_SECONDS,
   silentRange: km(SILENT_RANGE),
   selfDestructHold: SELF_DESTRUCT_HOLD,
   hookPrice: GEAR.find((gear) => gear.id === 'hook')!.price,
@@ -186,6 +192,12 @@ export const FROM_CODE: Record<string, number> = {
   orbitKm: Math.round(meters(circularAt(20000))),
   orbitKmTime: Math.round((2 * Math.PI * 20000) / circularAt(20000)),
   orbitEdge: Math.round(meters(circularAt(orbitRoom(hole())))),
+  // Jupiter's pull at its cloud deck (g), and the share of the main drive that holds a ship up against it (%)
+  jupiterG: Math.round((meters(jupiterPull()) / 9.81) * 100) / 100,
+  jupiterHold: percent(jupiterPull() / MAIN_THRUST),
+  // the circles its rocks fly, at the inner and the outer edge of their ring (m/s)
+  holeRocksInner: Math.round(meters(circularAt(arenaById('hole')!.layout.inner))),
+  holeRocksOuter: Math.round(meters(circularAt(arenaById('hole')!.layout.radius))),
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
@@ -196,6 +208,8 @@ export const FROM_CODE: Record<string, number> = {
   seeKm: Math.round(meters(reachAt(-20000, SIGHT_DEPTH)) / 10) * 10,
   seeTwoKm: Math.round(meters(reachAt(-40000, SIGHT_DEPTH)) / 10) * 10,
   dragDeck: Math.round((dragAt(-1, MAX_SPEED) / G) * 10) / 10,
+  // the wind under the deck (m/s)
+  jupiterWind: Math.round(meters(jupiterAir().wind!.length())),
   // the lift of the fins at the deck at the limit, the flight computer's trim, and the autopilot's
   // hardest turn at the deck at the limit (to 5 m, as the README gives it)
   liftDeck: g(LIFT),
@@ -242,6 +256,11 @@ function jupiterAir() {
   return arenaById('giant')!.layout.air!;
 }
 
+/** Jupiter's pull at its cloud deck (units/s²). */
+function jupiterPull() {
+  return wellPull(arenaById('giant')!.layout.well!, jupiterAir().radius);
+}
+
 /** How deep under Jupiter's deck the speed limit starts to heat a hull (m). */
 function hotDepth(): number {
   let depth = 0;
@@ -277,7 +296,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   heatShot: { value: 20, readme: 'Each shot adds # % of the heat capacity' },
   burstSun: { value: 6, readme: 'a cool laser fires a burst of #;' },
   cooled: { value: 30, readme: 'cooled down to # %' },
-  torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
+  torpedoShot: { value: 50, readme: 'the game keeps the 6 m for play; # points' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },
@@ -289,7 +308,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },
   pocket: { value: 1.35, readme: '# km deep at its middle' },
-  junkOrbit: { value: 25, readme: 'all at # m/s' },
+  junkOrbit: { value: 25, readme: 'crosses the field at # m/s' },
   stormEvery: { value: 50, readme: 'Every # seconds of field time a solar storm' },
   stormLength: { value: 8, readme: 'blinds the sensors for # seconds' },
   impactKill: { value: 72, readme: 'at about # m/s a ship is destroyed' },

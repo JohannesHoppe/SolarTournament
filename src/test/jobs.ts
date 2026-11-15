@@ -11,9 +11,9 @@ import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
 import { blastOn, Charges } from '../game/charges';
 import { approachGate, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
-import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
+import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, harpoonClosing, harpoonDamage, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
-import { DRILL_TORPEDOES, Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
+import { DRILL_TORPEDOES, Torpedoes, torpedoDamage, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
 import { hullOf, spareSkills, type Campaign, type Choice, type Mission } from '../campaign/campaign';
 import type { SceneName } from '../campaign/scenes';
@@ -223,6 +223,7 @@ export class JobWorld implements SchoolContext {
   dodges = 0;
   readonly brokenAt = new THREE.Vector3();
   brokenId = '';
+  brokenReach = 0;
   selfDestructing = false;
   fined = 0;
   owed = 0;
@@ -375,12 +376,12 @@ export class JobWorld implements SchoolContext {
     if (burn > 0 && ship.structural(burn, this.now) === 'destroyed') this.destroyed(ship, null, 'air');
   }
 
-  /** A place of the campaign has no edge; an arena of the Games loses a ship far out (see Game.keepInArena, the school's patience). */
+  /** A place of the campaign has no edge; an arena of the Games blows a ship far out with the Ministry's charge (see Game.keepInArena, the school's patience). */
   private keepInArena(ship: Ship) {
     if (!ship.alive || this.venue.open || ship.flight.position.length() < ARENA_LIMIT) return;
     if (ship.flight.position.length() < ARENA_LIMIT * 4) return;
     ship.structural(Infinity, this.now);
-    if (!ship.alive) this.destroyed(ship, null, 'space');
+    if (!ship.alive) this.destroyed(ship, null, 'ministry');
   }
 
   /** A ship against the well, rock (swept along its way), the drill's rings and hulls (see Game.collide). */
@@ -495,6 +496,7 @@ export class JobWorld implements SchoolContext {
         this.rocksBroken++;
         this.brokenAt.copy(blast.broken.object.position);
         this.brokenId = blast.broken.id;
+        this.brokenReach = blast.broken.radius;
       }
       for (const ship of [...this.ships]) {
         if (!ship.alive) continue;
@@ -543,11 +545,11 @@ export class JobWorld implements SchoolContext {
     this.torpedoList.launch(`${ship.id}.${ship.torpedoesFired++}`, ship, target, ship.nose(new THREE.Vector3()), Torpedoes.launchVelocity(ship), this.now, true);
   }
 
-  /** A torpedo went off; on a ship, it takes TORPEDO_DAMAGE of its hull (see Game.detonate, applyTorpedoHit). */
+  /** A torpedo went off; on a ship, it takes its warhead and the energy of the speed they closed at (see torpedoDamage, Game.detonate, applyTorpedoHit). */
   private detonate(torpedo: Torpedo, hit: Ship | null) {
     this.torpedoList.remove(torpedo);
     if (!hit) return;
-    const status = hit.structural(TORPEDO_DAMAGE, this.now);
+    const status = hit.structural(torpedoDamage(scratch.subVectors(torpedo.velocity, hit.flight.velocity).length(), hit.body.mass), this.now);
     if (status === 'protected') return;
     if (torpedo.shooter === this.me) this.torpedoesHit++;
     hit.thrusters = Math.max(0, hit.thrusters - 0.3);
@@ -638,6 +640,9 @@ export class JobWorld implements SchoolContext {
     if (fresh) {
       tether.cable.follow(this.field, at, owner.flight.position, false);
       tether.length = tether.cable.length(at, owner.flight.position);
+      // the harpoon's bite takes its kinetic energy from a ship's hull (see Game.harpooned)
+      const bitten = tether.anchor.ship;
+      if (bitten?.alive && bitten.structural(harpoonDamage(harpoonClosing(owner, bitten)), this.now) === 'destroyed') this.destroyed(bitten, owner, 'harpoon');
     }
     if (!tether.cable.follow(this.field, at, owner.flight.position, !fresh)) {
       this.dropHook();
@@ -815,6 +820,9 @@ export class JobWorld implements SchoolContext {
   fine(coins: number) {
     this.fined = coins;
   }
+
+  /** A drill's alarm: the simulated Host reads the drill's own state instead (its zone, its mark). */
+  alarm() {}
 
   claims(): Claim[] {
     return claimsIn(this.field, DETAIL);

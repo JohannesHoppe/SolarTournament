@@ -20,7 +20,7 @@ describe('scars', () => {
     expect(scarOf(null, 'torpedo')).toBe('blast');
     expect(scarOf('air', undefined)).toBe('burn');
     expect(scarOf('well', undefined)).toBe('undertow');
-    expect(scarOf('space', undefined)).toBeNull();
+    expect(scarOf('ministry', undefined)).toBeNull();
     const campaign = freshCampaign();
     const plain = hullOf(campaign);
     const tiers: number[] = [];

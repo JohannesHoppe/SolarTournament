@@ -885,18 +885,22 @@ export class Landmarks {
     this.scenes.set('venus', highball());
     this.scenes.set('triton', triton().add(this.jets(TRITON_JETS)));
     this.scenes.set('iapetus', iapetus().add(...this.saturnEdgeOn(IAPETUS_SATURN_AT, IAPETUS_SATURN_SIZE, IAPETUS_RING_TILT)));
-    for (const scene of this.scenes.values()) {
-      scene.visible = false;
-      this.group.add(scene);
-    }
   }
 
   show(arena: ArenaProfile) {
     if (this.shown === arena.id) return;
     this.shown = arena.id;
-    // a world fought over shows its place's scenery (see ArenaProfile.scenery)
+    // a world fought over shows its place's scenery (see ArenaProfile.scenery); only the scenery
+    // shown hangs in the scene: the others' hundreds of objects would cost a matrix update every
+    // frame, drawn or not
     const shown = arena.scenery ?? arena.id;
-    for (const [id, scene] of this.scenes) scene.visible = id === shown;
+    for (const [id, scene] of this.scenes) {
+      if (id !== shown) this.group.remove(scene);
+      else if (scene.parent !== this.group) {
+        this.group.add(scene);
+        scene.updateMatrixWorld(true);
+      }
+    }
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
     // the planets in the sky lit from where the arena's sun stands (a place's own, as on the Crack)
     for (const material of this.timed) material.uniforms.sun?.value.copy(arena.sun.direction ?? SUN_DIRECTION);
@@ -972,15 +976,16 @@ export class Landmarks {
   /** Granary's store, its tugs and their sensor cones (see world/granary). */
   private readonly granary = new GranaryScene();
 
-  update(time: number) {
+  /** The landmarks at field time `time`; `pilot` is the own ship (null for none), which a searchlight's or a sensor's cone turns orange on holding. */
+  update(time: number, pilot: THREE.Vector3 | null = null) {
     for (const material of this.timed) material.uniforms.time.value = time;
     DISK_UNIFORMS.diskTime.value = time;
     this.sun.update(time);
     // a neon sign stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
     if (this.shown === 'derelict') this.wreck.update(time);
-    if (this.shown === 'wall') this.wall.update(time);
-    if (this.shown === 'granary') this.granary.update(time);
+    if (this.shown === 'wall') this.wall.update(time, pilot);
+    if (this.shown === 'granary') this.granary.update(time, pilot);
   }
 
   /**
@@ -1096,7 +1101,8 @@ export class Landmarks {
       p.fromBufferAttribute(sheet.attributes.position, i);
       uv.setXY(i, (p.length() - inner) / (outer - inner), 0.5);
     }
-    const ring = new THREE.Mesh(sheet, new THREE.MeshBasicMaterial({ map: this.maps.ring, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    // flat: either face, never both, so one pass
+    const ring = new THREE.Mesh(sheet, new THREE.MeshBasicMaterial({ map: this.maps.ring, transparent: true, side: THREE.DoubleSide, forceSinglePass: true, depthWrite: false, fog: false }));
     // the ring's plane holds the line of sight but for a tilt: its normal square to it and nearly level
     const sight = at.clone().normalize();
     const normal = new THREE.Vector3(0, 1, 0).addScaledVector(sight, -sight.y).normalize().addScaledVector(sight, tilt).normalize();

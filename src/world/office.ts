@@ -6,6 +6,7 @@ import { Randomizer } from '../random';
 import { macroUv, patchedPlating, PLATING_TILE } from './boneyard';
 import { CAB_RADIUS, DEPOT_LAYOUT } from './yard';
 import { boxUv, industrialSurface, signTexture, surfaced } from '../view/surfaces';
+import { smokeTexture } from '../view/textures';
 
 /**
  * Rask's office (docs/campaign/STORY.md, section 3): the inside of the round, glazed cab on top of
@@ -93,8 +94,18 @@ export function office(): THREE.Group {
   // the ashtray on the desk, a cigar in it still glowing
   metal([new THREE.CylinderGeometry(3, 2.6, 0.8, 12).translate(x + 4, dh + 1.2, z + 14).toNonIndexed(), rotateZ(new THREE.CylinderGeometry(0.45, 0.4, 5, 8), Math.PI / 2).translate(x + 6, dh + 2, z + 14).toNonIndexed()]);
   light([new THREE.SphereGeometry(0.5, 6, 4).translate(x + 8.6, dh + 2, z + 14)], new THREE.Color(1, 0.35, 0.05).multiplyScalar(3));
-  // his sign over the lift's door, in neon gone a little dim
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(110, 22), new THREE.MeshBasicMaterial({ map: signTexture('RASK SALVAGE', '#ff9d00'), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+  // its ash, grey and long, glowing at its foot; and its smoke: at Psyche's 0.015 g warm smoke
+  // hardly rises (its lift a seventieth of Earth's), so it hangs as a slow, spreading ball round
+  // the tip instead of curling up in a plume
+  metal([rotateZ(new THREE.CylinderGeometry(0.42, 0.44, 1.6, 8), Math.PI / 2).translate(x + 9.4, dh + 2, z + 14).toNonIndexed()]);
+  for (const [dx, dy, size] of [[10.5, 2.6, 9], [11.5, 3.6, 15]] as const) {
+    const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTexture(), color: 0xb8b0a4, opacity: 0.22, depthWrite: false }));
+    puff.position.set(x + dx, dh + dy, z + 14);
+    puff.scale.setScalar(size);
+    root.add(puff);
+  }
+  // his sign over the lift's door, in neon gone a little dim (flat: either face, never both, so one pass)
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(110, 22), new THREE.MeshBasicMaterial({ map: signTexture('RASK SALVAGE', '#ff9d00'), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true }));
   sign.position.set(CAB_RADIUS - 12, 70, 0);
   setRotation(sign, 0, -Math.PI / 2, 0);
   root.add(sign);

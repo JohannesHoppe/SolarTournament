@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { curveLow, sineHigh } from './ceiling';
 
 /**
  * Verona on Miranda (the campaign's chapter 13, see docs/campaign/): Verona Rupes, the tallest
@@ -57,8 +58,21 @@ export function surfaceHeight(x: number, z: number): number {
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 24000, 4 * KM);
 const GROUND_TOP = TOP + BUMPS;
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): the ground drops as a point
+ * lies farther south of the face's line, so it stands highest at the least distance south, the
+ * line's wander by its sine's slope and its ribs by their noise; the boulders by their noise's
+ * lattice, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const face = sineHigh(x0, x1, WIND, (Math.PI * 2) / WIND_LENGTH) + RIBS * ribs.fractalRange(x0 / RIB_SCALE, x1 / RIB_SCALE, 0.5, 0.5, 0, 0, 2, span).hi;
+  const t = THREE.MathUtils.clamp((z0 - face) / (2 * FACE_HALF) + 0.5, 0, 1);
+  return TOP - CLIFF * t * t * (3 - 2 * t) + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, MIRANDA_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

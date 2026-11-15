@@ -4,7 +4,8 @@ import { setFromEuler } from '../detthree';
 import { Noise } from './noise';
 import { reliefPiece, reliefTop } from './horizon';
 import type { Placement } from './asteroids';
-import { LAND, surfaceHeight } from './callisto';
+import { LAND, surfaceCeiling, surfaceHeight } from './callisto';
+import { absHigh, absLow, blendHigh, distanceHigh, distanceLow, type Span } from './ceiling';
 
 /**
  * Valhalla as a world fought over (the deathmatch arena over Callisto, see FIGHT_WORLDS in
@@ -119,6 +120,67 @@ export function battleHeight(x: number, z: number): number {
   return own + (place - own) * smooth((r - BLEND_IN) / (BLEND_OUT - BLEND_IN));
 }
 
+const span: Span = { lo: 0, hi: 0 };
+
+/** The most a scarp's profile (its rise, flat top and drop, 0 to 1) gives for phases in [p0, p1]: 1 where the range touches the top, else at the end nearer to it. */
+function profileHigh(p0: number, p1: number): number {
+  if (p1 >= RISE && p0 <= TOP) return 1;
+  if (p1 < RISE) return smooth(p1 / RISE);
+  return p0 < SCARP ? 1 - smooth((p0 - TOP) / (SCARP - TOP)) : 0;
+}
+/** The farthest from its gorge's middle (the `off` of scarps) a phase in [p0, p1] lies: the distance rises with p up to a half, falls to GORGE_AT, then rises again. */
+function gorgeOffHigh(p0: number, p1: number): number {
+  const off = (p: number) => (p > 0.5 ? Math.abs(p - GORGE_AT) : p + 1 - GORGE_AT);
+  return Math.max(off(p0), off(p1), p0 <= 0.5 && p1 >= 0.5 ? 0.5 + 1 - GORGE_AT : -Infinity);
+}
+
+/**
+ * The most scarps gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling): the scarps'
+ * line by its meander's noise, so the distance along x within a range; for every scarp that
+ * range reaches, its height at its most by its crest's noise, times its profile at its most over
+ * the phases it covers there, and its gorge at the phase farthest from the gorge's middle.
+ */
+function scarpsCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const shift = meander.fractalRange(0.31, 0.31, z0 / (500 * M), z1 / (500 * M), 0.47, 0.47, 2, span);
+  const alongLo = x0 + MEANDER * shift.lo * 2 + PHASE;
+  const alongHi = x1 + MEANDER * shift.hi * 2 + PHASE;
+  let most = -Infinity;
+  for (let k = Math.floor(alongLo / RING_SPACING); k <= Math.floor(alongHi / RING_SPACING); k++) {
+    const p0 = Math.max(0, alongLo / RING_SPACING - k);
+    const p1 = Math.min(1, alongHi / RING_SPACING - k);
+    const crest = crests.fractalRange(k * 1.7, k * 1.7, z0 / (400 * M), z1 / (400 * M), 0.2, 0.2, 2, span).hi;
+    const height = (RIDGE_LOW + (RIDGE_HIGH - RIDGE_LOW) * unit(k)) * (0.78 + 0.44 * smooth(0.5 + crest));
+    most = Math.max(most, height * profileHigh(p0, p1) - GORGE_DEPTH * (1 - smooth(gorgeOffHigh(p0, p1) / GORGE_HALF)));
+  }
+  return most;
+}
+
+/**
+ * The most arenaGround gives over the rectangle (see world/ceiling): the scarps and the berm at
+ * their most, blended towards the furrow's floor by the furrow's share at whichever end of its
+ * range leaves more, and the hummocks by their noise's lattice.
+ */
+function arenaCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const zLo = absLow(z0, z1);
+  const zHi = absHigh(z0, z1);
+  const off = absLow((zLo - BERM_AT) / BERM_HALF, (zHi - BERM_AT) / BERM_HALF);
+  const plain = LAND + scarpsCeiling(x0, z0, x1, z1) + BERM * Math.max(0, 1 - off * off);
+  return blendHigh(plain, FURROW_FLOOR, furrowAt(zHi), furrowAt(zLo)) + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.3, 0.3, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 2, span).hi;
+}
+
+/**
+ * The most battleHeight gives over the rectangle (see world/ceiling): the arena's own within
+ * BLEND_IN, the place's beyond BLEND_OUT, and between them the blend of their ceilings by the
+ * blend's share at whichever end of its range leaves more.
+ */
+function battleCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const near = distanceLow(x0, z0, x1, z1, 0, 0);
+  const far = distanceHigh(x0, z0, x1, z1, 0, 0);
+  if (near >= BLEND_OUT) return surfaceCeiling(x0, z0, x1, z1);
+  if (far <= BLEND_IN) return arenaCeiling(x0, z0, x1, z1);
+  return blendHigh(arenaCeiling(x0, z0, x1, z1), surfaceCeiling(x0, z0, x1, z1), smooth((near - BLEND_IN) / (BLEND_OUT - BLEND_IN)), smooth((far - BLEND_IN) / (BLEND_OUT - BLEND_IN)));
+}
+
 /** How much of the ice lies bare at (x, z), 0 to 1: on the furrow's floor and its berm, churned up as the cruiser came down, and on the scarps' cliffs, too steep for dust to lie on. */
 export function freshIce(x: number, z: number): number {
   const fade = 1 - smooth((hypot(x, z) - BLEND_IN) / (BLEND_OUT - BLEND_IN));
@@ -131,7 +193,7 @@ export function freshIce(x: number, z: number): number {
 
 /** How far the arena's ground piece reaches (units, 3.2 km to each side), and how deep under its highest point (2 km). */
 export const BATTLE_GROUND_HALF = new THREE.Vector3(3.2 * KM, 2 * KM, 3.2 * KM);
-const groundPiece = reliefPiece(battleHeight, BATTLE_GROUND_HALF, reliefTop(battleHeight, BATTLE_GROUND_HALF) + 10 * M);
+const groundPiece = reliefPiece(battleHeight, BATTLE_GROUND_HALF, reliefTop(battleHeight, BATTLE_GROUND_HALF) + 10 * M, battleCeiling);
 export const battleRelief = groundPiece.relief;
 /** The ground's grid (units, 20 m): fine enough for the scarps' cliffs. */
 export const BATTLE_GROUND_CELL = 20 * M;

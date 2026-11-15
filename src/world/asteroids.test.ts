@@ -5,6 +5,7 @@ import { ARENA_LIMIT } from './arena';
 import { CRUMBLE_AFTER, CRUMBLE_SECONDS, fragmentSpeed, impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
+import { hillTide, hillTurn } from './orbits';
 import { cbrt, cos, sin } from '../detmath';
 import { setFromEuler } from '../detthree';
 
@@ -67,16 +68,74 @@ describe('the field of an arena', () => {
     expect(open.some((piece) => piece.object.position.y > 0) && open.some((piece) => piece.object.position.y < 0)).toBe(true);
   });
 
-  it('carries circling rocks along their orbits', () => {
+  it('carries the rocks round the black hole on the circles its pull holds them on', () => {
+    const hole = ARENAS.find((a) => a.id === 'hole')!.layout;
+    const field = testField();
+    field.generate(hole);
+    const mu = hole.well!.surfaceGravity * hole.well!.radius * hole.well!.radius;
+    for (const rock of field.asteroids.values()) {
+      const start = rock.object.position.length();
+      const speed = field.surfaceVelocity(rock, rock.object.position).length();
+      // the circular speed at its distance (116 to 167 m/s)
+      expect(speed / Math.sqrt(mu / start)).toBeCloseTo(1, 6);
+      field.setClock(60);
+      expect(rock.object.position.length()).toBeCloseTo(start, 0);
+      field.setClock(0);
+    }
+  });
+
+  it('lets the black hole swallow a rock knocked off its circle into a fall, at the field time its conic reaches the horizon', () => {
+    const hole = ARENAS.find((a) => a.id === 'hole')!.layout;
+    const field = testField();
+    field.generate(hole);
+    const rock = [...field.asteroids.values()].find((a) => !a.solid)!;
+    // its orbit's speed taken out: it falls straight in
+    const stop = field.surfaceVelocity(rock, rock.object.position).negate();
+    field.shove(rock.id, 0, stop, rock.spinAxis, rock.spinRate, 1);
+    expect(rock.crumbles).toBeGreaterThan(0);
+    expect(rock.crumbles).toBeLessThan(30);
+    field.setClock(rock.crumbles - 0.1);
+    expect(rock.object.position.length()).toBeGreaterThan(hole.well!.radius);
+    field.setClock(rock.crumbles);
+    expect(rock.object.position.length()).toBeLessThan(hole.well!.radius);
+    field.crumble();
+    expect(field.asteroids.has(rock.id)).toBe(false);
+    // a rock on its circle never falls in
+    for (const other of field.asteroids.values()) expect(other.crumbles).toBe(Infinity);
+  });
+
+  it("moves the Satellite Junkyard's junk as orbits beside the field's own do: the shell slowly about the hub, the crossing debris through it", () => {
     const junkyard = ARENAS.find((a) => a.id === 'junkyard')!.layout;
     const field = testField();
     field.generate(junkyard);
-    const rock = field.asteroids.get('0')!;
-    const start = rock.object.position.length();
-    field.setClock(60);
-    // an orbit keeps its distance from the center
-    expect(rock.object.position.length()).toBeCloseTo(start, 0);
-    expect(rock.object.position.distanceTo(rock.basePosition)).toBeGreaterThan(1000);
+    const frame = field.hill!;
+    const pieces = [...field.asteroids.values()].filter((a) => !a.solid);
+    const speeds = pieces.map((a) => a.velocity.length() * 0.05).sort((a, b) => a - b);
+    // the shell drifts at up to 3 m/s, the crossing debris at 25
+    const slow = speeds.filter((s) => s < 3.2).length;
+    expect(slow).toBeGreaterThan(pieces.length * 0.5);
+    expect(speeds.filter((s) => Math.abs(s - 25) < 1).length).toBe(pieces.length - slow);
+    // each where the planet's tide and the frame's turn, stepped finely, take it
+    const piece = pieces.find((a) => a.velocity.length() > 400)!;
+    const p = piece.basePosition.clone();
+    const v = piece.velocity.clone();
+    const a = new THREE.Vector3();
+    for (let k = 0; k < 120 * 200; k++) {
+      a.set(0, 0, 0);
+      hillTide(frame, p, a);
+      hillTurn(frame, v, a);
+      v.addScaledVector(a, 1 / 200);
+      p.addScaledVector(v, 1 / 200);
+    }
+    field.setClock(120);
+    expect(piece.object.position.distanceTo(p)).toBeLessThan(5);
+    // through the round about as many in the arena as at its start
+    const inArena = () => pieces.filter((a) => a.object.position.length() < ARENA_LIMIT).length;
+    const counts = [0, 100, 200, 300].map((t) => {
+      field.setClock(t);
+      return inArena();
+    });
+    expect(Math.min(...counts)).toBeGreaterThan(0.75 * Math.max(...counts));
   });
 });
 
@@ -352,13 +411,14 @@ describe('collision with a box piece', () => {
 });
 
 describe('the speed a rock breaks apart at', () => {
-  it("falls with the rock's size by the same energy a break puts in: 7.5 m/s for the small, never under 3 m/s", () => {
+  it("falls with the rock's size by the same energy a break puts in: 7.5 m/s for the small, centimeters a second for the largest", () => {
     expect(fragmentSpeed(400)).toBe(150);
     expect(fragmentSpeed(100)).toBe(150);
     // half again the size: (3/2)³ the mass, the speed by its square root
     expect(fragmentSpeed(600)).toBeCloseTo(150 / Math.sqrt(3.375), 6);
-    expect(fragmentSpeed(2200)).toBe(60);
-    expect(fragmentSpeed(7000)).toBe(60);
+    // a 100 m rock at 0.7 m/s, the belt's largest (350 m) at 10 cm/s: no floor
+    expect(fragmentSpeed(2000) * 0.05).toBeCloseTo(0.67, 2);
+    expect(fragmentSpeed(7000) * 0.05).toBeCloseTo(0.1, 2);
   });
 });
 

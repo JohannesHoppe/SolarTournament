@@ -4,6 +4,7 @@ import { setFromAxisAngle } from '../detthree';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import type { Placement } from './asteroids';
+import { absHigh, absLow, curveLow, planeHigh, planeLow, sineHigh, sineLow, type Span } from './ceiling';
 
 /**
  * The Lineae on Europa (the campaign's chapter 6, see docs/campaign/): a stretch of the ice shell
@@ -90,6 +91,37 @@ export function surfaceHeight(x: number, z: number): number {
   return height + BUMPS * bumps.fractal(x / BUMP_SCALE, 0.7, z / BUMP_SCALE, 3) - (x * x + z * z) / (2 * EUROPA_RADIUS);
 }
 
+/** The most a raised cosine of `width` (see bump) gives for d in [lo, hi]: at the d nearest its middle. */
+export const bumpHigh = (lo: number, hi: number, width: number) => bump(absLow(lo, hi), width);
+const noiseSpan: Span = { lo: 0, hi: 0 };
+
+/**
+ * The most surfaceHeight gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling), term
+ * by term: the Crack's middle by its sine's slope, so the distance from it within a range, how
+ * far into the Crack falling as that distance grows; the lips and ridges at their crests'
+ * nearest, the ridges by the least of the Crack's share, its depth by the least of it, the rubble
+ * by the most of it; the noises by their lattice (see Noise.fractalRange).
+ */
+export function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const middleLo = sineLow(z0, z1, CRACK_SWAY, (Math.PI * 2) / CRACK_WAVE);
+  const middleHi = sineHigh(z0, z1, CRACK_SWAY, (Math.PI * 2) / CRACK_WAVE);
+  const dLo = absLow(x0 - middleHi, x1 - middleLo);
+  const dHi = absHigh(x0 - middleHi, x1 - middleLo);
+  const crackLo = 1 - smooth((dHi - (CRACK_WIDTH / 2 - CRACK_EDGE)) / CRACK_EDGE);
+  const crackHi = 1 - smooth((dLo - (CRACK_WIDTH / 2 - CRACK_EDGE)) / CRACK_EDGE);
+  let height = LAND + LIP * bumpHigh(dLo - CRACK_WIDTH / 2 - LIP_WIDTH / 2, dHi - CRACK_WIDTH / 2 - LIP_WIDTH / 2, LIP_WIDTH / 2);
+  for (const { through, angle } of RIDGES) {
+    const c = cos(angle);
+    const s = sin(angle);
+    const lo = planeLow(x0 - through[0], z0 - through[1], x1 - through[0], z1 - through[1], c, s);
+    const hi = planeHigh(x0 - through[0], z0 - through[1], x1 - through[0], z1 - through[1], c, s);
+    height += RIDGE * (bumpHigh(lo - RIDGE_SPAN / 2, hi - RIDGE_SPAN / 2, RIDGE_WIDTH / 2) + bumpHigh(lo + RIDGE_SPAN / 2, hi + RIDGE_SPAN / 2, RIDGE_WIDTH / 2)) * (1 - crackLo);
+  }
+  height -= CRACK_DEPTH * crackLo;
+  height += crackHi * RUBBLE * Math.max(0, rubble.fractalRange(x0 / 1500, x1 / 1500, 0.2, 0.2, z0 / 1500, z1 / 1500, 2, noiseSpan).hi);
+  return height + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.7, 0.7, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, noiseSpan).hi - curveLow(x0, z0, x1, z1, EUROPA_RADIUS);
+}
+
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square, the arena and a little more), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 12000, 4 * KM);
 /** Its box's top: over the highest the ground gets there, a lip with a ridge crossing it and the hummocks. */
@@ -98,7 +130,7 @@ const GROUND_TOP = LAND + LIP + 2 * RIDGE + BUMPS;
 export const GROUND_CELL = 500;
 
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 
@@ -179,6 +211,41 @@ export function chaosAt(x: number, z: number, seed: number): number {
 }
 
 /**
+ * The most chaosAt gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling): every raft
+ * a point of it may ask, at its highest. A raft reaches no point where it is not inside; inside,
+ * its top is a plane in (du, dv), at most at the rectangle's corner its tilt leans to, and the
+ * edge's smoothstep at most where the rectangle comes deepest into the raft.
+ */
+export function chaosCeiling(x0: number, z0: number, x1: number, z1: number, seed: number): number {
+  let height = -CHAOS_SINK;
+  for (let i = Math.floor(x0 / CHAOS_CELL) - 1; i <= Math.floor(x1 / CHAOS_CELL) + 1; i++) {
+    for (let j = Math.floor(z0 / CHAOS_CELL) - 1; j <= Math.floor(z1 / CHAOS_CELL) + 1; j++) {
+      if (cellHash(i, j, 0, seed) < 0.2) continue;
+      const cx = (i + 0.3 + 0.4 * cellHash(i, j, 1, seed)) * CHAOS_CELL;
+      const cz = (j + 0.3 + 0.4 * cellHash(i, j, 2, seed)) * CHAOS_CELL;
+      const c = 2 * cellHash(i, j, 3, seed) - 1;
+      const s = Math.sqrt(1 - c * c);
+      // du = (x - cx) c + (z - cz) s and dv = (z - cz) c - (x - cx) s over the rectangle
+      const duLo = planeLow(x0 - cx, z0 - cz, x1 - cx, z1 - cz, c, s);
+      const duHi = planeHigh(x0 - cx, z0 - cz, x1 - cx, z1 - cz, c, s);
+      const dvLo = planeLow(x0 - cx, z0 - cz, x1 - cx, z1 - cz, -s, c);
+      const dvHi = planeHigh(x0 - cx, z0 - cz, x1 - cx, z1 - cz, -s, c);
+      const hu = (CHAOS_SIZE[0] + (CHAOS_SIZE[1] - CHAOS_SIZE[0]) * cellHash(i, j, 4, seed)) / 2;
+      const hv = (CHAOS_SIZE[0] + (CHAOS_SIZE[1] - CHAOS_SIZE[0]) * cellHash(i, j, 5, seed)) / 2;
+      const inside = Math.min(hu - absLow(duLo, duHi), hv - absLow(dvLo, dvHi));
+      if (inside <= 0) continue;
+      const rise = CHAOS_RISE[0] + (CHAOS_RISE[1] - CHAOS_RISE[0]) * cellHash(i, j, 6, seed);
+      const a = 2 * cellHash(i, j, 7, seed) - 1;
+      const b = 2 * cellHash(i, j, 8, seed) - 1;
+      const top = rise + CHAOS_TILT * (Math.max(a * duLo, a * duHi) + Math.max(b * dvLo, b * dvHi));
+      // a top under the matrix leaves the raft under it too
+      if (top + CHAOS_SINK > 0) height = Math.max(height, -CHAOS_SINK + (top + CHAOS_SINK) * smooth(inside / CHAOS_EDGE));
+    }
+  }
+  return height;
+}
+
+/**
  * The Lineae as a world fought over (see FIGHT_WORLDS in world/arenas): the place's ground, and
  * east of the Crack a field of chaos terrain on the plain, its rafts rising from CHAOS_FROM
  * (units, 800 m from the field's middle) and standing whole CHAOS_RAMP further (200 m): cover to
@@ -188,9 +255,14 @@ const CHAOS_FROM = 16000;
 const CHAOS_RAMP = 4000;
 const FIGHT_CHAOS = 6113;
 export const fightHeight = (x: number, z: number) => surfaceHeight(x, z) + chaosAt(x, z, FIGHT_CHAOS) * smooth((x - CHAOS_FROM) / CHAOS_RAMP);
+/** The most fightHeight gives over the rectangle (see world/ceiling): the place's ground's, and the chaos at its most, by the most of its ramp where it rises over the plain, else by the least. */
+function fightCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const chaos = chaosCeiling(x0, z0, x1, z1, FIGHT_CHAOS);
+  return surfaceCeiling(x0, z0, x1, z1) + chaos * smooth(((chaos > 0 ? x1 : x0) - CHAOS_FROM) / CHAOS_RAMP);
+}
 /** How far a raft can stand over the ground under it (units): its highest rise, tilted. */
 export const CHAOS_TOP = CHAOS_RISE[1] + CHAOS_TILT * CHAOS_SIZE[1];
-const fightPiece = reliefPiece(fightHeight, GROUND_HALF, GROUND_TOP + CHAOS_TOP);
+const fightPiece = reliefPiece(fightHeight, GROUND_HALF, GROUND_TOP + CHAOS_TOP, fightCeiling);
 export const fightRelief = fightPiece.relief;
 export const fightGroundPlacement = fightPiece.placement;
 

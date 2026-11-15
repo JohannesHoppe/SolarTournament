@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AsteroidField } from './asteroids';
-import { densityIn, dragOn } from './air';
+import { densityIn, dragOn, windIn } from './air';
+import { hillTurn } from './orbits';
 import { exp } from '../detmath';
 import { HOVER_HEIGHT, HOVER_REACH, HOVER_RIDE, type Ground } from '../ship/flight';
 
@@ -83,13 +84,16 @@ export function hover(field: AsteroidField, position: THREE.Vector3, velocity: T
 /**
  * What pulls and brakes a ship from outside over a step of `dt` (units/s²) into `target`: the
  * field's gravity, the hover field over a world's ground, and the drag of an arena's air (see
- * world/air); the air's density at the ship goes into its `flight` (for its lift, see
+ * world/air); the air's density and wind at the ship go into its `flight` (for its lift, see
  * ship/flight's LIFT), and gravity alone into its `fall` (what the clone does not feel). Returns the ground while the ship rides it (see hover).
  */
-export function outside(field: AsteroidField, position: THREE.Vector3, velocity: THREE.Vector3, radius: number, dt: number, target: THREE.Vector3, flight?: { airDensity: number; fall?: THREE.Vector3 }): Ground | null {
+export function outside(field: AsteroidField, position: THREE.Vector3, velocity: THREE.Vector3, radius: number, dt: number, target: THREE.Vector3, flight?: { airDensity: number; airWind?: THREE.Vector3; fall?: THREE.Vector3 }): Ground | null {
   if (flight) flight.airDensity = densityIn(field.air, position);
+  if (flight?.airWind) windIn(field.air, position, flight.airWind);
   field.gravity(position, target);
-  // gravity alone, which the clone falling with its hull never feels (see Ship.felt)
+  // in a frame riding an orbit, its turn as well (see FieldLayout.hill)
+  if (field.hill) hillTurn(field.hill, velocity, target);
+  // gravity alone (and the frame's turn), which the clone falling with its hull never feels (see Ship.felt)
   flight?.fall?.copy(target);
   const ground = hover(field, position, velocity, radius, target);
   if (field.air) dragOn(field.air, position, velocity, dt, target);

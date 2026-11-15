@@ -2,14 +2,16 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { evenSkills, RACE_SPEED, raceSpeedOf } from '../ship/bots';
 import { RacingLine } from '../game/racingline';
-import { type Attempt, clearOfRock, PIPE_BORE, RING_RADIUS, type SchoolContext } from '../game/school';
+import { type Attempt, clearOfRock, judge, type Markers, PIPE_BORE, RING_RADIUS, type SchoolContext } from '../game/school';
+import { CAMPAIGN, RASK } from '../music/lines';
+import { raySphere } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
-import { flyRings } from '../test/pilot';
+import { flyRings, SHIP_RADIUS } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierLimit, courierTimes, layCourier, MINING_PLACES, ON_PAD, TARGET_ZONE, YARD_MIDDLE } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, ECHO_EIGHT, ECHO_NINE, ECHO_TEN, ECHO_ELEVEN, SCOUT_AT, HEART_COURSE, HEART_LAPS, HEART_START, TERMINATOR_COURSE, TERMINATOR_LAPS, TERMINATOR_START, ECHO_MERCURY, CLOUD_COURSE, CLOUD_LAPS, CLOUD_START, ECHO_VENUS, HAUMEA_COURSE, HAUMEA_LAPS, HAUMEA_START, FUEL_FROM, ECHO_SEVEN, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, HEAT_COURSE, HEAT_LAPS, HEAT_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt, TIGER_COURSE, TIGER_NORMALS, TIGER_START, TIGER_TIME, DROP_COURSE, DROP_START, GEYSER_COURSE, GEYSER_NORMALS, GEYSER_START, GEYSER_TIME, TOWER_AT, SPRINT_GOLD, TIGER_GOLD, GEYSER_GOLD, COURIER_PLACES, courierLimit, courierTimes, layCourier, MINING_PLACES, ON_PAD, TARGET_ZONE, YARD_MIDDLE, liveTarget, TARGET_HITS } from './missions';
 import { PSYCHE_FALL } from '../world/yard';
 import { bridgeTower, HATCH_HALF, LOG } from '../world/bridgetower';
 import { BOOST_RADIUS } from '../game/race';
@@ -232,6 +234,53 @@ describe('Live Target in the Boneyard', () => {
     expect(MISSIONS.find((mission) => mission.id === 'liveTarget')!.start).toBe(ON_PAD);
   });
 
+  /**
+   * The tourists' fire on a ship that moves at `velocity` (none: at rest) from the pad, judged
+   * frame by frame as the school does: how the attempt ends (the line said, or true for done) and
+   * when, and the hits taken.
+   */
+  function underFire(velocity: THREE.Vector3) {
+    const flight = { position: new THREE.Vector3(...ON_PAD.at), velocity: new THREE.Vector3(), angularVelocity: new THREE.Vector3() };
+    const ctx = {
+      me: { flight, radius: SHIP_RADIUS },
+      dt: 1 / 60,
+      fireAt: (from: THREE.Vector3, through: THREE.Vector3) => raySphere(from, through.clone().sub(from).normalize(), flight.position, SHIP_RADIUS) !== null,
+      fine: () => undefined,
+      alarm: () => undefined,
+    } as unknown as SchoolContext;
+    const markers = { zone: () => undefined, zoneEdge: () => undefined } as unknown as Markers;
+    const attempt = { seconds: 0, held: 0, next: 0, jinks: 0, lastShot: 0, count: -1, points: [] } as unknown as Attempt;
+    liveTarget.enter!(ctx, attempt, markers);
+    flight.velocity.copy(velocity);
+    for (;;) {
+      attempt.seconds += ctx.dt;
+      flight.position.addScaledVector(flight.velocity, ctx.dt);
+      const verdict = judge(liveTarget, ctx, attempt, markers);
+      if (verdict !== null) return { verdict, seconds: attempt.seconds, hits: attempt.jinks };
+    }
+  }
+
+  it('is lost by a ship that sits still: the tourists’ hit past the limit within 20 s, and the job starts over', () => {
+    const { verdict, seconds, hits } = underFire(new THREE.Vector3());
+    expect(verdict).toBe(RASK.liveTargetRefund);
+    expect(hits).toBe(TARGET_HITS + 1);
+    expect(seconds).toBeLessThan(20);
+  });
+
+  it('is lost by a ship that flies straight, never jinking: the sights lead it along its flight', () => {
+    // 20 m/s from the pad towards the yard's middle, inside the zone all the while
+    const { verdict, hits } = underFire(new THREE.Vector3(-400, 0, 0));
+    expect(verdict).toBe(RASK.liveTargetRefund);
+    expect(hits).toBe(TARGET_HITS + 1);
+  });
+
+  it('names its limit in the briefing, and the line that ends an attempt the hit past it', () => {
+    const forty: Record<number, string> = { 40: 'forty' };
+    expect(RASK.liveTarget).toContain(`more than ${forty[TARGET_HITS]} times`);
+    expect(CAMPAIGN.liveTarget).toContain(`More than ${forty[TARGET_HITS]} hits`);
+    expect(RASK.liveTargetRefund).toContain(`${forty[TARGET_HITS]}-one hits`);
+  });
+
   it('flies chapter 1’s jobs with the autopilot, which holds the ship against Psyche’s pull: no flying drill there drifts freely', () => {
     expect(PSYCHE_FALL).toBeGreaterThan(0);
     for (const id of ['lamplighter', 'liveTarget', 'canisterSweep', 'firstCut', 'dockingLane']) {
@@ -366,7 +415,7 @@ describe('the Derelict’s bridge tower', () => {
           }
       expect(center.length() + box.half.length()).toBeLessThan(ARENA_LIMIT);
     }
-    // a hatch passes an interceptor (35 m long) with room: 60 m a side
+    // a hatch passes an interceptor (30 to 37 m long) with room: 60 m a side
     expect(HATCH_HALF * 2 * 0.05).toBeGreaterThanOrEqual(60);
     expect(ECHO_NINE.distanceTo(TOWER_AT.clone().add(LOG))).toBe(0);
   });
