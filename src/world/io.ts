@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, hypot, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { blendHigh, curveLow, distanceHigh, distanceLow } from './ceiling';
 
 /**
  * Flux on Io (the campaign's chapter 7, see docs/campaign/): a stretch of Io's sulfur plains,
@@ -66,8 +67,24 @@ export const GROUND_HALF = new THREE.Vector3(4 * KM, 6000, 4 * KM);
 /** Its box's top: over the highest the ground gets there, the mesa's top with a swell and its roughness. */
 const GROUND_TOP = LAND + MESA_HEIGHT + SWELL + BUMPS;
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): the patera's pit and the
+ * mesa both fall off with the distance from their middles, so the mesa stands highest at the
+ * nearest; the plain is blended towards the pit's floor by the pit's share at whichever end of
+ * its range leaves more; the noises by their lattices, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const pitLo = 1 - smooth((distanceHigh(x0, z0, x1, z1, PATERA.x, PATERA.z) - (PATERA_RADIUS - PATERA_EDGE)) / PATERA_EDGE);
+  const pitHi = 1 - smooth((distanceLow(x0, z0, x1, z1, PATERA.x, PATERA.z) - (PATERA_RADIUS - PATERA_EDGE)) / PATERA_EDGE);
+  const mesa = 1 - smooth((distanceLow(x0, z0, x1, z1, MESA.x, MESA.z) - MESA_RADIUS) / MESA_EDGE);
+  const swell = swells.fractalRange(x0 / SWELL_SCALE, x1 / SWELL_SCALE, 0.2, 0.2, z0 / SWELL_SCALE, z1 / SWELL_SCALE, 2, span).hi;
+  const plain = LAND + SWELL * swell + MESA_HEIGHT * mesa + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi;
+  return blendHigh(plain, PIT_FLOOR, pitLo, pitHi) - curveLow(x0, z0, x1, z1, IO_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

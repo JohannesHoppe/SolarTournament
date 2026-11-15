@@ -444,6 +444,11 @@ export class Torpedoes {
 
   constructor(private readonly effects: Effects) {}
 
+  /** A torpedo that never flies, in its materials, for the shaders compiled with the round's (see Game.warmShaders), so the first launch does not stall a frame. */
+  samples(): THREE.Object3D {
+    return new THREE.Mesh(this.geometry, this.material);
+  }
+
   launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean) {
     // a launch is loud: the shooter shows up on the sensors again (see Ship.silent)
     shooter.loudAt = now;
