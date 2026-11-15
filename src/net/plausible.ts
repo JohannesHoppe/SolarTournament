@@ -592,8 +592,9 @@ export function ramReach(field: Pick<AsteroidField, 'welded' | 'positionOf'>, pi
  * A piece of the field the lead browser reports struck by another or by a ring (see
  * world/contacts) is pushed apart by no more than KNOCK_PUSH (units, 50 m: the most two pieces
  * close in a step of the contacts' grid, the tips of spinning junk crossing at full speed, with
- * room), and drifts on no faster than KNOCK_SPEED (units/s, 250 m/s: twice the fastest a piece of
- * the field moves, its orbit, a fragment's push and a spinning tip together).
+ * room), and drifts on no faster than KNOCK_SPEED (units/s, 250 m/s: far beyond the fastest a
+ * knock sends a piece off its orbit, which carries it on top, see blowState: a fragment's push,
+ * a spinning tip and two neighbouring orbits crossing at the Event Horizon together).
  */
 const KNOCK_PUSH = 1000;
 const KNOCK_SPEED = 5000;

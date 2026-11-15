@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { airHeat, airKelvin, altitudeIn, stagnation, type Air } from '../world/air';
+import { airHeat, airKelvin, altitudeIn, stagnation, throughAir, type Air } from '../world/air';
+
+/** A ship's flight through the air (see world/air throughAir). */
+const flow = new THREE.Vector3();
 import { MAX_HEAT, RADIATE, type Ship } from '../ship/ship';
 import type { Effects } from './effects';
 import { exp, log2 } from '../detmath';
@@ -32,7 +35,7 @@ export function plasmaOf(load: number): number {
 
 /** How hard the air heats a ship at `position` flying at `velocity` against its radiators in the clouds (see plasmaOf). */
 export function loadOf(air: Air, position: THREE.Vector3, velocity: THREE.Vector3, cooling: number): number {
-  return airHeat(air, altitudeIn(air, position), velocity.length()) / cooling;
+  return airHeat(air, altitudeIn(air, position), throughAir(air, position, velocity, flow).length()) / cooling;
 }
 
 /**
@@ -46,7 +49,7 @@ const GLOW_SPAN = 1500;
 
 /** How much of a shock layer glows around a ship at `position` flying at `velocity` (0..1, see GLOW_KELVIN). */
 export function shockGlow(air: Air, position: THREE.Vector3, velocity: THREE.Vector3): number {
-  const rammed = airKelvin(air, altitudeIn(air, position)) + stagnation(air, velocity.length());
+  const rammed = airKelvin(air, altitudeIn(air, position)) + stagnation(air, throughAir(air, position, velocity, flow).length());
   return THREE.MathUtils.clamp((rammed - GLOW_KELVIN) / GLOW_SPAN, 0, 1);
 }
 

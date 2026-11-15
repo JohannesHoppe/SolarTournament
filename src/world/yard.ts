@@ -50,7 +50,7 @@ export const YARD_END = 3 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2;
 export const RACK_Y = GROUND + RACK_HEIGHT / 2;
 
 /**
- * The depot at the lane's far end, on the crater floor, sized for fighters 35 m long and built as
+ * The depot at the lane's far end, on the crater floor, sized for fighters up to 37 m long and built as
  * a station is in space, for Psyche's pull is next to nothing: round modules, no walls to stand
  * on, everything moored to the ground by cables and anchors so it never drifts off. The hangar
  * hall a vault (half a cylinder) open towards the lane, inside 80 m deep, 90 m wide and 45 m high
