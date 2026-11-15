@@ -180,7 +180,9 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     game.me.protectedUntil = 0;
     game.me.flight.position.set(0, 62000, 0);
     game.me.flight.velocity.set(0, 0, 0);
-    game.autopilot = false;
+    // the flight computer holds it there, against a planet's pull too (Jupiter's 2.5 g would drop
+    // a ship left alone a kilometer before the torpedo comes)
+    game.autopilot = true;
     return { id: game.me.id, position: game.me.flight.position.toArray() };
   });
   // put 1 km beside it, its nose on it; it fires once the other tab has its states from
@@ -202,8 +204,10 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   await a.evaluate(() => window.game.fireTorpedo(window.game.me));
   await play(b, 1);
   expect(await b.evaluate(() => window.game.torpedoes.list.length)).toBe(1);
+  const deaths = await b.evaluate(() => window.game.me.deaths);
   await play(b, 8);
-  expect(await b.evaluate(() => window.game.me.hull)).toBe(40);
+  // a ship at rest is struck at the torpedo's full speed: its warhead and that speed's energy take a whole hull
+  expect(await b.evaluate(() => window.game.me.deaths)).toBe(deaths + 1);
   expect(errors).toEqual([]);
 });
 

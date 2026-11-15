@@ -7,6 +7,8 @@ import type { Torpedo } from './torpedoes';
 import type { Probe } from './items';
 import { JOLT_TIME, MASS, rope, ropeFrom, ropeOver, share, type Body } from '../world/bodies';
 import { Cable, WRAP_MAX, type CablePath } from './cable';
+import { METERS_PER_UNIT } from '../ship/flight';
+import { SHEET_JOULES } from '../ship/impact';
 
 /**
  * The hook: a harpoon on a cable, fired along the nose. It bites into a rock or a ship within
@@ -33,7 +35,7 @@ import { Cable, WRAP_MAX, type CablePath } from './cable';
  * takes it when it arrives, as if it had flown through it (see game/items).
  */
 export const HOOK_RANGE = 20000;
-const HOOK_SPEED = 40000;
+export const HOOK_SPEED = 40000;
 /** The flight computer brakes a reeled ship's closing speed with up to this (units/s², 12 g, nearly the main drive), as late as it can, so it comes to rest at the floor. */
 const HOOK_BRAKE = 2350;
 /** Aim of the harpoon (rad, about 3°): a rock whose surface passes this close to the nose's line is hit. */
@@ -177,6 +179,33 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
 
 /** The seconds a harpoon flies to bite at `distance`. */
 export const flightTime = (distance: number) => distance / HOOK_SPEED;
+
+/**
+ * The harpoon's mass (kg), from what it has to hold: the cable's breaking load, 18 MN (see
+ * CABLE_BREAK), which a fibre of some 5 GPa carries in 36 cm², the cable's own. A shank of it
+ * half a meter long (3.2 kg), the petals that open behind the plate and take the load in tension
+ * (2 kg), a hardened tip that punches the armor (2 kg) and the cable's socket: 8 kg.
+ */
+export const HARPOON_MASS = 8;
+
+/**
+ * The speed a harpoon fired from `owner` strikes `target` at (units/s): its own 2 km/s from the
+ * tube, and the two ships' speed towards each other along the line between them.
+ */
+export function harpoonClosing(owner: Ship, target: Ship): number {
+  toAnchor.subVectors(target.flight.position, owner.flight.position).normalize();
+  return Math.max(0, HOOK_SPEED + point.subVectors(owner.flight.velocity, target.flight.velocity).dot(toAnchor));
+}
+
+/**
+ * Hull points a ship takes from a harpoon that bites it at a closing speed of `closing`
+ * (units/s): its kinetic energy, all of it stopped in the hull it bites, at the game's 0.75 MJ a
+ * point. At 2 km/s, 16 MJ: 21 points, about a fifth of a hull.
+ */
+export function harpoonDamage(closing: number): number {
+  const speed = closing * METERS_PER_UNIT;
+  return (0.5 * HARPOON_MASS * speed * speed) / SHEET_JOULES;
+}
 
 /**
  * Two hooks bit the same probe or torpedo at once, on two browsers: whether the ship that holds

@@ -14,14 +14,18 @@ import { shine, solarWing, surfaced, WING_BACK, WING_CELLS_ACROSS, WING_CELLS_AL
 const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, seams: 0.85, dents: 0.4, stencils: ['PROPERTY OF SPONSOR', 'SN 0451', 'DO NOT OPEN'], roughness: 0.55, metalness: 0.4 };
 
 /**
- * Items: sponsor probes that drift in the arena, each carrying one thing, like the item boxes
- * of a party brawler. Whoever flies through one takes what it carries. Twin lasers and plating
- * stay with the clone and fly out again as probes when it dies; the rest is used at once.
- * - twin: the laser fires twice as fast at half the heat per shot.
- * - plating: two hits into the drive bounce off, or one torpedo.
+ * Items: sponsor probes that drift in the arena, each a sponsor's drone carrying one thing,
+ * like the item boxes of a party brawler. Whoever flies through one takes what it carries: the
+ * drone matches the ship's velocity as it comes (see DOCK_ACCEL) and clamps on. Twin lasers and
+ * plating stay with the clone and fly out again as probes when it dies; the rest is used at once.
+ * - twin: a second laser module with its own radiator and coolant: the two fire in turn, twice
+ *   as fast, each shot with a whole shot's heat, its radiator shedding as much again (see
+ *   ship/ship, TWIN_RADIATE).
+ * - plating: two ablative plates over the stern that burn away as they take hits by their energy
+ *   (see ship/ship, PLATES): four beams into the drive, or a little of a torpedo's blast.
  * - torpedoes: four more (TORPEDOES_PER_PROBE; a drill's lean load in the flight school and a campaign's job, DRILL_TORPEDOES).
- * - overdrive: ready at once.
- * - repair: hull, drive and thrusters as new.
+ * - overdrive: a charge for the overdrive's dump: ready at once.
+ * - repair: nanobots and their feedstock make hull, drive and thrusters whole over a few seconds (see ship/ship, REPAIR_SECONDS).
  * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
  *   everyone to see, and its next shot is no laser: the core goes off, and every other ship
  *   around it is gone, and so is its own clone, printed again at once without counting as a
@@ -70,10 +74,10 @@ export const ITEM_NAMES: Record<ItemKind, string> = {
 /** What each item does, in as few words as the HUD can show next to its name. */
 export const ITEM_HINTS: Record<ItemKind, string> = {
   twin: msg('fires twice as fast'),
-  plating: msg('stops two hits'),
+  plating: msg('soaks up four hits into the drive'),
   torpedoes: msg('extra torpedoes'),
   overdrive: msg('ready now'),
-  repair: msg('ship as new'),
+  repair: msg('ship as new in seconds'),
   nova: msg('next shot blows up everything around'),
   decoys: msg('two lures for a torpedo'),
 };
@@ -114,14 +118,35 @@ const DROP_SPREAD = 400;
 export const PROBE_THRUST = 785;
 const PROBE_RETURN = 2000;
 /**
- * A probe's thrusters in full (N, about 20 kN): on its MASS.probe of 60 kg some 33 g, of which it
- * burns only PROBE_THRUST flying home. On a hook's cable it burns them in full against its swing
- * across the cable (see PROBE_STEADY): a sponsor wants its probe taken, so it helps the winch.
+ * What a probe's thrusters in full give it (units/s², about 34 g, sized to what it weighs), of
+ * which it burns only PROBE_THRUST flying home. On a hook's cable it burns them in full against
+ * its swing across the cable: a sponsor wants its probe taken, so it helps the winch.
  */
-const PROBE_FORCE = 20_000;
-/** What a probe's thrusters in full give it (units/s²: N over kg, 1 unit = 5 cm, about 33 g), see PROBE_FORCE. */
-export const PROBE_STEADY = (PROBE_FORCE / MASS.probe) * 20;
+export const PROBE_STEADY = 6667;
 const PROBE_SETTLE = 100;
+/**
+ * A probe is a sponsor's drone: its frame (body, solar wings, dish, beacon, the drive it docks
+ * with and its clamps) weighs PROBE_FRAME (kg), and on top of it what it carries (PROBE_LOAD):
+ * a second laser module with its own radiator and coolant, two plates of ablative armor, four
+ * torpedoes of a tonne (TORPEDOES_PER_PROBE, see game/torpedoes), a charge for the overdrive's
+ * dump, nanobots with the feedstock they mend a hull from, a nova core, two decoys.
+ */
+export const PROBE_FRAME = MASS.probe;
+export const PROBE_LOAD: Record<ItemKind, number> = { twin: 1200, plating: 120, torpedoes: 4 * MASS.torpedo, overdrive: 200, repair: 300, nova: 1700, decoys: 120 };
+/** What a probe carrying `kind` weighs (kg). */
+export const probeMass = (kind: ItemKind) => PROBE_FRAME + PROBE_LOAD[kind];
+/**
+ * A sponsor wants its probe taken, so a probe a ship is about to fly through (the ship's way
+ * passes within reach of it and closes on it) matches that ship's velocity with its own drive,
+ * at up to DOCK_ACCEL (units/s², 30 g; no clone aboard), just in time for the ship to meet it at
+ * DOCK_SPEED (units/s, 5 m/s): its clamps take hold without a blow, whatever the ship's speed. At
+ * the speed limit it starts some 130 m out and burns about a second; a heavy probe of torpedoes (4.3 t)
+ * burns about 1.1 MN·s doing it, some 20 kg of hydrogen at the thrusters' 50 km/s. A ship that
+ * turns away leaves it astray, and it flies back to its slot (see PROBE_THRUST), its drive in
+ * full while it is faster than PROBE_RETURN against it.
+ */
+export const DOCK_ACCEL = 5886;
+const DOCK_SPEED = 100;
 /**
  * A probe meeting something solid (rock, ice, junk and hull, the President's battleship, a
  * ring, wreckage, a sponsor core: all at least ten times its mass, which hardly notice it)
@@ -138,7 +163,7 @@ export interface Probe {
   luck: number | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
-  /** A probe is a body (see world/bodies) on a hook's cable: 60 kg. */
+  /** A probe is a body (see world/bodies) on a hook's cable: its frame and what it carries (see probeMass). */
   readonly mass: number;
   /** Where the probe belongs now and how that place drifts: the same on every browser (round clock, or a dead clone's death). The probe flies there unless a hook moved it (see astray). */
   readonly slot: THREE.Vector3;
@@ -147,6 +172,8 @@ export interface Probe {
   holder: Ship | null;
   /** Off its slot: on a cable, or flying back to it after one let go (see PROBE_THRUST). */
   astray: boolean;
+  /** Matching the velocity of a ship about to fly through it (see Probes.dock). */
+  docking: boolean;
   /** Gone after this (game time, s). */
   until: number;
   mesh: THREE.Group;
@@ -352,7 +379,7 @@ export class Probes {
     mesh.add(new THREE.Mesh(body, this.hull), new THREE.Mesh(wing, this.panels), new THREE.Mesh(dish, this.hull), new THREE.Mesh(mast, this.hull), beacon, new THREE.Mesh(ring, neon));
     mesh.position.copy(position);
     this.group.add(mesh);
-    this.list.push({ id, kind, luck, position: mesh.position, velocity, mass: MASS.probe, slot: position.clone(), slotVelocity: velocity.clone(), holder: null, astray: false, until, mesh, beacon });
+    this.list.push({ id, kind, luck, position: mesh.position, velocity, mass: probeMass(kind), slot: position.clone(), slotVelocity: velocity.clone(), holder: null, astray: false, docking: false, until, mesh, beacon });
   }
 
   /** A probe of this round with its slot moved to `position` and at rest there (the flight school's probes wait where its drills put them). */
@@ -390,7 +417,7 @@ export class Probes {
       for (const solid of shared) bounce(solid, probe.slot, probe.slotVelocity);
       // a slot behind what only this browser sees there (a core in tow, wreckage) is waited
       // for, drifting, until that is gone
-      const returning = probe.astray && !probe.holder && clear(probe.slot, solids, shared);
+      const returning = probe.astray && !probe.holder && !probe.docking && clear(probe.slot, solids, shared);
       if (returning) homeIn(probe, dt);
       probe.position.addScaledVector(probe.velocity, dt);
       let bumped = false;
@@ -403,6 +430,39 @@ export class Probes {
       setRotation(probe.mesh, 0.3, now * 0.4, 0.15);
       probe.beacon.visible = now % 1 < 0.6;
       if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
+    }
+  }
+
+  /**
+   * Each probe not on a cable matches the velocity of a ship about to fly through it (see
+   * DOCK_ACCEL), the one that asks the hardest burn of it, so that ship meets it at DOCK_SPEED;
+   * it leaves its slot for it, and flies back to it if the ship turns away.
+   */
+  dock(ships: readonly { readonly alive: boolean; readonly radius: number; readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 } }[], dt: number) {
+    for (const probe of this.list) {
+      probe.docking = false;
+      if (probe.holder) continue;
+      let best = 0;
+      for (const ship of ships) {
+        if (!ship.alive) continue;
+        dockLine.subVectors(probe.position, ship.flight.position);
+        dockClosing.subVectors(ship.flight.velocity, probe.velocity);
+        const closing = dockClosing.length();
+        if (closing <= DOCK_SPEED) continue;
+        const along = dockLine.dot(dockClosing) / closing;
+        const reach = ship.radius + PROBE_RADIUS;
+        // closing on it, and its way passes within reach
+        if (along <= 0 || dockLine.lengthSq() - along * along >= reach * reach) continue;
+        const need = (closing * closing - DOCK_SPEED * DOCK_SPEED) / (2 * Math.max(along - reach, 1));
+        if (need >= DOCK_ACCEL * 0.8 && need > best) {
+          best = need;
+          dockBurn.copy(dockClosing).divideScalar(closing);
+        }
+      }
+      probe.docking = best > 0;
+      if (best <= 0) continue;
+      probe.velocity.addScaledVector(dockBurn, Math.min(best, DOCK_ACCEL) * dt);
+      probe.astray = true;
     }
   }
 
@@ -465,9 +525,13 @@ export class Probes {
 }
 
 const toSlot = new THREE.Vector3();
+/** A ship's way to a probe, how it closes on it and the way the probe burns to match it (see Probes.dock). */
+const dockLine = new THREE.Vector3();
+const dockClosing = new THREE.Vector3();
+const dockBurn = new THREE.Vector3();
 const change = new THREE.Vector3();
 const hullNormal = new THREE.Vector3();
-const bouncing = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.probe };
+const bouncing = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: PROBE_FRAME };
 const hull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
 
 /** A push out of one part of an obstacle may leave a probe in the next (two boxes of a hull meeting, a gap narrower than the probe between the keel and a battery's barrels below it): it is pushed out this many times at most. */
@@ -533,7 +597,9 @@ function homeIn(probe: Probe, dt: number) {
   if (distance > 1e-6) change.addScaledVector(toSlot, speed / distance);
   change.sub(probe.velocity);
   const burn = change.length();
-  probe.velocity.addScaledVector(change, burn > 0 ? Math.min(1, (PROBE_THRUST * dt) / burn) : 0);
+  // far off the speed it wants (a dock the ship turned away from), its drive in full
+  const thrust = burn > PROBE_RETURN ? DOCK_ACCEL : PROBE_THRUST;
+  probe.velocity.addScaledVector(change, burn > 0 ? Math.min(1, (thrust * dt) / burn) : 0);
 }
 
 /** What a probe gives a taker in the `bucket` third of the field (see placeBucket): its kind, or for a sealed one what its luck and the place make of it. */

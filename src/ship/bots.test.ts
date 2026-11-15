@@ -6,7 +6,7 @@ import { debrisSet } from '../world/shapes';
 import type { JunkBuild } from '../world/junk';
 import { hypot, pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from './flight';
-import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
+import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_AFTER, SILENT_RANGE, SINK_FILL, strainAfter } from './ship';
 import { junkField, testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -20,7 +20,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, sink: 0, venting: false, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -101,6 +101,54 @@ describe('bots fly by the Hosts\' rules', () => {
     const loud = new Bot(me, evenSkills(0.5));
     loud.think(10, [me, rival], field(false));
     expect(loud.target).toBe(rival);
+  });
+
+  it('runs silent on its heat sink, its laser keeping its heat meanwhile, then vents (a glowing laser shows at once) and is found from afar again, a bot\'s ship as a Host\'s', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
+    const step = 1 / 30;
+    rival.loudAt = 0;
+    let t = 0;
+    for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
+    // silent: a shot's heat below the glow stays in the laser module, the radiators closed; the sink takes the reactor's heat alone
+    rival.heat = 20;
+    const full = SILENT_AFTER + 0.5 + MAX_HEAT / SINK_FILL;
+    for (; t < full - 1; t += step) rival.cool(step, t);
+    // still silent, its sink near full, the laser as hot as it was
+    expect(rival.silent(t)).toBe(true);
+    expect(rival.sink).toBeGreaterThan(MAX_HEAT * 0.9);
+    expect(rival.heat).toBe(20);
+    expect(rival.venting).toBe(false);
+    for (; t < full + 1; t += step) rival.cool(step, t);
+    // full: it vents and shows on every sensor; its laser is free
+    expect(rival.venting).toBe(true);
+    expect(rival.silent(t)).toBe(false);
+    expect(rival.overheated).toBe(false);
+    const sees = new Bot(me, evenSkills(0.5));
+    sees.think(t, [me, rival], field(false));
+    expect(sees.target).toBe(rival);
+    // its radiators draw the sink down, and it can run silent again
+    for (const end = t + 6; t < end; t += step) rival.cool(step, t);
+    expect(rival.venting).toBe(false);
+    expect(rival.overheated).toBe(false);
+    expect(rival.heat).toBe(0);
+    for (const end = t + SILENT_AFTER + 0.1; t < end; t += step) rival.cool(step, t);
+    expect(rival.silent(t)).toBe(true);
+  });
+
+  it('shows while its laser glows: the radiators stay open, cooling it, and it runs silent only once it is below the glow', () => {
+    const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
+    const step = 1 / 30;
+    rival.loudAt = 0;
+    rival.heat = 60;
+    let t = 0;
+    for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
+    // still glowing past the quiet seconds: loud, its heat shed into space
+    expect(rival.silent(t)).toBe(false);
+    expect(rival.heat).toBeLessThan(60);
+    for (const end = t + 6; t < end; t += step) rival.cool(step, t);
+    expect(rival.silent(t)).toBe(true);
+    expect(rival.heat).toBeLessThanOrEqual(MAX_HEAT * 0.25);
   });
 
   it('chases a thief behind rock, as a Host\'s HUD marks it, but holds its fire until it sees it', () => {
