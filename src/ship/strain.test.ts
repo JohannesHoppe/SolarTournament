@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, MAIN_THRUST, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveStep } from './flight';
-import { feltLoad, G, Seat, strainAfter } from './ship';
+import { DODGE_SECONDS, DODGE_THRUST, feltLoad, G, Seat, strainAfter } from './ship';
 import { JOLT_TIME } from '../world/bodies';
 import { CABLE_BREAK, cablePull } from '../game/hook';
 import type { Controls } from '../input/input';
@@ -52,7 +52,7 @@ describe("the clone's body under g, whatever pushes its hull", () => {
     const seat = new Seat();
     const none = new THREE.Vector3();
     step(flight, seat, none, none);
-    // a blow of 60 m/s sideways (the dodge's)
+    // a blow of 60 m/s sideways (a ram's)
     const blow = 60 / 0.05;
     const peak = step(flight, seat, none, none, IDLE, new THREE.Vector3(blow, 0, 0)).x;
     expect(peak).toBeCloseTo((blow * STEP) / JOLT_TIME / STEP, 0);
@@ -63,8 +63,29 @@ describe("the clone's body under g, whatever pushes its hull", () => {
       strain = strainAfter(strain, feltLoad(seat.felt), STEP);
     }
     expect(sum).toBeCloseTo(blow, -1);
-    // a dodge strains the clone a little, never to the edge
     expect(strain).toBeLessThan(0.3);
+  });
+
+  it('feels the dodge as its push over its fraction of a second, a little strain and never more than its 20 g', () => {
+    const flight = new FlightModel();
+    const seat = new Seat();
+    const none = new THREE.Vector3();
+    step(flight, seat, none, none);
+    let peak = 0;
+    let strain = 0;
+    let most = 0;
+    for (let t = 0; t < 2; t += STEP) {
+      // the dodge's push in each step, as Ship.dodgeStep gives it
+      const push = Math.min(STEP, Math.max(0, DODGE_SECONDS - t)) * DODGE_THRUST;
+      peak = Math.max(peak, step(flight, seat, none, none, IDLE, new THREE.Vector3(push, 0, 0)).x);
+      strain = strainAfter(strain, feltLoad(seat.felt), STEP);
+      most = Math.max(most, strain);
+    }
+    expect(flight.velocity.x * 0.05).toBeCloseTo(60, 0);
+    expect(peak / G).toBeLessThanOrEqual(20.01);
+    expect(peak / G).toBeGreaterThan(12);
+    expect(most).toBeGreaterThan(0.03);
+    expect(most).toBeLessThan(0.15);
   });
 
   it("feels a blow's spin as the cockpit's swing round the hull's middle (see ship/blow)", () => {

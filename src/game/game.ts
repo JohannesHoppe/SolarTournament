@@ -9,7 +9,7 @@ import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quali
 import type { Assets, ShipType } from '../assets';
 import { AsteroidField, blowSpin, blowState, FIELD_RADIUS, KNOCKED, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { allyInLine, Bot, BOOST_BEND, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
+import { allyInLine, Bot, BOOST_BEND, JINK_MEMORY, BOOST_KEEP, BOOST_LOOK, BOOST_NOSE, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, novaWorth, pressOn, raceSpeedOf, RISKY_DARING, SIEGE_DISTANCE, skillsFrom, skillsOf, startTiming, TORPEDO_CLEARANCE, wantsBoost, type Ring, type Skill, type Skills } from '../ship/bots';
 import { BOOST_RECHARGE } from '../ship/driveheat';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
@@ -20,7 +20,7 @@ import { ReferencePlane } from '../view/plane';
 import { OrbitPath } from '../view/orbitpath';
 import { referencesOf } from '../world/reference';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, CABLE_BREAK, cableEnd, Cables, cablePull, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, CABLE_BREAK, cableEnd, Cables, cablePull, clearOf, flightTime, floorOf, harpoonClosing, harpoonDamage, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters, type OnTarget, type TorpedoMark } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
@@ -59,7 +59,7 @@ import { BET_ODDS, BET_STAKES, PIT_PURSE, RUMOR_PRICE, RUMORS } from '../campaig
 import { CAMPAIGN_KEY, CHIPS, HUNT_PLACES, isHuntPlace, TAG_IDS, tagId, tagOf, TAGS_PER_PLACE, type HuntPlace } from '../campaign/finds';
 import { chipId, Hunt, type Find } from '../campaign/hunt';
 import { showShelf } from '../world/shelf';
-import { detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
+import { ARMOR_DAMAGE, detectable, firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, MAX_HULL, noseOn, PLATE_POINTS, PLATES, RADIATE, Ship, SUN_ABSORB, type ShipState, type Zone } from '../ship/ship';
 import { StrainHand } from '../ship/strainhand';
 import { flyByNose, gripAt, HOVER_HEIGHT, HOVER_REACH, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, OVERDRIVE_SECONDS, overdriveShove, overdriveStep, type Ground } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -92,7 +92,7 @@ import { clipType, recordClip } from '../view/clip';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, hullLooks, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_ARMING, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, torpedoDamage, TORPEDO_SIGHT, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_ARMING, TORPEDO_RADIUS, TORPEDOES, TORPEDOES_PER_PROBE, DRILL_TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
@@ -294,8 +294,6 @@ const NOVA_FLEE = 1.5;
 const NOVA_FLASH_MS = 1600;
 /** An idle bot goes for a probe within this distance (units, 1.5 km). */
 const PROBE_LURE = 30000;
-/** Plating (an item) turns this many hits into the drive, or one torpedo. */
-const PLATING_CHARGES = 2;
 /** A bot the sun burns (see Game.shadeFor) heads for a rock's shadow once its heat passes SHADE_HOT (of 100), to a point SHADE_OFF (units, 75 m) beyond the rock's far side from the sun, and stays until it has cooled to SHADE_COOL. */
 const SHADE_HOT = 70;
 const SHADE_COOL = 25;
@@ -546,14 +544,13 @@ const boostBeyond = new THREE.Vector3();
 const ESCAPE_EVERY = 0.2;
 /**
  * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
- * overload, a kick of DODGE_SPEED (units/s, 60 m/s) sideways or up or down: strong enough to leave
- * a line of fire, and to throw the ship back onto a racing line after a missed ring. The autopilot
- * lets the drift be for DODGE_DRIFT seconds, so the ship plainly leaves the line of fire (about
- * 70 m, two ship lengths, before the autopilot takes the drift out), and the thrusters
- * need DODGE_RECHARGE seconds before the next one. It throws the clone against the side of its
- * seat, a jolt it feels (see Ship.felt).
+ * overload, 60 m/s sideways or up or down within 0.31 s at 20 g (see DODGE_THRUST in ship/ship):
+ * strong enough to leave a line of fire, and to throw the ship back onto a racing line after a
+ * missed ring. The autopilot lets the drift be for DODGE_DRIFT seconds, so the ship plainly leaves
+ * the line of fire (about 60 m, nearly two ship lengths, before the autopilot takes the drift
+ * out), and the thrusters need DODGE_RECHARGE seconds before the next one. It presses the clone
+ * against the side of its seat at 20 g (see Ship.felt).
  */
-const DODGE_SPEED = 1200;
 const DODGE_DRIFT = 1.2;
 const DODGE_RECHARGE = 1.5;
 /**
@@ -954,7 +951,15 @@ const hookEnd = new THREE.Vector3();
 /** The part of the battleship the HUD marks, how far a battery's beam misses, and the point of the plume a bot flies away from. */
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
+/** A ship's change of motion across the line to the battleship, gravity's pull and that line (see trackJinks, fireBattery). */
+const jinkStep = new THREE.Vector3();
+const jinkPull = new THREE.Vector3();
+const jinkLine = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
+/** A torpedo's velocity against the hull it hits (see applyTorpedoHit). */
+const closingOf = new THREE.Vector3();
+/** How far a torpedo's blast flashes and is heard from (units, 20 m: 100 kg of explosive going off in vacuum; looks and sound only). */
+const TORPEDO_FIREBALL = 400;
 /** Where the drive whose plume grills the own ship burns, for the alarm's arrow. */
 const plumeFrom = new THREE.Vector3();
 /** A comet's head rumbles on the hull within RUMBLE_REACH of it (units, 1.5 km), up to RUMBLE_RATE times a second right at it; a shower's knot strikes as hard as can be heard at GRIT_LOUDEST laser hits' worth. */
@@ -1517,6 +1522,14 @@ export class Game implements OnlineGame {
   private readonly shownReferences: Reference[] = [];
   /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
   private readonly tethers = new Map<Ship, Tether>();
+  /** When each ship's harpoon last bit a ship this browser runs (game time, s; see harpooned). */
+  private readonly harpoonedAt = new Map<Ship, number>();
+  /** Whether the own ship's heat sink vented last frame (see Ship.venting). */
+  private wasVenting = false;
+  /** The heat sink's share last shown beside SILENT RUNNING (%). */
+  private sinkShown = -1;
+  /** Every ship as the battleship's fire control tracks it: its velocity a step ago and how hard it jinks (see trackJinks). */
+  private readonly jinks = new Map<Ship, { velocity: THREE.Vector3; jink: number }>();
   private readonly cables = new Cables();
   private hookReadyAt = 0;
   private hookHeld = false;
@@ -5185,6 +5198,8 @@ export class Game implements OnlineGame {
         ship.overdriveLeft = overdriveStep(ship.flight.velocity, ship.overdrivePending, ship.overdriveLeft, dt);
         if (ship.flight.velocity.length() > ship.overdriveCap) ship.flight.velocity.setLength(ship.overdriveCap);
       }
+      // a dodge under way pushes over its fraction of a second (see DODGE_THRUST)
+      if (!clamped) ship.dodgeStep(dt);
       this.outside(ship, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
       // under a planet's cloud deck the clouds hide the sun, as a rock does
@@ -5344,6 +5359,12 @@ export class Game implements OnlineGame {
     // the own ship runs silent: the sensors find it only up close (see Ship.silent)
     const silent = me.alive && me.silent(this.time);
     if ($('hud-silent').hidden === silent) $('hud-silent').hidden = !silent;
+    // how full its heat sink is (see SINK_SECONDS)
+    const sink = Math.round((me.sink / MAX_HEAT) * 100);
+    if (silent && sink !== this.sinkShown) $('hud-sink').textContent = `${(this.sinkShown = sink)} %`;
+    // its heat sink ran full: it vents, and every sensor sees it again
+    if (me.venting && !this.wasVenting) this.hud.flashMessage(now, t('Heat sink full · venting'), 2);
+    this.wasVenting = me.venting;
     this.hud.setStrain(me.alive ? me.strain : 0);
     this.showJets();
   }
@@ -5647,15 +5668,12 @@ export class Game implements OnlineGame {
     fleet.update(clock, now);
     fleet.view(this.camera.position);
     const held = fleet.held;
+    this.trackJinks(fleet, dt);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
     if (devlog && fleet.held > held) devlog.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: 'held', part: 'battery', zone: -1, weapon: null, count: fleet.held - held });
-    // what the sun burnt into its parts (the lead's count, which the others take from its state)
-    for (let i = 0; i < fleet.burns.length; i += 2) {
-      const zone = fleet.burns[i];
-      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon: 'sun', count: fleet.burns[i + 1] });
-      this.fleetEvents(fleet.hit(zone, fleet.burns[i + 1]), null);
-    }
-    fleet.burns.length = 0;
+    // what the sun burnt into its parts and its rams broke of them (the lead's count, which the others take from its state)
+    this.unshot(fleet, fleet.burns, 'sun');
+    this.unshot(fleet, fleet.rammed, 'ram');
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
@@ -5677,10 +5695,48 @@ export class Game implements OnlineGame {
     }
   }
 
+  /** Hits on the battleship's parts without a shooter (pairs of part and hits: the sun's burns, its rams), counted and the list emptied. */
+  private unshot(fleet: Fleet, hits: number[], weapon: 'sun' | 'ram') {
+    for (let i = 0; i < hits.length; i += 2) {
+      const zone = hits[i];
+      devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'hit', ship: null, part: fleet.zones[zone].kind, zone, weapon, count: hits[i + 1] });
+      this.fleetEvents(fleet.hit(zone, hits[i + 1]), null);
+    }
+    hits.length = 0;
+  }
+
+  /**
+   * The batteries' fire control tracks every ship: how hard it changes its motion across the
+   * line to the battleship (units/s², smoothed over JINK_MEMORY as a bot senses its target's,
+   * see batteryChance), gravity's share taken out, which the fire control reckons with.
+   */
+  private trackJinks(fleet: Fleet, dt: number) {
+    if (dt <= 0) return;
+    for (const ship of this.ships) {
+      const track = this.jinks.get(ship);
+      if (!track) {
+        this.jinks.set(ship, { velocity: ship.flight.velocity.clone(), jink: 0 });
+        continue;
+      }
+      // the change of its velocity in the step, what gravity gave it taken out, across the line to the battleship
+      jinkStep.subVectors(ship.flight.velocity, track.velocity);
+      track.velocity.copy(ship.flight.velocity);
+      if (!ship.alive) {
+        track.jink = 0;
+        continue;
+      }
+      jinkStep.addScaledVector(this.field.gravity(ship.flight.position, jinkPull), -dt);
+      jinkLine.subVectors(ship.flight.position, fleet.position).normalize();
+      jinkStep.addScaledVector(jinkLine, -jinkStep.dot(jinkLine));
+      track.jink += (jinkStep.length() / dt - track.jink) * (1 - exp(-dt / JINK_MEMORY));
+    }
+  }
+
   /**
    * A battery fires at the nearest ship it sees in range. Whether it hits follows from the
-   * shot's number, the target and its speed and distance (see batteryChance), the same on
-   * every browser; the browser that runs the target takes the damage.
+   * shot's number and the target's jinking, the swing of its line of sight and its distance
+   * (see batteryChance), much the same on every browser; the browser that runs the target takes
+   * the damage.
    */
   private fireBattery(fleet: Fleet, zone: number, shot: number) {
     const origin = fleet.zoneAt(zone, muzzle);
@@ -5698,7 +5754,11 @@ export class Game implements OnlineGame {
     fleet.shotHeat(zone);
     devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'shot', ship: fleet.sunlit[zone] ? 'sun' : 'shade', part: 'battery', zone, weapon: null, count: 1 });
     const roll = hash(textSeed(target.id), shot, zone) / 0x100000000;
-    const hit = roll < batteryChance(target.flight.velocity.length(), distance);
+    // the swing of its line of sight: its velocity against the battleship's, across the line, over the distance
+    jinkLine.subVectors(target.flight.position, origin).divideScalar(Math.max(distance, 1));
+    jinkStep.subVectors(target.flight.velocity, fleet.velocity);
+    const crossing = jinkStep.addScaledVector(jinkLine, -jinkStep.dot(jinkLine)).length() / Math.max(distance, 1);
+    const hit = roll < batteryChance(this.jinks.get(target)?.jink ?? 0, crossing, distance);
     const end = scratch.copy(target.flight.position);
     // a miss goes past the target, by a few of its radii
     if (!hit) end.add(missBy.set(hash(shot, zone, 1) / 0x100000000 - 0.5, hash(shot, zone, 2) / 0x100000000 - 0.5, hash(shot, zone, 3) / 0x100000000 - 0.5).setLength(target.radius * 4));
@@ -7327,7 +7387,7 @@ export class Game implements OnlineGame {
       const range = line.length();
       if (range > LASER_RANGE) continue;
       const off = angleTo(nose, line);
-      const onIt = off < TORPEDO_RADIUS / Math.max(range, 1) && range < hitRange;
+      const onIt = off < TORPEDO_SIGHT / Math.max(range, 1) && range < hitRange;
       const rival = torpedo.shooter !== me && !torpedo.shooter.allyOf(me);
       const assist = rival && off < angle && range <= AIM_ASSIST_RANGE;
       if ((!onIt && !assist) || !this.field.lineOfSight(flight.position, torpedo.position)) continue;
@@ -7867,6 +7927,7 @@ export class Game implements OnlineGame {
   private hooked(owner: Ship, anchor: Anchor, length: number) {
     if (owner.owner !== null || anchor.mark) return;
     this.online?.sendHook(owner, anchor.rock ? { rock: anchor.rock.id, local: anchor.local } : { target: anchor.ship }, length);
+    if (anchor.ship) this.harpooned(owner, anchor.ship);
     if (owner !== this.me) return;
     this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
     this.sound.beep(523, 0.08, 0.12);
@@ -7885,6 +7946,25 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(this.time, t('Hooked by {name}', { name: owner.name }), 2);
       this.linkHit(0.3, 0.2);
     }
+    if (target) this.harpooned(owner, target);
+  }
+
+  /**
+   * A harpoon bit a ship: on the browser that runs that ship, the hull takes its kinetic energy
+   * (see harpoonDamage), whichever side the hooker is on; a ship it kills is the hooker's kill.
+   */
+  private harpooned(owner: Ship, target: Ship) {
+    if (target.owner !== null || !target.alive) return;
+    // a hook bites again only after it was reeled back (HOOK_RECHARGE); a browser that says so
+    // faster, even by half, deals no damage with it (the messages' lag bunches a few)
+    const last = this.harpoonedAt.get(owner) ?? -Infinity;
+    if (this.time - last < HOOK_RECHARGE / 2) return;
+    this.harpoonedAt.set(owner, this.time);
+    const status = target.structural(harpoonDamage(harpoonClosing(owner, target)), this.time);
+    if (status === 'protected') return;
+    this.effects.sparks(target.flight.position, owner.color, 80);
+    if (target.isLocal) this.hud.damaged();
+    if (status === 'destroyed') this.shipDestroyed(target, owner, null, 'harpoon');
   }
 
   remoteUnhook(owner: Ship) {
@@ -7985,7 +8065,7 @@ export class Game implements OnlineGame {
       devlog.add({ kind: 'act', t: this.time, ship: torpedo.shooter.name, act: 'torpedo gone', detail: `${outcome}${torpedo.target ? '' : ', lock lost'}${torpedo.shooter.alive ? '' : ', shooter dead'}` });
     }
     if (!hit) return;
-    if (hit.owner === null) this.applyTorpedoHit(hit, credit);
+    if (hit.owner === null) this.applyTorpedoHit(hit, credit, torpedo);
     else this.online?.sendTorpedoHit(hit, credit, torpedo.id);
     if (credit.isLocal) {
       this.hud.hit();
@@ -8008,6 +8088,8 @@ export class Game implements OnlineGame {
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points, this.venue.probeAt);
     const shared = (this.slotSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, SLOT_BOUNCES)]);
+    // a probe a ship is about to fly through matches its velocity, so the ship docks it without a blow
+    this.probes.dock(this.ships, dt);
     this.probes.update(dt, now, this.field, (this.probeSolids ??= [...shared, ...pushesOf(this.solids, PROBE_BOUNCES.filter((kind) => !SLOT_BOUNCES.includes(kind)))]), shared);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
@@ -8047,7 +8129,8 @@ export class Game implements OnlineGame {
         ship.twin = true;
         break;
       case 'plating':
-        ship.plating = PLATING_CHARGES;
+        ship.plating = PLATES;
+        ship.plateLeft = PLATE_POINTS;
         break;
       case 'torpedoes':
         ship.torpedoes += this.probeTorpedoes();
@@ -8291,22 +8374,26 @@ export class Game implements OnlineGame {
   }
 
   private blowUp(torpedo: Torpedo) {
-    this.effects.explosion(torpedo.position, TORPEDO_RADIUS * 4, torpedo.velocity);
-    this.hearDebris(torpedo.position, TORPEDO_RADIUS * 4);
+    this.effects.explosion(torpedo.position, TORPEDO_FIREBALL, torpedo.velocity);
+    this.hearDebris(torpedo.position, TORPEDO_FIREBALL);
     this.torpedoes.remove(torpedo);
   }
 
-  /** A torpedo went off on a ship this browser runs, whichever side the shooter is on (friendly fire). */
-  applyTorpedoHit(ship: Ship, shooter: Ship | null) {
+  /**
+   * A torpedo went off on a ship this browser runs, whichever side the shooter is on (friendly
+   * fire): its warhead and the energy of the speed the two closed at (see torpedoDamage), as the
+   * torpedo flew here.
+   */
+  applyTorpedoHit(ship: Ship, shooter: Ship | null, torpedo: Torpedo) {
     const now = this.time;
-    // plating (an item) takes a whole torpedo and is gone
+    let damage = torpedoDamage(closingOf.subVectors(torpedo.velocity, ship.flight.velocity).length(), ship.body.mass);
+    // plating (an item) burns away first as far as it takes the blast (see PLATES)
     if (ship.plating > 0 && now >= ship.protectedUntil) {
-      ship.plating = 0;
+      damage = ship.absorb(damage);
       this.effects.sparks(ship.flight.position, PLATING_COLOR, 160);
-      if (ship.isLocal) this.hud.flashMessage(now, t('Plating took the torpedo'), 1.5);
-      return;
+      if (ship.isLocal) this.hud.flashMessage(now, ship.plating ? t('Plating holds') : t('Plating gone'), 1.5);
     }
-    const status = ship.structural(TORPEDO_DAMAGE, now);
+    const status = ship.structural(damage, now);
     if (status === 'protected') return;
     if (shooter?.isLocal) this.torpedoesHit++;
     // the blast shakes the thrusters too
@@ -8341,7 +8428,7 @@ export class Game implements OnlineGame {
     this.blowUp(torpedo);
   }
 
-  /** A thruster key tapped twice, or LB: the dodge; see DODGE_SPEED. */
+  /** A thruster key tapped twice, or LB: the dodge; see DODGE_THRUST. */
   private dodge(direction: { x: number; y: number }) {
     const me = this.me!;
     if (!me.alive || !me.perks.dodge || this.time < this.dodgeReadyAt) return;
@@ -8354,15 +8441,13 @@ export class Game implements OnlineGame {
 
   /** A ship kicks its thrusters, sideways or up or down in its own frame: the dodge, and a bot's shove (see Bot.shove). */
   private thrusterKick(ship: Ship, direction: { x: number; y: number }) {
-    // a damaged thruster kicks weaker
-    const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
-    ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
+    // it pushes over its fraction of a second (see Ship.dodgeStep), a damaged thruster weaker
     ship.kickJets(scratch.set(direction.x, direction.y, 0));
   }
 
   /**
-   * The puffs of gas from every living ship's firing nozzles (see Ship.fireJets), white-blue and
-   * tiny, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
+   * The hot jets from every living ship's firing nozzles (see Ship.fireJets), white-hot and rose,
+   * short, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
    */
   private showJets() {
     for (const ship of this.ships) {
@@ -8810,11 +8895,11 @@ export class Game implements OnlineGame {
    * side the shooter is on (friendly fire). Also called for beams from other peers.
    */
   applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null, weight = 1) {
-    // plating (an item) takes a hit into the drive
     // where the beam meets the ship
     const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
+    // plating (an item) takes a hit into the drive: a plate burns away what the armor would lose (see PLATES)
     if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
-      ship.plating--;
+      ship.absorb(ARMOR_DAMAGE * weight);
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;

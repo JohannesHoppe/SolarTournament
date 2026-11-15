@@ -100,7 +100,7 @@ export interface FleetEvent {
   ship: string | null;
   part: string;
   zone: number;
-  weapon: FleetWeapon | 'sun' | null;
+  weapon: FleetWeapon | 'sun' | 'ram' | null;
   count: number;
 }
 

@@ -1794,7 +1794,7 @@ const grooveShoot: Drill = {
  * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
  */
 const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
-const BOUNTY_SKILL = 0.4;
+const BOUNTY_SKILL = 0.2;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
 /** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
@@ -1996,7 +1996,7 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.3;
+const AMBUSH_SKILL = 0.2;
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2111,8 +2111,15 @@ const WANTED: readonly (readonly [string, string, string])[] = [
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
+/**
+ * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
+ * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
+ * The first faces at Europa (Blue Fenn) and Io (Sulfur Pike) with their escorts: at the tier's own
+ * a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at Io.
+ */
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
-  const { target, skill } = BOUNTY_TIERS[tier];
+  const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
   // the field they guard is laid where the place's field lies, as the attempt begins
   const field = new THREE.Vector3();
@@ -2877,7 +2884,7 @@ const TUG_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 
 const HARPOON_AFTER = 4;
 const REEL = 240;
 const TALLYMEN = 4;
-const TALLY_SKILL = 0.3;
+const TALLY_SKILL = 0.25;
 const TALLY_HOLD = 8000;
 const WINCH_HITS = 12;
 const TALLY_DOWN = 3;

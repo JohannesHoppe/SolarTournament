@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { cos, hypot, log, pow, sin } from '../detmath';
 import { quaternionAngleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, ELEVATION_GUTTER, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, batteryChance, BATTERY_SLEW, DODGE_MASS, ELEVATION_GUTTER, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, ramHits, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 import { Randomizer } from '../random';
 import { MASS, massOf } from '../world/bodies';
 import { Wrecks } from '../world/wrecks';
@@ -38,6 +38,30 @@ const breakAll = (fleet: Fleet, zones: number[]) => zones.flatMap((zone) => Arra
 const down = new THREE.Vector3(0, -1, 0);
 
 describe("the President's fleet", () => {
+  it('aims its batteries as light-speed beams: jinking scatters them, a ship crossing faster than the mount slews gets away, speed itself not', () => {
+    const near = 4000;
+    // steady flight, however fast: the same chance (speed is not an argument at all)
+    const steady = batteryChance(0, 0.1, near);
+    expect(steady).toBeGreaterThan(0.3);
+    // a ship jinking at half the thrusters (5 g) is a radius off, at all of them two: a quarter the chance
+    expect(batteryChance(1000, 0.1, near)).toBeCloseTo(steady, 6);
+    expect(batteryChance(2000, 0.1, near)).toBeCloseTo(steady / 4, 6);
+    // crossing at 250 m/s within 500 m: the mount cannot follow
+    expect(250 / 500).toBeLessThanOrEqual(BATTERY_SLEW);
+    expect(batteryChance(0, 250 / 400, near)).toBe(0);
+    // farther off, the pointing jitter halves it at the edge of its range
+    expect(batteryChance(0, 0.1, 30000)).toBeCloseTo(steady * 0.5 / (1 - 0.5 * near / 30000), 6);
+  });
+
+  it('takes hits on a part its hull rams a piece into, by the energy the armor takes; a light touch costs nothing', () => {
+    // a chunk of ice of 20 m (3.8 million kg) met at its cruising 30 m/s: some 1.6 GJ, 38 hits
+    const ice = (4 / 3) * Math.PI * 1000 * 900;
+    expect(ramHits(ice, 30 / 0.05)).toBe(38);
+    // a 2 m piece at the same speed, or the chunk barely moving: nothing
+    expect(ramHits((4 / 3) * Math.PI * 900, 30 / 0.05)).toBe(0);
+    expect(ramHits(ice, 1 / 0.05)).toBe(0);
+  });
+
   it('heats its parts in a burning sun as a fighter: a sunlit battery falls silent and burns, one in the hull\'s shade cools and fires again', () => {
     const fleet = new Fleet(7, testField());
     fleet.arrivesAt = 0;

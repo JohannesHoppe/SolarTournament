@@ -187,8 +187,15 @@ const JET_CAPACITY = 2048;
 /** A puff at full push: how far its gas reaches from the nozzle's mouth and how wide it spreads there (units, 5.5 m and 4 m). */
 const JET_LENGTH = 110;
 const JET_WIDTH = 80;
-/** The gas of a maneuvering thruster: cold, white-blue, added on top of whatever is behind it. */
-const JET_COLOR = new THREE.Color(0.7, 0.85, 1.25);
+/**
+ * The jet of a maneuvering thruster, added on top of whatever is behind it: hydrogen the reactor
+ * heats to a plasma (see README, Maneuvering thrusters), white-hot at the nozzle's mouth
+ * (JET_HOT, linear and above 1 for the bloom), glowing rose further out (JET_COOL) as it cools and
+ * recombines, the red and blue-green lines of hydrogen.
+ */
+const JET_HOT = new THREE.Color(1.5, 1.35, 1.25);
+const JET_COOL = new THREE.Color(1.1, 0.28, 0.5);
+const jetTint = new THREE.Color();
 
 /** Points a puff is drawn with by the share of particles (see setParticleShare): a plume of three on a full picture, one on the cheapest. */
 function jetPoints() {
@@ -196,7 +203,7 @@ function jetPoints() {
 }
 
 /**
- * The maneuvering thrusters' puffs of gas: laid anew every frame at the mouths of the nozzles
+ * The maneuvering thrusters' hot jets: laid anew every frame at the mouths of the nozzles
  * that fire (see Game.showJets), a short plume of points widening away from the mouth, so they
  * sit on the hull however fast it flies and never flicker. One draw call for all ships, with the
  * particles' shaders.
@@ -219,9 +226,10 @@ class Jets extends PointCloud {
       scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
       this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
       const fade = light * (1 - 0.6 * along);
-      this.tint[i * 4] = JET_COLOR.r;
-      this.tint[i * 4 + 1] = JET_COLOR.g;
-      this.tint[i * 4 + 2] = JET_COLOR.b;
+      jetTint.lerpColors(JET_HOT, JET_COOL, along);
+      this.tint[i * 4] = jetTint.r;
+      this.tint[i * 4 + 1] = jetTint.g;
+      this.tint[i * 4 + 2] = jetTint.b;
       this.tint[i * 4 + 3] = fade;
     }
   }

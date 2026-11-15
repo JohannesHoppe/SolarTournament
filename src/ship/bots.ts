@@ -197,11 +197,11 @@ const BURN_THRESHOLD = 500;
 /** Angular aim error at an aim of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
 const AIM_ANGLE = 0.02;
 /** How long a bot's sense of the target's jinking lingers (s). */
-const JINK_MEMORY = 0.6;
+export const JINK_MEMORY = 0.6;
 /** Jinking (change of velocity across the line of sight) of this share of the thruster strength scatters the aim by a full ship radius. */
-const JINK_SCATTER = 0.5;
+export const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
-const JINK_SCATTER_MAX = 2.5;
+export const JINK_SCATTER_MAX = 2.5;
 /**
  * A bot under attack jinks with this share of its thrusters (4 g of their 10 g): enough to throw a
  * chaser's aim off, while a Host of middling skill still lands its hits; the rest stays a Host's
