@@ -4417,7 +4417,11 @@ export class Game implements OnlineGame {
     this.edgePoint(out, edge);
     const height = this.field.groundBelow(out, groundUp);
     if (height === null || groundUp.y < LEVEL) return false;
-    out.addScaledVector(groundUp, -height);
+    // straight down onto the ground at this very spot, where its normal was measured: the height is
+    // taken along the normal (the vertical drop times its upward share), and stepping along a tilted
+    // normal from high up would land tens of meters aside, off a chaos raft's edge into the air
+    // beside it or into the raft itself
+    out.y -= height / groundUp.y;
     return true;
   }
 
