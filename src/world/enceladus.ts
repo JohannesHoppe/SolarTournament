@@ -3,6 +3,7 @@ import { cos, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import { Randomizer } from '../random';
+import { absHigh, absLow, curveLow, planeHigh, planeLow, sineHigh, sineLow } from './ceiling';
 
 /**
  * The Plumes at Enceladus's south pole (the campaign's chapter 10, see docs/campaign/): the four
@@ -81,13 +82,35 @@ export function surfaceHeight(x: number, z: number): number {
   return LAND + stripeRelief(x, z) + BUMPS * bumps.fractal(x / BUMP_SCALE, 0.4, z / BUMP_SCALE, 3) - (x * x + z * z) / (2 * ENCELADUS_RADIUS);
 }
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): along and across the stripes
+ * are planes in (x, z), so each stripe's distance lies within a range (its wind by its sine's
+ * slope); its ridges give their most at the distance nearest their crests, its trough its least
+ * depth at the farthest; the hummocks by their noise's lattice, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const alongLo = planeLow(x0, z0, x1, z1, STRIPE_WAY.x, STRIPE_WAY.z);
+  const alongHi = planeHigh(x0, z0, x1, z1, STRIPE_WAY.x, STRIPE_WAY.z);
+  const acrossLo = planeLow(x0, z0, x1, z1, ACROSS.x, ACROSS.z);
+  const acrossHi = planeHigh(x0, z0, x1, z1, ACROSS.x, ACROSS.z);
+  let relief = 0;
+  for (let k = 0; k < STRIPE_NAMES.length; k++) {
+    const middle = (k - (STRIPE_NAMES.length - 1) / 2) * STRIPE_SPACING;
+    const lo = acrossLo - middle - sineHigh(alongLo, alongHi, WIND, (Math.PI * 2) / WIND_LENGTH, k * 1.7);
+    const hi = acrossHi - middle - sineLow(alongLo, alongHi, WIND, (Math.PI * 2) / WIND_LENGTH, k * 1.7);
+    relief += RIDGE_HEIGHT * (bump(absLow(lo - RIDGE_OFF, hi - RIDGE_OFF), RIDGE_HALF) + bump(absLow(lo + RIDGE_OFF, hi + RIDGE_OFF), RIDGE_HALF)) - TROUGH_DEPTH * bump(absHigh(lo, hi), TROUGH_HALF);
+  }
+  return LAND + relief + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, ENCELADUS_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 /** Its box's top: over the highest the ground gets there, a ridge and its hummocks. */
 const GROUND_TOP = LAND + RIDGE_HEIGHT + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

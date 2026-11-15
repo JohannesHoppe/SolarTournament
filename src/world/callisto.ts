@@ -4,6 +4,7 @@ import { Randomizer } from '../random';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import type { Placement } from './asteroids';
+import { absLow, curveLow, distanceHigh, distanceLow, type Span } from './ceiling';
 
 /**
  * Valhalla on Callisto (the campaign's chapter 5, see docs/campaign/): a stretch of the ring zone
@@ -86,11 +87,11 @@ const smooth = (t: number) => {
 
 /** A crater's relief at `out` (the distance from its middle in its radii): the bowl a parabola up to the rim, the rim a raised cosine over its width. */
 function craterAt(crater: Crater, out: number): number {
-  const bowl = out < 1 ? -BOWL * crater.radius * crater.depth * (1 - out * out) : 0;
-  const off = Math.abs(out - 1) / RIM_WIDTH;
-  const rim = off < 1 ? RIM * crater.radius * crater.depth * (0.5 + 0.5 * cos(Math.PI * off)) : 0;
-  return bowl + rim;
+  return bowlAt(crater, out) + rimAt(crater, Math.abs(out - 1) / RIM_WIDTH);
 }
+/** A crater's bowl at `out` (rising with it to nothing at the rim), and its rim `off` its widths from the crest (falling with it). */
+const bowlAt = (crater: Crater, out: number) => (out < 1 ? -BOWL * crater.radius * crater.depth * (1 - out * out) : 0);
+const rimAt = (crater: Crater, off: number) => (off < 1 ? RIM * crater.radius * crater.depth * (0.5 + 0.5 * cos(Math.PI * off)) : 0);
 
 /** Valhalla's ring at a distance from its middle: a gentle rise over RING_RISE of the spacing, then the scarp down. */
 export function ringAt(out: number): number {
@@ -106,13 +107,53 @@ export function surfaceHeight(x: number, z: number): number {
   return height + BUMPS * bumps.fractal(x / BUMP_SCALE, 0.7, z / BUMP_SCALE, 3) - (x * x + z * z) / (2 * CALLISTO_RADIUS);
 }
 
+/** The most a crater gives for `out` in [lo, hi] (its distance from its middle in its radii): its bowl at the largest out, its rim at the out nearest its crest. */
+const craterHigh = (crater: Crater, lo: number, hi: number) => bowlAt(crater, hi) + rimAt(crater, absLow(lo - 1, hi - 1) / RIM_WIDTH);
+
+/**
+ * The most ringAt gives for distances in [lo, hi]: a whole spacing or more holds a crest; else
+ * the ring rises over its phase to RING_RISE and falls after, so its most lies at that crest
+ * where the range holds it, else at an end.
+ */
+function ringHigh(lo: number, hi: number): number {
+  if (hi - lo >= RING_SPACING) return RIDGE;
+  const crest = (Math.floor(lo / RING_SPACING) + RING_RISE) * RING_SPACING;
+  if ((crest >= lo && crest <= hi) || (crest + RING_SPACING >= lo && crest + RING_SPACING <= hi)) return RIDGE;
+  return Math.max(ringAt(lo), ringAt(hi));
+}
+const noiseSpan: Span = { lo: 0, hi: 0 };
+
+/**
+ * The most surfaceHeight gives over the rectangle [x0, x1] × [z0, z1] (see world/ceiling): the
+ * ring at its most over the rectangle's distances from Valhalla's middle, every crater listed in
+ * a cell the rectangle reaches into at its most over the rectangle's distances from its middle,
+ * the hummocks by their noise's lattice, the curve at its least. A crater left out of a point's
+ * cell lies beyond its rim's reach there and gives nothing, which its most covers unless that is
+ * below nothing; and then every point of the rectangle lies in its reach, so every cell of them
+ * lists it.
+ */
+export function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  let height = LAND + ringHigh(distanceLow(x0, z0, x1, z1, VALHALLA.x, VALHALLA.z), distanceHigh(x0, z0, x1, z1, VALHALLA.x, VALHALLA.z));
+  const seen = new Set<Crater>();
+  for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++) {
+    for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++) {
+      for (const crater of craterCells.get(cellKey(cx, cz)) ?? []) {
+        if (seen.has(crater)) continue;
+        seen.add(crater);
+        height += craterHigh(crater, distanceLow(x0, z0, x1, z1, crater.x, crater.z) / crater.radius, distanceHigh(x0, z0, x1, z1, crater.x, crater.z) / crater.radius);
+      }
+    }
+  }
+  return height + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.7, 0.7, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, noiseSpan).hi - curveLow(x0, z0, x1, z1, CALLISTO_RADIUS);
+}
+
 /** How far the ground's solid piece reaches from the field's middle (units, 8 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(8 * KM, 2 * KM, 8 * KM);
 /** Its box's top: over the highest the ground gets there, a ridge's crest with two craters' rims overlapping on it and the hummocks. */
 const GROUND_TOP = LAND + RIDGE + 2 * RIM * CRATER_MAX + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

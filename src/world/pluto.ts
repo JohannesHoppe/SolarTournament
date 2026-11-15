@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { absLow, curveLow } from './ceiling';
 
 /**
  * Last Light on Pluto (the campaign's chapter 15, see docs/campaign/): the edge of Pluto's heart,
@@ -60,8 +61,24 @@ export function surfaceHeight(x: number, z: number): number {
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 12000, 4 * KM);
 const GROUND_TOP = LAND + PEAKS + BUMPS;
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): the cells' rims sink least
+ * where their ridged noise lies nearest nothing; the mountains rise towards -x (at the
+ * rectangle's west edge) and stand on the highest step their noise's most rounds to; the
+ * hummocks by their noise's lattice, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const rims = cells.fractalRange(x0 / CELL, x1 / CELL, 0.2, 0.2, z0 / CELL, z1 / CELL, 1, span, true);
+  const shallow = absLow(rims.lo, rims.hi);
+  const into = THREE.MathUtils.clamp((MOUNTAINS_FROM - x0) / MOUNTAINS_RISE, 0, 1);
+  const step = Math.round((blocks.fractalRange(x0 / 9000, x1 / 9000, 0.4, 0.4, z0 / 9000, z1 / 9000, 2, span).hi * 0.5 + 0.5) * 4) / 4;
+  const mountains = into <= 0 ? 0 : PEAKS * into * (0.35 + 0.65 * step);
+  return LAND - TROUGH * shallow * shallow + mountains + BUMPS * bumps.fractalRange(x0 / 3000, x1 / 3000, 0.4, 0.4, z0 / 3000, z1 / 3000, 2, span).hi - curveLow(x0, z0, x1, z1, PLUTO_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

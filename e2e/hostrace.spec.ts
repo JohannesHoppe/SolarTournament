@@ -60,7 +60,7 @@ test('the mouse flies the first gates of a race', async ({ page }) => {
     if (look.drive !== driving) await (look.drive ? page.keyboard.down('KeyW') : page.keyboard.up('KeyW'));
     driving = look.drive;
     // the pointer pushed from the middle towards the line ahead, half as far as it lies off the crosshair
-    const x = look.behind ? (look.x > 0 ? 0 : viewport.width) : Math.min(viewport.width - 1, Math.max(0, (0.5 + look.x / 4) * viewport.width));
+    const x = look.behind ? (look.x > 0 ? 0 : viewport.width - 1) : Math.min(viewport.width - 1, Math.max(0, (0.5 + look.x / 4) * viewport.width));
     const y = look.behind ? viewport.height / 2 : Math.min(viewport.height - 1, Math.max(0, (0.5 - look.y / 4) * viewport.height));
     await page.mouse.move(x, y, { steps: 3 });
     await page.waitForTimeout(100);

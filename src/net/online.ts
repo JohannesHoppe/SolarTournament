@@ -64,7 +64,7 @@ export interface OnlineGame {
   /** A torpedo went off or was shot down on another browser. */
   remoteTorpedoGone(id: string, position: THREE.Vector3): void;
   /** Another browser's torpedo hit a ship this browser runs. */
-  applyTorpedoHit(target: Ship, shooter: Ship | null): void;
+  applyTorpedoHit(target: Ship, shooter: Ship | null, torpedo: Torpedo): void;
   /** A torpedo in flight or gone a moment ago (see Torpedoes.recent). */
   recentTorpedo(id: string): Torpedo | null;
   /**
@@ -363,8 +363,8 @@ export class Online {
       if (!ship || ship.owner !== null) return;
       const gun = this.find(shooter);
       const torpedo = game.recentTorpedo(id);
-      if (!gun || this.caught(gun, torpedo && [torpedo.shooter, torpedo.holder, torpedo.flinger].includes(gun) && plausibleBlast(torpedo.position, ship.flight.position) ? null : 'hit')) return;
-      game.applyTorpedoHit(ship, gun);
+      if (!gun || this.caught(gun, torpedo && [torpedo.shooter, torpedo.holder, torpedo.flinger].includes(gun) && plausibleBlast(torpedo.position, ship.flight.position) ? null : 'hit') || !torpedo) return;
+      game.applyTorpedoHit(ship, gun, torpedo);
     };
     session.onSync = (field, wrecks, probesTaken, probes) => {
       game.restoreField(field);

@@ -87,29 +87,33 @@ describe('the governor', () => {
   });
 
   it('takes a screen capped at 30 Hz for the screen, not for a slow device', () => {
-    // every rung runs at 30 frames/s with a quarter of the frame spent on its own work
-    const governor = new Governor(2);
+    // every rung runs at 30 frames/s with a quarter of the frame spent on its own work, from the
+    // full picture on, whose next rungs draw fewer pixels
+    const governor = new Governor(0);
     const stable: number[] = [];
     governor.stable = (rung) => stable.push(rung);
     const switched = run(governor, 600, 30, 0.25);
     // a few rungs down find nothing gained, and it goes back to where it was and stays
-    expect(switched).toEqual([...Array.from({ length: CAP_STEPS }, (_, i) => 3 + i), 2]);
-    expect(governor.rung).toBe(2);
+    expect(switched).toEqual([...Array.from({ length: CAP_STEPS }, (_, i) => 1 + i), 0]);
+    expect(governor.rung).toBe(0);
     expect(governor.cap).toBeCloseTo(30, 0);
     // a capped screen's rung is never kept as the device's
     expect(stable).toEqual([]);
-    // once the cap is lifted, the governor watches as before: smooth and with headroom, it climbs
-    expect(run(governor, STABLE_SECONDS + 1, 60, 0.25).length).toBeGreaterThan(0);
+    // once the cap is lifted, the governor watches as before: slow again, it steps down
+    run(governor, STABLE_SECONDS + 1, 60, 0.25);
     expect(governor.cap).toBe(0);
+    expect(run(governor, DOWN_SECONDS + 0.1, 20, 0.9)).toEqual([1]);
   });
 
   it('does not take a fill-rate-bound GPU for a capped screen: rungs that only thin rocks gain nothing', () => {
-    // 40 frames/s on the first rungs (rocks only), the lower resolutions run at 52
-    const fps = (rung: number) => (LADDER[rung].pixelRatio < LADDER[0].pixelRatio ? 52 : 40 + rung * 0.4);
-    const governor = new Governor(0);
+    // 40 frames/s from the first rung at 1.75 device pixels down through those that change no resolution (rocks, shadows), the lower resolutions run at 52
+    const start = LADDER.findIndex((look) => look.pixelRatio < LADDER[0].pixelRatio);
+    const lower = LADDER.findIndex((look) => look.pixelRatio < LADDER[start].pixelRatio);
+    const fps = (rung: number) => (LADDER[rung].pixelRatio < LADDER[start].pixelRatio ? 52 : 40 + rung * 0.4);
+    const governor = new Governor(start);
     run(governor, 600, fps, 0.2);
     expect(governor.cap).toBe(0);
-    expect(governor.rung).toBeGreaterThanOrEqual(3);
+    expect(governor.rung).toBeGreaterThanOrEqual(lower);
   });
 
   it('steps down under a cap once the device itself gets slower than the cap', () => {

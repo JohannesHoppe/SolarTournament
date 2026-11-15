@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { reliefPiece } from './horizon';
+import { curveLow } from './ceiling';
 import type { Air } from './air';
 
 /**
@@ -42,7 +43,7 @@ export const seaHeight = (x: number, z: number) => SEA - (x * x + z * z) / (2 * 
 export const SEA_HALF = new THREE.Vector3(4 * KM, 2000, 4 * KM);
 
 /** The sea as the field's piece (see reliefPiece): a world's ground, over which the hover field holds a ship (see world/hover). */
-const piece = reliefPiece(seaHeight, SEA_HALF, SEA);
+const piece = reliefPiece(seaHeight, SEA_HALF, SEA, (x0, z0, x1, z1) => SEA - curveLow(x0, z0, x1, z1, TITAN_RADIUS));
 export const seaRelief = piece.relief;
 export const seaPlacement = piece.placement;
 

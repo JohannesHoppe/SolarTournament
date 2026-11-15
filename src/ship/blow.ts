@@ -11,7 +11,7 @@ import { ramImpulse } from './impact';
  * nose shoves without spinning; one on the nose's corner spins the hull hardest.
  */
 
-/** The interceptor's length (units, 35 m), the rod a blow turns. */
+/** The rod a blow turns (units, 35 m): between the human interceptor's 30 m and the alien's 37 m, as both share one body in a fight. */
 export const HULL_LENGTH = 700;
 /** The flight computer catches no faster spin than this (rad/s); a blow never sets more. */
 export const SHOVE_SPIN_MAX = 6;

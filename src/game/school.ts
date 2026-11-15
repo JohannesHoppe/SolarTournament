@@ -166,6 +166,8 @@ export interface SchoolContext {
   /** Where the pilot last broke a rock, and which piece it was (its pieces' ids are its own and a dot more, see world/fracture). */
   readonly brokenAt: THREE.Vector3;
   readonly brokenId: string;
+  /** How far that rock reached from its center (units): all its pieces lie within it. */
+  readonly brokenReach: number;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
   /** A torpedo in flight still homes on the pilot. */

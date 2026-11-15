@@ -1675,10 +1675,10 @@ export function windingSurface(): WindingSurface {
 /**
  * A torpedo's casing as a lathe wraps it: once around (u, CASING_AROUND pixels) and its whole
  * length from the nose's tip at the top to the nozzle's lip at the bottom (v, CASING_ALONG
- * pixels). The two sizes keep the pixels square on its body (about 2 pixels per unit around its
- * 188 units and along its 260), so bands and stencils are drawn at their true proportions.
+ * pixels). The two sizes keep the pixels square on its body (about 4.6 pixels per unit around its
+ * 31 units and along its 110), so bands and stencils are drawn at their true proportions.
  */
-export const CASING_AROUND = 384;
+export const CASING_AROUND = 144;
 export const CASING_ALONG = 512;
 /** A strip of plain paint along the casing (u up to this share), left free of stencils: the fins and strakes take their paint from it. */
 export const CASING_PLAIN = 0.03;
@@ -1751,7 +1751,7 @@ export function torpedoCasing(along: (z: number) => number): THREE.Texture {
     g.font = 'bold 16px monospace';
     g.fillText('MK-IV ST-9', 0, -9);
     g.font = 'bold 11px monospace';
-    g.fillText('LOT 2584-07  HE 60', 0, 9);
+    g.fillText('LOT 2584-07  HE 100', 0, 9);
     g.restore();
   }
   // the tail: blued and sooted by the motor towards the nozzle

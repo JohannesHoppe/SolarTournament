@@ -186,6 +186,11 @@ export const ANNOUNCER_ROCK = [
   'and {name} meets an asteroid. the rockborn send their regards',
   'a rock wins again. {name} goes back to the printer',
 ];
+/** A ship the Ministry's charge blew apart for staying outside the arena. */
+export const ANNOUNCER_MINISTRY = [
+  '{name} left the field. the ministry pressed the button',
+  'boom. {name} strayed from the arena. rules are rules',
+];
 /** The announcer on a race: a new leader, the leader's last lap, the winner. */
 export const ANNOUNCER_LEAD = ['and {name} takes the lead', '{name} in front now. the crowd goes wild'];
 export const ANNOUNCER_LAST_LAP = ['last lap. {name} leads the pack', 'the final lap. can anyone stop {name}'];
@@ -402,6 +407,7 @@ export const COMPUTER = {
   debris: 'Debris impact.',
   asteroid: 'Asteroid cracked.',
   arena: 'Come back to the field, darling.',
+  charge: 'Back into the field, darling, before the Ministry blows us up.',
   noLink: 'Could not connect.',
   roundOver: 'Round over. You were wonderful.',
   launch: 'Live link established. Go get them, pilot.',
@@ -1086,7 +1092,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, ANNOUNCER_ADMITTED, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_MINISTRY, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ANNOUNCER_BOUNTY, ANNOUNCER_TITAN, ANNOUNCER_UNDYING, ANNOUNCER_ADMITTED, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(CHATTER).flat(), ...Object.values(ATTACKED.bot), ...ATTACKED.host];
     case 'rask':

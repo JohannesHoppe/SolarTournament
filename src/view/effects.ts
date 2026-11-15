@@ -187,8 +187,15 @@ const JET_CAPACITY = 2048;
 /** A puff at full push: how far its gas reaches from the nozzle's mouth and how wide it spreads there (units, 5.5 m and 4 m). */
 const JET_LENGTH = 110;
 const JET_WIDTH = 80;
-/** The gas of a maneuvering thruster: cold, white-blue, added on top of whatever is behind it. */
-const JET_COLOR = new THREE.Color(0.7, 0.85, 1.25);
+/**
+ * The jet of a maneuvering thruster, added on top of whatever is behind it: hydrogen the reactor
+ * heats to a plasma (see README, Maneuvering thrusters), white-hot at the nozzle's mouth
+ * (JET_HOT, linear and above 1 for the bloom), glowing rose further out (JET_COOL) as it cools and
+ * recombines, the red and blue-green lines of hydrogen.
+ */
+const JET_HOT = new THREE.Color(1.5, 1.35, 1.25);
+const JET_COOL = new THREE.Color(1.1, 0.28, 0.5);
+const jetTint = new THREE.Color();
 
 /** Points a puff is drawn with by the share of particles (see setParticleShare): a plume of three on a full picture, one on the cheapest. */
 function jetPoints() {
@@ -196,7 +203,7 @@ function jetPoints() {
 }
 
 /**
- * The maneuvering thrusters' puffs of gas: laid anew every frame at the mouths of the nozzles
+ * The maneuvering thrusters' hot jets: laid anew every frame at the mouths of the nozzles
  * that fire (see Game.showJets), a short plume of points widening away from the mouth, so they
  * sit on the hull however fast it flies and never flicker. One draw call for all ships, with the
  * particles' shaders.
@@ -219,9 +226,10 @@ class Jets extends PointCloud {
       scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
       this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
       const fade = light * (1 - 0.6 * along);
-      this.tint[i * 4] = JET_COLOR.r;
-      this.tint[i * 4 + 1] = JET_COLOR.g;
-      this.tint[i * 4 + 2] = JET_COLOR.b;
+      jetTint.lerpColors(JET_HOT, JET_COOL, along);
+      this.tint[i * 4] = jetTint.r;
+      this.tint[i * 4 + 1] = jetTint.g;
+      this.tint[i * 4 + 2] = jetTint.b;
       this.tint[i * 4 + 3] = fade;
     }
   }
@@ -243,6 +251,12 @@ const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
 /** At most this many exhaust puffs per frame and ship, even at extreme speed. */
 const TRAIL_MAX_PUFFS = 12;
+/** A laser's muzzle flash: its size (units, 8 m), how long it glows (s) and how bright (times its color). */
+const MUZZLE_SIZE = 160;
+const MUZZLE_LIFE = 0.12;
+const MUZZLE_GLOW = 2.5;
+const muzzleColor = new THREE.Color();
+const zero = new THREE.Vector3();
 const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 const spread = new THREE.Vector3();
@@ -364,7 +378,16 @@ export class Effects {
     }
   }
 
+  /**
+   * A laser shot from `from` to `to` in the shooter's tint. In vacuum a beam shows nothing from
+   * the side: what the sensors see is the flash at the muzzle and the hit, and the line between
+   * them is the flight computer's, drawn as the HUD draws. In a planet's air the air scatters the
+   * beam and it glows itself; either way it fades in the haze as anything seen through it.
+   */
   beam(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color) {
+    // the muzzle's flash: a small, short glow the sensors see
+    muzzleColor.set(0xffffff).lerp(color, 0.4).multiplyScalar(MUZZLE_GLOW);
+    this.fire.emit(from, zero, MUZZLE_LIFE, MUZZLE_SIZE, MUZZLE_SIZE * 0.4, muzzleColor);
     let beam: Beam | null = null;
     for (const b of this.beams) {
       if (b.age >= Beam.LIFE) {
@@ -397,7 +420,7 @@ const CORE_TINT = 0.85;
 const CORE_GLOW = 1.5;
 const HALO_GLOW = 2.5;
 
-/** A laser beam: bright core plus a soft halo, fading out quickly. */
+/** A laser beam as the screen shows it (see Effects.beam): bright core plus a soft halo, fading out quickly. */
 class Beam {
   /** Seconds a beam glows before it is gone. */
   static readonly LIFE = 0.3;

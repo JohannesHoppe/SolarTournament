@@ -4,6 +4,7 @@ import { Noise } from './noise';
 import { craterField, reliefPiece, reliefTop } from './horizon';
 import { setFromAxisAngle } from '../detthree';
 import type { Placement } from './asteroids';
+import { curveLow, type Ceiling } from './ceiling';
 
 /**
  * The Ballroom on the Moon (the campaign's chapter 19, see docs/campaign/): the President's
@@ -42,13 +43,18 @@ export function surfaceHeight(x: number, z: number): number {
   return LAND + craters(x, z) + BUMPS * bumps.fractal(x / 3000, 0.4, z / 3000, 3) - (x * x + z * z) / (2 * MOON_RADIUS);
 }
 
+/** The most surfaceHeight gives over a rectangle (see world/ceiling): the craters' ceiling, the hummocks by their noise's lattice, the curve at its least. */
+const surfaceCeiling: Ceiling = (x0, z0, x1, z1) =>
+  LAND + craters.ceiling(x0, z0, x1, z1) + BUMPS * bumps.fractalRange(x0 / 3000, x1 / 3000, 0.4, 0.4, z0 / 3000, z1 / 3000, 3, span).hi - curveLow(x0, z0, x1, z1, MOON_RADIUS);
+const span = { lo: 0, hi: 0 };
+
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 /** Its box's top: over the highest the ground gets in it (overlapping craters' rims add up), sampled every 50 m. */
 const GROUND_TOP = reliefTop(surfaceHeight, GROUND_HALF) + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece). */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

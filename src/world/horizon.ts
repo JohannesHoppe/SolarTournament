@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, exp, log, sin } from '../detmath';
 import type { Placement, Relief } from './asteroids';
+import { distanceHigh, distanceLow, type Ceiling } from './ceiling';
 import { Randomizer } from '../random';
 
 /**
@@ -25,22 +26,36 @@ export function behindAll<M extends THREE.Material>(material: M): M {
  * A cratered plain's craters (the Moon's, Mercury's): `count` bowls seeded from `seed` over a
  * square `reach` on each side of the field's middle, `from` to `to` in radius (units), none within
  * `clear` of the middle; what they add to the ground's height at (x, z): each a bowl a fifth as
- * deep as it is wide, a rim `rim` of its radius high round it, fading out to 1.6 radii.
+ * deep as it is wide, a rim `rim` of its radius high round it, fading out to 1.6 radii. Its
+ * `ceiling` is the most they add over a rectangle (see world/ceiling): a crater's profile rises
+ * with the distance from its middle up to its rim and falls beyond, so each gives its most at the
+ * rectangle's distance nearest its rim.
  */
-export function craterField(seed: number, count: number, reach: number, from: number, to: number, clear: number, rim: number): (x: number, z: number) => number {
+export function craterField(seed: number, count: number, reach: number, from: number, to: number, clear: number, rim: number): ((x: number, z: number) => number) & { ceiling: Ceiling } {
   const r = new Randomizer(seed);
   const craters = Array.from({ length: count }, () => ({ x: r.range(-reach, reach), z: r.range(-reach, reach), radius: r.range(from, to) })).filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > clear + c.radius);
-  return (x, z) => {
+  const profile = (radius: number, d: number) => (d > 1.6 ? 0 : d < 1 ? radius * 0.2 * (d * d - 1) + radius * rim * d * d : radius * rim * (1 - (d - 1) / 0.6) * (1 - (d - 1) / 0.6));
+  const field = (x: number, z: number) => {
     let height = 0;
     for (const crater of craters) {
       const dx = x - crater.x;
       const dz = z - crater.z;
       const d = Math.sqrt(dx * dx + dz * dz) / crater.radius;
       if (d > 1.6) continue;
-      height += d < 1 ? crater.radius * 0.2 * (d * d - 1) + crater.radius * rim * d * d : crater.radius * rim * (1 - (d - 1) / 0.6) * (1 - (d - 1) / 0.6);
+      height += profile(crater.radius, d);
     }
     return height;
   };
+  const ceiling: Ceiling = (x0, z0, x1, z1) => {
+    let height = 0;
+    for (const crater of craters) {
+      const near = distanceLow(x0, z0, x1, z1, crater.x, crater.z) / crater.radius;
+      const far = distanceHigh(x0, z0, x1, z1, crater.x, crater.z) / crater.radius;
+      height += profile(crater.radius, Math.min(far, Math.max(near, 1)));
+    }
+    return height;
+  };
+  return Object.assign(field, { ceiling });
 }
 
 /** The highest `surface` gets over the square of `half` (sampled every 50 m), for a ground box's top. */
@@ -54,12 +69,15 @@ export function reliefTop(surface: (x: number, z: number) => number, half: THREE
  * A moon's ground as a piece of the field: a box of half extents `half` whose top is the ground
  * `surface` gives (its `relief`, see Relief), the box's top at `top` (units, over the highest the
  * ground gets there); `placement` sets it as the piece of kind 'rack' of type `type` in the
- * yards' set.
+ * yards' set. A `ceiling` of the surface (see world/ceiling) lets rays over it skip the samples
+ * high above it.
  */
-export function reliefPiece(surface: (x: number, z: number) => number, half: THREE.Vector3, top: number): { relief: Relief; placement: (type: number) => Placement } {
+export function reliefPiece(surface: (x: number, z: number) => number, half: THREE.Vector3, top: number, ceiling?: Ceiling): { relief: Relief; placement: (type: number) => Placement } {
   const middle = top - half.y;
+  const relief: Relief = (x, z) => surface(x, z) - middle;
+  if (ceiling) relief.ceiling = (x0, z0, x1, z1) => ceiling(x0, z0, x1, z1) - middle;
   return {
-    relief: (x, z) => surface(x, z) - middle,
+    relief,
     placement: (type) => ({ kind: 'rack', type, scale: 1, position: new THREE.Vector3(0, middle, 0), orientation: new THREE.Quaternion(), solid: true, ground: true }),
   };
 }

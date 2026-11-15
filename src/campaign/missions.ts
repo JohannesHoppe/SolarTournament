@@ -265,7 +265,7 @@ const canisterSweep: Drill = {
 /**
  * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the Rockborn's mining charges
  * (FIRST_CUT_CHARGES of them, see game/charges) and fly through
- * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints from where it stood,
+ * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints off its surface,
  * drifting away at GLINT_SPEED (units/s, 3 to 8 m/s); one is taken within GLINT_REACH (units,
  * 25 m). The marker leads to the nearest glint, else to the nearest rock.
  */
@@ -276,12 +276,14 @@ const GLINTS_PER_ROCK = 7;
 const GLINT_SPEED = [60, 160] as const;
 const GLINT_REACH = 500;
 
-/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
-function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number, count = GLINTS_PER_ROCK) {
+/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds off its surface (see SchoolContext brokenAt, brokenReach), the same every attempt, among the attempt's points. */
+function glintsOf(a: Attempt, markers: Markers, ctx: SchoolContext, nth: number, count = GLINTS_PER_ROCK) {
   const r = new Randomizer(nth * 7 + 1);
   for (let i = 0; i < count; i++) {
     const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-    a.points.push(markers.glint(at, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
+    // blown off the rock's surface, outside all of its pieces, which part only slowly
+    const from = ctx.brokenAt.clone().addScaledVector(way, ctx.brokenReach);
+    a.points.push(markers.glint(from, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
   }
 }
 
@@ -325,7 +327,7 @@ const firstCut: Drill = {
   },
   done(ctx, a, markers) {
     // a rock just broken sheds its glints, the same ones every attempt
-    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
     takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
@@ -615,7 +617,7 @@ const cutAndHaul: Drill = {
     // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
     while (a.jinks < ctx.rocksBroken - a.count) {
       a.jinks++;
-      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks, HAUL_GLINTS);
+      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx, a.jinks, HAUL_GLINTS);
     }
     takeGlint(ctx, a, markers);
     ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
@@ -1840,7 +1842,7 @@ const grooveShoot: Drill = {
  * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
  */
 const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
-const BOUNTY_SKILL = 0.4;
+const BOUNTY_SKILL = 0.2;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
 /** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
@@ -2042,7 +2044,7 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.3;
+const AMBUSH_SKILL = 0.2;
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2102,7 +2104,7 @@ function miningRun(arena: ArenaId): Drill {
       ctx.me.overheated = false;
     },
     done(ctx, a, markers) {
-      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
       if (a.jinks > 0 && Number.isNaN(a.clockFrom)) a.clockFrom = a.seconds;
       takeGlint(ctx, a, markers);
       return a.next >= MINE_ORE;
@@ -2157,8 +2159,15 @@ const WANTED: readonly (readonly [string, string, string])[] = [
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
+/**
+ * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
+ * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
+ * The first faces at Europa (Blue Fenn) and Io (Sulfur Pike) with their escorts: at the tier's own
+ * a Host of middling skill won 1 of 4 seeds at Europa and none of 3 at Io.
+ */
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { europa: [{ target: 0.4, skill: 0.35 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
-  const { target, skill } = BOUNTY_TIERS[tier];
+  const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
   // the field they guard is laid where the place's field lies, as the attempt begins
   const field = new THREE.Vector3();
@@ -2923,7 +2932,7 @@ const TUG_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 
 const HARPOON_AFTER = 4;
 const REEL = 240;
 const TALLYMEN = 4;
-const TALLY_SKILL = 0.3;
+const TALLY_SKILL = 0.25;
 const TALLY_HOLD = 8000;
 const WINCH_HITS = 12;
 const TALLY_DOWN = 3;

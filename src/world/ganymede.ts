@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import { cosineLow, curveLow, planeHigh, planeLow } from './ceiling';
 
 /**
  * The Tug Yards over Ganymede (the campaign's chapter 8, see docs/campaign/): where the Loose hide
@@ -62,8 +63,27 @@ export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 /** Its box's top: over the highest the ground gets there, a swell and its hummocks. */
 const GROUND_TOP = LAND + SWELL + BUMPS;
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): how bright rises with its
+ * band's noise, so it lies within the brightness of that noise's range; the grooves sink least
+ * where the trough is least deep and the terrain least bright, the swell rises most by the share
+ * of dark terrain that leaves more; the noises by their lattices, the curve at its least.
+ */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const band = bands.fractalRange(x0 / 120000, x1 / 120000, 0.3, 0.3, z0 / 120000, z1 / 120000, 2, span);
+  const brightLo = smooth((band.lo - BRIGHT) / 0.15 + 0.5);
+  const brightHi = smooth((band.hi - BRIGHT) / 0.15 + 0.5);
+  const c = cos(GROOVE_TURN);
+  const s = sin(GROOVE_TURN);
+  const trough = 0.5 + 0.5 * cosineLow(planeLow(x0, z0, x1, z1, c, s), planeHigh(x0, z0, x1, z1, c, s), (2 * Math.PI) / GROOVE_SPACING);
+  const swell = bumps.fractalRange(x0 / 40000, x1 / 40000, 0.9, 0.9, z0 / 40000, z1 / 40000, 2, span).hi;
+  const height = LAND - GROOVE_DEPTH * trough * trough * brightLo + SWELL * swell * (swell > 0 ? 1 - brightLo : 1 - brightHi);
+  return height + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, GANYMEDE_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

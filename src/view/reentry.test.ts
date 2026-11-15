@@ -13,6 +13,8 @@ const m = (meters: number) => meters * 20;
 /** A point at an altitude (units) straight above the field's center. */
 const at = (altitude: number) => new THREE.Vector3(0, altitude, 0);
 const ahead = (speed: number) => new THREE.Vector3(0, 0, -speed);
+/** The velocity of a ship flying `speed` (units/s) through the air under the deck, where the wind carries it along on top. */
+const through = (speed: number) => ahead(speed).add(air.wind!);
 
 describe('the heat of a ship flying through the air', () => {
   it('follows the heating against the radiators: a quarter where they just keep up, full at eight times', () => {
@@ -27,22 +29,26 @@ describe('the heat of a ship flying through the air', () => {
   it('shows from the safe speed on, as the heat alarm does, and nowhere in the cold air near the deck or over it', () => {
     for (const depth of [-2000, -2250]) {
       const safe = safeSpeed(air, m(depth), RADIATE);
-      expect(loadOf(air, at(m(depth)), ahead(safe), RADIATE)).toBeCloseTo(1, 5);
-      expect(plasmaOf(loadOf(air, at(m(depth)), ahead(safe * 0.4), RADIATE))).toBe(0);
+      expect(loadOf(air, at(m(depth)), through(safe), RADIATE)).toBeCloseTo(1, 5);
+      expect(plasmaOf(loadOf(air, at(m(depth)), through(safe * 0.4), RADIATE))).toBe(0);
     }
     expect(plasmaOf(loadOf(air, at(m(10)), ahead(MAX_SPEED), RADIATE))).toBe(0);
-    expect(plasmaOf(loadOf(air, at(m(-800)), ahead(MAX_SPEED), RADIATE))).toBe(0);
-    expect(plasmaOf(loadOf(air, at(m(-2500)), ahead(MAX_SPEED), RADIATE))).toBeGreaterThan(0.6);
+    expect(plasmaOf(loadOf(air, at(m(-800)), through(MAX_SPEED), RADIATE))).toBe(0);
+    expect(plasmaOf(loadOf(air, at(m(-2500)), through(MAX_SPEED), RADIATE))).toBeGreaterThan(0.6);
   });
 
   it('never lights a shock layer: no ship of the Games rams any air hot enough to glow, at the overdrive or the arena’s bottom', () => {
-    expect(shockGlow(air, at(m(-3400)), ahead(m(450)))).toBe(0);
+    expect(shockGlow(air, at(m(-3400)), through(m(450)))).toBe(0);
     expect(shockGlow(TITAN_AIR, at(-6000), ahead(m(450)))).toBe(0);
   });
 
-  it('takes the flight alone: the same for every ship, wherever it is drawn', () => {
-    const a = loadOf(air, at(m(-2200)), new THREE.Vector3(3000, -1000, 2000), RADIATE);
-    const b = loadOf(air, at(m(-2200)), new THREE.Vector3(-2000, 3000, -1000), RADIATE);
+  it('takes the flight through the air alone: the same for every ship, wherever it is drawn', () => {
+    const a = loadOf(air, at(m(-2200)), new THREE.Vector3(3000, -1000, 2000).add(air.wind!), RADIATE);
+    const b = loadOf(air, at(m(-2200)), new THREE.Vector3(-2000, 3000, -1000).add(air.wind!), RADIATE);
     expect(a).toBeCloseTo(b, 10);
+    // with the wind and against it at the same speed over the field, the air heats the hull flying against it more
+    const downwind = loadOf(air, at(m(-2200)), air.wind!.clone().setLength(4000), RADIATE);
+    const upwind = loadOf(air, at(m(-2200)), air.wind!.clone().setLength(-4000), RADIATE);
+    expect(upwind).toBeGreaterThan(downwind);
   });
 });

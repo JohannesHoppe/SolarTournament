@@ -5,7 +5,7 @@ import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { showMagpie, THRUSTER_LAYOUTS } from './models';
 import { JOLT_TIME, MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
-import { CLOG_LOSS } from '../world/air';
+import { CLOG_LOSS, REACTOR_WASTE } from '../world/air';
 import { ramDamage, type RamZone } from './impact';
 import { HULL_LENGTH } from './blow';
 import type { Controls } from '../input/input';
@@ -27,7 +27,7 @@ export const MAX_HULL = 100;
  * The ships are heavily armored: a beam from the front or the side only scorches the armor
  * (this many hull points; fifty such hits wreck a ship). The drive is the weak spot.
  */
-const ARMOR_DAMAGE = 2;
+export const ARMOR_DAMAGE = 2;
 /**
  * A beam from behind, within REAR_CONE of the ship's axis, goes into the drive: each hit costs
  * this share of the thrust, and the hit that leaves nothing of it sends the drive's reactor
@@ -58,7 +58,7 @@ const VENT_TIME = 2.5;
 const VENT_THRUST = 20;
 /** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. Scaled with VENT_THRUST: the same air. */
 const VENT_SPIN = 1;
-/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a 35 m hull. */
+/** Rotation kick of the explosive decompression at the moment of the hit (rad/s): the first burst of that air at the hole's lever on a hull some 30 to 37 m long. */
 const DECOMPRESSION_KICK = 0.25;
 /** The exit hole tears wider than the entry hole and vents more. */
 const ENTRY_HOLE = 0.4;
@@ -75,6 +75,29 @@ const SPAWN_PROTECTION = 5;
 /** The laser heats the ship; the radiators shed the heat into the cold of space. */
 export const MAX_HEAT = 100;
 const HEAT_PER_SHOT = 20;
+/**
+ * Plating (an item, see game/items): PLATES plates of ablative composite clamped over the stern,
+ * 60 kg each, which burn away as they take a blow instead of the hull: about 0.05 MJ a kilogram,
+ * 3 MJ a plate, PLATE_POINTS of the game's hull points (0.75 MJ each). A beam into the drive
+ * costs a plate what it costs the armor (2 points), so the two stop four; a torpedo's blast
+ * burns through both and the rest goes on into the hull. Armor, not a shield: what a plate cannot
+ * take passes on.
+ */
+export const PLATES = 2;
+export const PLATE_POINTS = 4;
+/**
+ * A repair (an item): its nanobots and the feedstock they mend from (300 kg) make hull, drive
+ * and thrusters whole over REPAIR_SECONDS (s), evenly, sealing the holes first; a blow meanwhile
+ * still lands.
+ */
+export const REPAIR_SECONDS = 4;
+/**
+ * A twin laser (an item) is a second laser module clamped on, with its own radiator and coolant
+ * (see game/items, PROBE_LOAD): the two fire in turn, twice as fast, each shot with a whole
+ * shot's heat, and its radiator sheds TWIN_RADIATE (heat units a second) more, as much as the
+ * ship's own.
+ */
+const TWIN_RADIATE = 20;
 /** What the radiators shed into space (heat units per second, MAX_HEAT the laser's limit), whatever stands around: a shot a second. */
 export const RADIATE = 20;
 /**
@@ -83,7 +106,11 @@ export const RADIATE = 20;
  * (4.2 MW/m²) 30 a second, more than the radiators shed, so out of a shadow (a rock's or the
  * battleship's hull) the laser's heat climbs whether it fires or not and, once the radiators are
  * full, the surplus burns the hull (see Ship.sunExcess); at Earth's distance (1,361 W/m²) a
- * hundredth a second, out at Jupiter and Saturn nothing a radiator notices.
+ * hundredth a second (0.05 % of RADIATE), out at Jupiter and Saturn nothing a radiator notices.
+ * A deliberate deviation for the 26th century's coatings and radiators: with today's best white
+ * coating (absorbing some 8 %) and radiators at 500 K (3.5 kW/m²), a sunlit square meter takes in
+ * about 3 % of what a square meter of radiator sheds at Earth and 100 times it at the Corona; the
+ * Games' hulls take in some 60 times less, everywhere alike (README, Heat).
  */
 export const SUN_ABSORB = 30 / 4.2e6;
 /** An overheated laser stays locked until the ship has cooled down to this. */
@@ -149,7 +176,7 @@ const COCKPIT = new THREE.Vector3(0, 0, -HULL_LENGTH * 0.15);
  * hull but gravity's, which the clone falls with: its engines' and the air's (the flight model's
  * `felt`), the other outside pulls (the hover field, the air's drag), and whatever changed the
  * hull's speed between its steps, from outside its engines (a cable, a blow, a coil, a shove,
- * the dodge, the overdrive's shove), as a jolt it passes on over JOLT_TIME.
+ * the dodge's and the overdrive's pushes), as a jolt it passes on over JOLT_TIME.
  */
 export class Seat {
   /** What the clone felt in the last step (units/s², ship space; see feltLoad). */
@@ -199,10 +226,27 @@ export const LOCK_RANGE = 60000;
  * has not fired for SILENT_AFTER seconds shows no heat the sensors pick up from afar. The radar,
  * the HUD's marks, a torpedo's lock and the bots find it only within SILENT_RANGE (units, 1 km;
  * the radar reaches 2.5 km, a lock 3 km); the eye still sees it where nothing hides it.
+ *
+ * It runs silent on its heat sink: its radiators close, so their warmth no longer shows, and the
+ * reactor's waste heat goes into a tank of 2 t of water ice instead, which takes some 1.5 GJ
+ * melting and warming to 100 °C (`sink`, in the heat gauge's units: MAX_HEAT is the tank full).
+ * With the drive cold the reactor idles (the clone's link, the sensors, the life support, the
+ * reactor kept hot) at a twenty-fourth of the waste heat it makes at work (REACTOR_WASTE, which the
+ * radiators shed at full, some 300 MW): SINK_FILL a second, some 12.5 MW, full in SINK_SECONDS (two minutes).
+ * The laser module keeps its own heat in its own mass: with the radiators closed it sheds
+ * nothing. A gun hotter than RADIATOR_GLOW glows on every sensor, so a ship whose gun is that hot
+ * keeps its radiators open, cooling it, and shows; it runs silent only once the gun is below it,
+ * and stays so with the radiators closed, since it fires no shot while silent. Once the sink
+ * is full the ship must vent (see venting): its radiators open, and it shows on every sensor
+ * again until they have drawn the sink down to SINK_RESUME, three and a half seconds. Loud, they
+ * draw it down as well, beside the laser's heat.
  */
 export const SILENT_AFTER = 2;
 export const SILENT_THROTTLE = 0.05;
 export const SILENT_RANGE = 20000;
+export const SINK_FILL = REACTOR_WASTE / 24;
+export const SINK_SECONDS = MAX_HEAT / SINK_FILL;
+export const SINK_RESUME = 30;
 
 /** Whether the sensors at `from` find `ship` (its line of sight is the caller's): always within SILENT_RANGE, beyond it only while it does not run silent. */
 export function detectable(ship: Ship, from: THREE.Vector3, now: number): boolean {
@@ -283,8 +327,16 @@ const THRUSTERS: Record<ShipType, Thrusters> = {
 /** How fast a nozzle's puff follows its firing (1/s): there at once, gone a little slower, so a flight computer's quick corrections do not flicker. */
 const JET_RISE = 40;
 const JET_FALL = 14;
-/** How long the dodge's kick fires its nozzles at full push (s). */
-const JET_KICK = 0.15;
+/**
+ * The dodge (a thruster key tapped twice, LB; a bot's shove): the maneuvering thrusters fire all
+ * at once past their rating, at DODGE_THRUST (units/s², 20 g: twice their 10 g, the overload a
+ * nozzle bears for a moment) for DODGE_SECONDS (s), sideways or up or down in the ship's own
+ * frame: 60 m/s across the flight in 0.31 s, about 9 m aside by its end. Spread over that time the
+ * clone feels 20 g against the side of its seat (see Ship.felt), where the same kick at once would
+ * be a blow of hundreds; a damaged thruster pushes weaker (see Ship.dodge).
+ */
+export const DODGE_THRUST = 3924;
+export const DODGE_SECONDS = 1200 / DODGE_THRUST;
 /**
  * Another browser's ship: the push and turn of its thrusters read from how its velocity and spin
  * changed between two states (see applyState), what pulls and brakes it from outside taken out
@@ -358,6 +410,8 @@ export type ShipState = {
   to?: number;
   /** remaining spawn protection (s) */
   pr: number;
+  /** present while its radiators are open by need: its heat sink vents, or its glowing laser cools (see Ship.cool); it shows on every sensor */
+  ve?: 1;
 };
 
 const force = new THREE.Vector3();
@@ -384,9 +438,10 @@ export class Ship {
   /** Its maneuvering thrusters, and how hard each nozzle puffs now (0..1, eased, see fireJets). */
   readonly nozzles: Thrusters;
   readonly jets = new Float32Array(NOZZLES);
-  /** The dodge's kick in ship space, and how long its nozzles still fire (s). */
+  /** The dodge's kick in ship space (unit length), how long its nozzles still fire (s) and how hard (units/s², see DODGE_THRUST). */
   private readonly kick = new THREE.Vector3();
   private kickLeft = 0;
+  private kickThrust = 0;
   /**
    * Who flies the ship, read from its id, which no Host can choose: a bot, a real Host, or
    * nobody (the flight school's target drone). The HUD marks names with it (see view/marks).
@@ -428,9 +483,12 @@ export class Ship {
   lean = false;
   /** Torpedoes this ship fired with this clone and before, for their ids. */
   torpedoesFired = 0;
-  /** Items the clone holds (see game/items): a twin laser, and plating charges left. */
+  /** Items the clone holds (see game/items): a twin laser, and plating's plates left, the outer one with PLATE_POINTS or less left in it (kept by the browser that runs the ship). */
   twin = false;
   plating = 0;
+  plateLeft = PLATE_POINTS;
+  /** Seconds a repair's nanobots still mend the ship (see REPAIR_SECONDS). */
+  repairLeft = 0;
   /** The clone holds a nova core: it pulses for everyone to see (see pulse). */
   nova = false;
   /** Decoys the clone holds (see game/decoys): lures a torpedo homing on it turns to. */
@@ -451,6 +509,9 @@ export class Ship {
   overheated = false;
   /** When it last burned its drive or fired (game time, s), as every browser sees it: since SILENT_AFTER it runs silent (see silent). */
   loudAt = -Infinity;
+  /** Its heat sink (see SINK_SECONDS), of MAX_HEAT, kept by the browser that runs it; whether it ran full while it ran silent and vents until it is down to SINK_RESUME, seen by every sensor (its browser tells the others with its state). */
+  sink = 0;
+  venting = false;
   /** The radiators' skin and how hot it glows, 0..1 of the laser's limit (see radiate). */
   private readonly radiators: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   private glow = 0;
@@ -493,7 +554,7 @@ export class Ship {
 
   /** The heat the radiators could shed per second into space (heat units/s), less as far as they are clogged. */
   private get radiating() {
-    return RADIATE * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
+    return (RADIATE * this.perks.cooling + (this.twin ? TWIN_RADIATE : 0)) * (1 - CLOG_LOSS * this.clog);
   }
 
   /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit): what they radiate less the sunlight they take in, less as far as they are clogged. */
@@ -707,13 +768,20 @@ export class Ship {
     // the move to the spawn point is no flight: collisions and gates do not sweep along it
     this.previous.copy(position);
     this.holdTrigger();
-    this.repair();
+    // a fresh ship from the depot, whole at once
+    this.hull = MAX_HULL;
+    this.drive = this.thrusters = 1;
+    this.holes.length = 0;
     this.torpedoes = (this.lean ? DRILL_TORPEDOES : TORPEDOES) + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
+    this.plateLeft = PLATE_POINTS;
+    this.repairLeft = 0;
     this.nova = false;
     this.decoys = 0;
     this.heat = 0;
+    this.venting = false;
+    this.sink = 0;
     this.clog = 0;
     this.mending = false;
     this.hurtAt = -Infinity;
@@ -763,6 +831,9 @@ export class Ship {
     this.deaths = from.deaths;
     this.twin = from.twin;
     this.plating = from.plating;
+    this.plateLeft = from.plateLeft;
+    this.repairLeft = from.repairLeft;
+    this.sink = from.sink;
     this.nova = from.nova;
     // no more than a fresh clone's load: to the other browsers it is a ship never seen, and
     // they count its launches against that load (see Plausibility.torpedo)
@@ -801,6 +872,7 @@ export class Ship {
       dr: +this.drive.toFixed(2),
       tr: +this.thrusters.toFixed(2),
       pr:+Math.max(0, this.protectedUntil - now).toFixed(1),
+      ...(this.venting || this.heat > MAX_HEAT * RADIATOR_GLOW ? { ve: 1 as const } : {}),
     };
   }
 
@@ -818,6 +890,9 @@ export class Ship {
     this.flight.throttle = state.th;
     // its flame seen: loud (see silent)
     if (state.th > SILENT_THROTTLE) this.loudAt = now;
+    // its heat sink venting: loud too
+    this.venting = state.ve === 1;
+    if (this.venting) this.loudAt = now;
     this.hull = state.h;
     this.drive = state.dr;
     this.thrusters = state.tr;
@@ -842,6 +917,8 @@ export class Ship {
       // the owner booted a new clone
       this.alive = true;
       this.heat = 0;
+      this.venting = false;
+      this.sink = 0;
       this.glow = 0;
       this.holes.length = 0;
       this.root.visible = true;
@@ -877,10 +954,27 @@ export class Ship {
     }
   }
 
-  /** The dodge's kick (see Game.thrusterKick) in ship space: its nozzles fire at full push for a moment. */
+  /**
+   * The dodge's kick (see DODGE_THRUST) in ship space: its nozzles fire at overload for
+   * DODGE_SECONDS, a damaged thruster weaker. On a ship this browser runs it pushes the hull (see
+   * dodgeStep); on another browser's it only fires the nozzles.
+   */
   kickJets(direction: THREE.Vector3) {
     this.kick.copy(direction).normalize();
-    this.kickLeft = JET_KICK;
+    this.kickLeft = DODGE_SECONDS;
+    this.kickThrust = DODGE_THRUST * (0.25 + 0.75 * this.thrusters);
+  }
+
+  /** One step of `dt` of a dodge under way: its push along the kick in the ship's frame as it turns now. */
+  dodgeStep(dt: number) {
+    if (this.kickLeft <= 0 || this.owner !== null) return;
+    const share = Math.min(dt, this.kickLeft);
+    this.flight.velocity.addScaledVector(jetPush.copy(this.kick).applyQuaternion(this.flight.orientation), this.kickThrust * share);
+  }
+
+  /** Whether a dodge is still under way (its nozzles firing). */
+  get dodging(): boolean {
+    return this.kickLeft > 0;
   }
 
   /**
@@ -917,7 +1011,7 @@ export class Ship {
       if (this.engineLight) this.engineLight.intensity = 0;
       return;
     }
-    this.heat = Math.max(0, this.heat - this.cooling * dt);
+    if (!this.silent(now)) this.heat = Math.max(0, this.heat - this.cooling * dt);
     const r = this.remote;
     const age = Math.min(now - r.at, 1);
     local.copy(r.position).addScaledVector(r.velocity, age);
@@ -958,7 +1052,28 @@ export class Ship {
    * for its radiators' glow; that browser keeps the real heat.
    */
   warm() {
-    this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT / (this.twin ? 2 : 1));
+    this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT);
+  }
+
+  /**
+   * The ship's heat over a step: loud, the radiators shed the laser's heat into space and draw the
+   * heat sink down; running silent, they are closed, the laser keeps its heat in its own mass and
+   * the reactor's idle waste heat fills the sink (see SINK_SECONDS); full, the ship vents, loud
+   * until the radiators have drawn the sink down to SINK_RESUME. A laser hot enough to glow
+   * (RADIATOR_GLOW) keeps them open as well until it is below that, and the ship shows meanwhile.
+   */
+  cool(dt: number, now: number) {
+    if (this.silent(now)) {
+      this.sink = Math.min(MAX_HEAT, this.sink + SINK_FILL * dt);
+      if (this.sink >= MAX_HEAT) this.venting = true;
+    } else {
+      this.heat = Math.max(0, this.heat - this.cooling * dt);
+      this.sink = Math.max(0, this.sink - this.cooling * dt);
+    }
+    if (this.venting && this.sink <= SINK_RESUME) this.venting = false;
+    // radiators open by need, venting the sink or cooling a laser hot enough to glow: the ship shows
+    if (this.venting || this.heat > MAX_HEAT * RADIATOR_GLOW) this.loudAt = now;
+    if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
   }
 
   /** Advances flight and laser; returns true when the ship fires this frame. */
@@ -980,15 +1095,15 @@ export class Ship {
     this.extreme = extremeAfter(this.extreme, load, dt);
     this.show(dt, now);
     this.nanobots(dt, now);
+    this.mend(dt);
 
-    this.heat = Math.max(0, this.heat - this.cooling * dt);
-    if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
-    // a twin laser (an item) fires twice as fast at half the heat per shot
+    this.cool(dt, now);
+    // a twin laser (an item) fires twice as fast, a whole shot's heat each, its own radiator shedding more (see TWIN_RADIATE)
     const twin = this.twin ? 2 : 1;
     if (!controls.fire) this.triggerHeld = false;
     // a hull without a laser (the campaign's scrap) fires nothing
     if (controls.fire && this.perks.laser && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
-      this.heat += (HEAT_PER_SHOT * this.perks.laserHeat) / twin;
+      this.heat += HEAT_PER_SHOT * this.perks.laserHeat;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       // a held trigger keeps the cadence exactly, however the steps fall: a shot that was due
       // within this step counts from when it was due; a fresh press counts from now, so tapping
@@ -1109,11 +1224,37 @@ export class Ship {
     return direction.dot(this.flight.forward(offset)) / direction.length() > REAR_CONE_COS;
   }
 
-  /** The repair item: hull, drive and thrusters as new, the holes patched. */
+  /** The repair item (see REPAIR_SECONDS): the holes sealed at once, hull, drive and thrusters whole over its seconds. */
   repair() {
-    this.hull = MAX_HULL;
-    this.drive = this.thrusters = 1;
     this.holes.length = 0;
+    this.repairLeft = REPAIR_SECONDS;
+  }
+
+  /** A repair under way (see REPAIR_SECONDS): hull, drive and thrusters a step nearer whole, so they are whole when it ends. */
+  private mend(dt: number) {
+    if (this.repairLeft <= 0) return;
+    const share = Math.min(1, dt / this.repairLeft);
+    this.hull += (MAX_HULL - this.hull) * share;
+    this.drive += (1 - this.drive) * share;
+    this.thrusters += (1 - this.thrusters) * share;
+    this.repairLeft = Math.max(0, this.repairLeft - dt);
+  }
+
+  /**
+   * Plating takes a blow of `points` hull points first (see PLATES): its plates burn away as far
+   * as they take it, outer first; returns what passes on into the hull.
+   */
+  absorb(points: number): number {
+    while (points > 0 && this.plating > 0) {
+      const take = Math.min(points, this.plateLeft);
+      this.plateLeft -= take;
+      points -= take;
+      if (this.plateLeft <= 1e-9) {
+        this.plating--;
+        this.plateLeft = PLATE_POINTS;
+      }
+    }
+    return points;
   }
 
   /**

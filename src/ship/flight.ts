@@ -3,7 +3,7 @@ import type { Controls } from '../input/input';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
 import { angleTo, setFromAxisAngle } from '../detthree';
 
-/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
+/** Display scale: one world unit is 5 cm, a ship is about 30 to 37 m long. */
 export const METERS_PER_UNIT = 0.05;
 /** Acceleration of the main drive at full thrust (units/s²): 127.5 m/s², 13 g. Hard and quick: the speed limit is two seconds away, and so is a stop. */
 export const MAIN_THRUST = 2550;
@@ -91,6 +91,8 @@ export class FlightModel {
   thrusterFactor = 1;
   /** The density of the air at the ship (world/air's density, 1 right under a cloud deck; 0 out of any air), set by whoever flies it each step: its lift (see LIFT). */
   airDensity = 0;
+  /** The air's motion at the ship (units/s, see world/air windIn), set with its density: the lift answers to the flight through the air. */
+  readonly airWind = new THREE.Vector3();
   /** The air's push on the ship in the last update (units/s², world space): its lift and the drag that costs (see aero). */
   readonly aero = new THREE.Vector3();
 
@@ -290,24 +292,28 @@ const aeroAcross = new THREE.Vector3();
 
 /**
  * The air's push on a ship (units/s², world space) into `out`: the lift of its fins and hull
- * across its flight towards the nose (see LIFT), by its air's density (`flight.airDensity`), its
- * speed and its slip, and the induced drag that costs (see INDUCED), against its flight. The
+ * across its flight through the air towards the nose (see LIFT; its velocity less the air's wind,
+ * `flight.airWind`), by its air's density (`flight.airDensity`), that flight's speed and its
+ * slip, and the induced drag that costs (see INDUCED), against that flight. The
  * parasitic drag of the air is world/air's (dragOn), an outside pull like gravity.
  */
 export function aero(flight: FlightModel, out: THREE.Vector3): THREE.Vector3 {
   out.set(0, 0, 0);
-  const speed = flight.velocity.length();
+  // the flight through the air: the wind taken out
+  const flow = aeroFlow.copy(flight.velocity).sub(flight.airWind);
+  const speed = flow.length();
   const most = liftAt(flight.airDensity, speed);
   if (most < 1e-6) return out;
   flight.forward(aeroNose);
-  const along = aeroNose.dot(flight.velocity) / speed;
-  aeroAcross.copy(flight.velocity).multiplyScalar(-along / speed).add(aeroNose);
+  const along = aeroNose.dot(flow) / speed;
+  aeroAcross.copy(flow).multiplyScalar(-along / speed).add(aeroNose);
   const side = aeroAcross.length();
   const lift = Math.min(LIFT_MOST, most * liftShare(along, side));
   if (lift <= 0 || side < 1e-9) return out;
   out.copy(aeroAcross).multiplyScalar(lift / side);
-  return out.addScaledVector(flight.velocity, -induced(lift, most) / speed);
+  return out.addScaledVector(flow, -induced(lift, most) / speed);
 }
+const aeroFlow = new THREE.Vector3();
 
 /** The flight counts as on the nose within this angle (rad, 15°). */
 export const ON_NOSE = (15 * Math.PI) / 180;

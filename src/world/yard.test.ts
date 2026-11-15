@@ -49,7 +49,7 @@ describe('the Boneyard on Psyche', () => {
   it('opens the hangar hall to the lane, a ship fitting in it from the door to the pad, walled all round', () => {
     const field = testField();
     field.generate(place.layout);
-    // a ship's size (35 m long): its sphere clear of every wall all the way in, and set down on the pad
+    // a ship's size (up to 37 m long): its sphere clear of every wall all the way in, and set down on the pad
     const ship = 350;
     const above = PAD.clone().setY(PAD.y + ship + 40);
     for (let k = 0; k <= 20; k++) {
