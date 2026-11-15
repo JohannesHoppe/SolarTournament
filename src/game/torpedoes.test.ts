@@ -116,6 +116,21 @@ const run = (scene: (typeof scenes)[keyof typeof scenes], evade: Evasion = () =>
 const IN_TIME = [0.6, 0.8, 1, 1.2, 1.5, 2];
 
 describe('a torpedo', () => {
+  it('lifts on its fins by the air flowing past them, its velocity less the wind', () => {
+    /** How fast it has turned across within a second, homing on a point off its nose, in air of `density` blowing at `wind`. */
+    const turn = (density: number, wind = v(0, 0, 0)) => {
+      const torpedo = { position: v(0, 0, 0), velocity: v(0, 0, -TORPEDO_TOP_SPEED), push: v(0, 0, 0), seen: v(0, 0, 0) };
+      const target = { position: v(20000, 0, -20000), velocity: v(0, 0, 0) };
+      for (let t = 0; t < 1; t += DT) flyTorpedo(torpedo, target, DT, undefined, density, wind);
+      return torpedo.velocity.x;
+    };
+    // still air lifts it round harder than air flowing along with it, which lifts little, and vacuum not at all
+    const still = turn(1);
+    const along = turn(1, v(0, 0, -TORPEDO_TOP_SPEED));
+    expect(still).toBeGreaterThan(along);
+    expect(along).toBeGreaterThanOrEqual(turn(0));
+  });
+
   it('is faster than a ship in normal flight, slower than an overdrive, and less agile', () => {
     expect(TORPEDO_TOP_SPEED).toBeGreaterThan(MAX_SPEED);
     expect(TORPEDO_TOP_SPEED).toBeLessThan(MAX_SPEED + OVERDRIVE_PUSH);

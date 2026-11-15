@@ -7,7 +7,8 @@ import type { Effects } from '../view/effects';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
-import { densityIn, dragOn, LOCK_DEPTH } from '../world/air';
+import { densityIn, dragOn, LOCK_DEPTH, windIn } from '../world/air';
+import { hillTurn } from '../world/orbits';
 import { induced, LIFT_MOST, liftAt, METERS_PER_UNIT } from '../ship/flight';
 import { SHEET_JOULES } from '../ship/impact';
 import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
@@ -191,6 +192,9 @@ export interface Mover {
 const aim = new THREE.Vector3();
 const command = new THREE.Vector3();
 const course = new THREE.Vector3();
+/** The air flowing past a torpedo, its direction (see flyTorpedo), and the wind there. */
+const flow = new THREE.Vector3();
+const windHere = new THREE.Vector3();
 const across = new THREE.Vector3();
 const from = new THREE.Vector3();
 const step = new THREE.Vector3();
@@ -253,10 +257,13 @@ function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
  * steering, so it flies straight lines (one fired at the horizon without a lock does not sink) where its drive
  * and thrusters are strong enough, and is bent only where they are not (a strong well up close).
  */
-export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL, density = 0) {
+export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL, density = 0, wind: THREE.Vector3 = NO_PULL) {
   const { position, velocity, push, seen } = torpedo;
   const speed = velocity.length();
-  const most = TORPEDO_LIFT * liftAt(density, speed);
+  // its fins answer to the air flowing past them: its velocity less the wind's
+  const airspeed = flow.subVectors(velocity, wind).length();
+  if (airspeed > 1) flow.divideScalar(airspeed);
+  const most = TORPEDO_LIFT * liftAt(density, airspeed);
   finLift = Math.min(most, LIFT_MOST);
   if (target) {
     seen.lerp(target.velocity, 1 - exp(-dt / SEEKER_LAG));
@@ -276,10 +283,10 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   // the outside's pull countered at once, within what drive and thrusters give besides the steering
   bound(countered.subVectors(push, outside), speed, dt);
   // the lift its fins take across the flight (before its thrusters) costs it drag against it
-  if (finLift > 0 && speed > 1) {
-    const along = countered.dot(course);
+  if (finLift > 0 && airspeed > 1) {
+    const along = countered.dot(flow);
     const lift = Math.min(finLift, Math.sqrt(Math.max(0, countered.lengthSq() - along * along)));
-    countered.addScaledVector(course, -induced(lift, most));
+    countered.addScaledVector(flow, -induced(lift, most));
   }
   velocity.addScaledVector(countered.add(outside), dt);
   const limit = Math.max(speed, TORPEDO_TOP_SPEED);
@@ -469,8 +476,10 @@ export class Torpedoes {
       const burning = now - torpedo.bornAt < TORPEDO_LIFETIME;
       // a world's gravity, a well's pull, a column's push and an air's drag act on it as on a ship; it has no hover field
       field.gravity(torpedo.position, pulled);
+      // a field riding an orbit (the Satellite Junkyard): the frame's turn as well as its tide, as a ship feels it (see world/hover)
+      if (field.hill) hillTurn(field.hill, torpedo.velocity, pulled);
       if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled, TORPEDO_DRAG);
-      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled, densityIn(field.air, torpedo.position));
+      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled, densityIn(field.air, torpedo.position), windIn(field.air, torpedo.position, windHere));
       else torpedo.position.addScaledVector(torpedo.velocity.addScaledVector(pulled, dt), dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it
