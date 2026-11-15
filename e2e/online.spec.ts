@@ -202,8 +202,10 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   await a.evaluate(() => window.game.fireTorpedo(window.game.me));
   await play(b, 1);
   expect(await b.evaluate(() => window.game.torpedoes.list.length)).toBe(1);
+  const deaths = await b.evaluate(() => window.game.me.deaths);
   await play(b, 8);
-  expect(await b.evaluate(() => window.game.me.hull)).toBe(40);
+  // a ship at rest is struck at the torpedo's full speed: its warhead and that speed's energy take a whole hull
+  expect(await b.evaluate(() => window.game.me.deaths)).toBe(deaths + 1);
   expect(errors).toEqual([]);
 });
 
