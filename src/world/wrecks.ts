@@ -349,6 +349,14 @@ function hulkGeometry(r: Randomizer): THREE.BufferGeometry {
  * frames' ends, fading over a thin rim of the plating): the material's emissive times the
  * square of that heat. Shared program for every wreck's materials.
  */
+/** A wreck's two materials, its armor's worn paint outside and the hull's innards, each glowing where it is torn (see heated). */
+function wreckMaterials(): THREE.MeshStandardMaterial[] {
+  return [
+    heated(new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(13, TORN), 1), color: 0x80847a, emissive: HOT, vertexColors: true })),
+    heated(new THREE.MeshStandardMaterial({ ...surfaced(wreckInnards(), 1), emissive: HOT, vertexColors: true })),
+  ];
+}
+
 function heated<M extends THREE.MeshStandardMaterial>(material: M): M {
   material.onBeforeCompile = (shader) => {
     hazeUniforms(shader, material);
@@ -421,6 +429,18 @@ export class Wrecks {
   readonly list: Wreck[] = [];
 
   /**
+   * A mesh in each of a wreck's materials, never drawn: the game compiles their shaders with the
+   * round's (see Game.warmShaders), so the first ship to break up does not stall a frame.
+   */
+  samples(): THREE.Group {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const group = new THREE.Group().add(...wreckMaterials().map((material) => new THREE.Mesh(box, material)));
+    // shadowed as a piece is (see spawn): a shader of its own for that
+    group.traverse((object) => (object.castShadow = object.receiveShadow = true));
+    return group;
+  }
+
+  /**
    * Breaks the ship `id` (its `deaths`th clone) up at `position`, flying at `velocity`, its hit
    * radius `shipRadius`: the hulk and the plates (see PIECES_PER_SHIP), seeded alike on every
    * browser, flying apart slowly or, `blast` (its reactor gone critical, a warhead, a
@@ -429,10 +449,7 @@ export class Wrecks {
   spawn(id: string, deaths: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, now: number, blast = false) {
     const r = new Randomizer(textSeed(`${id}#${deaths}`));
     // the pieces of one ship cool down together: they share their materials
-    const materials = [
-      heated(new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(13, TORN), 1), color: 0x80847a, emissive: HOT, vertexColors: true })),
-      heated(new THREE.MeshStandardMaterial({ ...surfaced(wreckInnards(), 1), emissive: HOT, vertexColors: true })),
-    ];
+    const materials = wreckMaterials();
     materials[0].userData.pieces = PIECES_PER_SHIP;
     // a ship crushed whole tears cold, one blown apart hot
     for (const material of materials) material.userData.heat = blast ? 1 : 0.35;

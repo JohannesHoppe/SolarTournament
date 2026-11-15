@@ -3099,6 +3099,7 @@ export class Game implements OnlineGame {
   private enterArena(arena: ArenaProfile, state?: FieldState, keepWreckage = false) {
     // the rocks a hook held are gone with the field
     this.clearHooks();
+    this.shadersWarm = false;
     this.venue = arena;
     this.arenaReferences = referencesOf(arena);
     devlog?.begin(this.roundMode, arena.id);
@@ -4989,6 +4990,7 @@ export class Game implements OnlineGame {
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
     this.renderer.info.reset();
     this.updateShadowMap();
+    if (!this.shadersWarm) this.warmShaders();
     if (!this.bench.size) {
       this.composer.render();
       return;
@@ -5015,6 +5017,29 @@ export class Game implements OnlineGame {
     if (!medium) return;
     this.shadowFrame = (this.shadowFrame + 1) % 2;
     this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0 || !this.space.hasShadowMap;
+  }
+
+  /** Whether the shaders of everything the arena may show are compiled (see warmShaders). */
+  private shadersWarm = false;
+
+  /**
+   * Compiles the shaders of everything in the scene, hidden or not (a drive's plume before it
+   * burns, a probe before it shows up), and of a wreck's materials, as the scene's own pass draws
+   * them, in the background where the browser compiles in parallel: compiled at first sight, a
+   * shader stalls its frame (a drive's plume took a second in the test browser at a race's start,
+   * a wreck's tens of milliseconds at the first kill). Once an arena is entered, before its first
+   * picture.
+   */
+  private warmShaders() {
+    this.shadersWarm = true;
+    const samples = this.wrecks.samples();
+    this.scene.add(samples);
+    const target = this.renderer.getRenderTarget();
+    // the scene is drawn into the composer's buffers, untouched by the tone mapping: the shaders compiled for them
+    this.renderer.setRenderTarget(this.composer.readBuffer);
+    void this.renderer.compileAsync(this.scene, this.camera);
+    this.renderer.setRenderTarget(target);
+    this.scene.remove(samples);
   }
 
   /** The parts of the scene the benchmark switched off. */
