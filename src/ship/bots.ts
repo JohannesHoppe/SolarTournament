@@ -169,13 +169,15 @@ const AVOID_HORIZON = 5;
 /** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
 const AVOID_TUBE = 3;
 /**
- * A piece of the field moving faster than INCOMING_SPEED (units/s, 2 m/s) is watched as it comes
- * (the Event Horizon's rocks circle at up to 167 m/s, the Satellite Junkyard's debris crosses at
- * 25): one whose way past the bot, as the two move, comes within its reach and AVOID_TUBE ship
- * radii within INCOMING_SECONDS sends the bot off sideways, out of its way, as a Host sees a rock
- * coming and pulls aside.
+ * A piece of the field moving faster than INCOMING_SPEED (units/s, 50 m/s) is watched as it comes
+ * (the Event Horizon's rocks circle at 116 to 167 m/s, their fragments and a rammed piece faster):
+ * one whose way past the bot, as the two move, comes within its reach and AVOID_TUBE ship radii
+ * within INCOMING_SECONDS sends the bot off sideways, out of its way, as a Host sees a rock coming
+ * and pulls aside. A slower piece leaves the bot time enough with its look along its own flight
+ * (see wayAhead): swerving from the Satellite Junkyard's debris crossing at 25 m/s cost the
+ * middling bot some 200 points a deathmatch and spared it nothing (measured in its balance runs).
  */
-const INCOMING_SPEED = 40;
+const INCOMING_SPEED = 1000;
 const INCOMING_SECONDS = 4;
 /**
  * A sheet of junk whose plug would dent the hull this much at the bot's speed (hull points, see
