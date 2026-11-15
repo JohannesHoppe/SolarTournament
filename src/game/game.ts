@@ -1368,7 +1368,30 @@ export class Game implements OnlineGame {
   private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   // the HUD marks a ship its sensors find: in sight, and not running silent beyond SILENT_RANGE (see Ship.silent)
-  private readonly inSight = (ship: Ship) => detectable(ship, this.camera.position, this.time) && this.field.lineOfSight(this.camera.position, ship.flight.position);
+  private readonly inSight = (ship: Ship) => detectable(ship, this.camera.position, this.time) && this.cameraSees(ship);
+  /**
+   * The line of sight from the camera to a ship (see AsteroidField.lineOfSight), cast once for as
+   * long as neither the camera, the ship nor the field's clock moved: a frame asks it of every
+   * ship three times (its marker, its drop line, the range cue).
+   */
+  private cameraSees(ship: Ship): boolean {
+    const memo = this.sightMemo;
+    const eye = this.camera.position;
+    if (memo.clock !== this.field.clock || !memo.eye.equals(eye)) {
+      memo.clock = this.field.clock;
+      memo.eye.copy(eye);
+      memo.stamp++;
+    }
+    const position = ship.flight.position;
+    let kept = memo.ships.get(ship);
+    if (kept && kept.stamp === memo.stamp && kept.at.equals(position)) return kept.seen;
+    if (!kept) memo.ships.set(ship, (kept = { stamp: 0, at: new THREE.Vector3(), seen: false }));
+    kept.stamp = memo.stamp;
+    kept.at.copy(position);
+    kept.seen = this.field.lineOfSight(eye, position);
+    return kept.seen;
+  }
+  private readonly sightMemo = { clock: NaN, stamp: 0, eye: new THREE.Vector3(), ships: new WeakMap<Ship, { stamp: number; at: THREE.Vector3; seen: boolean }>() };
   /** Whether the own ship's sensors see a ship past the asteroids (and through the haze, see world/air), for the radar. */
   private readonly sensed = (ship: Ship) => detectable(ship, this.subject().flight.position, this.time) && this.field.lineOfSight(this.subject().flight.position, ship.flight.position, RADAR_DEPTH);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
