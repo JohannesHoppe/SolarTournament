@@ -302,7 +302,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },
   pocket: { value: 1.35, readme: '# km deep at its middle' },
-  junkOrbit: { value: 25, readme: 'all at # m/s' },
+  junkOrbit: { value: 25, readme: 'crosses the field at # m/s' },
   stormEvery: { value: 50, readme: 'Every # seconds of field time a solar storm' },
   stormLength: { value: 8, readme: 'blinds the sensors for # seconds' },
   impactKill: { value: 72, readme: 'at about # m/s a ship is destroyed' },

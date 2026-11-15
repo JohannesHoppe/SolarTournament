@@ -12,7 +12,7 @@ import { massOf } from './bodies';
 import type { JunkBuild } from './junk';
 import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
-import { kepler } from './orbits';
+import { hill, hillTide, kepler, type HillFrame } from './orbits';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -215,6 +215,16 @@ export interface FieldLayout {
    * holds them on (Kepler), its plane through the well's center.
    */
   orbit?: { axis: 'vertical' | 'random'; speed?: number };
+  /**
+   * The field rides a circular orbit about a planet (the Satellite Junkyard's, 5,000 km over
+   * Earth): its pieces move in the frame riding it (see world/orbits hill), the planet's pull
+   * taken out but for its tide. The pieces laid out circle the field's center on bounded
+   * relative orbits (no drift along the orbit; up and across they swing by up to `swing` times
+   * their distance a radian of the orbit); a `crossing` share of them instead fly orbits that
+   * cross the field at `speed` (units/s), each through where it was laid out at a field time
+   * between `from` and `to` (s), in a direction of its own.
+   */
+  hill?: { frame: HillFrame; swing: number; crossing: number; speed: number; from: number; to: number };
   /** How fast each rock turns about itself (rad/s). */
   spin: number;
   /** Hits a rock withstands: 4 plus one per this many units of mean radius. */
@@ -277,6 +287,8 @@ export interface Asteroid {
    * motion gives it, its drift taken in the frame its orbit turns. Zero for every other piece.
    */
   orbitMu: number;
+  /** The frame riding a circular orbit it moves in (see FieldLayout.hill), or null. */
+  hill: HillFrame | null;
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
   /** Field time (s) it crumbles to dust (see CRUMBLE_AFTER), from when it broke off, whatever moved it since; Infinity for a piece that lasts. */
@@ -541,6 +553,8 @@ export class AsteroidField {
   well: Well | null = null;
   /** The strength of the well the pieces circle on their own orbits (see Asteroid.orbitMu), 0 for none. */
   private orbitMu = 0;
+  /** The frame riding a circular orbit the field moves in (see FieldLayout.hill), or null: its tide is in the field's gravity, its turn in what a moving body feels (see world/hover outside). */
+  hill: HillFrame | null = null;
   /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
   fall = 0;
   /** The pieces that are a world's ground (see Placement.ground), for the hover field (see groundBelow). */
@@ -628,8 +642,9 @@ export class AsteroidField {
     this.layout = layout;
     this.well = layout.well ?? null;
     // a well at the field's center whose pull falls off as its own (see Well.body): the pieces fly about it as two bodies do
-    const kepler = layout.well && layout.orbit && layout.orbit.speed === undefined && layout.well.body === undefined && layout.well.position.lengthSq() === 0;
-    this.orbitMu = kepler ? layout.well!.surfaceGravity * layout.well!.radius * layout.well!.radius : 0;
+    const twoBodies = layout.well && layout.orbit && layout.orbit.speed === undefined && layout.well.body === undefined && layout.well.position.lengthSq() === 0;
+    this.orbitMu = twoBodies ? layout.well!.surfaceGravity * layout.well!.radius * layout.well!.radius : 0;
+    this.hill = layout.hill?.frame ?? null;
     this.fall = layout.fall ?? 0;
     this.columns = layout.columns ?? [];
     this.air = layout.air ?? null;
@@ -765,7 +780,9 @@ export class AsteroidField {
         orbitAxis.copy(position).cross(u.set(0, 1, 0).cross(position)).normalize();
       }
       const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
-      const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
+      const velocity = new THREE.Vector3();
+      if (layout.hill) relativeOrbit(r, layout.hill, position, velocity);
+      const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, velocity, orbitAxis, orbitRate);
       if (layout.rest !== undefined) this.rest(piece, layout.rest, i);
     }
   }
@@ -882,6 +899,7 @@ export class AsteroidField {
       orbitAxis,
       orbitRate,
       orbitMu: orbitRate ? this.orbitMu : 0,
+      hill: this.hill,
       born,
       crumbles: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
       basePosition: position.clone(),
@@ -1578,8 +1596,10 @@ export class AsteroidField {
   }
 
   /**
-   * The gravitational pull at a point (units/s²): an arena's massive body (its well), or the world a
-   * place lies on (its fall). The field's pieces pull as real ones do, a rock of 100 m with some
+   * The gravitational pull at a point (units/s²): an arena's massive body (its well), the world a
+   * place lies on (its fall), or the tide of the planet a field rides its orbit about (see
+   * FieldLayout.hill; the frame's turn a moving body feels comes on top, see world/hover
+   * outside). The field's pieces pull as real ones do, a rock of 100 m with some
    * hundred-thousandth of a g: nothing a ship would notice, so nothing at all.
    */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
@@ -1591,6 +1611,8 @@ export class AsteroidField {
       const distance = Math.max(pull.length(), well.radius);
       target.addScaledVector(pull.normalize(), wellPull(well, distance));
     }
+    // a field riding an orbit: the planet's tide, all its gravity leaves in the frame that falls with it
+    if (this.hill) hillTide(this.hill, position, target);
     return target;
   }
 }
@@ -1653,9 +1675,33 @@ function conic(a: Asteroid, age: number, position: THREE.Vector3, velocity: THRE
   kepler(a.orbitMu, a.basePosition, startVelocity, age, position, velocity);
 }
 
-/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center, or flown along its own conic about the well. */
+/**
+ * Where a piece of a field riding an orbit is laid out to move (see FieldLayout.hill), its
+ * velocity at field time 0 into `velocity`: on a bounded relative orbit about the field's center
+ * from `position`, or, a crossing share of them, on an orbit through `position` at a field time
+ * of its own, `position` moved to where it is at field time 0.
+ */
+function relativeOrbit(r: Randomizer, layout: NonNullable<FieldLayout['hill']>, position: THREE.Vector3, velocity: THREE.Vector3) {
+  const frame = layout.frame;
+  if (r.nextFloat() < layout.crossing) {
+    velocity.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(layout.speed);
+    hill(frame, position, velocity, -r.range(layout.from, layout.to), position, velocity);
+    return;
+  }
+  // no drift along the orbit: its speed along it twice the rate times its height less (see world/orbits hill)
+  const reach = frame.rate * position.length() * layout.swing;
+  velocity.copy(frame.up).multiplyScalar(r.range(-reach, reach));
+  velocity.addScaledVector(frame.ahead, -2 * frame.rate * position.dot(frame.up));
+  velocity.addScaledVector(frame.normal, r.range(-reach, reach));
+}
+
+/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center, flown along its own conic about the well, or along its orbit relative to the one the field rides. */
 function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
   const age = time - a.born;
+  if (a.hill) {
+    hill(a.hill, a.basePosition, a.velocity, age, flown, flownVelocity);
+    return target.copy(flown);
+  }
   if (ownConic(a)) {
     conic(a, age, flown, flownVelocity);
     return target.copy(flown);
@@ -1671,6 +1717,10 @@ function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vec
  */
 function driftAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
   const age = time - a.born;
+  if (a.hill) {
+    hill(a.hill, a.basePosition, a.velocity, age, flown, flownVelocity);
+    return target.copy(flownVelocity);
+  }
   if (ownConic(a)) {
     conic(a, age, flown, flownVelocity);
     return target.copy(a.orbitAxis).multiplyScalar(-a.orbitRate).cross(flown).add(flownVelocity);

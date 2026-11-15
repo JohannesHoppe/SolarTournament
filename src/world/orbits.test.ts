@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { kepler } from './orbits';
+import { hill, hillTide, hillTurn, kepler, type HillFrame } from './orbits';
 
 /** Steps a body through a point mass's gravity (leapfrog, small steps): what the closed form must match. */
 function stepped(mu: number, position: THREE.Vector3, velocity: THREE.Vector3, seconds: number, step = 1 / 8000) {
@@ -61,5 +61,45 @@ describe('a piece on its own conic about the hole', () => {
       kepler(MU, start, velocity, seconds, p, v);
       expect(Math.abs(energy(p, v) / energy(start, velocity) - 1)).toBeLessThan(1e-9);
     }
+  });
+});
+
+// the Satellite Junkyard's frame: 5,000 km over Earth, once around in 3.35 h
+const FRAME: HillFrame = { rate: Math.sqrt(3.986004418e14 / (11371000 * 11371000 * 11371000)), up: new THREE.Vector3(0, 1, 0), ahead: new THREE.Vector3(0, 0, -1), normal: new THREE.Vector3(-1, 0, 0) };
+
+describe('a piece beside the orbit a field rides', () => {
+  it('lands where the tide and the frame turning, stepped finely, take it', () => {
+    const start = new THREE.Vector3(1200, -800, 2000);
+    const velocity = new THREE.Vector3(300, -150, 420);
+    const p = start.clone();
+    const v = velocity.clone();
+    const a = new THREE.Vector3();
+    const step = 1 / 100;
+    for (let k = 0; k < 600 * 100; k++) {
+      hillTurn(FRAME, v, hillTide(FRAME, p, a.set(0, 0, 0)));
+      v.addScaledVector(a, step);
+      p.addScaledVector(v, step);
+    }
+    const q = new THREE.Vector3();
+    const w = new THREE.Vector3();
+    hill(FRAME, start, velocity, 600, q, w);
+    expect(q.distanceTo(p)).toBeLessThan(2);
+    expect(w.distanceTo(v)).toBeLessThan(0.01);
+  });
+
+  it('closes a loop once an orbit; a piece higher up falls behind, a lower one pulls ahead', () => {
+    const n = FRAME.rate;
+    expect((2 * Math.PI) / n / 3600).toBeCloseTo(3.35, 2);
+    // speed along the orbit twice the rate times the height less: a closed loop
+    const start = new THREE.Vector3(0, 2000, 0);
+    const q = new THREE.Vector3();
+    const w = new THREE.Vector3();
+    hill(FRAME, start, new THREE.Vector3(0, 0, 2 * n * 2000), (2 * Math.PI) / n, q, w);
+    expect(q.distanceTo(start)).toBeLessThan(1e-6);
+    // at rest beside the reference, higher: behind it after a while, lower: ahead
+    hill(FRAME, start, new THREE.Vector3(), 600, q, w);
+    expect(q.dot(FRAME.ahead)).toBeLessThan(0);
+    hill(FRAME, start.clone().negate(), new THREE.Vector3(), 600, q, w);
+    expect(q.dot(FRAME.ahead)).toBeGreaterThan(0);
   });
 });

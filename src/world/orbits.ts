@@ -116,19 +116,20 @@ export function hill(frame: HillFrame, position: THREE.Vector3, velocity: THREE.
 }
 
 /**
- * The pull a body feels in the frame riding the reference orbit (see hill), besides its own
- * gravity, which the frame's own fall takes out (units/s²), added into `target`: the tide
- * (3 rate² times the height up, rate² times the distance across the orbit's plane back towards
- * it) and the frame's turn once an orbit (Coriolis: twice the rate times the velocity, turned).
+ * The tide a body at `position` feels in the frame riding the reference orbit (see hill), all
+ * that is left of the planet's gravity once the frame's own fall takes out the rest (units/s²),
+ * added into `target`: 3 rate² times its height up, and rate² times its distance across the
+ * orbit's plane back towards it.
  */
-export function hillPull(frame: HillFrame, position: THREE.Vector3, velocity: THREE.Vector3 | null, target: THREE.Vector3): THREE.Vector3 {
-  const n = frame.rate;
-  const n2 = n * n;
+export function hillTide(frame: HillFrame, position: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
+  const n2 = frame.rate * frame.rate;
   target.addScaledVector(frame.up, 3 * n2 * position.dot(frame.up));
-  target.addScaledVector(frame.normal, -n2 * position.dot(frame.normal));
-  if (velocity) {
-    target.addScaledVector(frame.up, 2 * n * velocity.dot(frame.ahead));
-    target.addScaledVector(frame.ahead, -2 * n * velocity.dot(frame.up));
-  }
-  return target;
+  return target.addScaledVector(frame.normal, -n2 * position.dot(frame.normal));
+}
+
+/** The frame's turn once an orbit as a body flying at `velocity` feels it (Coriolis: twice the rate times its velocity, turned a quarter about the orbit's axis; units/s²), added into `target`. */
+export function hillTurn(frame: HillFrame, velocity: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
+  const twice = 2 * frame.rate;
+  target.addScaledVector(frame.up, twice * velocity.dot(frame.ahead));
+  return target.addScaledVector(frame.ahead, -twice * velocity.dot(frame.up));
 }

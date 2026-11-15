@@ -5,6 +5,7 @@ import { BELT_INNER } from './belt';
 import { surfaced, wornSurface, wreckInnards, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
 import { contact } from './bodies';
+import { hillTurn } from './orbits';
 import { atan2, cos, exp, hypot, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
 
@@ -378,7 +379,10 @@ const MEET_STEPS = 30;
 function fly(wreck: Wreck, time: number, field: AsteroidField) {
   const age = time - wreck.bornAt;
   while ((wreck.steps + 1) * WRECK_STEP <= age) {
-    wreck.velocity.addScaledVector(field.gravity(wreck.at, gravity), WRECK_STEP);
+    field.gravity(wreck.at, gravity);
+    // in a frame riding an orbit, its turn as well (see FieldLayout.hill)
+    if (field.hill) hillTurn(field.hill, wreck.velocity, gravity);
+    wreck.velocity.addScaledVector(gravity, WRECK_STEP);
     wreck.at.addScaledVector(wreck.velocity, WRECK_STEP);
     wreck.steps++;
   }

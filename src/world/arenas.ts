@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FIELD_RADIUS, SPIN_RATE, type FieldLayout, type Placement } from './asteroids';
+import type { HillFrame } from './orbits';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { msg } from '../i18n/i18n';
@@ -191,8 +192,9 @@ export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multip
  * straight below: tilted EARTH_TILT (11.5°) towards the sun, so the point beneath the arena lies
  * in the dusk (the sun 3.2° below its horizon): the terminator runs through the middle of the
  * ball, the day side towards the sun, the night with its cities away from it, and the arena
- * itself, high above, lies in sunlight (the sun 53° above Earth's rim as seen from it). Scenery
- * only: it neither pulls nor blocks.
+ * itself, high above, lies in sunlight (the sun 53° above Earth's rim as seen from it). It blocks
+ * nothing; its pull is the orbit the arena rides (see JUNK_FRAME): the arena falls with it, and
+ * only its tide and the frame's turn are felt.
  */
 export const EARTH_RADIUS = 127420000;
 export const EARTH_ALTITUDE = 100000000;
@@ -200,6 +202,23 @@ const EARTH_TILT = 0.2;
 /** Straight down to the point beneath the arena, from the field's center. */
 export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(sin(EARTH_TILT)).add(new THREE.Vector3(0, -cos(EARTH_TILT), 0));
 export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);
+/** Earth's strength (m³/s²): its pull times the square of the distance from its center. */
+const EARTH_MU = 3.986004418e14;
+/** The Satellite Junkyard's orbit: its distance from Earth's center (m, 11,371 km). */
+const JUNK_ORBIT = (EARTH_RADIUS + EARTH_ALTITUDE) * 0.05;
+/**
+ * The frame the Satellite Junkyard rides (see world/orbits hill): its circular orbit, once
+ * around in 3.35 h at 5.9 km/s (its rate, rad/s, 5.21e-4), Earth always beneath, its flight
+ * square to the way down.
+ */
+const JUNK_UP = EARTH_DOWN.clone().negate();
+const JUNK_AHEAD = new THREE.Vector3(1, 0, 0).addScaledVector(JUNK_UP, -JUNK_UP.x).normalize();
+export const JUNK_FRAME: HillFrame = {
+  rate: Math.sqrt(EARTH_MU / (JUNK_ORBIT * JUNK_ORBIT * JUNK_ORBIT)),
+  up: JUNK_UP,
+  ahead: JUNK_AHEAD,
+  normal: new THREE.Vector3().crossVectors(JUNK_UP, JUNK_AHEAD),
+};
 /** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
 export const RING_LAYER = 2500;
 /**
@@ -1199,7 +1218,10 @@ export const ARENAS: readonly ArenaProfile[] = [
       maxScale: 3,
       radius: FIELD_RADIUS * 1.2,
       inner: 12000,
-      orbit: { axis: 'random', speed: 500 },
+      // the network's shell drifting about the hub on its relative orbits at up to 3 m/s; two in
+      // five crossing the field at 25 m/s, as the debris of its collisions does, coming and going
+      // through the round
+      hill: { frame: JUNK_FRAME, swing: 0.5, crossing: 0.4, speed: 500, from: -60, to: 360 },
       spin: 0.15,
       toughness: 500,
       // the network's dead relay hub in the middle: an engine block and two spars across, one body

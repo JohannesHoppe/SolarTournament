@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AsteroidField } from './asteroids';
 import { densityIn, dragOn, windIn } from './air';
+import { hillTurn } from './orbits';
 import { exp } from '../detmath';
 import { HOVER_HEIGHT, HOVER_REACH, HOVER_RIDE, type Ground } from '../ship/flight';
 
@@ -90,7 +91,9 @@ export function outside(field: AsteroidField, position: THREE.Vector3, velocity:
   if (flight) flight.airDensity = densityIn(field.air, position);
   if (flight?.airWind) windIn(field.air, position, flight.airWind);
   field.gravity(position, target);
-  // gravity alone, which the clone falling with its hull never feels (see Ship.felt)
+  // in a frame riding an orbit, its turn as well (see FieldLayout.hill)
+  if (field.hill) hillTurn(field.hill, velocity, target);
+  // gravity alone (and the frame's turn), which the clone falling with its hull never feels (see Ship.felt)
   flight?.fall?.copy(target);
   const ground = hover(field, position, velocity, radius, target);
   if (field.air) dragOn(field.air, position, velocity, dt, target);
