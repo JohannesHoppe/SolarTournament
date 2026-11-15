@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
+import { raySphere, type Asteroid, type AsteroidField, type RayHit } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
 import { detectable, LASER_RANGE, noseOn, type Ship } from './ship';
 import { MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH, RCS_THRUST } from './flight';
@@ -11,12 +11,81 @@ import { ringRim } from '../world/gates';
 import { onCore, plugMass, type JunkBuild } from '../world/junk';
 import { RAM_SAFE, SAFE_IMPACT, sheetDamage } from './impact';
 import { groundBlow } from '../world/hover';
-import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH, throughAir } from '../world/air';
+
+/** A bot's flight through the air (see world/air throughAir). */
+const airFlow = new THREE.Vector3();
 import { plumeStrength } from './plume';
-import { exp, hypot } from '../detmath';
+import { atan, exp, hypot, tan } from '../detmath';
+import { CAMERA_FOV, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
+/**
+ * What a bot sees as a Host sees its screen (see Bot.inView): the chase camera's picture,
+ * CAMERA_FOV high and at 16:9 about 102° wide, from where the camera hangs behind and above the
+ * ship (CHASE_DISTANCE, CHASE_HEIGHT; a ship beside the hull at a shove's reach still shows),
+ * widened by VIEW_MARGIN (rad, 15°) on every side: the picture widens by up to 17° with speed
+ * and a full burn (see Game.updateCamera), and the eye catches what moves just past the screen's
+ * edge. Within it the bot sees ship by ship, past rock or not; outside it only what its last
+ * glance at the radar and the arrows at the screen's edge showed (see GLANCE_SLOW).
+ */
+const VIEW_MARGIN = (15 * Math.PI) / 180;
+const VIEW_ASPECT = 16 / 9;
+const VIEW_HALF = (CAMERA_FOV * Math.PI) / 360;
+/** The view's half height and half width as slopes (tangents of the half angles with the margin). */
+const VIEW_UP = tan(VIEW_HALF + VIEW_MARGIN);
+const VIEW_SIDE = tan(atan(tan(VIEW_HALF) * VIEW_ASPECT) + VIEW_MARGIN);
+/**
+ * A bot glances at the radar and the arrows at the screen's edge (see Bot.glance) every
+ * GLANCE_SLOW seconds at reflexes 0 down to GLANCE_FAST at reflexes 1, each gap GLANCE_JITTER
+ * longer or shorter by chance: a pilot's eyes are on the picture, and the corner of the screen
+ * gets a look now and then. What it shows a Host it shows the bot: the ships in line of sight,
+ * within the radar's reach (RADAR_RANGE, units, 2.5 km) through the radar's haze, beyond it
+ * through the eye's, where they are at that moment.
+ */
+const GLANCE_SLOW = 3;
+const GLANCE_FAST = 1;
+const GLANCE_JITTER = 0.25;
+const RADAR_RANGE = 50000;
+/**
+ * Bots think in turns (see Turns): one a step in a fixed rotation, and more only where that
+ * would leave a bot longer than TURN_GAP (s of game time, about a quick human's reaction) without
+ * one: with seven bots a step of a sixtieth of a second gives each a turn about every 0.12 s, a
+ * step of a thirtieth (30 frames a second, a time-lapse) every 0.23 s.
+ */
+export const TURN_GAP = 0.25;
+
+/**
+ * The rotation of the bots' turns (see Bot.think): `deal` gives each step's turns to the next
+ * bots in a fixed order, whatever happens (a hit, a lock, a torpedo, a rock ahead are answered
+ * in the bot's next turn, so many bots struck at once think no sooner); a bot whose clone is
+ * gone lets its turn pass. A step gives one turn, or more where the bots are so many or the
+ * step so long that one would wait longer than TURN_GAP: `bots` times the step over TURN_GAP,
+ * the fraction carried over to the next step, never more than one each.
+ */
+export class Turns {
+  private next = 0;
+  private owed = 0;
+  private readonly dealt = new Set<Bot>();
+
+  deal(bots: readonly Bot[], dt: number) {
+    this.dealt.clear();
+    const count = bots.length;
+    if (!count) return;
+    this.owed = Math.min(count, this.owed + Math.max(1, (count * dt) / TURN_GAP));
+    while (this.owed >= 1) {
+      this.owed--;
+      this.next %= count;
+      this.dealt.add(bots[this.next++]);
+    }
+  }
+
+  /** Whether `bot` has its turn this step. */
+  has(bot: Bot): boolean {
+    return this.dealt.has(bot);
+  }
+}
 /** Bots only fire within this distance (units, 1 km). */
 const FIRE_RANGE = 20000;
 /** In a solar storm a bot's sensors are blind: it only sees what its own eyes see (units, 750 m). */
@@ -166,6 +235,17 @@ const AVOID_HORIZON = 5;
 /** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
 const AVOID_TUBE = 3;
 /**
+ * A piece of the field moving faster than INCOMING_SPEED (units/s, 50 m/s) is watched as it comes
+ * (the Event Horizon's rocks circle at 116 to 167 m/s, their fragments and a rammed piece faster):
+ * one whose way past the bot, as the two move, comes within its reach and AVOID_TUBE ship radii
+ * within INCOMING_SECONDS sends the bot off sideways, out of its way, as a Host sees a rock coming
+ * and pulls aside. A slower piece leaves the bot time enough with its look along its own flight
+ * (see wayAhead): swerving from the Satellite Junkyard's debris crossing at 25 m/s cost the
+ * middling bot some 200 points a deathmatch and spared it nothing (measured in its balance runs).
+ */
+const INCOMING_SPEED = 1000;
+const INCOMING_SECONDS = 4;
+/**
  * A sheet of junk whose plug would dent the hull this much at the bot's speed (hull points, see
  * sheetDamage: a stage's tank walls at speed, never a wing's panels) is worth flying round, while
  * it lies at least SHEET_ROOM seconds ahead, where a turn round it costs little; closer, the bot
@@ -183,11 +263,11 @@ const BURN_THRESHOLD = 500;
 /** Angular aim error at an aim of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
 const AIM_ANGLE = 0.02;
 /** How long a bot's sense of the target's jinking lingers (s). */
-const JINK_MEMORY = 0.6;
+export const JINK_MEMORY = 0.6;
 /** Jinking (change of velocity across the line of sight) of this share of the thruster strength scatters the aim by a full ship radius. */
-const JINK_SCATTER = 0.5;
+export const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
-const JINK_SCATTER_MAX = 2.5;
+export const JINK_SCATTER_MAX = 2.5;
 /**
  * A bot under attack jinks with this share of its thrusters (4 g of their 10 g): enough to throw a
  * chaser's aim off, while a Host of middling skill still lands its hits; the rest stays a Host's
@@ -222,7 +302,7 @@ const WELL_PULL = 0.3;
  * that by up to AIR_RISE (units/s, 80 m/s), in full from AIR_RISE_SPAN under it (units, 500 m),
  * and never sinks under it of its own wish, after a rival or a probe neither: it waits above. Over
  * it, it sinks no faster than it could stop at it braking with AIR_BRAKE (units/s², 1.5 g: its
- * thrusters' 10 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
+ * thrusters' 10 g, less the planet's pull of 2.5 g, with room to spare). Three exceptions:
  * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
  * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
  * a bot of AIR_DARING and more follows its target down into them; and one heading home from
@@ -303,9 +383,16 @@ const hunt = new THREE.Vector3();
 const across = new THREE.Vector3();
 const across2 = new THREE.Vector3();
 const wayOrigin = new THREE.Vector3();
+/** The bot's view (see Bot.inView): its axes and the line to what it looks at. */
+const viewForward = new THREE.Vector3();
+const viewUp = new THREE.Vector3();
+const viewSide = new THREE.Vector3();
+const viewLine = new THREE.Vector3();
 /** The rays of wayAhead (and the shove's check): each cast's hit, and the nearest of them, reused every step. */
 const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
+/** The pieces wayAhead's tube may meet (see AsteroidField.piecesAlong), gathered anew every look. */
+const wayPieces: Asteroid[] = [];
 /** Where a ray of wayAhead met a piece of junk, in the piece's frame (see world/junk, onCore). */
 const wayPoint = new THREE.Vector3();
 const groundNormal = new THREE.Vector3();
@@ -313,6 +400,11 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
 const SIDE = new THREE.Vector3(1, 0, 0);
+/** A moving piece's velocity, where it is from the bot, how the two close, where it passes (see Bot.incoming). */
+const pieceVelocity = new THREE.Vector3();
+const offset = new THREE.Vector3();
+const closing = new THREE.Vector3();
+const passing = new THREE.Vector3();
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -450,7 +542,10 @@ export function novaWorth(holder: Ship, ships: readonly Ship[], radius: number, 
 }
 
 /**
- * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
+ * Newtonian pursuit AI, perceiving and deciding as a pilot does: a clone with a human mind sits in
+ * the cockpit, and a mind needs its time. It thinks in turns (see Turns), sees fully only what
+ * lies in its view (see inView), and knows of the ships outside it what a glance at the radar and
+ * the screen's edge shows (see glance). It works out the velocity it wants (close in on its target,
  * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
  * the main drive into the error and burning. Small differences are trimmed with the
  * maneuvering thrusters while the nose stays on the target. The armor makes it a dogfight:
@@ -474,6 +569,29 @@ export class Bot {
   /** What the bot wants this thought, and what its hand gives the ship: the same, eased in (see HAND_TIME). */
   private readonly controls: Controls = { ...IDLE };
   private readonly hand: Controls = { ...IDLE };
+  /** Whether this clone has had a turn yet; its hand rests until it has (see think). */
+  private decided = false;
+  /** What the last turn decided, which the hand flies until the next (see fly): the velocity it wants; whether it burns for it whatever (danger), or once it is far off; whether it aims at the target or fires at a battleship's part (`siegeAt`), else where it looks (`look`). */
+  private readonly want = new THREE.Vector3();
+  private mustBurn = false;
+  private mayBurn = false;
+  private aiming = false;
+  private sieging = false;
+  private readonly siegeAt = new THREE.Vector3();
+  private readonly look = new THREE.Vector3();
+  private defending = false;
+  private lookingBack = false;
+  private racing = false;
+  /** The last turn's reasons to spend the clone's strain (see STRAIN_HOLD): danger, a nova, an attacker, a race. */
+  private spending = false;
+  /** Whether the target is in sight to fire at, and whether the bot follows it as it is (in view, or by its sensors: a lock, a hit, the HUD's mark of a prey) or only knows where its glance showed it (`seenAt`). */
+  private inSight = false;
+  private tracked = false;
+  private readonly seenAt = new THREE.Vector3();
+  /** Where the bot last saw each ship (in view or at a glance), and which glance that was in (see glance): only what it saw since its last glance counts. */
+  private readonly memory = new Map<Ship, { at: THREE.Vector3; glance: number }>();
+  private glances = 0;
+  private nextGlance = 0;
   /** The axis the bot circles its target about, and the target it was chosen for (see ORBIT_SPEED). */
   private readonly orbitAxis = new THREE.Vector3(0, 1, 0);
   private orbiting: Ship | null = null;
@@ -587,19 +705,111 @@ export class Bot {
     this.skills = on ? this.own : this.held;
   }
 
-  think(now: number, ships: Ship[], field: AsteroidField): Controls {
-    const me = this.ship.flight;
-    // one controls object per bot, cleared each thought, so thinking allocates nothing
-    const controls = Object.assign(this.controls, IDLE);
-    // the first thought after a (re)spawn must not count the time the bot was gone as reaction
-    // time, and a new clone's hand starts at rest; any shorter step counts in full (a time-lapse
-    // takes long ones)
+  /**
+   * Whether the bot sees `ship` (see AsteroidField.lineOfSight, `haze` the reach through an air):
+   * the line from its own ship is cast once a turn, since one turn asks it of the same
+   * ship again and again (as a target, a hunter of another, a chaser, a ship to keep clear of)
+   * while nothing moves.
+   */
+  private sees(field: AsteroidField, ship: Ship, haze = SIGHT_DEPTH): boolean {
+    const from = this.ship.flight.position;
+    const to = ship.flight.position;
+    if (from.distanceTo(to) < 1) return true;
+    if (!field.clearAir(from, to, haze)) return false;
+    let clear = this.sightLines.get(ship);
+    if (clear === undefined) {
+      clear = field.clearLine(from, to);
+      this.sightLines.set(ship, clear);
+    }
+    return clear;
+  }
+
+  /** The lines of sight cast in this thought (see sees). */
+  private readonly sightLines = new Map<Ship, boolean>();
+
+  /**
+   * One step of the bot: on its `turn` (see Turns) it looks and decides (see decide), and every
+   * step its hand flies what its last turn decided (see fly). A fresh clone's hand rests until
+   * its first turn.
+   */
+  think(now: number, ships: Ship[], field: AsteroidField, turn = true): Controls {
+    // the first step after a (re)spawn must not count the time the bot was gone as reaction
+    // time, and a new clone's hand starts at rest, knowing nothing yet; any shorter step counts
+    // in full (a time-lapse takes long ones)
     let dt = now - this.lastThink;
     this.lastThink = now;
     if (dt > RESPAWN_GAP) {
       dt = 0;
       Object.assign(this.hand, IDLE);
+      this.decided = false;
+      this.nextGlance = now;
     }
+    this.shove = null;
+    if (turn) this.decide(now, ships, field);
+    return this.fly(now, ships, field, dt);
+  }
+
+  /**
+   * Whether `position` lies in the bot's view (see VIEW_MARGIN): seen from where the chase
+   * camera hangs, within its picture and the margin, by dot products with the ship's own axes.
+   */
+  inView(position: THREE.Vector3): boolean {
+    const me = this.ship.flight;
+    const forward = me.forward(viewForward);
+    const above = me.up(viewUp);
+    const radius = this.ship.radius;
+    viewLine.subVectors(position, me.position).addScaledVector(forward, CHASE_DISTANCE * radius).addScaledVector(above, -CHASE_HEIGHT * radius);
+    const ahead = viewLine.dot(forward);
+    if (ahead <= 0) return false;
+    if (Math.abs(viewLine.dot(above)) > ahead * VIEW_UP) return false;
+    return Math.abs(viewLine.dot(viewSide.crossVectors(forward, above))) <= ahead * VIEW_SIDE;
+  }
+
+  /**
+   * A glance at the radar and the arrows at the screen's edge (see GLANCE_SLOW): every ship
+   * outside the view they show (in line of sight, the radar's haze within its reach and the
+   * eye's beyond, a ship running silent only up close) is remembered where it is now. A solar
+   * storm blanks both, and the bot sees only what its eyes do.
+   */
+  private glance(now: number, ships: readonly Ship[], field: AsteroidField) {
+    this.glances++;
+    const reflexes = this.skills.reflexes;
+    this.nextGlance = now + (GLANCE_SLOW - (GLANCE_SLOW - GLANCE_FAST) * reflexes) * (1 - GLANCE_JITTER + 2 * GLANCE_JITTER * Math.random());
+    if (this.blind) return;
+    const eye = this.ship.flight.position;
+    for (const ship of ships) {
+      if (ship === this.ship || !ship.alive || this.inView(ship.flight.position)) continue;
+      const distance = ship.flight.position.distanceTo(eye);
+      if (distance >= SIGHT_RANGE || !detectable(ship, eye, now)) continue;
+      if (field.lineOfSight(eye, ship.flight.position, distance < RADAR_RANGE ? RADAR_DEPTH : SIGHT_DEPTH)) this.remember(ship);
+    }
+  }
+
+  /** Keeps where `ship` is now, as seen this glance (see recalled). */
+  private remember(ship: Ship) {
+    let kept = this.memory.get(ship);
+    if (!kept) this.memory.set(ship, (kept = { at: new THREE.Vector3(), glance: 0 }));
+    kept.at.copy(ship.flight.position);
+    kept.glance = this.glances;
+  }
+
+  /** Where the bot last saw `ship`, in view or at its last glance, if it has since that glance; else null. */
+  private recalled(ship: Ship): THREE.Vector3 | null {
+    const kept = this.memory.get(ship);
+    return kept && kept.glance === this.glances ? kept.at : null;
+  }
+
+  /**
+   * The bot's turn: what it sees and knows (target, chaser, threats, the way ahead, the ships
+   * to keep clear of), and what it wants from it: the velocity, and whether to burn for it, aim
+   * at the target, fire at a battleship's part or only look where it goes. Its hand flies that
+   * until the next turn (see fly).
+   */
+  private decide(now: number, ships: Ship[], field: AsteroidField) {
+    this.sightLines.clear();
+    this.decided = true;
+    const me = this.ship.flight;
+    if (now >= this.nextGlance) this.glance(now, ships, field);
 
     if (now >= this.nextRethink) {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
@@ -613,12 +823,28 @@ export class Bot {
     // the nearest ship in sight, but one that others already hunt (as the bot sees them: their
     // noses on it) counts as farther, and a ship hunted by MAX_HUNTERS is left to them: the bots
     // fight each other too, not only the Host
+    // in view it sees every ship as it is; outside it, only where its last glance showed one,
+    // which it turns to and fights once it has it in view
     let target: Ship | null = null;
     const sight = this.blind ? STORM_SIGHT : SIGHT_RANGE;
     let targetDistance = sight;
+    let tracked = false;
     let best = Infinity;
     for (const ship of ships) {
       if (!this.rival(ship, now)) continue;
+      if (!this.inView(ship.flight.position)) {
+        const kept = this.recalled(ship);
+        const distance = kept ? kept.distanceTo(me.position) : Infinity;
+        if (distance >= sight) continue;
+        const cost = distance * (ship === this.target ? STICKY : 1);
+        if (cost < best) {
+          best = cost;
+          target = ship;
+          targetDistance = distance;
+          tracked = false;
+        }
+        continue;
+      }
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
       // a ship running silent its sensors find only up close, as a Host's (see Ship.silent)
@@ -627,20 +853,24 @@ export class Bot {
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
       // in a planet's haze the radar finds it farther off than the eye sees (see world/air)
-      if (cost < best && field.lineOfSight(me.position, ship.flight.position, RADAR_DEPTH)) {
+      if (cost < best && this.sees(field, ship, RADAR_DEPTH)) {
+        this.remember(ship);
         best = cost;
         target = ship;
         targetDistance = distance;
+        tracked = true;
       }
     }
+    if (target && !tracked) this.seenAt.copy(this.recalled(target)!);
     // a ship the game names as prey (the thief of the own side's core, which a Host's HUD marks
     // wherever it is) is chased wherever it is, but only fired at in sight; in a planet's haze
     // so is a ship the radar shows, as the laser reaches no farther than the eye
-    let inSight = !field.air || !target || field.lineOfSight(me.position, target.flight.position);
+    let inSight = tracked && (!field.air || this.sees(field, target!));
     if (this.prey?.alive) {
       target = this.prey;
+      tracked = true;
       targetDistance = this.prey.flight.position.distanceTo(me.position);
-      inSight = targetDistance < sight && field.lineOfSight(me.position, this.prey.flight.position);
+      inSight = targetDistance < sight && this.sees(field, this.prey);
     }
     // a ship on the own tail with its nose on the bot comes first: the bot turns its armor to
     // it and jinks, because from behind the drive is open
@@ -659,13 +889,14 @@ export class Bot {
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
       const threat = i < 0 || (this.ship.tailToward(line) && noseOn(ship.flight, me.position, this.ship.radius) > 0);
-      if (threat && field.lineOfSight(me.position, ship.flight.position, i < 0 ? SIGHT_DEPTH : LOCK_DEPTH)) {
+      if (threat && this.sees(field, ship, i < 0 ? SIGHT_DEPTH : LOCK_DEPTH)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
         if (this.armed && !this.waypoint) {
           target = ship;
           targetDistance = distance;
           inSight = true;
+          tracked = true;
           defending = true;
         }
         break;
@@ -686,8 +917,11 @@ export class Bot {
       target = chaser;
       targetDistance = chaser!.flight.position.distanceTo(me.position);
       inSight = true;
+      tracked = true;
     }
     this.target = target;
+    this.tracked = tracked;
+    this.inSight = inSight;
 
     if (chaser && !this.armed) {
       toTarget.subVectors(me.position, chaser.flight.position);
@@ -698,10 +932,12 @@ export class Bot {
       toTarget.subVectors(this.waypoint!, me.position);
       const keep = now < this.boostUntil ? OVERDRIVE_PUSH : BOOST_PUSH;
       desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + keep)));
-      if (target) this.senseJink(target, dt, now);
+    } else if (target && !tracked) {
+      // a ship its last glance showed outside the view: it turns to where it was and closes in
+      toTarget.subVectors(this.seenAt, me.position);
+      desired.copy(toTarget).normalize().multiplyScalar(Math.min(toTarget.length() * 0.3, CRUISE_SPEED));
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
-      this.senseJink(target, dt, now);
       if (defending) {
         // hold the distance and face the attacker; the jink below makes it miss
         const approach = THREE.MathUtils.clamp((targetDistance - HOLD_DISTANCE) * 0.3, -CRUISE_SPEED * 0.3, CRUISE_SPEED);
@@ -777,21 +1013,63 @@ export class Bot {
       }
       for (const ring of this.rings) this.clearRing(ring, speed, ring === this.through);
     }
+    // a piece moving into its way, however still the bot holds: out of it sideways
+    if (this.incoming(field, local)) {
+      danger = true;
+      desired.addScaledVector(local, CRUISE_SPEED * 2);
+    }
     // in a planet's air no way out of danger is worth burning the hull (see air)
     if (desired.lengthSq() > this.airLimit * this.airLimit) desired.setLength(this.airLimit);
 
-    error.subVectors(desired, me.velocity);
+    this.want.copy(desired);
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
     // a racer burns for the gate; a fighter only when no target is in range
     // a part of a battleship is fought within range and in sight; behind the hull the bot burns round to it
     const sieging = !target && !!this.siege && this.siegeClear && toTarget.length() < FIRE_RANGE;
-    const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(((target && targetDistance < FIRE_RANGE) || sieging) && !this.ship.overheated)));
+    this.mustBurn = danger || !!this.flee;
+    this.mayBurn = !defending && !lookingBack && (racing || !(((target && targetDistance < FIRE_RANGE) || sieging) && !this.ship.overheated));
+    this.aiming = !!target && (!racing || lookingBack || me.noseAngleTo(line.subVectors(tracked ? target.flight.position : this.seenAt, me.position)) < RACE_AIM_CONE);
+    this.sieging = sieging;
+    if (this.siege) this.siegeAt.copy(this.siege);
+    this.look.copy(toTarget);
+    this.defending = defending;
+    this.lookingBack = lookingBack;
+    this.racing = racing;
+    this.spending = danger || !!this.flee || defending || racing;
+    this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
+    if (devlog) {
+      // what the bot does, the first that holds: running from danger, then its task
+      const doing = this.flee ? 'flee' : falling ? 'escape well' : hot ? 'climb out of the heat' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
+      const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
+      const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
+      devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
+    }
+  }
+
+  /**
+   * The bot's hand, every step: it flies what the last turn decided (see decide) against the
+   * ship as it moves now, burning for the wanted velocity while it is far off, keeping the nose
+   * on the target it chose (on where its glance showed it, until it has it in view) and pulling
+   * the trigger by its reaction time, trimming with the thrusters, jinking under attack and
+   * easing off its clone's strain; all of it eased in by hand (see byHand).
+   */
+  private fly(now: number, ships: Ship[], field: AsteroidField, dt: number): Controls {
+    const me = this.ship.flight;
+    // one controls object per bot, cleared each step, so flying allocates nothing
+    const controls = Object.assign(this.controls, IDLE);
+    if (!this.decided) return this.byHand(controls, dt);
+    const target = this.target?.alive ? this.target : null;
+    error.subVectors(this.want, me.velocity);
+    const burning = this.mustBurn || (this.mayBurn && error.length() > BURN_THRESHOLD);
+    if (target && this.tracked) this.senseJink(target, dt, now);
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.noseAngleTo(error) < 0.25 ? 1 : 0;
-    } else if (target && (!racing || lookingBack || me.noseAngleTo(line.subVectors(target.flight.position, me.position)) < RACE_AIM_CONE)) {
-      aimPoint.copy(target.flight.position).addScaledVector(this.aimOffset, this.aimError(targetDistance)).add(this.jinkOffset);
+    } else if (target && this.aiming) {
+      const where = this.tracked ? target.flight.position : this.seenAt;
+      const targetDistance = where.distanceTo(me.position);
+      aimPoint.copy(where).addScaledVector(this.aimOffset, this.aimError(targetDistance)).add(this.jinkOffset);
       me.steer(aimPoint.sub(me.position), 3, controls);
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.noseAngleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
@@ -799,19 +1077,20 @@ export class Bot {
       const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * strainPenalty(this.ship);
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
-      const open = target.tailToward(line.subVectors(target.flight.position, me.position));
+      const open = this.tracked && target.tailToward(line.subVectors(target.flight.position, me.position));
       // a racer flies first: single shots only, even at an open drive, and only now and then
       // (in its sniping spells), unless it looks back; the pack is a race, not a shooting gallery;
       // so does a raider held back while two others press the fight (see pressOn)
-      const flying = (racing && !lookingBack) || this.skills === this.held;
+      const flying = (this.racing && !this.lookingBack) || this.skills === this.held;
       const heatLimit = open && !flying ? this.hotHeat : ARMOR_FIRE_HEAT;
-      controls.fire = inSight && ((open && !flying) || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
-    } else if (sieging) {
+      controls.fire = this.inSight && ((open && !flying) || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
+    } else if (this.sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
+      toTarget.subVectors(this.siegeAt, me.position);
       me.steer(toTarget, 3, controls);
       controls.fire = me.noseAngleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < this.hotHeat;
     } else {
-      me.steer(toTarget, 2.5, controls);
+      me.steer(this.look, 2.5, controls);
     }
 
     // trim the remaining velocity error with the maneuvering thrusters
@@ -820,28 +1099,19 @@ export class Bot {
     controls.strafeY = THREE.MathUtils.clamp(local.y, -1, 1);
     controls.strafeZ = THREE.MathUtils.clamp(-local.z, -1, 1);
     // under attack the bot jinks left and right, so the attacker's aim cannot settle
-    if (defending) {
+    if (this.defending) {
       if (now >= this.nextDodge) {
         this.dodge = -this.dodge;
         this.nextDodge = now + 0.4 + Math.random() * 0.4;
       }
       controls.strafeX = this.dodge * JINK_PUSH;
     }
-    this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
     // the clone's strain: spent out of danger, away from a nova, jinking under attack, on the shot
     // and on a race's line, where the gates' housings punish a slack hand; else the bot eases off
     // at its hold until it has recovered (see STRAIN_HOLD)
     this.recovering = easesOff(this.recovering, this.ship.strain, this.skills.daring);
-    const spending = danger || !!this.flee || defending || controls.fire || racing;
-    if (this.recovering && !spending) flyGently(controls);
-    if (devlog) {
-      // what the bot does, the first that holds: running from danger, then its task
-      const doing = this.flee ? 'flee' : falling ? 'escape well' : hot ? 'climb out of the heat' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
-      const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
-      const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
-      devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
-    }
+    if (this.recovering && !this.spending && !controls.fire) flyGently(controls);
     // the beam would end on a ship of the own side: no shot (friendly fire hurts)
     if (controls.fire && allyInLine(this.ship, ships, field, me.position, me.forward(heading), LASER_RANGE, ALLY_CLEARANCE)) controls.fire = false;
     // a trigger the ship ignores until let go (a fresh clone's): let go of it first, as a Host does, then press again
@@ -886,7 +1156,7 @@ export class Bot {
     const safe = heatSpeed(air, altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
     // until the hull has cooled again; and choking under the deck, it climbs out at once
-    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
+    if (this.ship.heat > AIR_HOT && heatInto(air, altitude, throughAir(air, me.position, me.velocity, airFlow).length(), this.ship.clog) > cooling) this.climbing = true;
     else if (this.ship.heat < AIR_COOL) this.climbing = false;
     const out = this.climbing || (choking && altitude < 0);
     // on the way out the waste heat comes whatever the speed, so the quicker out the better: as
@@ -902,6 +1172,8 @@ export class Bot {
     const me = this.ship.flight;
     for (const ship of ships) {
       if (!this.rival(ship, now)) continue;
+      // a rival beside the hull it sees: within a shove's reach the view takes it in
+      if (!this.inView(ship.flight.position)) continue;
       const away = local.subVectors(ship.flight.position, me.position);
       const distance = away.length();
       if (distance > this.ship.radius * SHOVE_REACH || line.subVectors(ship.flight.velocity, me.velocity).lengthSq() > SHOVE_DRIFT * SHOVE_DRIFT) continue;
@@ -922,6 +1194,38 @@ export class Bot {
   }
 
   /**
+   * The way out of the moving piece of the field that comes soonest within reach of the hull as
+   * the two move (see INCOMING_SPEED), into `away` (unit length: from where it would pass closest
+   * towards where the bot would be then); false when none comes.
+   */
+  private incoming(field: AsteroidField, away: THREE.Vector3): boolean {
+    const me = this.ship.flight;
+    let soonest = INCOMING_SECONDS;
+    let found = false;
+    for (const piece of field.asteroids.values()) {
+      if (piece.solid) continue;
+      const moving = field.surfaceVelocity(piece, piece.object.position, pieceVelocity);
+      if (moving.lengthSq() < INCOMING_SPEED * INCOMING_SPEED) continue;
+      // the piece as the bot sees it: where it is from the bot, and how the two close
+      offset.subVectors(me.position, piece.object.position);
+      closing.subVectors(me.velocity, moving);
+      const rate = closing.lengthSq();
+      if (rate < 1) continue;
+      const when = -offset.dot(closing) / rate;
+      if (when <= 0 || when >= soonest) continue;
+      passing.copy(offset).addScaledVector(closing, when);
+      if (passing.length() > piece.radius + this.ship.radius * AVOID_TUBE) continue;
+      soonest = when;
+      found = true;
+      // square to how they close, on the side the bot passes (straight across when dead on)
+      away.copy(passing).addScaledVector(closing, -passing.dot(closing) / rate);
+      if (away.lengthSq() < 1) away.crossVectors(closing, Math.abs(closing.y) < 0.9 * Math.sqrt(rate) ? UP : SIDE);
+      away.normalize();
+    }
+    return found;
+  }
+
+  /**
    * The nearest rock, well or hull the way along `direction` (unit length) meets within `length`:
    * the way as the hull sweeps it, a tube of AVOID_TUBE ship radii around the line of flight
    * (its center line and four lines along its wall), so a rock the line itself only grazes counts.
@@ -936,11 +1240,13 @@ export class Bot {
     across2.crossVectors(direction, across);
     let best: RayHit | null = null;
     const inside = !!field.obstacle?.within(position);
+    // the pieces the tube may meet, gathered once along its center line: each of its five lines meets only those
+    const pieces = field.piecesAlong(position, direction, length, wall, wayPieces);
     for (let i = 0; i < 5; i++) {
       wayOrigin.copy(position);
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
       if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
-      const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
+      const hit = field.raycastAmong(pieces, wayOrigin, direction, best ? best.distance : length, true, wayHit);
       // a racer, and a bot over a world fought over, takes a world's ground for no danger (`overGround`) where it would meet it within the hover field's cushion: its glide carries the hull over it and along its walls; met steeply, it strikes as rock does
       if (!hit || (overGround && hit.asteroid?.ground && !this.groundStrikes(field, direction, hit.distance))) continue;
       // a sheet of junk (a wing's panels, a fairing, a stage's tank) is none either: the hull punches through it (see world/junk)
@@ -981,6 +1287,8 @@ export class Bot {
         if (local.lengthSq() < 1) local.set(0, 1, 0).addScaledVector(backward, -backward.y);
         desired.addScaledVector(local.normalize(), CRUISE_SPEED);
       }
+      // a ship outside its view it does not see coming, unless its last glance at the radar showed it; a plume it sits in it feels by the heat (above)
+      if (!this.inView(ship.flight.position) && !this.recalled(ship)) continue;
       // where the other ship is, and how fast the two close, as the bot sees it
       local.subVectors(me.position, ship.flight.position);
       line.subVectors(me.velocity, ship.flight.velocity);
@@ -994,7 +1302,7 @@ export class Bot {
       local.addScaledVector(line, when);
       const miss = local.length();
       // a ship behind rock the bot does not see coming
-      if ((miss >= clear && !into) || !field.lineOfSight(me.position, ship.flight.position)) continue;
+      if ((miss >= clear && !into) || !this.sees(field, ship)) continue;
       if (into) {
         towardShip.subVectors(ship.flight.position, me.position);
         const gap = towardShip.length() - hulls;
@@ -1085,9 +1393,11 @@ export class Bot {
     const eye = this.ship.flight.position;
     for (const ship of ships) {
       if (ship === this.ship || ship === prey || !ship.alive || ship.allyOf(prey)) continue;
+      // a nose it reads only in its view
+      if (!this.inView(ship.flight.position)) continue;
       if (ship.flight.position.distanceTo(eye) >= sight) continue;
       const line = hunt.subVectors(prey.flight.position, ship.flight.position);
-      if (line.length() > FIRE_RANGE || ship.flight.noseAngleTo(line) > HUNT_ANGLE || !field.lineOfSight(eye, ship.flight.position)) continue;
+      if (line.length() > FIRE_RANGE || ship.flight.noseAngleTo(line) > HUNT_ANGLE || !this.sees(field, ship)) continue;
       hunters++;
     }
     return hunters;

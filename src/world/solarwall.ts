@@ -4,14 +4,14 @@ import { atan2, cos, hypot, sin, tan } from '../detmath';
 import { boxUv, industrialSurface, signTexture, surfaced } from '../view/surfaces';
 import { withCollider } from './boneyard';
 import { behindAll } from './horizon';
-import { LIGHT_ANGLE, LIGHT_REACH, LIGHTS, lightAim, lightAt, WALL_LENGTH, WALL_TOP } from './wall';
+import { LIGHT_ANGLE, LIGHT_REACH, LIGHTS, lightAim, lightAt, lightHolds, WALL_LENGTH, WALL_TOP } from './wall';
 
 /**
  * How the Solar Wall looks (where things are in world/wall): its stretch by the field as the
  * field's piece (girders, the mesh hung between them, the searchlights' housings on its top
  * edge, red beacons, its neon sign THE SOLAR WALL · MARS PAYS on both faces), the stretch beyond
- * out to its ends drawn behind everything, and the searchlights' cones of light sweeping the
- * lane as world/wall says they look.
+ * out to its ends drawn behind everything, and the searchlights' cones sweeping the lane as
+ * world/wall says they look, drawn by the flight computer (see sensorCone).
  */
 
 /** Posts every POST_STEP (units, 200 m) along the wall, the top chord and rails every RAIL_STEP down it (units, 400 m). */
@@ -71,10 +71,10 @@ export function wallPiece(half: THREE.Vector3): THREE.Group {
     }
   }
   group.add(new THREE.Mesh(boxUv(mergeGeometries(girders), 400), steel));
-  // the mesh between them, both faces, its wires every 2 m
+  // the mesh between them, both faces (flat: either, never both, so one pass), its wires every 2 m
   const net = meshTexture();
   net.repeat.set((half.z * 2) / 2560, (half.y * 2) / 2560);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(half.z * 2, half.y * 2).applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1)), new THREE.MeshStandardMaterial({ map: net, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.8 }));
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(half.z * 2, half.y * 2).applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1)), new THREE.MeshStandardMaterial({ map: net, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide, forceSinglePass: true, roughness: 0.6, metalness: 0.8 }));
   group.add(mesh);
   // the searchlights' housings on the top edge, their lenses lit, and red beacons between them
   const lenses: THREE.BufferGeometry[] = [];
@@ -102,48 +102,62 @@ export function wallPiece(half: THREE.Vector3): THREE.Group {
   return withCollider(group, half);
 }
 
+/** The HUD's azure and its orange for what the pilot acts on now, as glows (see style.css, --hud and --neon-orange). */
+const HUD_AZURE = new THREE.Color(0x0062ff);
+const HUD_ORANGE = new THREE.Color(0xff9d00);
+/** Rings drawn round a sensor's cone every this far along it (units, 1 km), so it reads as a volume. */
+const CONE_RING = 20000;
+
 /**
- * A searchlight's or a sensor's cone of light (the Solar Wall's searchlights, the Feeders' tugs at
- * Granary): `angle` its half opening (rad), `reach` its length (units) along +y from its foot,
- * open at its far end, its light `tint` fading along it (vertex colors) and soft at its sides, by
- * how squarely the eye looks through its face, none at its silhouette.
+ * Where a searchlight or a sensor looks (the Solar Wall's searchlights, the Feeders' tugs at
+ * Granary), as the flight computer draws it. In vacuum a searchlight's beam shows nothing from the
+ * side (there is no dust in the lane to scatter it), and a sensor's never shows: the flight
+ * computer knows where each one points and draws its cone into space as a warning volume in the
+ * HUD's style, a faint azure veil with thin lines along its silhouette and rings along it, fading
+ * towards its far end; orange while it holds the own ship (`held`, set each frame, 0 to 1).
+ * `angle` its half opening (rad), `reach` its length (units) along +y from its foot, open at its
+ * far end.
  */
-export function lightCone(angle: number, reach: number, tint: THREE.Color): THREE.Mesh {
+export function sensorCone(angle: number, reach: number): THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> {
   const radius = tan(angle) * reach;
-  const shape = new THREE.CylinderGeometry(radius, 30, reach, 32, 8, true).translate(0, reach / 2, 0);
-  const position = shape.getAttribute('position');
-  const colors = new Float32Array(position.count * 3);
-  for (let i = 0; i < position.count; i++) {
-    const fade = 1 - position.getY(i) / reach;
-    colors.set([fade * fade, fade * fade, fade * fade * 0.9], i * 3);
-  }
-  shape.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  // soft at its sides: the cone's light by how squarely the eye looks through its face, none at its silhouette
-  const light = new THREE.ShaderMaterial({
-    uniforms: { tint: { value: tint } },
+  const shape = new THREE.CylinderGeometry(radius, 30, reach, 48, 8, true).translate(0, reach / 2, 0);
+  const cone = new THREE.ShaderMaterial({
+    uniforms: { azure: { value: HUD_AZURE }, orange: { value: HUD_ORANGE }, held: { value: 0 }, reach: { value: reach }, ring: { value: CONE_RING } },
     vertexShader: `
-      attribute vec3 color;
-      varying vec3 vShade;
       varying float vFacing;
+      varying float vAlong;
       void main() {
         vec4 eye = modelViewMatrix * vec4(position, 1.0);
         vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-eye.xyz)));
-        vShade = color;
+        vAlong = position.y;
         gl_Position = projectionMatrix * eye;
       }`,
     fragmentShader: `
-      uniform vec3 tint;
-      varying vec3 vShade;
+      uniform vec3 azure;
+      uniform vec3 orange;
+      uniform float held;
+      uniform float reach;
+      uniform float ring;
       varying float vFacing;
+      varying float vAlong;
       void main() {
-        gl_FragColor = vec4(tint * vShade * vFacing * vFacing, 1.0);
+        float fade = 1.0 - vAlong / reach;
+        // the silhouette's line: where the eye grazes the cone's face, a couple of pixels wide
+        float grazing = 1.0 - vFacing;
+        float edge = smoothstep(1.0 - 2.5 * fwidth(grazing), 1.0, grazing);
+        // rings along the axis, a pixel and a half wide whatever their distance
+        float d = abs(fract(vAlong / ring + 0.5) - 0.5) * ring;
+        float rings = 1.0 - smoothstep(0.0, 1.5 * fwidth(vAlong), d);
+        float glow = 0.012 + 0.4 * max(edge, rings * 0.5);
+        gl_FragColor = vec4(mix(azure, orange, held) * glow * fade, 1.0);
       }`,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
+    toneMapped: false,
   });
-  const mesh = new THREE.Mesh(shape, light);
+  const mesh = new THREE.Mesh(shape, cone);
   mesh.frustumCulled = false;
   mesh.userData.shadowless = true;
   return mesh;
@@ -157,7 +171,7 @@ export function lightCone(angle: number, reach: number, tint: THREE.Color): THRE
  */
 export class WallScene {
   readonly group = new THREE.Group();
-  private readonly cones: THREE.Mesh[] = [];
+  private readonly cones: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>[] = [];
   private readonly foot = new THREE.Vector3();
   private readonly aim = new THREE.Vector3();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
@@ -180,19 +194,19 @@ export class WallScene {
     dots.renderOrder = -1;
     dots.frustumCulled = false;
     this.group.add(dots);
-    const cone = lightCone(LIGHT_ANGLE, LIGHT_REACH, new THREE.Color(1, 0.96, 0.85).multiplyScalar(0.16));
     for (let i = 0; i < LIGHTS; i++) {
-      const copy = cone.clone();
-      this.cones.push(copy);
-      this.group.add(copy);
+      const cone = sensorCone(LIGHT_ANGLE, LIGHT_REACH);
+      this.cones.push(cone);
+      this.group.add(cone);
     }
   }
 
-  /** The cones where world/wall says their lights look at field time `time`. */
-  update(time: number) {
+  /** The cones where world/wall says their lights look at field time `time`, orange where one holds `pilot` (the own ship, null for none). */
+  update(time: number, pilot: THREE.Vector3 | null) {
     this.cones.forEach((cone, i) => {
       cone.position.copy(lightAt(i, this.foot));
       cone.quaternion.setFromUnitVectors(WallScene.UP, lightAim(i, time, this.aim));
+      cone.material.uniforms.held.value = pilot && lightHolds(i, pilot, time) ? 1 : 0;
     });
   }
 }

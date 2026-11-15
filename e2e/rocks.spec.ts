@@ -1,4 +1,54 @@
 import { expect, test } from '@playwright/test';
+import { openGame, startSolo } from './game';
+
+/**
+ * Once a round runs, three.js finds every object's program at once, never looking it up anew:
+ * the belt's instanced rocks draw with materials of their own, not the field's rocks' (an
+ * instanced and a plain mesh switching over one material look its program up at every switch),
+ * and nothing see-through and two-sided is drawn in two passes (each pass looks it up again).
+ * A lookup past three.js's early out is what asks a material for its customProgramCacheKey. A
+ * frame may still look one up now and then (a level of detail drawn for the first time), never
+ * frame after frame.
+ */
+test('a deathmatch in the belt looks up no program frame after frame', async ({ page }) => {
+  // the software renderer draws a frame of the belt in a second or more on a busy machine
+  test.setTimeout(240_000);
+  const errors = await openGame(page);
+  // this test watches the drawing itself: the scene drawn again
+  await page.evaluate(() => delete window.game.composer.render);
+  await startSolo(page, 'deathmatch', 'belt');
+  await page.evaluate(async () => {
+    for (let frame = 0; frame < 20; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  const framesLooking = await page.evaluate(async () => {
+    const game = window.game;
+    let count = 0;
+    const counted = new Set<object>();
+    for (const scene of [game.scene, game.hudScene]) {
+      scene.traverse((object: { material?: unknown }) => {
+        for (const material of ([] as Array<{ customProgramCacheKey: () => string }>).concat((object.material ?? []) as never)) {
+          if (counted.has(material)) continue;
+          counted.add(material);
+          const key = material.customProgramCacheKey;
+          material.customProgramCacheKey = function () {
+            count++;
+            return key.call(this);
+          };
+        }
+      });
+    }
+    let looking = 0;
+    for (let frame = 0; frame < 30; frame++) {
+      const before = count;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (count > before) looking++;
+    }
+    return looking;
+  });
+  // of 30 frames, at most two look a program up
+  expect(framesLooking).toBeLessThanOrEqual(2);
+  expect(errors).toEqual([]);
+});
 
 /**
  * A rock shades alike however it is drawn: the belt draws its rocks instanced, the field as

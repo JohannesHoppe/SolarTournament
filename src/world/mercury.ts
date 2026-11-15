@@ -5,6 +5,7 @@ import { craterField, reliefPiece, reliefTop } from './horizon';
 import { setFromAxisAngle } from '../detthree';
 import type { Placement } from './asteroids';
 import { SUN_DIRECTION } from './space';
+import { absLow, curveLow, sineHigh, sineLow, type Ceiling } from './ceiling';
 
 /**
  * Caloris on Mercury (a side trip of the campaign, see docs/campaign/): the floor of Mercury's
@@ -53,8 +54,14 @@ const CREST_WIDTH = 4000;
 const CREST_HEIGHT = 1000;
 const ridge = (d: number) => RIDGE_HEIGHT * exp(-(d * d) / (RIDGE_WIDTH * RIDGE_WIDTH)) + CREST_HEIGHT * exp(-(d * d) / (CREST_WIDTH * CREST_WIDTH));
 /** The first ridge runs east-west north of the camp, the second north-south west of it (units). */
-export const ridgeNorth = (x: number) => 34000 + 8000 * sin(x / 50000);
-const ridgeWest = (z: number) => -46000 + 6000 * sin(z / 37000 + 1);
+const NORTH_AT = 34000;
+const NORTH_SWAY = 8000;
+const NORTH_WAVE = 50000;
+const WEST_AT = -46000;
+const WEST_SWAY = 6000;
+const WEST_WAVE = 37000;
+export const ridgeNorth = (x: number) => NORTH_AT + NORTH_SWAY * sin(x / NORTH_WAVE);
+const ridgeWest = (z: number) => WEST_AT + WEST_SWAY * sin(z / WEST_WAVE + 1);
 
 /** Hummocks of regolith: a few meters. */
 const BUMPS = 80;
@@ -65,13 +72,26 @@ export function surfaceHeight(x: number, z: number): number {
   return LAND + ridge(z - ridgeNorth(x)) + ridge(x - ridgeWest(z)) + craters(x, z) + BUMPS * bumps.fractal(x / 3000, 0.4, z / 3000, 3) - (x * x + z * z) / (2 * MERCURY_RADIUS);
 }
 
+/**
+ * The most surfaceHeight gives over a rectangle (see world/ceiling): each ridge falls off with the
+ * distance from its line, so it gives its most at the least distance, the line's wander bounded
+ * by its sine's slope; the craters' ceiling, the hummocks by their noise's lattice, the curve at
+ * its least.
+ */
+const surfaceCeiling: Ceiling = (x0, z0, x1, z1) => {
+  const north = absLow(z0 - NORTH_AT - sineHigh(x0, x1, NORTH_SWAY, 1 / NORTH_WAVE), z1 - NORTH_AT - sineLow(x0, x1, NORTH_SWAY, 1 / NORTH_WAVE));
+  const west = absLow(x0 - WEST_AT - sineHigh(z0, z1, WEST_SWAY, 1 / WEST_WAVE, 1), x1 - WEST_AT - sineLow(z0, z1, WEST_SWAY, 1 / WEST_WAVE, 1));
+  return LAND + ridge(north) + ridge(west) + craters.ceiling(x0, z0, x1, z1) + BUMPS * bumps.fractalRange(x0 / 3000, x1 / 3000, 0.4, 0.4, z0 / 3000, z1 / 3000, 3, span).hi - curveLow(x0, z0, x1, z1, MERCURY_RADIUS);
+};
+const span = { lo: 0, hi: 0 };
+
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 /** Its box's top: over the highest the ground gets in it (see reliefTop). */
 const GROUND_TOP = reliefTop(surfaceHeight, GROUND_HALF) + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece). */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

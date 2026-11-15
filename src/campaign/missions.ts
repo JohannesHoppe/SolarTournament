@@ -110,60 +110,108 @@ const lamplighter: Drill = {
 
 /**
  * Live Target (1.2): tourists pay to shoot at the hull. Three gunners on a ring around the yard
- * fire, each every TARGET_INTERVAL seconds, at where the ship was TARGET_LAG ago (as the slide
- * drill's gunner does); the ship lives TARGET_SECONDS inside TARGET_ZONE of the yard's middle
+ * fire, each every TARGET_INTERVAL seconds; their sights show the ship as it was TARGET_LAG ago
+ * and lead it along the flight it had then, so they hit a ship that sits still or flies straight
+ * and miss one that changed its flight since (a jink with the thrusters, a turn, a burn of the
+ * drive); the ship lives TARGET_SECONDS inside TARGET_ZONE of the yard's middle
  * (units, 1.5 km: the racks, the lane and the depot's bay with its pad, where the job starts) by
  * jinking, with the autopilot, as every job of chapter 1 is flown. Out of the zone the mark
- * counts down TARGET_GRACE seconds to fly back in; longer starts it over. Every hit takes
- * TARGET_FINE coins off the pay (see complete), as the attempt stands.
+ * counts down TARGET_GRACE seconds to fly back in, under a warning with the same countdown;
+ * longer starts it over. Every hit takes TARGET_FINE coins off the pay (see complete), as the
+ * attempt stands, and the hit past TARGET_HITS has the tourists want their money back: the
+ * attempt starts over. The zone's edge lights up as the ship nears it (within TARGET_EDGE),
+ * orange once the ship is out.
  */
 const TARGET_SECONDS = 90;
 export const TARGET_ZONE = 30000;
 const TARGET_GRACE = 3;
 const TARGET_INTERVAL = 1.2;
-const TARGET_LAG = 0.4;
-const TARGET_FINE = 10;
+/**
+ * How old the sights' picture of the ship is (s): a tourist's reaction and aim. A jink dodges the
+ * shot once it has moved the hull a hit radius (17 m) off the line it was flying: the welded
+ * thrusters of the scrap hull (70 m/s², 7 g) held to one side move it 35 m off in that second.
+ */
+const TARGET_LAG = 1;
+/** The sights take the ship's place and flight every SIGHT_STEP seconds and keep them TARGET_LAG long. */
+const SIGHT_STEP = 0.05;
+const SIGHTED = Math.round(TARGET_LAG / SIGHT_STEP) + 1;
+const TARGET_FINE = 5;
+/**
+ * The hits an attempt may take, measured with the job harness (src/test/jobbehaviors.ts, jink): a
+ * middling Host jinking about the yard took 19 to 33 hits in the 90 s on twelve seeds, flying the
+ * same legs without the slide keys some 170, sitting still 211, nearly every shot.
+ * Past TARGET_HITS a ship at rest is out after some 17 s, one flying straight soon after.
+ */
+export const TARGET_HITS = 40;
+/** The zone's edge lights up within this of it (units, 300 m), and its caution sounds while the ship flies outwards there. */
+const TARGET_EDGE = 6000;
 const GUNNERS = [point(0, 6000, -24000), point(20000, 3000, 12000), point(-20000, 4000, 12000)];
 /** The yard's middle, the zone's center (see TARGET_ZONE). */
 export const YARD_MIDDLE = OFFICE;
 
-const liveTarget: Drill = {
+const towardYard = new THREE.Vector3();
+const lead = new THREE.Vector3();
+/** What the sights saw of the ship (see TARGET_LAG): a ring of its places and velocities, when each was taken, and the slot taken next (the oldest). */
+const sighted = Array.from({ length: SIGHTED }, () => ({ at: 0, position: new THREE.Vector3(), velocity: new THREE.Vector3() }));
+let sightNext = 0;
+
+/** The sights take the ship as it is now (attempt seconds `at`); at the attempt's start, the whole ring. */
+function sight(ship: Ship, at: number, all = false) {
+  for (let k = 0; k < SIGHTED; k++) {
+    if (!all && k !== sightNext) continue;
+    sighted[k].at = at;
+    sighted[k].position.copy(ship.flight.position);
+    sighted[k].velocity.copy(ship.flight.velocity);
+  }
+  sightNext = (sightNext + 1) % SIGHTED;
+}
+
+export const liveTarget: Drill = {
   line: CAMPAIGN.liveTarget,
   keys: ['slide', 'turn', 'drive'],
   arena: 'boneyard',
   autopilot: true,
   enter(ctx, a, markers) {
     stop(ctx);
-    a.points = [ctx.me.flight.position.clone()];
-    markers.zone(OFFICE, TARGET_ZONE);
+    sight(ctx.me, a.seconds, true);
+    markers.zone(OFFICE, TARGET_ZONE, true);
     a.lastShot = 0;
     // a.jinks: the hits taken in this attempt
     a.jinks = 0;
     a.next = 0;
     ctx.fine(0);
   },
-  done(ctx, a) {
+  done(ctx, a, markers) {
     // a.held: the seconds out of the zone without a break, counted once the clone has been in it
     // this attempt (a.next 1): an attempt begun again out where the last one failed fails no sooner
     // than the Host is back inside
-    const out = ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE;
+    const position = ctx.me.flight.position;
+    const distance = position.distanceTo(OFFICE);
+    const out = distance > TARGET_ZONE;
     if (!out) a.next = 1;
     a.held = out && a.next ? a.held + ctx.dt : 0;
-    a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / TARGET_LAG));
+    markers.zoneEdge(out ? 1 : Math.max(0, 1 - (TARGET_ZONE - distance) / TARGET_EDGE), out);
+    towardYard.subVectors(OFFICE, position);
+    if (a.held > 0) ctx.alarm({ id: 'zone', level: 'warning', text: t('OUT OF THE YARD · BACK INSIDE'), direction: towardYard, seconds: Math.max(0, TARGET_GRACE - a.held) });
+    else if (a.next && distance > TARGET_ZONE - TARGET_EDGE && ctx.me.flight.velocity.dot(towardYard) < 0) ctx.alarm({ id: 'zone', level: 'caution', text: t('YARD EDGE'), direction: towardYard });
+    if (a.seconds - sighted[(sightNext + SIGHTED - 1) % SIGHTED].at >= SIGHT_STEP) sight(ctx.me, a.seconds);
     if (a.seconds - a.lastShot > TARGET_INTERVAL / GUNNERS.length) {
       a.lastShot = a.seconds;
       a.count = (a.count + 1) % GUNNERS.length;
-      if (ctx.fireAt(GUNNERS[a.count], a.points[0])) ctx.fine(++a.jinks * TARGET_FINE);
+      // the oldest the sights keep, led on along its flight to now
+      const seen = sighted[sightNext];
+      lead.copy(seen.position).addScaledVector(seen.velocity, a.seconds - seen.at);
+      if (ctx.fireAt(GUNNERS[a.count], lead)) ctx.fine(++a.jinks * TARGET_FINE);
     }
-    return a.seconds >= TARGET_SECONDS;
+    return a.seconds >= TARGET_SECONDS && a.jinks <= TARGET_HITS;
   },
-  fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : null),
+  fail: (_, a) => (a.held > TARGET_GRACE ? CAMPAIGN.liveTargetOut : a.jinks > TARGET_HITS ? RASK.liveTargetRefund : null),
   mark: (_, a) =>
     !a.next
       ? t('Back into the yard')
       : a.held > 0
       ? t('Out of the yard: back inside in {seconds} s', { seconds: Math.max(0, Math.ceil(TARGET_GRACE - a.held)) })
-      : t('Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
+      : t('Stay alive: {seconds} s · hits {hits}/{limit} · ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, limit: TARGET_HITS, fine: a.jinks * TARGET_FINE }),
   waypoint: () => null,
 };
 
@@ -217,7 +265,7 @@ const canisterSweep: Drill = {
 /**
  * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the Rockborn's mining charges
  * (FIRST_CUT_CHARGES of them, see game/charges) and fly through
- * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints from where it stood,
+ * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints off its surface,
  * drifting away at GLINT_SPEED (units/s, 3 to 8 m/s); one is taken within GLINT_REACH (units,
  * 25 m). The marker leads to the nearest glint, else to the nearest rock.
  */
@@ -228,12 +276,14 @@ const GLINTS_PER_ROCK = 7;
 const GLINT_SPEED = [60, 160] as const;
 const GLINT_REACH = 500;
 
-/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
-function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number, count = GLINTS_PER_ROCK) {
+/** The glints of ore (`count` of them) the `nth` rock broken in an attempt sheds off its surface (see SchoolContext brokenAt, brokenReach), the same every attempt, among the attempt's points. */
+function glintsOf(a: Attempt, markers: Markers, ctx: SchoolContext, nth: number, count = GLINTS_PER_ROCK) {
   const r = new Randomizer(nth * 7 + 1);
   for (let i = 0; i < count; i++) {
     const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-    a.points.push(markers.glint(at, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
+    // blown off the rock's surface, outside all of its pieces, which part only slowly
+    const from = ctx.brokenAt.clone().addScaledVector(way, ctx.brokenReach);
+    a.points.push(markers.glint(from, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
   }
 }
 
@@ -277,7 +327,7 @@ const firstCut: Drill = {
   },
   done(ctx, a, markers) {
     // a rock just broken sheds its glints, the same ones every attempt
-    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
     takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
@@ -567,7 +617,7 @@ const cutAndHaul: Drill = {
     // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
     while (a.jinks < ctx.rocksBroken - a.count) {
       a.jinks++;
-      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx.brokenAt, a.jinks, HAUL_GLINTS);
+      if (hauled && ofClaim(ctx.brokenId)) glintsOf(a, markers, ctx, a.jinks, HAUL_GLINTS);
     }
     takeGlint(ctx, a, markers);
     ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
@@ -1792,7 +1842,8 @@ const grooveShoot: Drill = {
  * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
  */
 const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
-const BOUNTY_SKILL = 0.4;
+/** Measured against a Host of middling skill (see src/test/jobsuite): at 0.2 it won 1 of 4 seeds, at 0.1 6 of 8. */
+const BOUNTY_SKILL = 0.1;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
 /** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
@@ -1994,7 +2045,9 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.3;
+const AMBUSH_SKILL = 0.2;
+/** The places whose bandits fly weaker, as measured against a Host of middling skill (see src/test/jobsuite): at the Ballroom at 0.2 it won 1 of 4 seeds, at 0.1 3 of 3. */
+const AMBUSH_EASED: Partial<Record<ArenaId, number>> = { ballroom: 0.1 };
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2009,7 +2062,7 @@ function ambush(arena: ArenaId): Drill {
     autopilot: false,
     music: 'fight',
     enter(ctx) {
-      ctx.spawnJumpers(null, layCourier(ctx.field, arena).points[0], AMBUSHERS, AMBUSH_SKILL, AMBUSH_NAMES, AMBUSH_HOLD, true);
+      ctx.spawnJumpers(null, layCourier(ctx.field, arena).points[0], AMBUSHERS, AMBUSH_EASED[arena] ?? AMBUSH_SKILL, AMBUSH_NAMES, AMBUSH_HOLD, true);
       ctx.me.heat = 0;
       ctx.me.overheated = false;
     },
@@ -2054,7 +2107,7 @@ function miningRun(arena: ArenaId): Drill {
       ctx.me.overheated = false;
     },
     done(ctx, a, markers) {
-      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+      while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx, ++a.jinks);
       if (a.jinks > 0 && Number.isNaN(a.clockFrom)) a.clockFrom = a.seconds;
       takeGlint(ctx, a, markers);
       return a.next >= MINE_ORE;
@@ -2109,8 +2162,17 @@ const WANTED: readonly (readonly [string, string, string])[] = [
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
+/**
+ * The faces flown weaker than their tier at a place, as measured against a Host of middling skill
+ * (see src/test/jobsuite): the target's and its escorts' skill, by tier (null: the tier's own).
+ * The first faces at Phobos (Corporal Nobody), Callisto (Mother Static), Europa (Blue Fenn) and Io
+ * (Sulfur Pike) with their escorts: at the tier's own a Host of middling skill won 1 of 4 seeds at
+ * Europa, none of 3 at Io and 2 of 7 at Callisto; Phobos at 0.2 and 0.2 4 of 9, at 0.2 and 0.1 3 of
+ * 8; Europa at 0.4 and 0.35 2 of 7. As eased: 6 of 6 at Phobos, 6 of 8 at Callisto, 6 of 9 at Europa.
+ */
+const FACES_EASED: Partial<Record<ArenaId, readonly ({ target: number; skill: number } | null)[]>> = { phobos: [{ target: 0.1, skill: 0.1 }], callisto: [{ target: 0.3, skill: 0.2 }], europa: [{ target: 0.35, skill: 0.2 }], io: [{ target: 0.4, skill: 0.35 }] };
 function wanted(arena: ArenaId, name: string, tier: number): Drill {
-  const { target, skill } = BOUNTY_TIERS[tier];
+  const { target, skill } = FACES_EASED[arena]?.[tier] ?? BOUNTY_TIERS[tier];
   const escorts = BOUNTY_TIERS[tier].escorts - (HAZE_PLACES.includes(arena) ? 1 : 0);
   // the field they guard is laid where the place's field lies, as the attempt begins
   const field = new THREE.Vector3();
@@ -2875,7 +2937,7 @@ const TUG_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 
 const HARPOON_AFTER = 4;
 const REEL = 240;
 const TALLYMEN = 4;
-const TALLY_SKILL = 0.3;
+const TALLY_SKILL = 0.25;
 const TALLY_HOLD = 8000;
 const WINCH_HITS = 12;
 const TALLY_DOWN = 3;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FIELD_RADIUS, SPIN_RATE, type FieldLayout, type Placement } from './asteroids';
+import type { HillFrame } from './orbits';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { msg } from '../i18n/i18n';
@@ -44,17 +45,29 @@ const G = 196.2;
 /**
  * Jupiter, whose cloud deck runs through its arena: a planet of JUPITER_RADIUS (units, 40 km) to
  * the deck, which lies in the reference plane at the field's center, so half the arena is open
- * space over its curved horizon and half is its air (see world/air). It pulls with JUPITER_GRAVITY
- * at the deck, falling off with the square of the distance from its center: 0.71 g at the
- * arena's top, 0.99 g at its bottom, as near a real planet. Its scale is the game's: the real
- * Jupiter is 140 000 km wide and pulls with 2.5 g; a planet of 80 km shows its curve from a few
- * kilometers up. The arena's well, what a ship cannot fly into, is its core JUPITER_FLOOR (units,
- * 5 km) below the deck, deeper than the air lets any ship get alive.
+ * space over its curved horizon and half is its air (see world/air). Its scale is the game's: the
+ * real Jupiter is 143 000 km wide; a planet of 80 km shows its curve from a few kilometers up. Its
+ * pull is the real one: JUPITER_GRAVITY (units/s², 24.8 m/s², 2.53 g) at the cloud tops, falling
+ * off with the square of the distance from the real planet's center (JUPITER_BODY, units, its
+ * radius of 71 492 km), so over the arena's 6.8 km of height it changes by two parts in ten
+ * thousand, as near the real planet; only its direction is the drawn planet's, square to the
+ * clouds the game shows (a deviation of up to 5° at the arena's edge, where the real planet's
+ * curve would tilt it 0.003°). The arena's well, what a ship cannot fly into, is its core
+ * JUPITER_FLOOR (units, 5 km) below the deck, deeper than the air lets any ship get alive.
  */
 const JUPITER_RADIUS = 800000;
 const JUPITER_FLOOR = 100000;
-const JUPITER_GRAVITY = 0.83 * G;
+const JUPITER_GRAVITY = 24.79 / 0.05;
+const JUPITER_BODY = 71492000 / 0.05;
 const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
+/**
+ * Jupiter's wind under its cloud deck (units/s, 30 m/s; see world/air windIn): east, which over
+ * the arena's 13° south runs along -z (the map's frame turns the planet's axis about z, see
+ * world/landmarks JUPITER_LATITUDE). Its zonal jets blow up to 150 m/s at the cloud tops and
+ * faster under them; at the arena's latitude, between its belts, 30 m/s. The clouds under the
+ * deck drift with it (see world/jupiter), and it drags and heats what flies in it.
+ */
+const JUPITER_WIND = new THREE.Vector3(0, 0, -600);
 /**
  * The black hole's event horizon (units, 350 m), in the middle of its arena. It pulls with
  * HOLE_PULL (units/s², 1 g) at HOLE_PULL_AT (units, 2 km), falling off with the square of the
@@ -179,8 +192,9 @@ export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multip
  * straight below: tilted EARTH_TILT (11.5°) towards the sun, so the point beneath the arena lies
  * in the dusk (the sun 3.2° below its horizon): the terminator runs through the middle of the
  * ball, the day side towards the sun, the night with its cities away from it, and the arena
- * itself, high above, lies in sunlight (the sun 53° above Earth's rim as seen from it). Scenery
- * only: it neither pulls nor blocks.
+ * itself, high above, lies in sunlight (the sun 53° above Earth's rim as seen from it). It blocks
+ * nothing; its pull is the orbit the arena rides (see JUNK_FRAME): the arena falls with it, and
+ * only its tide and the frame's turn are felt.
  */
 export const EARTH_RADIUS = 127420000;
 export const EARTH_ALTITUDE = 100000000;
@@ -188,6 +202,23 @@ const EARTH_TILT = 0.2;
 /** Straight down to the point beneath the arena, from the field's center. */
 export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(sin(EARTH_TILT)).add(new THREE.Vector3(0, -cos(EARTH_TILT), 0));
 export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);
+/** Earth's strength (m³/s²): its pull times the square of the distance from its center. */
+const EARTH_MU = 3.986004418e14;
+/** The Satellite Junkyard's orbit: its distance from Earth's center (m, 11,371 km). */
+const JUNK_ORBIT = (EARTH_RADIUS + EARTH_ALTITUDE) * 0.05;
+/**
+ * The frame the Satellite Junkyard rides (see world/orbits hill): its circular orbit, once
+ * around in 3.35 h at 5.9 km/s (its rate, rad/s, 5.21e-4), Earth always beneath, its flight
+ * square to the way down.
+ */
+const JUNK_UP = EARTH_DOWN.clone().negate();
+const JUNK_AHEAD = new THREE.Vector3(1, 0, 0).addScaledVector(JUNK_UP, -JUNK_UP.x).normalize();
+export const JUNK_FRAME: HillFrame = {
+  rate: Math.sqrt(EARTH_MU / (JUNK_ORBIT * JUNK_ORBIT * JUNK_ORBIT)),
+  up: JUNK_UP,
+  ahead: JUNK_AHEAD,
+  normal: new THREE.Vector3().crossVectors(JUNK_UP, JUNK_AHEAD),
+};
 /** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
 export const RING_LAYER = 2500;
 /**
@@ -1187,7 +1218,10 @@ export const ARENAS: readonly ArenaProfile[] = [
       maxScale: 3,
       radius: FIELD_RADIUS * 1.2,
       inner: 12000,
-      orbit: { axis: 'random', speed: 500 },
+      // the network's shell drifting about the hub on its relative orbits at up to 3 m/s; two in
+      // five crossing the field at 25 m/s, as the debris of its collisions does, coming and going
+      // through the round
+      hill: { frame: JUNK_FRAME, swing: 0.5, crossing: 0.4, speed: 500, from: -60, to: 360 },
       spin: 0.15,
       toughness: 500,
       // the network's dead relay hub in the middle: an engine block and two spars across, one body
@@ -1220,8 +1254,8 @@ export const ARENAS: readonly ArenaProfile[] = [
       inner: 0,
       spin: SPIN_RATE,
       toughness: 800,
-      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow(JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR), 2) },
-      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT },
+      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow((JUPITER_BODY + JUPITER_FLOOR) / JUPITER_BODY, 2), body: JUPITER_BODY },
+      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS, kelvin: JUPITER_KELVIN, lapse: JUPITER_LAPSE, heatCapacity: HYDROGEN_HEAT, wind: JUPITER_WIND },
     },
     sunlight: 50,
     storms: false,
@@ -1256,7 +1290,8 @@ export const ARENAS: readonly ArenaProfile[] = [
       radius: FIELD_RADIUS * 1.3,
       inner: 28000,
       flat: 2500,
-      orbit: { axis: 'vertical', speed: 500 },
+      // on the circular orbits the hole's pull holds them on: 167 m/s at 1.4 km, 116 m/s at 2.9 km
+      orbit: { axis: 'vertical' },
       spin: 0.06,
       toughness: 800,
       well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (HOLE_PULL * HOLE_PULL_AT * HOLE_PULL_AT) / (HOLE_RADIUS * HOLE_RADIUS) },

@@ -40,24 +40,28 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
 
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
- * first, in the order the benchmark measured (README "Performance"). The field's rocks are most
- * of a frame's triangles (2 000 each up close, drawn twice: for the picture and for the sun's
- * shadows), and their silhouette barely shows from a distance, so the near mesh keeps to
- * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
- * down early and in small steps, with the bloom's resolution and the shadow map's edge between
- * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a
+ * first, in the order the benchmark measured (README "Performance"). On a GPU the frame goes with
+ * its pixels (the picture and every full-screen pass after it): on a screen of 2 device pixels
+ * per CSS pixel the first step to 1.75 and the bloom at half its resolution save the most and
+ * barely show, while thinning the rocks saved nothing measurable there. So the resolution comes
+ * down first and in small steps, with the bloom's resolution and the shadow map's edge between
+ * them. The field's rocks are most of a frame's triangles (2 000 each up close, drawn twice: for
+ * the picture and for the sun's shadows), which counts where triangles are dear (a renderer
+ * without a GPU), and their silhouette barely shows from a distance, so the near mesh keeps to
+ * closer range next. The title screen's pad keeps a simpler look from the middle on. Shadows off costs a
  * shader compile and comes late; the lacquer saved nothing measurable and goes last. The
  * Jupiter landmark (seen only in its own arena) sheds its segments alongside the rocks it costs
- * about as much as; the black hole's lens (seen only in its own arena) is a full-screen pass
- * whose cost goes with the picture's resolution: its whole march is a small part of it, so it
- * marches fewer steps alongside the bloom and saves mostly by the resolution coming down.
+ * about as much as; the black hole's lens (seen only in its own arena) covers the whole picture
+ * whenever the hole is ahead, its cost going with the picture's resolution: its whole march is a
+ * small part of it, so it marches fewer steps alongside the bloom and saves mostly by the
+ * resolution coming down.
  */
 const STEPS: Partial<Look>[] = [
   {},
-  { rocks: 0.5 },
-  { rocks: 0.25, landmark: 0.5 },
   { pixelRatio: 1.75 },
   { bloom: 0.5, lens: 4 },
+  { rocks: 0.5 },
+  { rocks: 0.25, landmark: 0.5 },
   { shadows: 2048 },
   { pixelRatio: 1.5, showcase: { pixelRatio: 1.5, shadows: true, every: 1 } },
   { shadows: 1024 },

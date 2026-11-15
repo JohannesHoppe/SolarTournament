@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, easesOff, evenSkills, flyGently, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, strainHold, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, easesOff, evenSkills, flyGently, flyRound, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, pressOn, PRESSING, reactionOf, skillsOf, startTiming, strainHold, TORPEDO_CLEARANCE, TURN_GAP, Turns } from './bots';
 import { IDLE } from '../input/input';
 import { debrisSet } from '../world/shapes';
 import type { JunkBuild } from '../world/junk';
 import { hypot, pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from './flight';
-import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
+import { firstHull, G, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_AFTER, SILENT_RANGE, SINK_FILL, strainAfter } from './ship';
 import { junkField, testField } from '../test/field';
-import type { AsteroidField } from '../world/asteroids';
+import type { Asteroid, AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
+import { Randomizer } from '../random';
 import { airBurn, altitudeIn, clogging, dragOn, heatInto, safeSpeed } from '../world/air';
 import { glide, outside } from '../world/hover';
 
@@ -20,7 +21,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, extreme: 0, heat: 0, sink: 0, venting: false, clog: 0, overheated: false, inShadow: false, sunlight: 0, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -101,6 +102,54 @@ describe('bots fly by the Hosts\' rules', () => {
     const loud = new Bot(me, evenSkills(0.5));
     loud.think(10, [me, rival], field(false));
     expect(loud.target).toBe(rival);
+  });
+
+  it('runs silent on its heat sink, its laser keeping its heat meanwhile, then vents (a glowing laser shows at once) and is found from afar again, a bot\'s ship as a Host\'s', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
+    const step = 1 / 30;
+    rival.loudAt = 0;
+    let t = 0;
+    for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
+    // silent: a shot's heat below the glow stays in the laser module, the radiators closed; the sink takes the reactor's heat alone
+    rival.heat = 20;
+    const full = SILENT_AFTER + 0.5 + MAX_HEAT / SINK_FILL;
+    for (; t < full - 1; t += step) rival.cool(step, t);
+    // still silent, its sink near full, the laser as hot as it was
+    expect(rival.silent(t)).toBe(true);
+    expect(rival.sink).toBeGreaterThan(MAX_HEAT * 0.9);
+    expect(rival.heat).toBe(20);
+    expect(rival.venting).toBe(false);
+    for (; t < full + 1; t += step) rival.cool(step, t);
+    // full: it vents and shows on every sensor; its laser is free
+    expect(rival.venting).toBe(true);
+    expect(rival.silent(t)).toBe(false);
+    expect(rival.overheated).toBe(false);
+    const sees = new Bot(me, evenSkills(0.5));
+    sees.think(t, [me, rival], field(false));
+    expect(sees.target).toBe(rival);
+    // its radiators draw the sink down, and it can run silent again
+    for (const end = t + 6; t < end; t += step) rival.cool(step, t);
+    expect(rival.venting).toBe(false);
+    expect(rival.overheated).toBe(false);
+    expect(rival.heat).toBe(0);
+    for (const end = t + SILENT_AFTER + 0.1; t < end; t += step) rival.cool(step, t);
+    expect(rival.silent(t)).toBe(true);
+  });
+
+  it('shows while its laser glows: the radiators stay open, cooling it, and it runs silent only once it is below the glow', () => {
+    const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
+    const step = 1 / 30;
+    rival.loudAt = 0;
+    rival.heat = 60;
+    let t = 0;
+    for (; t < SILENT_AFTER + 0.5; t += step) rival.cool(step, t);
+    // still glowing past the quiet seconds: loud, its heat shed into space
+    expect(rival.silent(t)).toBe(false);
+    expect(rival.heat).toBeLessThan(60);
+    for (const end = t + 6; t < end; t += step) rival.cool(step, t);
+    expect(rival.silent(t)).toBe(true);
+    expect(rival.heat).toBeLessThanOrEqual(MAX_HEAT * 0.25);
   });
 
   it('chases a thief behind rock, as a Host\'s HUD marks it, but holds its fire until it sees it', () => {
@@ -835,5 +884,155 @@ describe('several against one', () => {
     raiders[2].ship.alive = false;
     pressOn(raiders, host);
     expect(raiders.filter((b) => b.ship.alive).every((b) => b.skills === b.own)).toBe(true);
+  });
+});
+
+describe('bots perceive and decide as a pilot does', () => {
+  it('think in turns, one a step in a fixed rotation, more only where a bot would wait longer than TURN_GAP, never a turn left out', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const deal = (count: number, dt: number, steps: number) => {
+      const bots = Array.from({ length: count }, () => new Bot(me, evenSkills(0.5)));
+      const turns = new Turns();
+      const last = bots.map(() => 0);
+      let longest = 0;
+      let most = 0;
+      for (let step = 1; step <= steps; step++) {
+        turns.deal(bots, dt);
+        most = Math.max(most, bots.filter((bot) => turns.has(bot)).length);
+        bots.forEach((bot, i) => {
+          if (!turns.has(bot)) return;
+          longest = Math.max(longest, step - last[i]);
+          last[i] = step;
+        });
+      }
+      return { most, longest: longest * dt };
+    };
+    // seven bots at 60 frames a second: one turn a step, each bot's every seven steps (about 8.6 a second)
+    expect(deal(7, 1 / 60, 600)).toEqual({ most: 1, longest: 7 / 60 });
+    // at 30 (and in a time-lapse's steps of a thirtieth): still one a step, about 4.3 a second each
+    expect(deal(7, 1 / 30, 300)).toEqual({ most: 1, longest: 7 / 30 });
+    // one bot alone thinks every step
+    expect(deal(1, 1 / 30, 30)).toEqual({ most: 1, longest: 1 / 30 });
+    // many bots, or long steps: as many turns a step as keep every bot within TURN_GAP
+    for (const [count, dt] of [
+      [20, 1 / 30],
+      [12, 1 / 20],
+      [40, 1 / 30],
+    ]) {
+      const { most, longest } = deal(count, dt, 600);
+      expect(most).toBeGreaterThan(1);
+      expect(longest).toBeLessThanOrEqual(TURN_GAP + dt + 1e-9);
+    }
+  });
+
+  it('between its turns flies by hand what the last one decided: the nose stays on the target and the trigger is pulled by the reaction time', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(0), at(1));
+    const rival = ship('Laika', at(8000), at(1));
+    const bot = new Bot(me, evenSkills(1));
+    const gravity = new THREE.Vector3();
+    let fired = false;
+    // one turn at the start, then only the hand for two seconds
+    for (let t = 0; t < 2; t += STEP) {
+      const c = bot.think(t, [me, rival], f, t === 0);
+      fired ||= c.fire;
+      me.flight.update(STEP, c, gravity);
+      rival.flight.update(STEP, IDLE, gravity);
+    }
+    expect(bot.target).toBe(rival);
+    expect(fired).toBe(true);
+  });
+
+  it('answers a hit in the drive only in its next turn: the hand flies on meanwhile', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(0), at(1));
+    const ahead = ship('Laika', at(10000), at(1));
+    const shooter = ship('Halley', at(-6000), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.think(0, [me, ahead], f);
+    expect(bot.target).toBe(ahead);
+    // struck in the drive from behind: no turn yet, nothing changes
+    bot.struck(shooter, 0.05);
+    bot.think(0.05, [me, ahead, shooter], f, false);
+    expect(bot.target).toBe(ahead);
+    // its next turn turns it to the shooter
+    bot.think(0.1, [me, ahead, shooter], f, true);
+    expect(bot.target).toBe(shooter);
+  });
+
+  it('sees fully only what lies in the chase camera\'s view, widened a little; beside the hull at a shove\'s reach is in it', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    // ahead, off the nose, at the edges of the picture: in view
+    expect(bot.inView(at(10000))).toBe(true);
+    expect(bot.inView(at(10000, 0, 18000))).toBe(true);
+    expect(bot.inView(at(10000, 9000))).toBe(true);
+    // far out to the side or above, and behind: not
+    expect(bot.inView(at(10000, 0, 30000))).toBe(false);
+    expect(bot.inView(at(10000, 16000))).toBe(false);
+    expect(bot.inView(at(-10000))).toBe(false);
+    expect(bot.inView(at(0, 0, 20000))).toBe(false);
+    // a rival right beside the hull, 50 m off, as the camera behind the ship shows it
+    expect(bot.inView(at(0, 0, RADIUS * 3))).toBe(true);
+  });
+
+  it('knows of a ship behind it only what its last glance at the radar and the screen\'s edge showed: where it was then, and never one behind rock', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const rival = ship('Laika', at(-10000), at(-1));
+    // the bot's first turn is a glance: the ship behind shows, and the bot turns to where it was
+    const bot = new Bot(me, evenSkills(0));
+    bot.think(0, [me, rival], field(false));
+    expect(bot.target).toBe(rival);
+    // it moves on; the bot's next turns still know it where the glance showed it, until it looks again
+    rival.flight.position.set(-10000, 0, 20000);
+    for (let t = STEP; t < 0.9; t += STEP) bot.think(t, [me, rival], field(false));
+    expect(bot.target).toBe(rival);
+    // behind rock, no glance shows it: the bot knows nothing of it however long it flies
+    const me2 = ship('Kessler', at(8000), at(1));
+    const hidden = ship('Laika', at(-8000), at(1));
+    const other = new Bot(me2, evenSkills(1));
+    const rock = field(true);
+    for (let t = 0; t < 5; t += STEP) other.think(t, [me2, hidden], rock);
+    expect(other.target).toBeNull();
+  });
+
+  it('casts the five lines of its way ahead among the pieces the tube may meet, finding to the bit what every line cast against the whole field finds', () => {
+    const random = new Randomizer(7);
+    const wall = RADIUS * 3;
+    const pieces: Asteroid[] = [];
+    const direction = new THREE.Vector3();
+    const across = new THREE.Vector3();
+    const across2 = new THREE.Vector3();
+    const origin = new THREE.Vector3();
+    let hits = 0;
+    for (const id of ['belt', 'rings', 'junkyard', 'valhalla', 'crack']) {
+      const f = testField();
+      f.generate(arenaById(id)!.layout);
+      for (let i = 0; i < 300; i++) {
+        const position = at(random.range(-40000, 40000), random.range(-8000, 8000), random.range(-40000, 40000));
+        direction.set(random.range(-1, 1), random.range(-0.4, 0.4), random.range(-1, 1)).normalize();
+        const length = random.range(2000, 22000);
+        across.crossVectors(direction, Math.abs(direction.y) < 0.9 ? at(0, 1) : at(1)).normalize();
+        across2.crossVectors(direction, across);
+        f.piecesAlong(position, direction, length, wall, pieces);
+        for (let k = 0; k < 5; k++) {
+          origin.copy(position);
+          if (k > 0) origin.addScaledVector(k < 3 ? across : across2, k % 2 ? wall : -wall);
+          for (const max of [length, length * random.nextFloat()]) {
+            const whole = f.raycast(origin, direction, max, true);
+            const wholeHit = whole && { distance: whole.distance, asteroid: whole.asteroid, part: whole.part, center: whole.center.clone() };
+            const among = f.raycastAmong(pieces, origin, direction, max, true);
+            expect(among === null).toBe(wholeHit === null);
+            if (!wholeHit || !among) continue;
+            hits++;
+            expect(among.distance).toBe(wholeHit.distance);
+            expect(among.asteroid).toBe(wholeHit.asteroid);
+            expect(among.part).toBe(wholeHit.part);
+            expect(among.center.equals(wholeHit.center)).toBe(true);
+          }
+        }
+      }
+    }
+    expect(hits).toBeGreaterThan(500);
   });
 });

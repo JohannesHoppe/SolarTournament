@@ -130,6 +130,8 @@ export function shipState(x: unknown): ShipState | null {
     dr: num(x.dr, 0, 1),
     tr: num(x.tr, 0, 1),
     pr: num(x.pr, 0, 10),
+    // a heat sink venting is told only while it vents
+    ...(x.ve === undefined ? {} : { ve: x.ve === 1 ? 1 : null }),
   });
   // a quaternion of length zero cannot be normalized
   return state && hypot(state.q[0], state.q[1], state.q[2], state.q[3]) >= 0.5 ? state : null;

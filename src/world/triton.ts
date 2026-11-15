@@ -5,6 +5,7 @@ import { Noise } from './noise';
 import { reliefPiece } from './horizon';
 import { Randomizer } from '../random';
 import type { Column, Placement } from './asteroids';
+import { curveLow } from './ceiling';
 
 /**
  * Memorial on Triton (the campaign's chapter 14, see docs/campaign/): the pinkish nitrogen plain,
@@ -44,12 +45,19 @@ export function surfaceHeight(x: number, z: number): number {
   return LAND - DIMPLE_DEPTH * (1 - ridges) + BUMPS * bumps.fractal(x / BUMP_SCALE, 0.4, z / BUMP_SCALE, 3) - (x * x + z * z) / (2 * TRITON_RADIUS);
 }
 
+/** The most surfaceHeight gives over a rectangle (see world/ceiling): the dimples at the most of their ridged noise, the hummocks by their noise's lattice, the curve at its least. */
+function surfaceCeiling(x0: number, z0: number, x1: number, z1: number): number {
+  const ridges = dimples.fractalRange(x0 / DIMPLE_SIZE, x1 / DIMPLE_SIZE, 0.3, 0.3, z0 / DIMPLE_SIZE, z1 / DIMPLE_SIZE, 2, span, true).hi;
+  return LAND - DIMPLE_DEPTH * (1 - ridges) + BUMPS * bumps.fractalRange(x0 / BUMP_SCALE, x1 / BUMP_SCALE, 0.4, 0.4, z0 / BUMP_SCALE, z1 / BUMP_SCALE, 3, span).hi - curveLow(x0, z0, x1, z1, TRITON_RADIUS);
+}
+const span = { lo: 0, hi: 0 };
+
 /** How far the ground's solid piece reaches from the field's middle (units, 4 km square), and how deep under its highest point. */
 export const GROUND_HALF = new THREE.Vector3(4 * KM, 4000, 4 * KM);
 const GROUND_TOP = LAND + BUMPS;
 
 /** The ground as the field's piece (see reliefPiece): its relief in its box's coordinates, and its placement as type `type` of the yards' set. */
-const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
+const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP, surfaceCeiling);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
 

@@ -33,7 +33,7 @@ function plasmaTorus(): THREE.Mesh {
   });
   const band = new THREE.Mesh(
     new THREE.CylinderGeometry(TORUS_REACH, TORUS_REACH, TORUS_REACH * TORUS_WIDTH, 128, 1, true).applyMatrix4(turn),
-    behindAll(new THREE.MeshBasicMaterial({ color: TORUS_COLOR, map: fade, transparent: true, opacity: TORUS_GLOW, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })),
+    behindAll(new THREE.MeshBasicMaterial({ color: TORUS_COLOR, map: fade, transparent: true, opacity: TORUS_GLOW, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false })),
   );
   band.userData.shadowless = true;
   return band;
@@ -73,14 +73,15 @@ export function fluxScenery(): THREE.Group {
   lake.geometry.applyMatrix4(new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1));
   lake.position.set(PATERA.x, PIT_FLOOR + 20, PATERA.z);
   group.add(lake);
-  // the tube: two nested columns, additive, faint, never written to the depth so the field shows through
+  // the tube: two nested columns, additive, faint, never written to the depth so the field shows
+  // through; added light sums the same in any order, so one pass draws both faces
   for (const [share, strength] of [
     [1, 0.025],
     [0.35, 0.06],
   ] as const) {
     const column = new THREE.Mesh(
       new THREE.CylinderGeometry(FLUX_RADIUS * share, FLUX_RADIUS * share, FLUX_HEIGHT, 32, 1, true),
-      new THREE.MeshBasicMaterial({ color: FLUX_COLOR.clone().multiplyScalar(strength), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: FLUX_COLOR.clone().multiplyScalar(strength), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, toneMapped: false }),
     );
     column.position.set(FLUX_AT.x, LAND + FLUX_HEIGHT / 2, FLUX_AT.z);
     column.userData.shadowless = true;

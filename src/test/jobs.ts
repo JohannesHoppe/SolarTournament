@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Assets } from '../assets';
 import { IDLE, type Controls, type Device } from '../input/input';
-import { Bot, evenSkills, pressOn, raceSpeedOf, skillsFrom, type Skill, type Skills } from '../ship/bots';
+import { Bot, evenSkills, pressOn, raceSpeedOf, Turns, skillsFrom, type Skill, type Skills } from '../ship/bots';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, type Ground } from '../ship/flight';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
 import { cos, sin } from '../detmath';
@@ -11,9 +11,9 @@ import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
 import { blastOn, Charges } from '../game/charges';
 import { approachGate, coilPush } from '../game/race';
 import { RacingLine } from '../game/racingline';
-import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
+import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floorOf, harpoonClosing, harpoonDamage, HOOK_RECHARGE, newTether, pullOn, type Tether } from '../game/hook';
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
-import { DRILL_TORPEDOES, Torpedoes, TORPEDO_DAMAGE, type Torpedo } from '../game/torpedoes';
+import { DRILL_TORPEDOES, Torpedoes, torpedoDamage, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
 import { hullOf, spareSkills, type Campaign, type Choice, type Mission } from '../campaign/campaign';
 import type { SceneName } from '../campaign/scenes';
@@ -169,6 +169,8 @@ export class JobWorld implements SchoolContext {
   readonly school: FlightSchool;
   readonly ships: Ship[] = [];
   readonly bots = new Map<Ship, Bot>();
+  /** Whose turn it is among the bots to look and decide (see ship/bots, Turns), dealt as the game deals them. */
+  private readonly turns = new Turns();
   readonly me: Ship;
   readonly deaths: Deaths = { causes: {}, total: 0 };
   readonly assets = nodeAssets();
@@ -223,6 +225,7 @@ export class JobWorld implements SchoolContext {
   dodges = 0;
   readonly brokenAt = new THREE.Vector3();
   brokenId = '';
+  brokenReach = 0;
   selfDestructing = false;
   fined = 0;
   owed = 0;
@@ -260,6 +263,7 @@ export class JobWorld implements SchoolContext {
     if (hands.torpedo && this.me.alive) this.fireTorpedo(this.me);
     this.mine(!!hands.charge && this.me.alive);
     if (this.jumpers) pressOn(this.jumpers.bots, this.me);
+    this.turns.deal([...this.bots.values()], JOB_STEP);
     for (const ship of [...this.ships]) {
       if (!ship.alive) {
         this.reprint(ship);
@@ -375,12 +379,12 @@ export class JobWorld implements SchoolContext {
     if (burn > 0 && ship.structural(burn, this.now) === 'destroyed') this.destroyed(ship, null, 'air');
   }
 
-  /** A place of the campaign has no edge; an arena of the Games loses a ship far out (see Game.keepInArena, the school's patience). */
+  /** A place of the campaign has no edge; an arena of the Games blows a ship far out with the Ministry's charge (see Game.keepInArena, the school's patience). */
   private keepInArena(ship: Ship) {
     if (!ship.alive || this.venue.open || ship.flight.position.length() < ARENA_LIMIT) return;
     if (ship.flight.position.length() < ARENA_LIMIT * 4) return;
     ship.structural(Infinity, this.now);
-    if (!ship.alive) this.destroyed(ship, null, 'space');
+    if (!ship.alive) this.destroyed(ship, null, 'ministry');
   }
 
   /** A ship against the well, rock (swept along its way), the drill's rings and hulls (see Game.collide). */
@@ -495,6 +499,7 @@ export class JobWorld implements SchoolContext {
         this.rocksBroken++;
         this.brokenAt.copy(blast.broken.object.position);
         this.brokenId = blast.broken.id;
+        this.brokenReach = blast.broken.radius;
       }
       for (const ship of [...this.ships]) {
         if (!ship.alive) continue;
@@ -543,11 +548,11 @@ export class JobWorld implements SchoolContext {
     this.torpedoList.launch(`${ship.id}.${ship.torpedoesFired++}`, ship, target, ship.nose(new THREE.Vector3()), Torpedoes.launchVelocity(ship), this.now, true);
   }
 
-  /** A torpedo went off; on a ship, it takes TORPEDO_DAMAGE of its hull (see Game.detonate, applyTorpedoHit). */
+  /** A torpedo went off; on a ship, it takes its warhead and the energy of the speed they closed at (see torpedoDamage, Game.detonate, applyTorpedoHit). */
   private detonate(torpedo: Torpedo, hit: Ship | null) {
     this.torpedoList.remove(torpedo);
     if (!hit) return;
-    const status = hit.structural(TORPEDO_DAMAGE, this.now);
+    const status = hit.structural(torpedoDamage(scratch.subVectors(torpedo.velocity, hit.flight.velocity).length(), hit.body.mass), this.now);
     if (status === 'protected') return;
     if (torpedo.shooter === this.me) this.torpedoesHit++;
     hit.thrusters = Math.max(0, hit.thrusters - 0.3);
@@ -638,6 +643,9 @@ export class JobWorld implements SchoolContext {
     if (fresh) {
       tether.cable.follow(this.field, at, owner.flight.position, false);
       tether.length = tether.cable.length(at, owner.flight.position);
+      // the harpoon's bite takes its kinetic energy from a ship's hull (see Game.harpooned)
+      const bitten = tether.anchor.ship;
+      if (bitten?.alive && bitten.structural(harpoonDamage(harpoonClosing(owner, bitten)), this.now) === 'destroyed') this.destroyed(bitten, owner, 'harpoon');
     }
     if (!tether.cable.follow(this.field, at, owner.flight.position, !fresh)) {
       this.dropHook();
@@ -707,20 +715,23 @@ export class JobWorld implements SchoolContext {
     return !!hull?.ship && hull.ship.tailToward(direction);
   }
 
-  /** A bot's thought this step, with what the game tells it first (see Game.updateRound): a raider's saw, a rival's ring. */
+  /** A bot's step, with what the game tells it first on its turn (see Game.updateRound): a raider's saw; and a rival's ring, counted every step. */
   private think(bot: Bot): Controls {
     const ship = bot.ship;
     const raid = this.jumpers;
     bot.ease = this.ease;
     const sawing = !!raid && !raid.guard && raid.bots.includes(bot);
-    bot.prey = null;
-    bot.siege = sawing ? this.sawPoint(bot, raid) : null;
-    // a raider keeps to the place it raids (see Game.updateRound)
-    bot.homeAt = raid?.bots.includes(bot) ? raid.rig : null;
-    bot.raceSpeed = raceSpeedOf(bot.skills);
+    const turn = this.turns.has(bot);
+    if (turn) {
+      bot.prey = null;
+      bot.siege = sawing ? this.sawPoint(bot, raid) : null;
+      // a raider keeps to the place it raids (see Game.updateRound)
+      bot.homeAt = raid?.bots.includes(bot) ? raid.rig : null;
+      bot.raceSpeed = raceSpeedOf(bot.skills);
+    }
     if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
     const ships = sawing ? this.ships.filter((other) => other === ship || other.flight.position.distanceTo(ship.flight.position) < JUMPER_NOTICE) : this.ships;
-    const thought = bot.think(this.now, ships, this.field);
+    const thought = bot.think(this.now, ships, this.field, turn);
     if (bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
     return thought;
   }
@@ -815,6 +826,9 @@ export class JobWorld implements SchoolContext {
   fine(coins: number) {
     this.fined = coins;
   }
+
+  /** A drill's alarm: the simulated Host reads the drill's own state instead (its zone, its mark). */
+  alarm() {}
 
   claims(): Claim[] {
     return claimsIn(this.field, DETAIL);

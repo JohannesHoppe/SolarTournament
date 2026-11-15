@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { hypot } from '../detmath';
-import { COURIER_PLACES, MINING_PLACES } from '../campaign/missions';
+import { atan2, cos, hypot, sin } from '../detmath';
+import { COURIER_PLACES, MINING_PLACES, TARGET_ZONE, YARD_MIDDLE } from '../campaign/missions';
+import { GROUND, RACK_HEIGHT } from '../world/yard';
 import { MAX_HEAT } from '../ship/ship';
 import { LASER_RANGE } from '../ship/ship';
 import { HOOK_FLING } from '../game/school';
@@ -270,14 +271,70 @@ const climb: Behavior = (world, pilot) => {
   return { goto: hatch.clone().setY(hatch.y + 900), cruise: 300 };
 };
 
-/** A smuggling run: to the drop, the drive cold while a patrol is near enough to see it burn (with room for the patrol's circle). */
+/**
+ * A smuggling run: to the drop, the drive cold while a patrol is near enough to see it burn (with
+ * room for the patrol's circle); out of their sight it empties its heat sink (see Ship.sink) with
+ * a shot whenever it holds more than SINK_LOW and its gun is as cool (a gun locked by its heat
+ * opens the radiators, see Ship.cool), so the silence lasts past the patrols.
+ */
 const PATROL_SIGHT = 48000;
+const SINK_LOW = 0.15;
 const smuggle: Behavior = (world) => {
   const near = world.formation.some((patrol) => patrol.flight.position.distanceTo(world.me.flight.position) < PATROL_SIGHT);
-  return { goto: world.waypoint, quiet: near };
+  return { goto: world.waypoint, quiet: near, fire: !near && world.me.sink > MAX_HEAT * SINK_LOW && world.me.heat < MAX_HEAT * SINK_LOW };
 };
 
+/**
+ * Dodging the tourists' fire about the yard (Live Target), as a Host jinks: a point somewhere in
+ * the zone's inner JINK_ROOM flown for at JINK_CRUISE, a new one once near it or after JINK_LEG
+ * seconds, and the slide keys held hard to one side on top of the flight, then to the other (and now
+ * and then up or down), the side switched every JINK_SWITCH seconds: the gunners lead the flight
+ * the ship had a second ago, and each jink takes it off that line (see missions, TARGET_LAG).
+ */
+const JINK_ROOM = 0.6;
+/** 60 m/s: a Host's pace in a yard 1.5 km across. */
+const JINK_CRUISE = 1200;
+const JINK_LEG = [4, 8] as const;
+const JINK_SWITCH = [1, 2] as const;
+/** The points it flies for lie this high over the racks' tops at least, clear of the field's pieces by JINK_CLEAR (units, 75 m). */
+const JINK_OVER = 1000;
+const JINK_CLEAR = 1500;
+const between = (range: readonly [number, number]) => range[0] + Math.random() * (range[1] - range[0]);
+
+/** A point to fly for in the yard's zone (see jink), clear of the racks and the depot. */
+function yardPoint(world: JobWorld): THREE.Vector3 {
+  const point = new THREE.Vector3();
+  for (let tries = 0; tries < 30; tries++) {
+    point.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+    if (point.lengthSq() > 1) continue;
+    point.multiplyScalar(TARGET_ZONE * JINK_ROOM).add(YARD_MIDDLE);
+    point.y = Math.max(point.y, GROUND + RACK_HEIGHT + JINK_OVER);
+    if (point.distanceTo(YARD_MIDDLE) < TARGET_ZONE * JINK_ROOM && !world.field.overlap(point, JINK_CLEAR)) return point;
+  }
+  return point.copy(YARD_MIDDLE).setY(GROUND + RACK_HEIGHT + JINK_OVER * 3);
+}
+
+const jink: Behavior = (world, pilot) => {
+  if (!world.attempt?.live) return standard(world, pilot);
+  const memo = pilot.memo as { to?: THREE.Vector3; until?: number; side?: THREE.Vector3; switchAt?: number };
+  if (!memo.to || memo.to.distanceTo(world.me.flight.position) < NEAR_POINT || world.now > memo.until!) {
+    memo.to = yardPoint(world);
+    memo.until = world.now + between(JINK_LEG);
+  }
+  if (!memo.side || world.now > memo.switchAt!) {
+    // the other way, now and then up or down too: left, right, up, down as the thumb falls
+    const turn = (memo.side ? atan2(memo.side.y, memo.side.x) + Math.PI : 0) + (Math.random() - 0.5) * Math.PI;
+    memo.side = new THREE.Vector3(cos(turn), sin(turn), 0);
+    memo.switchAt = world.now + between(JINK_SWITCH);
+  }
+  world.note = `jink ${memo.side.toArray().map((v) => v.toFixed(1))} to ${memo.to.toArray().map(Math.round)}`;
+  return { goto: memo.to, cruise: JINK_CRUISE, slide: memo.side };
+};
+/** A point it flies for counts as reached within this (units, 150 m). */
+const NEAR_POINT = 3000;
+
 export const BEHAVIORS: Record<string, Record<number, Behavior>> = {
+  liveTarget: { 1: jink },
   firstCut: { 1: mine },
   dockingLane: { 1: shootDrones },
   rheasilvia: { 0: gel },

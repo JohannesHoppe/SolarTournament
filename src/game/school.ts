@@ -24,6 +24,7 @@ import { HOOK_RANGE } from './hook';
 import { msg, t } from '../i18n/i18n';
 import type { ArenaId } from '../world/arenas';
 import type { OrbitState } from './orbit';
+import type { AlarmRaise } from './alarms';
 import type { SceneName } from '../campaign/scenes';
 import type { Choice } from '../campaign/campaign';
 import type { Skill, Skills } from '../ship/bots';
@@ -81,6 +82,8 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): boolean;
   /** A mission of the campaign: its pay is cut by this many coins, as the attempt stands now (see campaign/campaign, complete). */
   fine(coins: number): void;
+  /** Raises a danger of the drill's among the flight computer's alarms this frame (see game/alarms): leaving a job's zone. */
+  alarm(report: AlarmRaise): void;
   /** The claims of a field dressed with the Rockborn's mining, in the order they were filed (see world/mining, Mining.claims); none elsewhere. */
   claims(): Claim[];
   /** The clone climbs out of the cockpit and stands in a scene in person (see campaign/scenes), or, with null, climbs back in. */
@@ -163,6 +166,8 @@ export interface SchoolContext {
   /** Where the pilot last broke a rock, and which piece it was (its pieces' ids are its own and a dot more, see world/fracture). */
   readonly brokenAt: THREE.Vector3;
   readonly brokenId: string;
+  /** How far that rock reached from its center (units): all its pieces lie within it. */
+  readonly brokenReach: number;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
   /** A torpedo in flight still homes on the pilot. */
@@ -1733,6 +1738,9 @@ const BEACON_LIT = 0xff9d00;
 const BEACON_DEAD = 0x2a2622;
 type Beacon = { body: THREE.BufferGeometry; lens: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; halo: THREE.Sprite | null; charge: number; lit: boolean; litAt: number };
 
+/** A zone's wire sphere (see Markers.zone) is drawn at this opacity, faint so it never hides the field. */
+const ZONE_FAINT = 0.45;
+
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 /** Where the tug's winch is (scratch). */
 const winchPoint = new THREE.Vector3();
@@ -1747,7 +1755,9 @@ export class Markers {
   private readonly debrisGeometry = new THREE.IcosahedronGeometry(1, 0);
   private readonly zoneGeometry = new THREE.IcosahedronGeometry(1, 2);
   private readonly bright = new THREE.MeshBasicMaterial({ color: 0xff9d00, wireframe: true });
-  private readonly dim = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: 0.45 });
+  private readonly dim = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: ZONE_FAINT });
+  /** The wire of a zone whose edge lights up as the ship nears it (see zoneEdge). */
+  private readonly edge = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: ZONE_FAINT });
   private readonly rock = new THREE.MeshBasicMaterial({ color: 0xff4d2e, wireframe: true });
   private readonly ore = new THREE.MeshBasicMaterial({ color: 0xffd27a });
   private rings: { root: THREE.Group; coil: THREE.Mesh }[] = [];
@@ -1854,14 +1864,27 @@ export class Markers {
     }
   }
 
-  /** A faint wire sphere around a point: the zone a drill wants the ship in. */
-  zone(position: THREE.Vector3, radius: number): THREE.Mesh {
-    const mesh = new THREE.Mesh(this.zoneGeometry, this.dim);
+  /**
+   * A faint wire sphere around a point: the zone a drill wants the ship in. With `edge`, a zone
+   * whose wire lights up as the ship nears it from inside (see zoneEdge); one such zone at a time.
+   */
+  zone(position: THREE.Vector3, radius: number, edge = false): THREE.Mesh {
+    if (edge) this.zoneEdge(0, false);
+    const mesh = new THREE.Mesh(this.zoneGeometry, edge ? this.edge : this.dim);
     mesh.scale.setScalar(radius);
     mesh.position.copy(position);
     this.root.add(mesh);
     // a drill may move it on (the Parade's slot)
     return mesh;
+  }
+
+  /**
+   * How near the ship is to the edge of the zone laid with `edge` (0 far inside, 1 at it): its wire
+   * goes from faint to full azure, and orange once the ship is `out` of it, the moment to act.
+   */
+  zoneEdge(near: number, out: boolean) {
+    this.edge.opacity = ZONE_FAINT + (1 - ZONE_FAINT) * near;
+    this.edge.color.setHex(out ? 0xff9d00 : 0x4d91ff);
   }
 
   ring(position: THREE.Vector3, normal: THREE.Vector3) {
@@ -2194,7 +2217,7 @@ export class Markers {
   /** Frees the geometries and materials on the GPU when the flight school ends. */
   dispose() {
     this.clear();
-    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.ore, this.cableMaterial]) resource.dispose();
+    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.edge, this.rock, this.ore, this.cableMaterial]) resource.dispose();
     this.canisterGeometry?.dispose();
     this.canisterMaterial?.dispose();
     this.beaconSteel?.dispose();

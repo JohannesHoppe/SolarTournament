@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
-import { aimHook, HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
+import { aimHook, CABLE_BREAK, HARPOON_MASS, harpoonDamage, HOOK_PULL, HOOK_RANGE, HOOK_SPEED, keepsHold, pullOn } from './hook';
 import type { Ship } from '../ship/ship';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
@@ -33,6 +33,18 @@ function fly(flight: FlightModel, seconds: number, reeling: boolean, floor = 0) 
 }
 
 describe('the hook', () => {
+  it('bites a ship with its harpoon, heavy enough to hold the cable, by its kinetic energy', () => {
+    // 18 MN, the cable's breaking load on an interceptor, in a fibre of 5 GPa: 36 cm², half a meter of it some 3.2 kg of the 8
+    const load = CABLE_BREAK * 0.05 * MASS.ship;
+    expect(load / 5e9).toBeCloseTo(0.0035, 4);
+    expect(HARPOON_MASS).toBeGreaterThan((load / 5e9) * 0.5 * 1800);
+    // 16 MJ at 2 km/s: 21 hull points, the game's 0.75 MJ a point
+    expect(harpoonDamage(HOOK_SPEED)).toBeCloseTo(21.3, 1);
+    // a ship flying into it takes more, one fleeing at the limit less
+    expect(harpoonDamage(HOOK_SPEED + MAX_SPEED)).toBeGreaterThan(harpoonDamage(HOOK_SPEED));
+    expect(harpoonDamage(HOOK_SPEED - MAX_SPEED)).toBeGreaterThan(15);
+  });
+
   it('swings a passing ship around the rock, at the cable length and the same speed', () => {
     const flight = passing(2000);
     fly(flight, 3, false);

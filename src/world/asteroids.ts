@@ -12,6 +12,8 @@ import { massOf } from './bodies';
 import type { JunkBuild } from './junk';
 import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
+import { hill, hillTide, kepler, type HillFrame } from './orbits';
+import { pyramidOf, type Ceiling } from './ceiling';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -35,19 +37,18 @@ export const CRUMBLE_SECONDS = 2;
  * and its spin: the energy a break puts into a rock is about the same whatever its size, so its
  * pieces part slower the heavier it was, by the inverse square root of its mass. A piece of
  * FRAGMENT_REFERENCE (20 m) flies apart at FRAGMENT_SPEED (7.5 m/s), a smaller one no faster, a
- * 30 m one at 4 m/s; none slower than FRAGMENT_SLOWEST (3 m/s), which every rock from about 38 m
- * up gets. The floor is the game's: a real pile of a hundred meters would part at centimeters a
- * second, and pieces that slow lie in each other while their orbits carry them about (see
- * world/contacts), where 3 m/s takes them clear within seconds.
+ * 30 m one at 4 m/s, a 100 m one at 0.7 m/s, the belt's largest (350 m) at 10 cm/s: a big rock
+ * cracks and its pieces drift apart slowly, still cover where it stood. Siblings of one break
+ * part through each other however slowly (see world/contacts), and they keep circling with
+ * their rock's orbit together, so nothing needs them faster.
  */
 const FRAGMENT_SPEED = 150;
 const FRAGMENT_REFERENCE = 400;
-const FRAGMENT_SLOWEST = 60;
 
 /** How fast the pieces of a rock of `meanRadius` (units) fly apart (see FRAGMENT_SPEED). */
 export function fragmentSpeed(meanRadius: number): number {
   const ratio = FRAGMENT_REFERENCE / Math.max(meanRadius, FRAGMENT_REFERENCE);
-  return Math.max(FRAGMENT_SLOWEST, FRAGMENT_SPEED * ratio * Math.sqrt(ratio));
+  return FRAGMENT_SPEED * ratio * Math.sqrt(ratio);
 }
 /** How fast a piece of a broken rock tumbles besides its parent's spin: up to this share of the layout's spin, about an axis of its own. */
 const FRAGMENT_TUMBLE = 1;
@@ -119,6 +120,26 @@ export interface Well {
   position: THREE.Vector3;
   radius: number;
   surfaceGravity: number;
+  /**
+   * The radius (units) of the real body whose pull this is, where the game draws it smaller
+   * (Jupiter, see world/arenas): the pull falls off with the square of the distance from that
+   * body's center, its surface lying where the well's own does, so over the few kilometers of an
+   * arena it barely changes, as near the real planet. Without, the well's own radius.
+   */
+  body?: number;
+}
+
+/** A well's pull (units/s²) at `distance` (units) from its center (see Well.body). */
+export function wellPull(well: Well, distance: number): number {
+  if (well.body === undefined) return (well.surfaceGravity * well.radius * well.radius) / (distance * distance);
+  const reach = well.body + distance - well.radius;
+  return (well.surfaceGravity * well.body * well.body) / (reach * reach);
+}
+
+/** The distance from a well's center (units) at which it pulls with `accel` (units/s²): where a drive of that thrust outpulls it. */
+export function wellReach(well: Well, accel: number): number {
+  const at = well.body ?? well.radius;
+  return well.radius - at + at * Math.sqrt(well.surfaceGravity / accel);
 }
 
 /** Something besides rocks that stands in the field, blocks the line of sight and sets off a torpedo (the President's battleship). */
@@ -191,10 +212,20 @@ export interface FieldLayout {
   open?: { count: number; minScale: number; maxScale: number; from: number; to: number; radius: number };
   /**
    * The rocks circle the center: about the vertical axis or each about an axis of its own
-   * (crossing orbits), at `speed` (units/s) or, with a well, at the speed its gravity holds
-   * them in (Kepler).
+   * (crossing orbits), at `speed` (units/s) or, with a well, on the circular orbit its gravity
+   * holds them on (Kepler), its plane through the well's center.
    */
   orbit?: { axis: 'vertical' | 'random'; speed?: number };
+  /**
+   * The field rides a circular orbit about a planet (the Satellite Junkyard's, 5,000 km over
+   * Earth): its pieces move in the frame riding it (see world/orbits hill), the planet's pull
+   * taken out but for its tide. The pieces laid out circle the field's center on bounded
+   * relative orbits (no drift along the orbit; up and across they swing by up to `swing` times
+   * their distance a radian of the orbit); a `crossing` share of them instead fly orbits that
+   * cross the field at `speed` (units/s), each through where it was laid out at a field time
+   * between `from` and `to` (s), in a direction of its own.
+   */
+  hill?: { frame: HillFrame; swing: number; crossing: number; speed: number; from: number; to: number };
   /** How fast each rock turns about itself (rad/s). */
   spin: number;
   /** Hits a rock withstands: 4 plus one per this many units of mean radius. */
@@ -250,9 +281,20 @@ export interface Asteroid {
   /** The rock circles the field's center about this axis at this rate (rad/s); zero for a rock that only drifts. */
   orbitAxis: THREE.Vector3;
   orbitRate: number;
+  /**
+   * The strength of the well it circles on its own orbit (units³/s², see world/orbits kepler):
+   * a piece of a field circling a well's center as its gravity holds it (FieldLayout.orbit
+   * without a speed); once it drifts off its circle (a knock, a break) it flies the conic its
+   * motion gives it, its drift taken in the frame its orbit turns. Zero for every other piece.
+   */
+  orbitMu: number;
+  /** The frame riding a circular orbit it moves in (see FieldLayout.hill), or null. */
+  hill: HillFrame | null;
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
   /** Field time (s) it crumbles to dust (see CRUMBLE_AFTER), from when it broke off, whatever moved it since; Infinity for a piece that lasts. */
+  wornOut: number;
+  /** Field time (s) it is gone: worn out, or swallowed by the well its conic falls into (see AsteroidField.fallsIn), whichever comes first. */
   crumbles: number;
   basePosition: THREE.Vector3;
   baseOrientation: THREE.Quaternion;
@@ -291,6 +333,9 @@ export interface Asteroid {
 /** How long a correction of a piece's place by the lead's sync is eased in (s, see Asteroid.ease): a gentle glide, never a jump. */
 export const EASE_SECONDS = 1;
 
+/** A piece's fall into a well is looked for on this grid of field time (s, the contacts' step, see world/contacts). */
+const SWALLOW_STEP = 0.1;
+
 /** How the layout placed a root of the field (see AsteroidField.rebuildFamily). */
 interface Origin {
   kind: TemplateKind;
@@ -300,6 +345,7 @@ interface Origin {
   position: THREE.Vector3;
   spinAxis: THREE.Vector3;
   spinRate: number;
+  velocity: THREE.Vector3;
   orbitAxis: THREE.Vector3;
   orbitRate: number;
   solid: boolean;
@@ -511,6 +557,10 @@ export class AsteroidField {
   layout: FieldLayout | null = null;
   /** The massive body of the arena, if it has one. */
   well: Well | null = null;
+  /** The strength of the well the pieces circle on their own orbits (see Asteroid.orbitMu), 0 for none. */
+  private orbitMu = 0;
+  /** The frame riding a circular orbit the field moves in (see FieldLayout.hill), or null: its tide is in the field's gravity, its turn in what a moving body feels (see world/hover outside). */
+  hill: HillFrame | null = null;
   /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
   fall = 0;
   /** The pieces that are a world's ground (see Placement.ground), for the hover field (see groundBelow). */
@@ -597,6 +647,10 @@ export class AsteroidField {
     if (this.layout?.key !== layout.key) this.attachments.clear();
     this.layout = layout;
     this.well = layout.well ?? null;
+    // a well at the field's center whose pull falls off as its own (see Well.body): the pieces fly about it as two bodies do
+    const twoBodies = layout.well && layout.orbit && layout.orbit.speed === undefined && layout.well.body === undefined && layout.well.position.lengthSq() === 0;
+    this.orbitMu = twoBodies ? layout.well!.surfaceGravity * layout.well!.radius * layout.well!.radius : 0;
+    this.hill = layout.hill?.frame ?? null;
     this.fall = layout.fall ?? 0;
     this.columns = layout.columns ?? [];
     this.air = layout.air ?? null;
@@ -649,7 +703,7 @@ export class AsteroidField {
     this.origins.clear();
     for (const a of this.asteroids.values()) {
       this.roots.push(a.id);
-      this.origins.set(a.id, { ...a, position: a.basePosition.clone(), spinAxis: a.spinAxis.clone(), orbitAxis: a.orbitAxis.clone(), baseOrientation: a.baseOrientation.clone(), type: a.object.userData.type, scale: a.object.userData.scale, template: a.object.userData.template });
+      this.origins.set(a.id, { ...a, position: a.basePosition.clone(), spinAxis: a.spinAxis.clone(), velocity: a.velocity.clone(), orbitAxis: a.orbitAxis.clone(), baseOrientation: a.baseOrientation.clone(), type: a.object.userData.type, scale: a.object.userData.scale, template: a.object.userData.template });
     }
   }
 
@@ -689,7 +743,7 @@ export class AsteroidField {
       this.heard.delete(id);
       this.dust.delete(id);
     }
-    const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), new THREE.Vector3(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
+    const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), origin.velocity.clone(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
     a.baseOrientation.copy(origin.baseOrientation);
     a.weld = origin.weld;
     this.place(a);
@@ -701,7 +755,7 @@ export class AsteroidField {
   originOf(root: string): ShovedState | null {
     const origin = this.origins.get(root);
     if (!origin) return null;
-    return { id: root, b: 0, p: origin.position.toArray(), v: [0, 0, 0], q: origin.baseOrientation.toArray(), s: [...origin.spinAxis.toArray(), origin.spinRate], c: KNOCKED };
+    return { id: root, b: 0, p: origin.position.toArray(), v: origin.velocity.toArray(), q: origin.baseOrientation.toArray(), s: [...origin.spinAxis.toArray(), origin.spinRate], c: KNOCKED };
   }
 
   /**
@@ -725,9 +779,16 @@ export class AsteroidField {
       if (layout.orbit?.axis === 'random') {
         // an axis across the line to the center, so the rock circles at its distance
         orbitAxis.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).cross(position).normalize();
+      } else if (layout.orbit && layout.orbit.speed === undefined && this.well) {
+        // a real orbit's plane runs through the body's center: the axis square to the line to
+        // the center, as near the vertical as that leaves it, so a rock above the disk's middle
+        // swings through it and below it, as far again, on its way round
+        orbitAxis.copy(position).cross(u.set(0, 1, 0).cross(position)).normalize();
       }
       const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
-      const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
+      const velocity = new THREE.Vector3();
+      if (layout.hill) relativeOrbit(r, layout.hill, position, velocity);
+      const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, velocity, orbitAxis, orbitRate);
       if (layout.rest !== undefined) this.rest(piece, layout.rest, i);
     }
   }
@@ -755,12 +816,12 @@ export class AsteroidField {
     this.place(piece);
   }
 
-  /** How fast a rock at a place circles the center: at `speed` (units/s), or as the well's gravity holds it. */
+  /** How fast a rock at a place circles the center: at `speed` (units/s), or on the circular orbit the well's gravity holds it on (Kepler: its pull is the circle's v²/r). */
   private orbitRate(position: THREE.Vector3, speed?: number) {
     const distance = Math.max(position.length(), 1);
     if (speed !== undefined) return speed / distance;
     const well = this.well;
-    return well ? Math.sqrt((well.surfaceGravity * well.radius * well.radius) / (distance * distance * distance)) : 0;
+    return well ? Math.sqrt(wellPull(well, distance) / distance) : 0;
   }
 
   clear() {
@@ -843,8 +904,11 @@ export class AsteroidField {
       velocity,
       orbitAxis,
       orbitRate,
+      orbitMu: orbitRate ? this.orbitMu : 0,
+      hill: this.hill,
       born,
-      crumbles: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
+      wornOut: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
+      crumbles: Infinity,
       basePosition: position.clone(),
       baseOrientation: object.quaternion.clone(),
       center: template.center,
@@ -859,6 +923,9 @@ export class AsteroidField {
       appeared: ++this.revision,
       ease: null,
     };
+    asteroid.crumbles = this.goneAt(asteroid);
+    // a ground's ceiling is built with the field, never in the middle of a round
+    if (template.relief?.ceiling) pyramidOf(template.relief.ceiling, template.semiAxes);
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
     object.userData.scale = scale;
@@ -1083,15 +1150,42 @@ export class AsteroidField {
   /** One piece of a shove (see shove). */
   private push(a: Asteroid, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number) {
     const age = at - a.born;
+    const drift = driftAt(a, at, new THREE.Vector3());
     positionAt(a, at, a.basePosition);
     a.baseOrientation.premultiply(setFromAxisAngle(new THREE.Quaternion(), a.spinAxis, a.spinRate * age));
-    if (a.orbitRate) applyAxisAngle(a.velocity, a.orbitAxis, a.orbitRate * age);
-    a.velocity.add(kick);
+    a.velocity.copy(drift).add(kick);
     a.spinAxis = axis.clone();
     a.spinRate = rate;
     a.born = at;
     a.shovedBy = by;
+    a.crumbles = this.goneAt(a);
     this.place(a);
+  }
+
+  /**
+   * The field time a piece is gone (see Asteroid.crumbles): worn out, or swallowed where its own
+   * conic (see Asteroid.orbitMu) first reaches the well's body, found on the contacts' grid of
+   * field time from its motion alone, so every browser takes it at the same field time; a conic
+   * that never reaches it falls into nothing.
+   */
+  private goneAt(a: Asteroid): number {
+    const well = this.well;
+    if (!well || !ownConic(a)) return a.wornOut;
+    // its nearest pass of the center: from its energy and angular momentum
+    startVelocity.copy(a.orbitAxis).multiplyScalar(a.orbitRate).cross(a.basePosition).add(a.velocity);
+    const r0 = a.basePosition.length();
+    const energy = startVelocity.lengthSq() / 2 - a.orbitMu / r0;
+    const h2 = flownVelocity.crossVectors(a.basePosition, startVelocity).lengthSq();
+    const e = Math.sqrt(Math.max(0, 1 + (2 * energy * h2) / (a.orbitMu * a.orbitMu)));
+    if (h2 / a.orbitMu / (1 + e) > well.radius) return a.wornOut;
+    // falling in: within one turn of a bound conic, or the time an unbound one takes to come in from where it is
+    const axis = energy < 0 ? -a.orbitMu / (2 * energy) : 0;
+    const span = energy < 0 ? 2 * Math.PI * Math.sqrt((axis * axis * axis) / a.orbitMu) : (2 * r0) / Math.max(1, startVelocity.length());
+    for (let t = SWALLOW_STEP; t <= span + SWALLOW_STEP; t += SWALLOW_STEP) {
+      conic(a, t, flown, flownVelocity);
+      if (flown.lengthSq() < well.radius * well.radius) return Math.min(a.wornOut, a.born + t);
+    }
+    return a.wornOut;
   }
 
   /**
@@ -1109,6 +1203,7 @@ export class AsteroidField {
     a.spinAxis = new THREE.Vector3().fromArray(state.s).normalize();
     a.spinRate = state.s[3];
     a.shovedBy = state.c;
+    a.crumbles = this.goneAt(a);
     this.place(a);
     return a;
   }
@@ -1139,8 +1234,7 @@ export class AsteroidField {
     const scale = asteroid.object.userData.scale * FRAGMENT_SCALE;
     // the fragments fly apart from where the piece stood, and keep circling with its orbit
     const origin = positionAt(asteroid, at, new THREE.Vector3());
-    const drift = asteroid.velocity.clone();
-    if (asteroid.orbitRate) applyAxisAngle(drift, asteroid.orbitAxis, asteroid.orbitRate * (at - asteroid.born));
+    const drift = driftAt(asteroid, at, new THREE.Vector3());
     const templates = this.templates[asteroid.kind];
     for (let i = 0; i < count; i++) {
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
@@ -1174,8 +1268,7 @@ export class AsteroidField {
     const r = new Randomizer(textSeed(rock.id));
     const age = at - rock.born;
     const origin = positionAt(rock, at, new THREE.Vector3());
-    const drift = rock.velocity.clone();
-    if (rock.orbitRate) applyAxisAngle(drift, rock.orbitAxis, rock.orbitRate * age);
+    const drift = driftAt(rock, at, new THREE.Vector3());
     const turn = setFromAxisAngle(new THREE.Quaternion(), rock.spinAxis, rock.spinRate * age).multiply(rock.baseOrientation);
     const spin = rock.spinAxis.clone().multiplyScalar(rock.spinRate);
     const tumble = (this.layout?.spin ?? SPIN_RATE) * FRAGMENT_TUMBLE;
@@ -1290,7 +1383,32 @@ export class AsteroidField {
    * reads it before the next cast), the others get a fresh one.
    */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
-    const distance = this.cast(origin, direction, maxDistance, false, obstacles);
+    return this.hitOf(this.cast(origin, direction, maxDistance, false, obstacles), into);
+  }
+
+  /**
+   * The pieces a tube of radius `wall` around the line from `origin` along `direction` (unit
+   * length) may meet within `length`, in the field's own order, written into `into`: those whose
+   * bounding sphere, widened by the wall (and a unit for rounding), the line enters by then. A ray
+   * inside the tube and parallel to the line, cast no farther, meets no other piece: where it
+   * enters a piece's sphere, the line runs no farther than the wall from that point.
+   */
+  piecesAlong(origin: THREE.Vector3, direction: THREE.Vector3, length: number, wall: number, into: Asteroid[]): Asteroid[] {
+    into.length = 0;
+    for (const asteroid of this.asteroids.values()) {
+      const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius + wall + 1);
+      if (enter !== null && enter <= length) into.push(asteroid);
+    }
+    return into;
+  }
+
+  /** As raycast, but among `pieces` alone (see piecesAlong): the same pieces met in the same order, so the same hit to the bit for a ray they were gathered for. */
+  raycastAmong(pieces: readonly Asteroid[], origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
+    return this.hitOf(this.cast(origin, direction, maxDistance, false, obstacles, pieces), into);
+  }
+
+  /** The last cast's hit at `distance` as a RayHit (into `into` when given), or null for none. */
+  private hitOf(distance: number | null, into?: RayHit): RayHit | null {
     if (distance === null) return null;
     const hit = into ?? { asteroid: null, distance: 0, center: castCenter! };
     hit.asteroid = castRock;
@@ -1298,6 +1416,11 @@ export class AsteroidField {
     hit.center = castCenter!;
     hit.part = castPart;
     return hit;
+  }
+
+  /** Whether a ray meets anything within `max` that raycast would hit: the first hit found ends the search, its distance and rock unknown. */
+  blocked(origin: THREE.Vector3, direction: THREE.Vector3, max: number, obstacles = false): boolean {
+    return this.cast(origin, direction, max, true, obstacles) !== null;
   }
 
   /**
@@ -1308,7 +1431,13 @@ export class AsteroidField {
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    if (!this.clearAir(from, to, haze)) return false;
+    return this.clearAir(from, to, haze) && this.clearLine(from, to);
+  }
+
+  /** True when no rock, well body or obstacle lies between two points: the line of sight without the haze (see lineOfSight). */
+  clearLine(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const distance = from.distanceTo(to);
+    if (distance < 1) return true;
     sight.subVectors(to, from).divideScalar(distance);
     return this.cast(from, sight, distance, true, true) === null;
   }
@@ -1320,10 +1449,11 @@ export class AsteroidField {
 
   /**
    * Where a ray first meets one piece (the distance along it, null for a miss): its box, its
-   * measured surface or its ellipsoid, and what stands on it or reaches out of it.
+   * measured surface or its ellipsoid, and what stands on it or reaches out of it. A ground of
+   * hills and hollows is marched only as far as `max`: a hit beyond it may go unfound.
    */
-  rayInto(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
-    let distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+  rayInto(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3, max = Infinity): number | null {
+    let distance = asteroid.box ? rayPiece(asteroid, origin, direction, max) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
     rayPart = false;
     for (const part of this.attachments.get(asteroid.id) ?? NONE) {
       const along = rayAttachment(asteroid, part, origin, direction);
@@ -1338,9 +1468,10 @@ export class AsteroidField {
   /**
    * The distance of the nearest hit along a ray within `max` (the rock hit, if any, in castRock),
    * or with `any` of the first hit found, which is all a line of sight needs; null for none.
-   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped.
+   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped; only
+   * `pieces` are looked at (every piece of the field by default, see piecesAlong).
    */
-  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean): number | null {
+  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean, pieces: Iterable<Asteroid> = this.asteroids.values()): number | null {
     let best: number | null = null;
     castRock = null;
     castCenter = null;
@@ -1361,10 +1492,10 @@ export class AsteroidField {
         castCenter = well.position;
       }
     }
-    for (const asteroid of this.asteroids.values()) {
+    for (const asteroid of pieces) {
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
-      const distance = this.rayInto(asteroid, origin, direction);
+      const distance = this.rayInto(asteroid, origin, direction, best ?? max);
       if (distance !== null && distance <= max && (best === null || distance < best)) {
         best = distance;
         castRock = asteroid;
@@ -1502,10 +1633,15 @@ export class AsteroidField {
   surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3(), time = this.clock): THREE.Vector3 {
     const arm = pull.subVectors(point, asteroid.object.position);
     target.copy(asteroid.spinAxis).multiplyScalar(asteroid.spinRate).cross(arm);
-    if (!asteroid.orbitRate) return target.add(asteroid.velocity);
-    // the orbit carries the rock (and turns its drift) about the field's center
-    target.add(applyAxisAngle(v.copy(asteroid.velocity), asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
+    target.add(driftAt(asteroid, time, v));
+    // the orbit carries the rock about the field's center
+    if (!asteroid.orbitRate) return target;
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
+  }
+
+  /** Whether the field lies on a world's ground (see Placement.ground). */
+  get grounded(): boolean {
+    return this.grounds.length > 0;
   }
 
   /**
@@ -1541,8 +1677,10 @@ export class AsteroidField {
   }
 
   /**
-   * The gravitational pull at a point (units/s²): an arena's massive body (its well), or the world a
-   * place lies on (its fall). The field's pieces pull as real ones do, a rock of 100 m with some
+   * The gravitational pull at a point (units/s²): an arena's massive body (its well), the world a
+   * place lies on (its fall), or the tide of the planet a field rides its orbit about (see
+   * FieldLayout.hill; the frame's turn a moving body feels comes on top, see world/hover
+   * outside). The field's pieces pull as real ones do, a rock of 100 m with some
    * hundred-thousandth of a g: nothing a ship would notice, so nothing at all.
    */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
@@ -1552,8 +1690,10 @@ export class AsteroidField {
     if (well) {
       pull.subVectors(well.position, position);
       const distance = Math.max(pull.length(), well.radius);
-      target.addScaledVector(pull.normalize(), (well.surfaceGravity * well.radius * well.radius) / (distance * distance));
+      target.addScaledVector(pull.normalize(), wellPull(well, distance));
     }
+    // a field riding an orbit: the planet's tide, all its gravity leaves in the frame that falls with it
+    if (this.hill) hillTide(this.hill, position, target);
     return target;
   }
 }
@@ -1602,10 +1742,71 @@ function rayAttachment(asteroid: Asteroid, part: Attachment, origin: THREE.Vecto
   return rayBox(localOrigin, localStep, part.half);
 }
 
-/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center. */
+const flown = new THREE.Vector3();
+const flownVelocity = new THREE.Vector3();
+const startVelocity = new THREE.Vector3();
+
+/** Whether a piece flies its own conic about the well (see Asteroid.orbitMu): it circles one, and drifts off its circle. */
+const ownConic = (a: Asteroid) => a.orbitMu !== 0 && (a.velocity.x !== 0 || a.velocity.y !== 0 || a.velocity.z !== 0);
+
+/** A piece on its own conic (see ownConic): where it is `age` seconds after it was born, and how fast it moves there, into `position` and `velocity`. */
+function conic(a: Asteroid, age: number, position: THREE.Vector3, velocity: THREE.Vector3) {
+  // its drift was taken in the frame its orbit turns: the turn's speed where it was born on top
+  startVelocity.copy(a.orbitAxis).multiplyScalar(a.orbitRate).cross(a.basePosition).add(a.velocity);
+  kepler(a.orbitMu, a.basePosition, startVelocity, age, position, velocity);
+}
+
+/**
+ * Where a piece of a field riding an orbit is laid out to move (see FieldLayout.hill), its
+ * velocity at field time 0 into `velocity`: on a bounded relative orbit about the field's center
+ * from `position`, or, a crossing share of them, on an orbit through `position` at a field time
+ * of its own, `position` moved to where it is at field time 0.
+ */
+function relativeOrbit(r: Randomizer, layout: NonNullable<FieldLayout['hill']>, position: THREE.Vector3, velocity: THREE.Vector3) {
+  const frame = layout.frame;
+  if (r.nextFloat() < layout.crossing) {
+    velocity.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(layout.speed);
+    hill(frame, position, velocity, -r.range(layout.from, layout.to), position, velocity);
+    return;
+  }
+  // no drift along the orbit: its speed along it twice the rate times its height less (see world/orbits hill)
+  const reach = frame.rate * position.length() * layout.swing;
+  velocity.copy(frame.up).multiplyScalar(r.range(-reach, reach));
+  velocity.addScaledVector(frame.ahead, -2 * frame.rate * position.dot(frame.up));
+  velocity.addScaledVector(frame.normal, r.range(-reach, reach));
+}
+
+/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center, flown along its own conic about the well, or along its orbit relative to the one the field rides. */
 function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
   const age = time - a.born;
+  if (a.hill) {
+    hill(a.hill, a.basePosition, a.velocity, age, flown, flownVelocity);
+    return target.copy(flown);
+  }
+  if (ownConic(a)) {
+    conic(a, age, flown, flownVelocity);
+    return target.copy(flown);
+  }
   target.copy(a.basePosition).addScaledVector(a.velocity, age);
+  return a.orbitRate ? applyAxisAngle(target, a.orbitAxis, a.orbitRate * age) : target;
+}
+
+/**
+ * A rock's drift at a field time (units/s), into `target`: how it moves besides what its orbit's
+ * turn carries (the turn's speed where it stands, see surfaceVelocity), in the world's axes; its
+ * drift as born, turned with its orbit, or what is left of its speed on its own conic.
+ */
+function driftAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
+  const age = time - a.born;
+  if (a.hill) {
+    hill(a.hill, a.basePosition, a.velocity, age, flown, flownVelocity);
+    return target.copy(flownVelocity);
+  }
+  if (ownConic(a)) {
+    conic(a, age, flown, flownVelocity);
+    return target.copy(a.orbitAxis).multiplyScalar(-a.orbitRate).cross(flown).add(flownVelocity);
+  }
+  target.copy(a.velocity);
   return a.orbitRate ? applyAxisAngle(target, a.orbitAxis, a.orbitRate * age) : target;
 }
 
@@ -1701,9 +1902,10 @@ function pieceContact(asteroid: Asteroid, center: THREE.Vector3, radius: number,
  * A ground of hills and hollows on top of a box piece (a moon's surface under a place): its
  * height (in the box's own coordinates, about its center) at each point of the box's footprint,
  * never above the box's top. The piece collides as that ground: whatever lies below it within
- * the footprint is inside.
+ * the footprint is inside. A ground with a `ceiling` (see world/ceiling) is marched by its rays
+ * only where they come near it.
  */
-export type Relief = (x: number, z: number) => number;
+export type Relief = ((x: number, z: number) => number) & { ceiling?: Ceiling };
 
 /** The step for a ground's slope (units, in the box's coordinates). */
 const RELIEF_STEP = 20;
@@ -1774,22 +1976,34 @@ export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief:
 /** Halvings of the way to a wall that rises over a sphere's center (see reliefContact): to within a 16,000th of its radius. */
 const RELIEF_WALL_STEPS = 14;
 
-/** How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. */
+/**
+ * How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's
+ * ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. The march
+ * stops at `max` world units along the ray (a hit within it is found as without the limit), since
+ * a world's ground box spans kilometers and every step samples its relief, but where the ground
+ * has a ceiling (see world/ceiling), a step above it samples nothing: it gives the answer the
+ * sample would, so the ray stops at the same step and the same point.
+ */
 const RELIEF_MARCH = 200;
-export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief): number | null {
+export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief, max = Infinity): number | null {
   const enter = rayBox(origin, step, half);
   if (enter === null) return null;
   const length = step.length();
   const through = (2 * half.length()) / length;
+  const pyramid = relief.ceiling ? pyramidOf(relief.ceiling, half) : null;
   const under = (t: number) => {
     const x = origin.x + step.x * t;
     const z = origin.z + step.z * t;
     if (Math.abs(x) > half.x || Math.abs(z) > half.z) return false;
-    return origin.y + step.y * t <= Math.min(half.y, relief(x, z));
+    // over the box's top no ground can reach, nor over its ceiling: its relief is not sampled there
+    const y = origin.y + step.y * t;
+    if (y > half.y || (pyramid && pyramid.above(x, y, z))) return false;
+    return y <= relief(x, z);
   };
   const stride = RELIEF_MARCH / length;
   if (under(enter)) return enter;
-  for (let t = enter; t < enter + through; t += stride) {
+  const end = Math.min(enter + through, max);
+  for (let t = enter; t < end; t += stride) {
     if (!under(t + stride)) continue;
     let low = t;
     let high = t + stride;
@@ -1814,9 +2028,9 @@ function toLocalRay(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.
 }
 
 /** Distance along a normalized ray to a box piece's surface (slabs), or null. */
-function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3, max = Infinity): number | null {
   toLocalRay(asteroid, origin, direction);
-  return asteroid.relief ? reliefRay(localOrigin, localStep, asteroid.semiAxes, asteroid.relief) : rayBox(localOrigin, localStep, asteroid.semiAxes);
+  return asteroid.relief ? reliefRay(localOrigin, localStep, asteroid.semiAxes, asteroid.relief, max) : rayBox(localOrigin, localStep, asteroid.semiAxes);
 }
 
 /** Distance along a normalized ray to the asteroid's ellipsoid surface, or null. */

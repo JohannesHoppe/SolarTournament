@@ -41,7 +41,7 @@ export interface DeathEvent {
   ship: string;
   /** Skill of a bot, null for a Host. */
   skill: number | null;
-  /** rock, hull, gate, wreck, ram, knockout, laser, torpedo, nova, plume, flare, comet, shower, well, air, space, battery, exhaust, blast, remote. */
+  /** rock, hull, gate, wreck, ram, knockout, laser, torpedo, nova, plume, flare, comet, shower, well, air, ministry, battery, exhaust, blast, remote. */
   cause: string;
   /** For a knockout: what the shoved ship crashed into. */
   into: string | null;
@@ -100,7 +100,7 @@ export interface FleetEvent {
   ship: string | null;
   part: string;
   zone: number;
-  weapon: FleetWeapon | 'sun' | null;
+  weapon: FleetWeapon | 'sun' | 'ram' | null;
   count: number;
 }
 

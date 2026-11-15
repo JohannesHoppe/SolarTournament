@@ -29,7 +29,7 @@ export type FlameLevel = {
   glow: THREE.Color;
   glowScale: number;
   plume: THREE.Color;
-  /** The maneuvering thrusters' gas. */
+  /** The color the maneuvering thrusters' gas cools to away from the nozzle (white-hot at its mouth, see view/effects). */
   jet: THREE.Color;
   /** The exhaust trail's puffs. */
   trail: THREE.Color;
@@ -42,10 +42,11 @@ const color = (r: number, g: number, b: number, scale = 1) => new THREE.Color(r,
 /**
  * The steps of the look (linear light, not tone mapped, so the bright parts bloom). Stock has no
  * jet of its own (the model file's flame burns); its colors are the drive's as the depots fuel it:
- * an orange plume, the thrusters' cold white-blue gas, a faint cool blue trail.
+ * an orange plume, the thrusters' hydrogen cooling to rose (its red and blue-green lines), a
+ * faint cool blue trail.
  */
 export const FLAMES: readonly FlameLevel[] = [
-  { core:color(1, 1, 1), edge: color(1, 1, 1), length: 0, diamonds: 0, glow: color(1, 1, 1), glowScale: 1, plume: color(1, 0.4, 0.1), jet: color(0.7, 0.85, 1.25), trail: color(0.2, 0.28, 0.5), light: new THREE.Color(0x88bbff) },
+  { core: color(1, 1, 1), edge: color(1, 1, 1), length: 0, diamonds: 0, glow: color(1, 1, 1), glowScale: 1, plume: color(1, 0.4, 0.1), jet: color(1.1, 0.28, 0.5), trail: color(0.2, 0.28, 0.5), light: new THREE.Color(0x88bbff) },
   // azure: a hotter core of white-blue in the game's azure (its readable shade, #4d91ff, on the rim)
   { core: color(0.6, 0.85, 1, 3.2), edge: color(0.07, 0.29, 1, 2.6), length: 1, diamonds: 0, glow: color(0.3, 0.6, 1.6), glowScale: 1.3, plume: color(0.1, 0.35, 1.4), jet: color(0.35, 0.65, 1.7), trail: color(0.05, 0.16, 0.7), light: new THREE.Color(0x3d8bff) },
   // violet: a mix that burns violet, the jet standing in shock diamonds
@@ -117,13 +118,17 @@ const FRAGMENT = /* glsl */ `
   }
 `;
 
-/** The jets' cones of a hull's nozzles, made once per set of nozzles: rings from the mouth (along 0) to the tail (along 1). */
+/**
+ * The jets' cones of a hull's nozzles: rings from the mouth (along 0) to the tail (along 1). Their
+ * buffers are made once per set of nozzles and shared; each ship's jets are a geometry of their
+ * own over them, so their bounds follow how far its jets reach (see FlameLook.burn).
+ */
 const cones = new Map<string, THREE.BufferGeometry>();
 
 function jets(nozzles: readonly Nozzle[]): THREE.BufferGeometry {
   const key = JSON.stringify(nozzles);
   const kept = cones.get(key);
-  if (kept) return kept;
+  if (kept) return share(kept);
   const radial = 16;
   const rings = 24;
   const position: number[] = [];
@@ -159,13 +164,21 @@ function jets(nozzles: readonly Nozzle[]): THREE.BufferGeometry {
   geometry.setAttribute('along', new THREE.Float32BufferAttribute(along, 1));
   geometry.setAttribute('mouth', new THREE.Float32BufferAttribute(mouth, 3));
   geometry.setIndex(index);
-  // the jets reach out behind the mouths as far as the longest look's shove draws them
-  const reach = FLAME_LENGTH * FLAMES[FLAMES.length - 1].length * SHOVE_LENGTH;
+  // the mouths' bounds; FlameLook.burn moves its far side out as far as the jets reach
   const box = new THREE.Box3();
-  for (const nozzle of nozzles) box.expandByPoint(new THREE.Vector3(nozzle.x - nozzle.r, nozzle.y - nozzle.r, nozzle.z)).expandByPoint(new THREE.Vector3(nozzle.x + nozzle.r, nozzle.y + nozzle.r, nozzle.z + reach));
+  for (const nozzle of nozzles) box.expandByPoint(new THREE.Vector3(nozzle.x - nozzle.r, nozzle.y - nozzle.r, nozzle.z)).expandByPoint(new THREE.Vector3(nozzle.x + nozzle.r, nozzle.y + nozzle.r, nozzle.z));
   geometry.boundingBox = box;
-  geometry.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
   cones.set(key, geometry);
+  return share(geometry);
+}
+
+/** A geometry of its own over another's buffers (drawn from the same buffers on the GPU), with bounds of its own. */
+function share(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(source.attributes)) geometry.setAttribute(name, attribute);
+  geometry.setIndex(source.index);
+  geometry.boundingBox = source.boundingBox!.clone();
+  geometry.boundingSphere = geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
   return geometry;
 }
 
@@ -234,7 +247,14 @@ export class FlameLook {
     this.mesh.visible = shown && length > 0;
     if (!this.mesh.visible) return;
     const draw = 1 + (SHOVE_LENGTH - 1) * shove;
-    this.uniforms.reach.value = FLAME_LENGTH * length * (IDLE_LENGTH + (1 - IDLE_LENGTH) * throttle) * draw;
+    const reach = FLAME_LENGTH * length * (IDLE_LENGTH + (1 - IDLE_LENGTH) * throttle) * draw;
+    this.uniforms.reach.value = reach;
+    // its bounds reach as far as the jets do, for the frustum's culling and the title pad's frame
+    const { boundingBox: box, boundingSphere: sphere } = this.mesh.geometry;
+    if (box && sphere && !box.isEmpty()) {
+      box.max.z = box.min.z + reach;
+      box.getBoundingSphere(sphere);
+    }
     this.uniforms.strength.value = (IDLE_STRENGTH + (1 - IDLE_STRENGTH) * throttle) * (1 + 0.5 * shove);
     if (!still) this.uniforms.time.value = time;
   }

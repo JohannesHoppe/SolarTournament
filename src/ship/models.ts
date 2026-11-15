@@ -642,7 +642,7 @@ const HUMAN_BODY: End[] = [{ z: -290, w: 12, h: 10, y: -8 }, { z: -170, w: 45, h
 /** The human interceptor's right fin, from its leading edge back. */
 const HUMAN_FIN: End[] = [{ z: -110, w: 8, h: 30, x: 300, y: 30 }, { z: 260, w: 16, h: 78, x: 285, y: 8 }];
 
-/** The human interceptor, after the original: about 32 m across and 29 m long. */
+/** The human interceptor, after the original: about 31 m across its fins and 30 m long. */
 export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
   const parts: THREE.BufferGeometry[] = [
     // fuselage: wide at the drives, narrowing to the nose

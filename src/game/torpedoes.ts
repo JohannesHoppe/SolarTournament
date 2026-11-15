@@ -7,8 +7,10 @@ import type { Effects } from '../view/effects';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
-import { densityIn, dragOn, LOCK_DEPTH } from '../world/air';
-import { induced, LIFT_MOST, liftAt } from '../ship/flight';
+import { densityIn, dragOn, LOCK_DEPTH, windIn } from '../world/air';
+import { hillTurn } from '../world/orbits';
+import { induced, LIFT_MOST, liftAt, METERS_PER_UNIT } from '../ship/flight';
+import { SHEET_JOULES } from '../ship/impact';
 import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
 /** Torpedoes a fresh clone carries: enough for a salvo that a ship's decoys (one torpedo each, see game/decoys) cannot all draw. */
@@ -35,9 +37,11 @@ export const TORPEDO_LAUNCH = 800;
  */
 export const TORPEDO_ARMING = 0.5;
 /**
- * Its top speed (units/s, 360 m/s): a notch above a ship's 250 m/s, so a ship flying straight
- * is caught at 110 m/s, and below an overdrive's 400 m/s. As for a ship, a push beyond it adds
- * no speed.
+ * Its top speed (units/s, 360 m/s), a rule of the Ministry's as the ships' speed limit is: its
+ * motor could take it to some 2.7 km/s, but its computer holds it a notch above a ship's 250 m/s,
+ * so the show lasts: a ship flying straight is caught at 110 m/s, one with an overdrive's shove
+ * (450 m/s) gets away for a while, and the laser has time to find it. As for a ship, a push
+ * beyond it adds no speed.
  */
 export const TORPEDO_TOP_SPEED = 7200;
 /** Its main drive along its flight (units/s², 20 g): from a standing launch to top speed in under 2 s, quick on a straight line. */
@@ -56,7 +60,7 @@ const SEEKER_LAG = 0.4;
 const STEER_LAG = 0.25;
 /**
  * The moment to break (s before the hit at the closing speed): a hard turn started 0.6 to 2 s
- * before the hit makes a torpedo overshoot, a dodge 0.6 to 1.2 s before; Nicole calls it here.
+ * before the hit makes a torpedo overshoot, a dodge 0.6 to 1.5 s before; Nicole calls it here.
  */
 export const TORPEDO_BREAK = 1.5;
 /**
@@ -72,29 +76,62 @@ export const TORPEDO_LIFETIME = 15;
  */
 export const FLING_CREDIT = 3;
 /**
- * A torpedo's drag per unit of its mass as a share of a ship's (see world/air, dragOn): a slender
- * body nose first, an ogive and a boat tail with fins flush to it, against a fighter's blunt hull,
- * its wings, fins and drive bells broadside to the air in every turn. Drag per mass goes with the
- * drag coefficient times the frontal area over the mass: a slender missile's coefficient is about a
- * third of a blunt airframe's, and its frontal area per tonne no larger, so it loses about a third
- * of what a ship loses to the same air at the same speed (a ballistic coefficient three times a
- * ship's).
+ * A torpedo's drag per unit of its mass as a share of a ship's (see world/air, dragOn). Drag per
+ * mass goes with the drag coefficient times the frontal area over the mass. A torpedo (see
+ * LENGTH, BODY) flies nose first, an ogive and a boat tail with small fins: a coefficient of
+ * about 0.3 on its 0.2 m² of cross section, 6 × 10⁻⁵ m² a kilogram. A fighter, blunt with its
+ * fins and drive bells (about 40 m² nose on, a coefficient of about 0.8), has some 5 × 10⁻⁴ m² a
+ * kilogram, which with the game's drag (1.5 g at 250 m/s at Jupiter's cloud deck) puts some
+ * 0.9 kg/m³ of air there, about Jupiter's at 5 bar. So a torpedo loses a ninth of what a ship
+ * loses to the same air at the same speed.
  */
-export const TORPEDO_DRAG = 1 / 3;
+export const TORPEDO_DRAG = 1 / 9;
 /**
- * In air its fins give it lift (see ship/flight, LIFT) as a ship's do: this share of a ship's
- * per tonne, the same third as its drag (small fins on a slender body: a ship's lift for its drag),
- * on top of its thrusters across its flight, so it too turns tighter the faster it flies there;
- * its computer trims the fins for the turn it wants, no further than a ship's (LIFT_MOST), and the
- * lift it takes costs it drag as a ship's does (see ship/flight, induced).
+ * In air its fins and body give it lift (see ship/flight, LIFT) as a ship's do: this share of a
+ * ship's per tonne. A ship's 15 g at the deck at 250 m/s asks for a lift coefficient times its
+ * area of about 300 m² (a wing of 35 m by 10 m at about 1): 5 m² a tonne; a missile's body and
+ * fins at a steep angle of attack give a normal force of about 5 times their cross section,
+ * 1 m² a tonne, a fifth. It comes on top of its thrusters across its flight, so it too turns
+ * tighter the faster it flies there; its computer trims the fins for the turn it wants, no
+ * further than a ship's (LIFT_MOST), and the lift it takes costs it drag as a ship's does (see
+ * ship/flight, induced).
  */
-export const TORPEDO_LIFT = 1 / 3;
+export const TORPEDO_LIFT = 1 / 5;
 /** The lift its fins give in the step flown (units/s², see TORPEDO_LIFT); 0 out of any air. */
 let finLift = 0;
-/** Its own radius, for the laser that shoots it down and for the rock it strikes (units, 6 m). It goes off at a ship's hull (see strikes). */
-export const TORPEDO_RADIUS = 120;
-/** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
-export const TORPEDO_DAMAGE = 60;
+/** Its own radius (units, 2.75 m: half its length, see LENGTH), for the rock, hull and solids it strikes. It goes off at a ship's hull (see strikes). */
+export const TORPEDO_RADIUS = 55;
+/**
+ * How close to it the laser's beam has to pass to shoot it down (units, 6 m). Its body is half a
+ * meter thick, too thin for a Host's crosshair, but it is the brightest thing in the sky: its
+ * motor at full push (196 kN at an exhaust velocity of about 3 km/s) throws out some 300 MW of
+ * hot gas, and the laser's beam director, a fast steering mirror swinging the beam up to about
+ * 1.5° off the nose, puts the beam on the body wherever the crosshair lies within 6 m of it. The
+ * mirror reaches 6 m from 230 m on; closer the game keeps the 6 m all the same.
+ */
+export const TORPEDO_SIGHT = 120;
+/**
+ * The warhead: 100 kg of high explosive (some 420 MJ), shaped to throw its blast and fragments
+ * at the hull it goes off on; about a tenth of it reaches the armor, 42 MJ: TORPEDO_WARHEAD hull
+ * points at the game's 0.75 MJ a point (see ship/impact, SHEET_JOULES). Armor does not stop it,
+ * whatever side it hits.
+ */
+export const TORPEDO_WARHEAD = 56;
+/** What a torpedo takes from a hull at most (hull points): a whole hull; more than that tears through it. */
+export const TORPEDO_MOST = 100;
+
+/**
+ * Hull points a torpedo takes from a ship of `mass` (kg) it hits at a closing speed of `closing`
+ * (units/s): the warhead's, and the energy the two bodies lose meeting as one (½ μ v², μ the
+ * reduced mass of torpedo and hull) at the game's 0.75 MJ a point; at most TORPEDO_MOST. A ship
+ * fleeing at the limit is struck at 110 m/s (6 MJ, 8 points more: 64), one at rest at 360 m/s
+ * (64 MJ, 85 more: all of it), head on at 610 m/s all of it too.
+ */
+export function torpedoDamage(closing: number, mass: number): number {
+  const speed = closing * METERS_PER_UNIT;
+  const reduced = (MASS.torpedo * mass) / (MASS.torpedo + mass);
+  return Math.min(TORPEDO_MOST, TORPEDO_WARHEAD + (0.5 * reduced * speed * speed) / SHEET_JOULES);
+}
 /** A torpedo locks on a ship (or a part of the President's battleship) within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
 export const LOCK_ANGLE = 0.3;
 export const LOCK_DISTANCE = 60000;
@@ -155,6 +192,9 @@ export interface Mover {
 const aim = new THREE.Vector3();
 const command = new THREE.Vector3();
 const course = new THREE.Vector3();
+/** The air flowing past a torpedo, its direction (see flyTorpedo), and the wind there. */
+const flow = new THREE.Vector3();
+const windHere = new THREE.Vector3();
 const across = new THREE.Vector3();
 const from = new THREE.Vector3();
 const step = new THREE.Vector3();
@@ -217,10 +257,13 @@ function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
  * steering, so it flies straight lines (one fired at the horizon without a lock does not sink) where its drive
  * and thrusters are strong enough, and is bent only where they are not (a strong well up close).
  */
-export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL, density = 0) {
+export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number, outside: THREE.Vector3 = NO_PULL, density = 0, wind: THREE.Vector3 = NO_PULL) {
   const { position, velocity, push, seen } = torpedo;
   const speed = velocity.length();
-  const most = TORPEDO_LIFT * liftAt(density, speed);
+  // its fins answer to the air flowing past them: its velocity less the wind's
+  const airspeed = flow.subVectors(velocity, wind).length();
+  if (airspeed > 1) flow.divideScalar(airspeed);
+  const most = TORPEDO_LIFT * liftAt(density, airspeed);
   finLift = Math.min(most, LIFT_MOST);
   if (target) {
     seen.lerp(target.velocity, 1 - exp(-dt / SEEKER_LAG));
@@ -240,10 +283,10 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   // the outside's pull countered at once, within what drive and thrusters give besides the steering
   bound(countered.subVectors(push, outside), speed, dt);
   // the lift its fins take across the flight (before its thrusters) costs it drag against it
-  if (finLift > 0 && speed > 1) {
-    const along = countered.dot(course);
+  if (finLift > 0 && airspeed > 1) {
+    const along = countered.dot(flow);
     const lift = Math.min(finLift, Math.sqrt(Math.max(0, countered.lengthSq() - along * along)));
-    countered.addScaledVector(course, -induced(lift, most));
+    countered.addScaledVector(flow, -induced(lift, most));
   }
   velocity.addScaledVector(countered.add(outside), dt);
   const limit = Math.max(speed, TORPEDO_TOP_SPEED);
@@ -264,15 +307,23 @@ export function strikes(before: THREE.Vector3, after: THREE.Vector3, target: Mov
   return from.addScaledVector(step, along).distanceToSquared(target.position) < radius * radius;
 }
 
-/** A torpedo's length (units, 13 m), its body's radius (units, 1.5 m) and how far its fins reach out (units, 2.9 m): looks only, its radius for every rule is TORPEDO_RADIUS. */
-const LENGTH = 260;
-const BODY = 30;
+/**
+ * A torpedo's length (units, 5.5 m) and its body's radius (units, 0.25 m): a tonne (see
+ * world/bodies, MASS) in some 0.85 m³ of ogive, body and boat tail, about 1,200 kg/m³: 100 kg of
+ * warhead, some 600 kg of propellant and 300 kg of motor, seeker and casing. It is drawn in design
+ * units (DESIGN_LENGTH long, DESIGN_BODY in its body's radius, its fins reaching FIN_REACH out:
+ * 0.5 m) and scaled onto its size; its radius for every rule is TORPEDO_RADIUS.
+ */
+const LENGTH = 110;
+const BODY = 5;
+const DESIGN_LENGTH = 260;
+const DESIGN_BODY = 30;
 const FIN_REACH = 58;
 /** Sides around its round parts: smooth at the closest look, a few hundred triangles. */
 const AROUND = 24;
 
-/** The casing's row of a point along the axis (z, nose +LENGTH/2): 0 at the nose's tip, 1 at the nozzle's lip (see torpedoCasing). */
-const casingRow = (z: number) => (LENGTH / 2 - z) / LENGTH;
+/** The casing's row of a point along the axis (z in design units, nose +DESIGN_LENGTH/2): 0 at the nose's tip, 1 at the nozzle's lip (see torpedoCasing). */
+const casingRow = (z: number) => (DESIGN_LENGTH / 2 - z) / DESIGN_LENGTH;
 
 /**
  * A round part: the profile `[radius, z]` turned about the axis, painted from the casing by
@@ -322,18 +373,18 @@ const NOZZLE_GLOW = new THREE.Color(1.3, 0.55, 0.16);
  * the seeker's eye and the motor's throat. Its nose points along +z, as lookAt turns it.
  */
 function torpedoGeometry(): THREE.BufferGeometry {
-  const half = LENGTH / 2;
+  const half = DESIGN_LENGTH / 2;
   const nose: [number, number][] = [];
   for (let k = 0; k <= 8; k++) {
     const s = k / 8;
-    nose.push([9 + (BODY - 9) * pow(cos((s * Math.PI) / 2), 0.85), 58 + s * (half - 12 - 58)]);
+    nose.push([9 + (DESIGN_BODY - 9) * pow(cos((s * Math.PI) / 2), 0.85), 58 + s * (half - 12 - 58)]);
   }
   const body = [
     // the bell's outside, its lip and its inside down to the throat (inside out: faces inwards)
     turned([[12, -half + 12], [17, -half], [19, -half], [21, -half + 16]]),
     // the boat tail, the body, the nose
-    turned([[21, -half + 16], [BODY, -96]]),
-    turned([[BODY, -96], [BODY, 58]]),
+    turned([[21, -half + 16], [DESIGN_BODY, -96]]),
+    turned([[DESIGN_BODY, -96], [DESIGN_BODY, 58]]),
     turned(nose),
     // the seeker's dome of dark glass
     turned(Array.from({ length: 5 }, (_, k): [number, number] => [9 * cos((k / 4) * (Math.PI / 2)), half - 12 + 9 * sin((k / 4) * (Math.PI / 2))])),
@@ -341,7 +392,7 @@ function torpedoGeometry(): THREE.BufferGeometry {
   for (let k = 0; k < 4; k++) {
     const angle = (k * Math.PI) / 2;
     body.push(fin(angle + Math.PI / 4, [-half + 10, -62], [-half + 6, -96], 18, FIN_REACH, 2.5));
-    body.push(fin(angle, [-40, 50], [-28, 38], BODY - 1, BODY + 7, 3));
+    body.push(fin(angle, [-40, 50], [-28, 38], DESIGN_BODY - 1, DESIGN_BODY + 7, 3));
   }
   // the eye: a small cap of red light just through the dome's top
   const eye = new THREE.SphereGeometry(4.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, half - 7, 0);
@@ -365,6 +416,8 @@ function torpedoGeometry(): THREE.BufferGeometry {
   join('color', 3, 1);
   geometry.addGroup(0, casingPart.attributes.position.count, 0);
   geometry.addGroup(casingPart.attributes.position.count, glowPart.attributes.position.count, 1);
+  // from design units onto its size: around its axis (y here) and along it
+  geometry.scale(BODY / DESIGN_BODY, LENGTH / DESIGN_LENGTH, BODY / DESIGN_BODY);
   rotateX(geometry, Math.PI / 2);
   geometry.computeBoundingSphere();
   return geometry;
@@ -390,6 +443,11 @@ export class Torpedoes {
   ];
 
   constructor(private readonly effects: Effects) {}
+
+  /** A torpedo that never flies, in its materials, for the shaders compiled with the round's (see Game.warmShaders), so the first launch does not stall a frame. */
+  samples(): THREE.Object3D {
+    return new THREE.Mesh(this.geometry, this.material);
+  }
 
   launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean) {
     // a launch is loud: the shooter shows up on the sensors again (see Ship.silent)
@@ -423,12 +481,14 @@ export class Torpedoes {
       const burning = now - torpedo.bornAt < TORPEDO_LIFETIME;
       // a world's gravity, a well's pull, a column's push and an air's drag act on it as on a ship; it has no hover field
       field.gravity(torpedo.position, pulled);
+      // a field riding an orbit (the Satellite Junkyard): the frame's turn as well as its tide, as a ship feels it (see world/hover)
+      if (field.hill) hillTurn(field.hill, torpedo.velocity, pulled);
       if (field.air) dragOn(field.air, torpedo.position, torpedo.velocity, dt, pulled, TORPEDO_DRAG);
-      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled, densityIn(field.air, torpedo.position));
+      if (burning) flyTorpedo(torpedo, target?.flight ?? null, dt, pulled, densityIn(field.air, torpedo.position), windIn(field.air, torpedo.position, windHere));
       else torpedo.position.addScaledVector(torpedo.velocity.addScaledVector(pulled, dt), dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it
-      if (burning && Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);
+      if (burning && Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-LENGTH / 2 - 5).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 25);
       const spent = !burning && !torpedo.holder && now - torpedo.releasedAt > FLING_CREDIT;
       // another browser decides where its torpedo goes off; one whose word never came is gone after its time
       if (!torpedo.own) {
@@ -451,7 +511,7 @@ export class Torpedoes {
     for (const torpedo of this.list) {
       // a ship does not shoot down its own torpedo leaving the tube
       if (torpedo.shooter === shooter && now - torpedo.bornAt < TORPEDO_ARMING) continue;
-      const distance = raySphere(origin, direction, torpedo.position, TORPEDO_RADIUS);
+      const distance = raySphere(origin, direction, torpedo.position, TORPEDO_SIGHT);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { torpedo, distance };
     }
     return best;

@@ -74,6 +74,8 @@ export class Radar {
     const scale = pixels / css;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, css, css);
+    // one font for every word of the draw: setting it costs a parse, even to the same
+    ctx.font = FONT;
     const center = css / 2;
     const radius = css / 2 - 14;
     this.written.length = 0;
@@ -198,7 +200,6 @@ export class Radar {
   /** A mark's name, unless it would run into a name already written: the marks come first, then the ships, each keeps its dot either way. */
   private label(text: string, x: number, y: number, color: string) {
     const written = this.written;
-    this.ctx.font = FONT;
     const width = this.ctx.measureText(text).width;
     for (let i = 0; i < written.length; i += 3) {
       if (x < written[i] + written[i + 2] && written[i] < x + width && Math.abs(y - written[i + 1]) < LINE) return;
@@ -207,9 +208,9 @@ export class Radar {
     this.text(text, x, y, color);
   }
 
+  /** A word in the draw's font (FONT, set once in update). */
   private text(text: string, x: number, y: number, color: string, align: CanvasTextAlign = 'left') {
     const ctx = this.ctx;
-    ctx.font = FONT;
     ctx.textAlign = align;
     ctx.fillStyle = color;
     ctx.fillText(text, x, y);

@@ -21,9 +21,9 @@ export const IMMOVABLE = Infinity;
 /**
  * The masses of what flies (kg). An interceptor (35 m) is a fighter of 60 t, about three
  * times a fighter jet of today, for its reactor, drive and armor. A sponsor core (an armored
- * reactor canister 14 m long) a quarter of that; a sponsor probe 60 kg (solar wings, a dish and
- * a beacon on a light frame: a hook's winch has it in at a jerk, and its thrusters, about 20 kN,
- * throw it about at some 33 g, see game/items); a torpedo a
+ * reactor canister 14 m long) a quarter of that; a sponsor probe's frame 300 kg (solar wings, a dish, a
+ * beacon, its drive and clamps), with what it carries 0.4 to 4.3 t (see game/items, probeMass;
+ * its thrusters throw it about at some 34 g, whatever it carries); a torpedo (5.5 m long, half a meter thick, see game/torpedoes) a
  * tonne (its 20 g motor makes about 196 kN); wreckage what it is (see world/wrecks: a hulk of 24 t and plates by their area); Scout One, the
  * campaign's scout, 12 t; the President's
  * battleship (1,150 m) 4.5 million t: a carrier of today, 330 m long, displaces some 100,000 t,
@@ -35,7 +35,7 @@ export const MASS = {
   /** Scout One, the PAAA 01's scout (the campaign's Ninth): long-legged and stripped for range, her holds empty, one sleeper in the pod, a fifth of an interceptor. */
   scout: 12_000,
   core: 15_000,
-  probe: 60,
+  probe: 300,
   torpedo: 1_000,
   battleship: 4.5e9,
 } as const;
@@ -64,10 +64,10 @@ export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'> & { junk?: A
 }
 
 /**
- * A jolt (the speed a blow, a cable's jerk, a coil, a shove or the dodge gives a hull at once)
- * reaches what it carries over about this long (s): the clone through its seat's gel, a cable
- * through its stretch. Its peak is the jolt's speed over this time, falling off as it passes; a
- * push that lasts (the overdrive's, a cable's swing) passes on as it comes.
+ * A jolt (the speed a blow, a cable's jerk, a coil or a shove gives a hull at once) reaches what
+ * it carries over about this long (s): the clone through its seat's gel, a cable through its
+ * stretch. Its peak is the jolt's speed over this time, falling off as it passes; a push that
+ * lasts (the overdrive's, the dodge's, a cable's swing) passes on as it comes.
  */
 export const JOLT_TIME = 0.2;
 

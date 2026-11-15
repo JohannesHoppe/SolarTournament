@@ -76,6 +76,17 @@ export function galley(): THREE.Group {
   // the counter along the wall: cupboards, its top, the hot plate glowing, pots on the shelf above
   metal([box(90, 18, 14, -20, 9, hz - 7), box(92, 1.5, 15, -20, 18.7, hz - 7.5), box(90, 1.2, 8, -20, 34, hz - 4)]);
   for (let k = 0; k < 4; k++) metal([new THREE.CylinderGeometry(3.4, 3, 5, 10).translate(-50 + k * 18, 37.2, hz - 4).toNonIndexed()]);
+  // a ship's galley floats whatever is not held: lids on the mugs (each with its spout) and the pot,
+  // its lid clamped, and a rail across the shelf that keeps the pots on it
+  metal([
+    new THREE.CylinderGeometry(1.55, 1.55, 0.5, 8).translate(-40, 18.95, 4).toNonIndexed(),
+    new THREE.CylinderGeometry(0.25, 0.3, 1, 5).translate(-39.4, 19.6, 4).toNonIndexed(),
+    new THREE.CylinderGeometry(1.55, 1.55, 0.5, 8).translate(-12, 18.95, -5).toNonIndexed(),
+    new THREE.CylinderGeometry(0.25, 0.3, 1, 5).translate(-11.4, 19.6, -5).toNonIndexed(),
+    new THREE.CylinderGeometry(5.3, 5.3, 0.7, 12).translate(-25, 22.05, 2).toNonIndexed(),
+    box(1, 3.5, 11.5, -25, 21, 2),
+    box(90, 0.8, 0.8, -20, 38.5, hz - 8.2),
+  ]);
   light([box(12, 0.4, 10, -2, 19.6, hz - 8)], new THREE.Color(1, 0.3, 0.08).multiplyScalar(1.6));
   // lockers on the other long wall, one door hanging open
   const lockers: THREE.BufferGeometry[] = [];
@@ -92,8 +103,8 @@ export function galley(): THREE.Group {
   const lamp = new THREE.PointLight(0xffd9a8, LAMP_LIGHT, LAMP_REACH, 0);
   lamp.position.set(-20, hy * 2 - 16, 0);
   root.add(lamp);
-  // the crew's sign over the counter, painted by hand
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(60, 12), new THREE.MeshBasicMaterial({ map: signTexture('EAT · SLEEP · HAUL', '#4d91ff'), transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+  // the crew's sign over the counter, painted by hand (flat: either face, never both, so one pass)
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(60, 12), new THREE.MeshBasicMaterial({ map: signTexture('EAT · SLEEP · HAUL', '#4d91ff'), transparent: true, toneMapped: false, side: THREE.DoubleSide, forceSinglePass: true }));
   sign.applyMatrix4(FACING_IN);
   sign.position.set(-20, hy * 2 - 10, hz - 1);
   root.add(sign);

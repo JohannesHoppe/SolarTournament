@@ -66,7 +66,7 @@ export const blowDamage = (closing: number, mass: number, other: number, zone = 
  * 250 m/s (2.3 MJ) costs 3 points, about a laser's scorch and a half; a fairing's 250 kg plug
  * (7.8 MJ) 10; a tank's tonne of two walls (31 MJ) 42, a solid hit.
  */
-const SHEET_JOULES = 750_000;
+export const SHEET_JOULES = 750_000;
 /** Slower than this (units/s, 30 m/s) a sheet only scratches the paint: a touch, no dent. */
 export const SHEET_SAFE = 600;
 /**
