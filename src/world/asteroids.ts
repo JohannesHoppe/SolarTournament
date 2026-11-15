@@ -292,6 +292,8 @@ export interface Asteroid {
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
   /** Field time (s) it crumbles to dust (see CRUMBLE_AFTER), from when it broke off, whatever moved it since; Infinity for a piece that lasts. */
+  wornOut: number;
+  /** Field time (s) it is gone: worn out, or swallowed by the well its conic falls into (see AsteroidField.fallsIn), whichever comes first. */
   crumbles: number;
   basePosition: THREE.Vector3;
   baseOrientation: THREE.Quaternion;
@@ -329,6 +331,9 @@ export interface Asteroid {
 
 /** How long a correction of a piece's place by the lead's sync is eased in (s, see Asteroid.ease): a gentle glide, never a jump. */
 export const EASE_SECONDS = 1;
+
+/** A piece's fall into a well is looked for on this grid of field time (s, the contacts' step, see world/contacts). */
+const SWALLOW_STEP = 0.1;
 
 /** How the layout placed a root of the field (see AsteroidField.rebuildFamily). */
 interface Origin {
@@ -901,7 +906,8 @@ export class AsteroidField {
       orbitMu: orbitRate ? this.orbitMu : 0,
       hill: this.hill,
       born,
-      crumbles: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
+      wornOut: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
+      crumbles: Infinity,
       basePosition: position.clone(),
       baseOrientation: object.quaternion.clone(),
       center: template.center,
@@ -916,6 +922,7 @@ export class AsteroidField {
       appeared: ++this.revision,
       ease: null,
     };
+    asteroid.crumbles = this.goneAt(asteroid);
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
     object.userData.scale = scale;
@@ -1148,7 +1155,34 @@ export class AsteroidField {
     a.spinRate = rate;
     a.born = at;
     a.shovedBy = by;
+    a.crumbles = this.goneAt(a);
     this.place(a);
+  }
+
+  /**
+   * The field time a piece is gone (see Asteroid.crumbles): worn out, or swallowed where its own
+   * conic (see Asteroid.orbitMu) first reaches the well's body, found on the contacts' grid of
+   * field time from its motion alone, so every browser takes it at the same field time; a conic
+   * that never reaches it falls into nothing.
+   */
+  private goneAt(a: Asteroid): number {
+    const well = this.well;
+    if (!well || !ownConic(a)) return a.wornOut;
+    // its nearest pass of the center: from its energy and angular momentum
+    startVelocity.copy(a.orbitAxis).multiplyScalar(a.orbitRate).cross(a.basePosition).add(a.velocity);
+    const r0 = a.basePosition.length();
+    const energy = startVelocity.lengthSq() / 2 - a.orbitMu / r0;
+    const h2 = flownVelocity.crossVectors(a.basePosition, startVelocity).lengthSq();
+    const e = Math.sqrt(Math.max(0, 1 + (2 * energy * h2) / (a.orbitMu * a.orbitMu)));
+    if (h2 / a.orbitMu / (1 + e) > well.radius) return a.wornOut;
+    // falling in: within one turn of a bound conic, or the time an unbound one takes to come in from where it is
+    const axis = energy < 0 ? -a.orbitMu / (2 * energy) : 0;
+    const span = energy < 0 ? 2 * Math.PI * Math.sqrt((axis * axis * axis) / a.orbitMu) : (2 * r0) / Math.max(1, startVelocity.length());
+    for (let t = SWALLOW_STEP; t <= span + SWALLOW_STEP; t += SWALLOW_STEP) {
+      conic(a, t, flown, flownVelocity);
+      if (flown.lengthSq() < well.radius * well.radius) return Math.min(a.wornOut, a.born + t);
+    }
+    return a.wornOut;
   }
 
   /**
@@ -1166,6 +1200,7 @@ export class AsteroidField {
     a.spinAxis = new THREE.Vector3().fromArray(state.s).normalize();
     a.spinRate = state.s[3];
     a.shovedBy = state.c;
+    a.crumbles = this.goneAt(a);
     this.place(a);
     return a;
   }

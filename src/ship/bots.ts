@@ -169,6 +169,15 @@ const AVOID_HORIZON = 5;
 /** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
 const AVOID_TUBE = 3;
 /**
+ * A piece of the field moving faster than INCOMING_SPEED (units/s, 2 m/s) is watched as it comes
+ * (the Event Horizon's rocks circle at up to 167 m/s, the Satellite Junkyard's debris crosses at
+ * 25): one whose way past the bot, as the two move, comes within its reach and AVOID_TUBE ship
+ * radii within INCOMING_SECONDS sends the bot off sideways, out of its way, as a Host sees a rock
+ * coming and pulls aside.
+ */
+const INCOMING_SPEED = 40;
+const INCOMING_SECONDS = 4;
+/**
  * A sheet of junk whose plug would dent the hull this much at the bot's speed (hull points, see
  * sheetDamage: a stage's tank walls at speed, never a wing's panels) is worth flying round, while
  * it lies at least SHEET_ROOM seconds ahead, where a turn round it costs little; closer, the bot
@@ -316,6 +325,11 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** Up from a planet's center through the bot (see Bot.air). */
 const up = new THREE.Vector3();
 const SIDE = new THREE.Vector3(1, 0, 0);
+/** A moving piece's velocity, where it is from the bot, how the two close, where it passes (see Bot.incoming). */
+const pieceVelocity = new THREE.Vector3();
+const offset = new THREE.Vector3();
+const closing = new THREE.Vector3();
+const passing = new THREE.Vector3();
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -780,6 +794,11 @@ export class Bot {
       }
       for (const ring of this.rings) this.clearRing(ring, speed, ring === this.through);
     }
+    // a piece moving into its way, however still the bot holds: out of it sideways
+    if (this.incoming(field, local)) {
+      danger = true;
+      desired.addScaledVector(local, CRUISE_SPEED * 2);
+    }
     // in a planet's air no way out of danger is worth burning the hull (see air)
     if (desired.lengthSq() > this.airLimit * this.airLimit) desired.setLength(this.airLimit);
 
@@ -922,6 +941,38 @@ export class Bot {
       return this.shoveKick;
     }
     return null;
+  }
+
+  /**
+   * The way out of the moving piece of the field that comes soonest within reach of the hull as
+   * the two move (see INCOMING_SPEED), into `away` (unit length: from where it would pass closest
+   * towards where the bot would be then); false when none comes.
+   */
+  private incoming(field: AsteroidField, away: THREE.Vector3): boolean {
+    const me = this.ship.flight;
+    let soonest = INCOMING_SECONDS;
+    let found = false;
+    for (const piece of field.asteroids.values()) {
+      if (piece.solid) continue;
+      const moving = field.surfaceVelocity(piece, piece.object.position, pieceVelocity);
+      if (moving.lengthSq() < INCOMING_SPEED * INCOMING_SPEED) continue;
+      // the piece as the bot sees it: where it is from the bot, and how the two close
+      offset.subVectors(me.position, piece.object.position);
+      closing.subVectors(me.velocity, moving);
+      const rate = closing.lengthSq();
+      if (rate < 1) continue;
+      const when = -offset.dot(closing) / rate;
+      if (when <= 0 || when >= soonest) continue;
+      passing.copy(offset).addScaledVector(closing, when);
+      if (passing.length() > piece.radius + this.ship.radius * AVOID_TUBE) continue;
+      soonest = when;
+      found = true;
+      // square to how they close, on the side the bot passes (straight across when dead on)
+      away.copy(passing).addScaledVector(closing, -passing.dot(closing) / rate);
+      if (away.lengthSq() < 1) away.crossVectors(closing, Math.abs(closing.y) < 0.9 * Math.sqrt(rate) ? UP : SIDE);
+      away.normalize();
+    }
+    return found;
   }
 
   /**

@@ -84,6 +84,26 @@ describe('the field of an arena', () => {
     }
   });
 
+  it('lets the black hole swallow a rock knocked off its circle into a fall, at the field time its conic reaches the horizon', () => {
+    const hole = ARENAS.find((a) => a.id === 'hole')!.layout;
+    const field = testField();
+    field.generate(hole);
+    const rock = [...field.asteroids.values()].find((a) => !a.solid)!;
+    // its orbit's speed taken out: it falls straight in
+    const stop = field.surfaceVelocity(rock, rock.object.position).negate();
+    field.shove(rock.id, 0, stop, rock.spinAxis, rock.spinRate, 1);
+    expect(rock.crumbles).toBeGreaterThan(0);
+    expect(rock.crumbles).toBeLessThan(30);
+    field.setClock(rock.crumbles - 0.1);
+    expect(rock.object.position.length()).toBeGreaterThan(hole.well!.radius);
+    field.setClock(rock.crumbles);
+    expect(rock.object.position.length()).toBeLessThan(hole.well!.radius);
+    field.crumble();
+    expect(field.asteroids.has(rock.id)).toBe(false);
+    // a rock on its circle never falls in
+    for (const other of field.asteroids.values()) expect(other.crumbles).toBe(Infinity);
+  });
+
   it("moves the Satellite Junkyard's junk as orbits beside the field's own do: the shell slowly about the hub, the crossing debris through it", () => {
     const junkyard = ARENAS.find((a) => a.id === 'junkyard')!.layout;
     const field = testField();
