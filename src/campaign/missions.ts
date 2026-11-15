@@ -1792,7 +1792,7 @@ const grooveShoot: Drill = {
  * see Game.jumpers); Red Ledger shot down ends it, his wingmen only in the way.
  */
 const BOUNTY_NAMES = ['Red Ledger', 'Carbon', 'Copy'];
-const BOUNTY_SKILL = 0.4;
+const BOUNTY_SKILL = 0.2;
 const BOUNTY_FIELD = point(-30000, callistoHeight(-30000, 20000) + 5000, 20000);
 
 /** A bounty of Lanes Watch's at `arena`: raiders named `names` (the target first) of `skills`, guarding `field`, fighting every ship they see; the target shot down ends it. */
@@ -1994,7 +1994,7 @@ function courier(arena: ArenaId): Drill {
  * off it (units, 300 m), fighting every ship they see; all of them down wins.
  */
 const AMBUSHERS = 3;
-const AMBUSH_SKILL = 0.3;
+const AMBUSH_SKILL = 0.2;
 const AMBUSH_HOLD = 6000;
 /** The bandits' names (never translated). */
 const AMBUSH_NAMES = ['Rook', 'Jinx', 'Moth'];
@@ -2083,7 +2083,7 @@ const ambushes: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `ambus
  * the Games, the hook and the nanobots. The target shot down ends it.
  */
 export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: number; pay: number; ratings: number }[] = [
-  { target: 0.45, escorts: 1, skill: 0.4, pay: 1500, ratings: 100 },
+  { target: 0.4, escorts: 1, skill: 0.35, pay: 1500, ratings: 100 },
   { target: 0.5, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
   { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
@@ -2875,7 +2875,7 @@ const TUG_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 
 const HARPOON_AFTER = 4;
 const REEL = 240;
 const TALLYMEN = 4;
-const TALLY_SKILL = 0.3;
+const TALLY_SKILL = 0.25;
 const TALLY_HOLD = 8000;
 const WINCH_HITS = 12;
 const TALLY_DOWN = 3;
