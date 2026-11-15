@@ -12,7 +12,7 @@ import type { Controls } from '../input/input';
 import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { packLooks, shownLooks, STOCK, unpackLooks, type Looks, type Perks, type UpgradeId } from '../game/hangar';
-import { brightGlow, driveLength, driveLight, FLAMES, FlameLook, MAGPIE_FLAME, type FlameLevel } from '../view/flame';
+import { brightGlow, driveLength, FLAMES, FlameLook, MAGPIE_FLAME, STOCK_JET, type FlameLevel } from '../view/flame';
 import { NeonLook } from '../view/neon';
 import { botTint, TINTS, TROPHY_MARKS } from './tints';
 import { cos, exp, hypot, pow, sin } from '../detmath';
@@ -500,12 +500,12 @@ export class Ship {
   perks: Perks = STOCK;
   /** The neon trim's racing stripes and their light, the ship's own (see outfit, view/neon). */
   private readonly trim: { group: THREE.Object3D; neon: NeonLook };
+  /** The looks another browser last told of this ship (a state's `lo`, see applyState); none yet. */
+  private looksTold = -1;
   /** What its hull shows of its upgrades (see outfit). */
   private looks: Looks = { flame: 0, neon: 0, radiators: 0, drive: 0, thrusters: 0, tubes: 0 };
   /** The glowing skins of the radiator fins bolted on (see models, boltOns), glowing with the radiators. */
   private readonly radiatorExtras: THREE.Mesh[] = [];
-  /** The model file's flame at its own size, drawn longer by the main drive's step. */
-  private readonly flameScale = new THREE.Vector3(1, 1, 1);
   /** The color the trim burns in (see setTint). */
   private readonly neonTint = new THREE.Color();
   /** The jets of the drive flame's look (see outfit, view/flame). */
@@ -674,7 +674,6 @@ export class Ship {
     this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
-    if (this.engine.flame) this.flameScale.copy(this.engine.flame.scale);
     this.root.name = 'ship:' + id;
     this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.textures.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
     this.aura.visible = false;
@@ -706,9 +705,10 @@ export class Ship {
     this.trim.neon.wear(this.looks.neon, this.neonTint, this.perks.magpie);
   }
 
-  /** How the drive burns by the flame's look (see view/flame): its colors for the plume, the trail and the thrusters' puffs. */
+  /** How the drive burns by the flame's look (see view/flame): its colors for the plume, the trail and the thrusters' puffs; a stock look on an upgraded main drive burns its jet in the stock flame's color (STOCK_JET). */
   get flameLook(): FlameLevel {
-    return this.perks.magpie ? MAGPIE_FLAME : FLAMES[this.looks.flame];
+    if (this.perks.magpie) return MAGPIE_FLAME;
+    return this.looks.flame === 0 && this.looks.drive > 0 ? STOCK_JET : FLAMES[this.looks.flame];
   }
 
   /** How large the maneuvering thrusters' puffs are drawn by the thrusters' step (more gas a second): a fifth larger a step. */
@@ -992,7 +992,11 @@ export class Ship {
       // another browser's ship shows the looks of its upgrades and heats in the air with its
       // radiators; how it flies is that browser's
       // (its hull's looks with them: the Magpie in its last stage, see hangar, hullLooks)
-      if (state.lo !== packLooks(this.perks) || (this.type === 'magpie' && !this.perks.magpie)) this.outfit(unpackLooks(state.lo!, this.type));
+      // fitted again only when the looks it tells change, never on a state that repeats them
+      if (state.lo !== this.looksTold) {
+        this.looksTold = state.lo!;
+        this.outfit(unpackLooks(state.lo!, this.type));
+      }
       // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
       this.wish = state.co!;
       this.torpedoes = state.to!;
@@ -1435,12 +1439,11 @@ export class Ship {
     // the shove goes through the drive: its flame, jets and glow blaze while it lasts
     const blaze = Math.max(throttle, shove);
     if (flame && flameMaterial) {
-      // the model file's flame is the stock look's, as long as the main drive's step draws it; a look burns its jets instead
+      // the model file's flame is a stock drive's; an upgraded drive or a look burns its jets instead (see flameLook)
       flame.visible = look === FLAMES[0] && blaze > 0.02;
-      flame.scale.copy(this.flameScale).setZ(this.flameScale.z * driveLength(drive));
       flame.position.z = flameZ - FLAME_RETRACT * (1 - blaze);
       flameMaterial.map = this.frames[Math.floor(this.flameTime * 10) % this.frames.length];
-      flameMaterial.opacity = Math.min(1, blaze * driveLight(drive));
+      flameMaterial.opacity = blaze;
     }
     this.flame.burn(dt, blaze, shove, drive, this.flameTime, this.drive > 0 && this.jetSeen);
     // the glow grows and brightens with the drive; idle it is a faint pilot light

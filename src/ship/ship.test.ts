@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, RCS_THRUST } from './flight';
 import { NANO_SECONDS, NANO_WAIT, Ship } from './ship';
-import { STOCK } from '../game/hangar';
+import { emptyHangar, HANGAR_SHIPS, LEVELS, packLooks, perksOf, STOCK, UPGRADES, type Perks } from '../game/hangar';
+import type { ShipType } from '../assets';
 import { shipState } from '../net/validate';
 import { Plausibility } from '../net/plausible';
 import { ONLINE_LOAD } from '../game/torpedoes';
@@ -38,6 +39,13 @@ function ship(id: string): Ship {
     pull: new THREE.Vector3(),
     remote: { position: new THREE.Vector3(), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion(), spin: new THREE.Vector3(), at: 0, alive: true },
     syncTransform: () => {},
+    looksTold: -1,
+    // fitted without a model: the perks taken, the fittings counted
+    outfits: 0,
+    outfit(this: Ship & { outfits: number }, perks: Perks) {
+      this.perks = perks;
+      this.outfits++;
+    },
   });
   return s;
 }
@@ -90,6 +98,29 @@ describe('a fresh clone', () => {
 });
 
 describe("another browser's ship", () => {
+  it('is fitted with its looks once, and again only when they change, never on a state that repeats them', () => {
+    const maxed = emptyHangar();
+    for (const hull of HANGAR_SHIPS) for (const upgrade of UPGRADES) maxed.levels[hull][upgrade.id] = LEVELS;
+    const cases: [ShipType, Perks][] = [
+      ['human', STOCK],
+      ['alien', perksOf(maxed, 'alien', true)],
+      ['sovereign', perksOf(emptyHangar(), 'sovereign', true)],
+      ['magpie', perksOf(emptyHangar(), 'magpie', true)],
+    ];
+    for (const [type, perks] of cases) {
+      const owner = Object.assign(ship('p:a'), { type, perks });
+      const seen = Object.assign(ship('p:a'), { type }) as Ship & { outfits: number };
+      for (let t = 0; t < 5; t++) seen.applyState(shipState(owner.toState(t, true))!, t);
+      expect(seen.outfits, type).toBe(1);
+      expect(packLooks(seen.perks), type).toBe(packLooks(perks));
+      if (type === 'magpie') expect(seen.perks.magpie).toBe(true);
+      // a change of its looks fits it again, once
+      owner.perks = { ...perks, neon: perks.neon === 1 ? 2 : 1 };
+      for (let t = 5; t < 8; t++) seen.applyState(shipState(owner.toState(t, true))!, t);
+      expect(seen.outfits, type).toBe(2);
+    }
+  });
+
   it('has died only once its owner says so, not while its owner is silent', () => {
     const owner = ship('p:a');
     const seen = ship('p:a');

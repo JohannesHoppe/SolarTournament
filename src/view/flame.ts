@@ -67,6 +67,18 @@ export const FLAMES: readonly FlameLevel[] = [
 ];
 
 /**
+ * A stock look on an upgraded main drive (and the Sovereign's): the depots' propellant as it is,
+ * its jet burning in the model file's flame's own blue-white so the drive's steps show in its
+ * length and light; the stock colors everywhere else.
+ */
+export const STOCK_JET: FlameLevel = {
+  ...FLAMES[0],
+  core: color(0.8, 0.9, 1, 3),
+  edge: color(0.3, 0.45, 1, 2.2),
+  glow: color(0.45, 0.62, 1.1),
+};
+
+/**
  * The Magpie's drive, as Pim tuned it: the third step's train and hot bells, its emitter burning
  * in the bird's colors, a chalk-white core in a blue-green sheath (its shimmer, #3fe0c4).
  */
