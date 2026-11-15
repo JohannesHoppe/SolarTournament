@@ -66,40 +66,40 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 
 `npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, `worlds`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
 
-**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame at each rung; the GPU time per rung is not measured yet on a quiet machine:
+**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame at each rung and the GPU time of a frame in the test browser (its software renderer: only the times next to each other mean something), one run with the machine otherwise quiet:
 
-| Rung | Triangles |
-|---|---|
-| 0 high | 231 380 |
-| 1 | 195 435 |
-| 2 | 179 339 |
-| 3 | 176 374 |
-| 4 | 178 566 |
-| 5 | 174 603 |
-| 6 medium | 162 114 |
-| 7 | 162 651 |
-| 8 | 161 192 |
-| 9 | 115 383 |
-| 10 | 103 691 |
-| 11 low | 77 247 |
-| 12 | 78 617 |
-| 13 | 79 090 |
-
-**A world's ground thins out its grid with distance.** The worlds flown over (the race worlds, the worlds fought over and the campaign's places on a moon's ground) lay their ground on a fine grid (25 m on the Throat and on Europa, 20 m at Valhalla's battlefield), 200 000 to 570 000 triangles, drawn once for the picture and once more for the sun's shadows. `src/world/groundlod.ts` draws it in tiles of 64 × 64 cells, each in five levels (every row and column of the grid, every second, fourth, eighth and sixteenth), the level picked every frame by the camera's distance to the tile's nearest point: the coarsest whose faces stray from the full grid's points by at most 2 px on a picture 1440 px high, measured square to the faces, so a cliff counts by how far it moves sideways. Up close a tile draws exactly the full grid's faces; the bluffs, rifts and scarps keep their full grid out to several kilometers, a gentle plain thins out within one or two. A skirt hanging from each tile's inner edges closes the gaps where two levels meet. A tile out of the camera's view is not drawn for the picture, one outside the sun's shadow map not for the shadows; each tile drawn is a draw call of its own (some 40 to 110 on a world). The land beyond a moon's ground (`horizonMesh`, 100 800 triangles on 140 rings and 360 spokes) is cut into 12 sectors in two bands, so the pieces out of view are not drawn. The Throat's sea casts no shadow: under it lies only the bed under the water. Screenshots of every world at the full picture and at rung 11, at the chase camera and 400 m above it, show the ground no different from the full grid's. Triangles and draw calls submitted per frame on the full picture (`BENCH_ONLY=arenas,worlds npm run bench`, the test browser at 1280 × 720, the camera behind a pilot on a world, on its circle round the field in an arena):
-
-| Scene | Triangles | Draw calls |
+| Rung | Triangles | GPU ms |
 |---|---|---|
-| Throat (race) | 392 000 | 284 |
-| Crack (race) | 615 000 | 420 |
-| Valhalla (deathmatch) | 462 000 | 252 |
-| Lineae (deathmatch) | 471 000 | 141 |
-| Belt | 238 000 | 153 |
-| Rings of Saturn | 156 000 | 276 |
-| Satellite Junkyard | 186 000 | 457 |
-| Jupiter | 147 000 | 100 |
-| Corona | 130 000 | 158 |
-| Event Horizon | 49 000 | 73 |
-| Derelict | 2 000 000 (1 950 000 of them its landmark, the break's mist and dead) | 161 |
+| 0 high | 255 413 | 254 |
+| 1 | 211 404 | 233 |
+| 2 | 194 969 | 195 |
+| 3 | 195 977 | 168 |
+| 4 | 194 563 | 148 |
+| 5 | 196 448 | 142 |
+| 6 medium | 181 762 | 123 |
+| 7 | 180 779 | 116 |
+| 8 | 180 701 | 108 |
+| 9 | 129 662 | 95 |
+| 10 | 112 905 | 91 |
+| 11 low | 83 154 | 50 |
+| 12 | 83 141 | 43 |
+| 13 | 83 115 | 36 |
+
+**A world's ground thins out its grid with distance.** The worlds flown over (the race worlds, the worlds fought over and the campaign's places on a moon's ground) lay their ground on a fine grid (25 m on the Throat and on Europa, 20 m at Valhalla's battlefield), 200 000 to 570 000 triangles, drawn once for the picture and once more for the sun's shadows. `src/world/groundlod.ts` draws it in tiles of 64 × 64 cells, each in five levels (every row and column of the grid, every second, fourth, eighth and sixteenth), the level picked every frame by the camera's distance to the tile's nearest point: the coarsest whose faces stray from the full grid's points by at most 2 px on a picture 1440 px high, measured square to the faces, so a cliff counts by how far it moves sideways. Up close a tile draws exactly the full grid's faces; the bluffs, rifts and scarps keep their full grid out to several kilometers, a gentle plain thins out within one or two. A skirt hanging from each tile's inner edges closes the gaps where two levels meet. A tile out of the camera's view is not drawn for the picture, one outside the sun's shadow map not for the shadows; each tile drawn is a draw call of its own (some 40 to 110 on a world). The land beyond a moon's ground (`horizonMesh`, 100 800 triangles on 140 rings and 360 spokes) is cut into 12 sectors in two bands, so the pieces out of view are not drawn. The Throat's sea casts no shadow: under it lies only the bed under the water. Screenshots of every world at the full picture and at rung 11, at the chase camera and 400 m above it, show the ground no different from the full grid's. Triangles and draw calls submitted per frame on the full picture, and the GPU time of a frame in the test browser (`BENCH_ONLY=arenas,worlds npm run bench`, the test browser at 1280 × 720, the camera behind a pilot on a world, on its circle round the field in an arena):
+
+| Scene | Triangles | Draw calls | GPU ms |
+|---|---|---|---|
+| Throat (race) | 378 000 | 263 | 186 |
+| Crack (race) | 619 000 | 414 | 226 |
+| Valhalla (deathmatch) | 451 000 | 222 | 303 |
+| Lineae (deathmatch) | 352 000 | 102 | 300 |
+| Belt | 249 000 | 182 | 120 |
+| Rings of Saturn | 163 000 | 287 | 89 |
+| Satellite Junkyard | 196 000 | 476 | 82 |
+| Jupiter | 139 000 | 96 | 188 |
+| Corona | 134 000 | 169 | 97 |
+| Event Horizon | 59 000 | 100 | 118 |
+| Derelict | 63 000 | 167 | 95 |
 
 **Measured costs of the other features.** One run each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement. The test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
 
