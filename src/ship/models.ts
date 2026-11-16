@@ -354,6 +354,8 @@ function coat({ parts, wear, seed, look, glow, rim }: Coat): THREE.Mesh {
   );
   material.userData.paint = wear.metalness;
   material.userData.rim = rim;
+  // for the hangar's marks over the plating (see view/showcase)
+  material.userData.relief = wear.relief;
   material.onBeforeCompile = hullShader;
   return new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE, 'readable'), CREASE), material);
 }
