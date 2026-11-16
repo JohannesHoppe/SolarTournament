@@ -721,7 +721,7 @@ export class Ship {
    * The meshes of the hull an upgrade changes, for the hangar to point at (see view/showcase,
    * highlight): the radiators' skin and the fins of their step (the first step's where none are
    * fitted yet), the thrusters' clusters, the drives' bells, the tube rack of its step (the first's
-   * where none is), the plating of the whole hull, the stripes; none of the trimmings a hull does
+   * where none is), the hull's coats as it shows them for the plating (an interceptor's those it renews), the stripes; none of the trimmings a hull does
    * not take (the Sovereign's).
    */
   partsOf(upgrade: UpgradeId): THREE.Mesh[] {
@@ -738,8 +738,9 @@ export class Ship {
       case 'tubes':
         return plain ? [] : named(`pods${Math.max(1, this.looks.tubes)}`);
       case 'plating': {
-        // the coats whose plates it renews (see ship/plating); a trophy renews none, its whole hull is armored alike
-        const hull = named(`${this.type === 'magpie' ? 'human' : this.type}Hull`);
+        // the coats as the hull shows them: the scrap hull's or the Magpie's, the panels on its flank once fitted;
+        // of an interceptor's, the coats whose plates it renews (see ship/plating), a trophy's all of them
+        const hull = named(`${this.type === 'magpie' ? 'human' : this.type}Hull`, 'panels', 'magpie').filter((mesh) => this.shows(mesh));
         const plated = hull.filter((mesh) => platedOf(mesh.material));
         return plated.length ? plated : hull;
       }
@@ -751,6 +752,12 @@ export class Ship {
   /** The step of the plating its hull shows (see outfit, ship/plating). */
   get platingShown() {
     return this.looks.plating;
+  }
+
+  /** Whether a part of the hull is shown: it and everything it hangs on in the model visible. */
+  private shows(part: THREE.Object3D) {
+    for (let o: THREE.Object3D | null = part; o && o !== this.model; o = o.parent) if (!o.visible) return false;
+    return true;
   }
 
   /** Leaves out the looks' finest parts while the camera at `camera` is too far to see them (see TRIM_SEEN, JET_SEEN). */
@@ -811,11 +818,13 @@ export class Ship {
     }
   }
 
-  /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
-  idle(dt: number, throttle: number) {
+  /** The drive burning at a throttle without flying anywhere, and the radiators as warm as `warmth` of the laser's limit, for a ship on show (see view/showcase). */
+  idle(dt: number, throttle: number, warmth: number) {
     this.flight.throttle = throttle;
     this.plumeHidden = true;
     this.animateEngine(dt);
+    this.heat = warmth * MAX_HEAT;
+    this.radiate(dt);
   }
 
   /** The glow of a nova core: it pulses and runs through every color, so everyone sees who holds it. */

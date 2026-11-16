@@ -33,8 +33,18 @@ export function moodCue(mood: Mood, title: string, elapsed: number, roundLength:
   return { title, energy: 'calm', elapsed, roundLength, flavor, voiceless: true };
 }
 
-/** Steps are scheduled this far ahead of the audio clock (s). */
+/**
+ * Steps are scheduled at least LOOKAHEAD ahead of the audio clock (s), every TICK_MS. The
+ * scheduler runs on the page's main thread: a step it has not handed to the band by its time is
+ * lost, so the music stutters wherever a frame or a hitch holds the thread longer than the
+ * lookahead (a phone's frames, a tab in the background). The lookahead grows to LOOKAHEAD_SLACK
+ * times the longest gap between ticks, at most LOOKAHEAD_MAX, and that gap is forgotten again at
+ * LOOKAHEAD_FORGET seconds per second, so a fast desktop keeps the short one.
+ */
 const LOOKAHEAD = 0.2;
+const LOOKAHEAD_MAX = 1;
+const LOOKAHEAD_SLACK = 1.25;
+const LOOKAHEAD_FORGET = 0.05;
 const TICK_MS = 40;
 /** The music jumps to the shared clock when it is this far off (s). */
 const RESYNC = 0.12;
@@ -130,6 +140,9 @@ export class Radio {
   /** The band has its voice; until then, and after a failed load, when to try again (performance.now, ms). */
   private voiced = false;
   private retryAt = 0;
+  /** When the scheduler last ran (performance.now, ms), and the longest gap between its runs not yet forgotten (s; see LOOKAHEAD). */
+  private lastTick = performance.now();
+  private slowest = 0;
   /** An announcement waiting for room on air (see announce). */
   private pendingAnnouncement: { text: string; name: string | null; until: number } | null = null;
 
@@ -317,7 +330,16 @@ export class Radio {
     return next;
   }
 
+  /** How far ahead the scheduler hands steps to the band (s), by the longest recent gap between its runs (see LOOKAHEAD). */
+  get lookahead(): number {
+    return Math.min(LOOKAHEAD_MAX, Math.max(LOOKAHEAD, LOOKAHEAD_SLACK * this.slowest));
+  }
+
   private tick() {
+    const at = performance.now();
+    const gap = (at - this.lastTick) / 1000;
+    this.lastTick = at;
+    this.slowest = Math.max(gap, this.slowest - LOOKAHEAD_FORGET * gap);
     const cue = this.cue;
     if (!cue || this.context.state !== 'running') return;
     if (!this.band) {
@@ -373,7 +395,8 @@ export class Radio {
       // landing inside a bar: its sound (filters, drive) is set up at once
       if (this.nextStep % STEPS_PER_BAR !== 0) this.guard(() => this.band!.joinBar(song, this.nextStep, now));
     }
-    while (this.start + this.nextStep * sixteenth < now + LOOKAHEAD) {
+    const ahead = now + this.lookahead;
+    while (this.start + this.nextStep * sixteenth < ahead) {
       const time = this.start + this.nextStep * sixteenth;
       const step = this.nextStep++;
       if (time < now || time <= this.scheduledUntil) continue;

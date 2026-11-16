@@ -421,6 +421,8 @@ function coat({ parts, wear, seed, look, glow, rim, fresh }: Coat): THREE.Mesh {
   for (const material of materials) {
     material.userData.paint = wear.metalness;
     material.userData.rim = rim;
+    // for the hangar's marks over the plating (see view/showcase)
+    material.userData.relief = wear.relief;
     material.onBeforeCompile = hullShader;
     // the fresh plates' look is written into the program: one program for each look
     const key = fresh ? `hull:${fresh.shade}:${fresh.saturation}:${fresh.film}` : 'hull';
@@ -487,9 +489,28 @@ const STRIPE_COLUMN = 2;
 const STRIPE_STAND = 1;
 /** Where the top under a stripe drops or rises by more than this between neighbouring samples (units, 2 m), the stripe breaks off there instead of hanging down a wall. */
 const STRIPE_JUMP = 40;
-const stripeRay = new THREE.Raycaster();
-const stripeFrom = new THREE.Vector3();
-const DOWN = new THREE.Vector3(0, -1, 0);
+const stripeRay = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+const stripeHit = new THREE.Vector3();
+/** How far outside a triangle's footprint a ray down is still tried on it (units): far beyond the rounding of the test, so no hit it would find is left out. */
+const FOOTPRINT_SLACK = 1e-3;
+/** A triangle of the hull's top with its footprint seen from above (x and z bounds). */
+type TopTriangle = { a: THREE.Vector3; b: THREE.Vector3; c: THREE.Vector3; x0: number; x1: number; z0: number; z1: number };
+
+/** The triangles of `surfaces` in their order (each geometry's, by its index if it has one), with their footprints. */
+function topTriangles(surfaces: THREE.BufferGeometry[]): TopTriangle[] {
+  const triangles: TopTriangle[] = [];
+  for (const geometry of surfaces) {
+    const position = geometry.attributes.position;
+    const index = geometry.index;
+    const count = index ? index.count : position.count;
+    const corner = (i: number) => new THREE.Vector3().fromBufferAttribute(position, index ? index.getX(i) : i);
+    for (let i = 0; i + 2 < count; i += 3) {
+      const [a, b, c] = [corner(i), corner(i + 1), corner(i + 2)];
+      triangles.push({ a, b, c, x0: Math.min(a.x, b.x, c.x), x1: Math.max(a.x, b.x, c.x), z0: Math.min(a.z, b.z, c.z), z1: Math.max(a.z, b.z, c.z) });
+    }
+  }
+  return triangles;
+}
 /** How far short of a canopy and its frame the racing stripes stop, before and behind it (units, 40 cm). */
 const CANOPY_MARGIN = 8;
 
@@ -497,7 +518,8 @@ const CANOPY_MARGIN = 8;
  * The neon trim, a look of the hangar (see Ship.outfit, view/neon): racing stripes along the top
  * of the hull from the nose back to the stern (depths `from` to `to`), laid on its surface as
  * paint is, over the spine wherever it rises: each sample the first of `surfaces`
- * (the hull's top parts, nothing standing tall on it) straight down. Every step's stripes (STRIPES)
+ * (the hull's top parts, nothing standing tall on it) straight down, tried only on the triangles
+ * across its depth (three.js's ray-triangle test, both faces), a hull's in a few milliseconds at load. Every step's stripes (STRIPES)
  * are one mesh, `trimLight`, each vertex knowing the step it belongs to (`tier`), where along the
  * ship it lies (`along`, 0 at the nose to 1 at the stern, so the chase light runs towards the
  * drives), where across its stripe (`across`, -1 to 1) and which stripe it is (`seed`, for its
@@ -509,17 +531,24 @@ const CANOPY_MARGIN = 8;
 function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: number, canopy: End[] | null, wobble = 0): THREE.Object3D {
   const glass = canopy ? [Math.min(...canopy.map((end) => end.z)) - CANOPY_MARGIN, Math.max(...canopy.map((end) => end.z)) + CANOPY_MARGIN] : null;
   const onGlass = (z: number) => !!glass && z >= glass[0] && z <= glass[1];
-  const targets = surfaces.map((geometry) => new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })));
-  const top = (x: number, z: number) => {
-    stripeRay.set(stripeFrom.set(x, 1000, z), DOWN);
-    const hit = stripeRay.intersectObjects(targets, false)[0];
-    return hit ? hit.point.y + STRIPE_STAND : null;
-  };
   const position: number[] = [];
   const attributes: Record<'tier' | 'along' | 'across' | 'seed', number[]> = { tier: [], along: [], across: [], seed: [] };
   const depths: number[] = [];
   for (let z = from; z < to; z += STRIPE_STEP) depths.push(z);
   depths.push(to);
+  // every ray of a depth meets only the triangles across it: those are sorted out once a depth
+  const triangles = topTriangles(surfaces);
+  const across = depths.map((z) => triangles.filter((t) => z >= t.z0 - FOOTPRINT_SLACK && z <= t.z1 + FOOTPRINT_SLACK));
+  // the first surface straight down from high above, both faces, the first of equally near ones
+  const top = (x: number, d: number) => {
+    stripeRay.origin.set(x, 1000, depths[d]);
+    let y: number | null = null;
+    for (const t of across[d]) {
+      if (x < t.x0 - FOOTPRINT_SLACK || x > t.x1 + FOOTPRINT_SLACK || !stripeRay.intersectTriangle(t.a, t.b, t.c, false, stripeHit)) continue;
+      if (y === null || stripeHit.y > y) y = stripeHit.y;
+    }
+    return y === null ? null : y + STRIPE_STAND;
+  };
   let seed = 0;
   STRIPES.forEach((stripes, step) => {
     for (const stripe of stripes) {
@@ -528,7 +557,7 @@ function racingStripes(surfaces: THREE.BufferGeometry[], from: number, to: numbe
       // a hand's slow drift off the line, and the edges not quite parallel
       const drift = (z: number, c: number) => wobble * (0.6 * sin(z * 0.013 + seed) + 0.4 * sin(z * 0.041 + seed * 2.3) * (c / columns - 0.5));
       const xs = depths.map((z) => Array.from({ length: columns + 1 }, (_, c) => stripe.x - stripe.width / 2 + (c / columns) * stripe.width + drift(z, c)));
-      const heights = depths.map((z, d) => xs[d].map((x) => top(x, z)));
+      const heights = depths.map((_, d) => xs[d].map((x) => top(x, d)));
       const corner = (d: number, c: number) => {
         position.push(xs[d][c], heights[d][c]!, depths[d]);
         attributes.tier.push(step + 1);
