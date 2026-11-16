@@ -14,6 +14,8 @@ import { cos, sin } from '../detmath';
 const TURN_SECONDS = 30;
 /** Its drives burn at this share of full throttle while it is on show, so the drive flame's look shows. */
 const SHOW_THROTTLE = 0.6;
+/** Its radiators glow softly, as warm as at this share of the laser's limit (dull red, see Ship.radiate), so the radiators' upgrade reads as radiators. */
+const SHOW_WARMTH = 0.5;
 /** The top of the pad's rim lies this high (units); the ship hovers HOVER above the pad's middle. */
 const PAD_TOP = 35;
 const HOVER = 280;
@@ -283,7 +285,7 @@ export class Showcase {
     }
     this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
-    this.shown?.idle(dt, SHOW_THROTTLE);
+    this.shown?.idle(dt, SHOW_THROTTLE, SHOW_WARMTH);
     this.glowMarks(time);
     if (root) this.reach.max(reachOf(root, reachNow));
     this.frame(width, height);

@@ -796,11 +796,13 @@ export class Ship {
     }
   }
 
-  /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
-  idle(dt: number, throttle: number) {
+  /** The drive burning at a throttle without flying anywhere, and the radiators as warm as `warmth` of the laser's limit, for a ship on show (see view/showcase). */
+  idle(dt: number, throttle: number, warmth: number) {
     this.flight.throttle = throttle;
     this.plumeHidden = true;
     this.animateEngine(dt);
+    this.heat = warmth * MAX_HEAT;
+    this.radiate(dt);
   }
 
   /** The glow of a nova core: it pulses and runs through every color, so everyone sees who holds it. */
