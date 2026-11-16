@@ -13,12 +13,15 @@
 /**
  * An audio context that plays like a media player: where the browser lets a page say so (the
  * Audio Session API of Safari and every browser on iOS), the page's sound is playback, which the
- * device's silent mode leaves alone; without it iOS mutes Web Audio in silent mode.
+ * device's silent mode leaves alone; without it iOS mutes Web Audio in silent mode. Its buffer is
+ * the browser's balanced one, not the smallest it can play (in desktop Chrome 480 frames instead
+ * of 256, 10 ms instead of 5): a block of the band that renders late on a busy phone fits into it
+ * instead of breaking the sound up, for a few milliseconds more between a shot and its sound.
  */
 export function playbackContext(): AudioContext {
   const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
   if (session) session.type = 'playback';
-  return new AudioContext();
+  return new AudioContext({ latencyHint: 'balanced' });
 }
 
 export class Sound {
