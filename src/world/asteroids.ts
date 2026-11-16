@@ -949,8 +949,13 @@ export class AsteroidField {
         a.object.quaternion.premultiply(slerp(easing.identity(), ease.turn, left));
       } else a.ease = null;
     }
-    a.object.updateMatrixWorld(true);
-    a.inverse.copy(a.object.matrixWorld).invert();
+    // a piece standing where it stood when its matrices were last reckoned (a world's ground, a
+    // rack, a slab: most pieces of a world) keeps them as they are, and what hangs under it too:
+    // reckoned again from the same pose they would come out the same to the bit
+    if (!samePose(a)) {
+      a.object.updateMatrixWorld(true);
+      a.inverse.copy(a.object.matrixWorld).invert();
+    }
     const frost = a.weld === null ? undefined : this.frosts.get(a.weld);
     if (frost && this.weldMotion(a.weld!, frost)) frost.invert();
   }
@@ -1887,6 +1892,33 @@ const NORMAL_STEP = 0.05;
 
 const closest = new THREE.Vector3();
 
+/** The pose (position, turn, scale) each piece's matrices were last reckoned for (see place). */
+const reckoned = new WeakMap<THREE.Object3D, Float64Array>();
+
+/**
+ * Whether a piece's object stands as it stood when its matrices were last reckoned, to the bit;
+ * if not, its pose now is kept as the one they are about to be reckoned for. The field's group
+ * never moves, so the same pose gives the same matrices.
+ */
+function samePose(a: Asteroid): boolean {
+  const { position: p, quaternion: q, scale: s } = a.object;
+  let pose = reckoned.get(a.object);
+  // to the bit: a zero's sign too
+  if (pose && Object.is(pose[0], p.x) && Object.is(pose[1], p.y) && Object.is(pose[2], p.z) && Object.is(pose[3], q.x) && Object.is(pose[4], q.y) && Object.is(pose[5], q.z) && Object.is(pose[6], q.w) && Object.is(pose[7], s.x) && Object.is(pose[8], s.y) && Object.is(pose[9], s.z)) return true;
+  if (!pose) reckoned.set(a.object, (pose = new Float64Array(10)));
+  pose[0] = p.x;
+  pose[1] = p.y;
+  pose[2] = p.z;
+  pose[3] = q.x;
+  pose[4] = q.y;
+  pose[5] = q.z;
+  pose[6] = q.w;
+  pose[7] = s.x;
+  pose[8] = s.y;
+  pose[9] = s.z;
+  return false;
+}
+
 /**
  * A sphere against a box piece, in the piece's own coordinates: the point of the box closest
  * to the sphere's center (on its surface; for a center inside, on the face nearest to it) and
@@ -1941,6 +1973,9 @@ export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief:
     normal.subVectors(local, closest).divideScalar(distance);
     return closest;
   }
+  // the sphere's lowest point over the ground's ceiling under the whole footprint (see world/ceiling):
+  // no sample can rise into it, so none is taken; the answer is the one the samples would give
+  if (relief.ceiling && pyramidOf(relief.ceiling, half).highest(local.x - radius, local.z - radius, local.x + radius, local.z + radius) < local.y - radius) return null;
   let deepest = 0;
   for (const [u, w] of RELIEF_SAMPLES) {
     const x = local.x + u * radius;
