@@ -14,6 +14,8 @@ import { cos, sin } from '../detmath';
 const TURN_SECONDS = 30;
 /** Its drives burn at this share of full throttle while it is on show, so the drive flame's look shows. */
 const SHOW_THROTTLE = 0.6;
+/** Its radiators glow softly, as warm as at this share of the laser's limit (dull red, see Ship.radiate), so the radiators' upgrade reads as radiators. */
+const SHOW_WARMTH = 0.5;
 /** The top of the pad's rim lies this high (units); the ship hovers HOVER above the pad's middle. */
 const PAD_TOP = 35;
 const HOVER = 280;
@@ -221,7 +223,9 @@ export class Showcase {
     ship.model.updateWorldMatrix(true, true);
     const inverse = markInverse.copy(ship.model.matrixWorld).invert();
     for (const part of ship.partsOf(upgrade)) {
-      const mark = new THREE.Mesh(part.geometry, MARK_MATERIAL);
+      const material = upgrade === 'plating' ? plateMark(part) : MARK_MATERIAL;
+      if (!material) continue;
+      const mark = new THREE.Mesh(part.geometry, material);
       mark.matrixAutoUpdate = false;
       mark.matrix.multiplyMatrices(inverse, part.matrixWorld);
       mark.renderOrder = 3;
@@ -283,7 +287,7 @@ export class Showcase {
     }
     this.hologram?.light.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologram.size);
     this.runLamps(time);
-    this.shown?.idle(dt, SHOW_THROTTLE);
+    this.shown?.idle(dt, SHOW_THROTTLE, SHOW_WARMTH);
     this.glowMarks(time);
     if (root) this.reach.max(reachOf(root, reachNow));
     this.frame(width, height);
@@ -490,6 +494,57 @@ const MARK_MATERIAL = new THREE.ShaderMaterial({
   polygonOffsetFactor: -4,
   polygonOffsetUnits: -4,
 });
+
+/**
+ * The marks over the plating: the plates' outlines, the seams between them (and the rivets, the
+ * scales' rims, the gold's engraving) in the azure, read from the hull's normal map where its relief
+ * tilts it, over a faint glow of the plates and their outline as the other marks have; read a little
+ * finer than the hull is drawn at, so the seams still show while the hull is small on the pad; a
+ * dense relief (a fin's ribs, the alien skin's scales) fainter (DENSE_SEAMS), so it never floods a part. A
+ * part without relief (a glow) takes no mark. One material a normal map, its glow the other marks'.
+ */
+const PLATE_MARKS = new Map<THREE.Texture, THREE.ShaderMaterial>();
+function plateMark(part: THREE.Mesh): THREE.ShaderMaterial | null {
+  const normal = (part.material as THREE.MeshStandardMaterial).normalMap;
+  if (!normal || !part.geometry.attributes.uv) return null;
+  let material = PLATE_MARKS.get(normal);
+  if (!material) {
+    material = MARK_MATERIAL.clone();
+    const dense = ['ribs', 'scales'].includes((part.material as THREE.Material).userData.relief);
+    material.uniforms = { ...MARK_MATERIAL.uniforms, relief: { value: normal }, seams: { value: dense ? DENSE_SEAMS : 1 } };
+    material.vertexShader = /* glsl */ `
+      varying float vFacing;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec4 view = modelViewMatrix * vec4(position, 1.0);
+        vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-view.xyz)));
+        gl_Position = projectionMatrix * view;
+      }
+    `;
+    material.fragmentShader = /* glsl */ `
+      uniform float strength;
+      uniform vec3 color;
+      uniform sampler2D relief;
+      uniform float seams;
+      varying float vFacing;
+      varying vec2 vUv;
+      void main() {
+        vec2 tilt = texture2D(relief, vUv, ${PLATE_BIAS.toFixed(1)}).xy * 2.0 - 1.0;
+        float seam = seams * smoothstep(0.04, 0.3, length(tilt));
+        float rim = pow(1.0 - vFacing, 2.0);
+        vec3 light = color * strength * (0.06 + 2.2 * seam + 0.35 * rim);
+        gl_FragColor = vec4(light, clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0));
+      }
+    `;
+    PLATE_MARKS.set(normal, material);
+  }
+  return material;
+}
+/** How much finer than its drawing the plates' marks read the hull's relief (a mipmap's bias: a step). */
+const PLATE_BIAS = -1;
+/** How bright a dense relief is marked (ribs, scales), of the plates' seams. */
+const DENSE_SEAMS = 0.08;
 
 /** Every solid mesh of a ship on show throws its shadow onto the pad; light (glows, jets, neon) throws none. */
 function castsShadow(root: THREE.Object3D) {
