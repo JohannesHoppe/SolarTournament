@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
+import { platedCoat, plateFore, plateFragment, PLATE_STEPS, PLATE_VERTEX, PLATE_VERTEX_MAIN } from './plating';
 import { letteringTexture, numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
 import type { BellRing, Nozzle } from '../view/flame';
@@ -223,6 +224,9 @@ export function setGlint(sunIntensity: number) {
   glintPeak.value = GLINT_PER_SUN * sunIntensity;
 }
 
+/** How much stronger the lacquer is on the plating's fresh plates than on the old (see ship/plating): a new coat, whole, not yet dulled. */
+const FRESH_COAT = 1.6;
+
 /**
  * The steel under the paint (linear), where it chipped off or was scratched through: the surface
  * marks such spots as metal (see flakes in view/surfaces), and the hull shows them in this color
@@ -237,8 +241,9 @@ const BARE_STEEL = new THREE.Color(0xb4b8be);
  * metal (scaled by the part's finish, so soot stays black); takes from each part's finish (see
  * paint) how much lacquer, polish and metal it has;
  * lets the skin glow faintly along its outline in `userData.rim` (black for none), brightest
- * where the hull turns away from the eye; and takes the haze as every material does (see
- * view/haze).
+ * where the hull turns away from the eye; takes the haze as every material does (see
+ * view/haze); and on a coat the plating renews (`userData.fresh`, see ship/plating) shows the
+ * fresh plates of its step (`userData.platingStep`) in their own surface.
  */
 function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWithUniforms) {
   hazeUniforms(shader, this);
@@ -248,7 +253,7 @@ function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWi
   const direct = 'clearcoatSpecularDirect';
   const capped = `${direct} * min( 1.0, glintPeak / max( max( ${direct}.r, ${direct}.g ), max( ${direct}.b, 1e-4 ) ) )`;
   const steel = `vec3( ${BARE_STEEL.r.toFixed(4)}, ${BARE_STEEL.g.toFixed(4)}, ${BARE_STEEL.b.toFixed(4)} )`;
-  shader.fragmentShader =
+  let fragment =
     'uniform float glintPeak;\nuniform float paintMetal;\nuniform vec3 rimGlow;\n' +
     shader.fragmentShader
       .replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`)
@@ -275,6 +280,54 @@ function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWi
 		material.iridescence *= vColor.a;
 	#endif`,
       );
+
+  const fresh: FreshLook | undefined = this.userData.fresh;
+  if (fresh) {
+    // the plating's fresh plates (see ship/plating): their own color and finish, the paint a
+    // shade darker and richer, the film over the alien's scales stronger than on the old ones
+    Object.assign(shader.uniforms, {
+      plateMap: { value: fresh.plates },
+      plateThreshold: { value: PLATE_STEPS[this.userData.platingStep] },
+      freshMap: { value: fresh.map },
+      freshOrm: { value: fresh.orm },
+    });
+    shader.vertexShader = PLATE_VERTEX + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>${PLATE_VERTEX_MAIN}`);
+    fragment = `${plateFragment(TILE)}uniform sampler2D freshMap;\nuniform sampler2D freshOrm;\n${fragment}`
+      .replace(
+        '#include <map_fragment>',
+        `float fresh = plateFresh( vMapUv );
+	vec4 freshTexel = texture2D( freshOrm, vMapUv );
+	vec4 sampledDiffuseColor = mix( texture2D( map, vMapUv ), texture2D( freshMap, vMapUv ), fresh );
+	diffuseColor *= sampledDiffuseColor;`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+	float freshLuma = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+	diffuseColor.rgb = max( mix( vec3( freshLuma ), diffuseColor.rgb, mix( ${fresh.saturation[0].toFixed(3)}, ${fresh.saturation[1].toFixed(3)}, fresh ) ), 0.0 ) * mix( ${fresh.shade[0].toFixed(3)}, ${fresh.shade[1].toFixed(3)}, fresh );`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+	roughnessFactor = mix( roughnessFactor, roughness * freshTexel.g, fresh );`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+	metalnessFactor = mix( metalnessFactor, metalness * freshTexel.b, fresh );`,
+      )
+      .replace(
+        '#include <lights_physical_fragment>',
+        `#include <lights_physical_fragment>
+	#ifdef USE_CLEARCOAT
+		material.clearcoat = mix( material.clearcoat, min( 1.0, clearcoat * ${FRESH_COAT.toFixed(3)} ) * freshTexel.r, fresh );
+	#endif
+	#ifdef USE_IRIDESCENCE
+		material.iridescence *= mix( ${fresh.film[0].toFixed(3)}, ${fresh.film[1].toFixed(3)}, fresh );
+	#endif`,
+      );
+  }
+  shader.fragmentShader = fragment;
 }
 
 /**
@@ -323,16 +376,26 @@ function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vec
  * of the material differs from the hull's lacquered paint (`look`), the color its surface's
  * glowing map glows in, if any (`glow`), and the faint glow along its outline (`rim`, see hullShader).
  */
-type Coat = { parts: THREE.BufferGeometry[]; wear: Wear; seed: number; look?: THREE.MeshPhysicalMaterialParameters; glow?: THREE.Color; rim?: THREE.Color };
+type Coat = { parts: THREE.BufferGeometry[]; wear: Wear; seed: number; look?: THREE.MeshPhysicalMaterialParameters; glow?: THREE.Color; rim?: THREE.Color; fresh?: Fresh };
+
+/**
+ * The plates the hangar's plating puts on a coat (see ship/plating): their `wear` (the same seed
+ * lays out the same plates and seams), and for the old plates and the fresh ones how bright
+ * (`shade`) and how rich in color (`saturation`) their paint is against the coat's own, and how
+ * strong the film over them is as a share of the coat's (`film`, the alien's scales).
+ */
+type Fresh = { wear: Wear; shade: [number, number]; saturation: [number, number]; film: [number, number] };
+/** What the hull's shader takes of a coat's fresh plates (see hullShader). */
+type FreshLook = Fresh & { plates: THREE.Texture; map: THREE.Texture; orm: THREE.Texture };
 
 /**
  * A coat as one mesh: the paint's color times its surface's, worn down to bare steel where it
  * chipped (see hullShader), its relief a normal map, mirroring the sky where it is smooth, under
  * a clear lacquer. The texture coordinates follow the facets (see boxUv), the normals the creases.
  */
-function coat({ parts, wear, seed, look, glow, rim }: Coat): THREE.Mesh {
+function coat({ parts, wear, seed, look, glow, rim, fresh }: Coat): THREE.Mesh {
   const surface = hullSurface(seed, wear, !!glow);
-  const material = lacquer(
+  const make = () => lacquer(
     new THREE.MeshPhysicalMaterial({
       vertexColors: true,
       map: surface.map,
@@ -352,10 +415,24 @@ function coat({ parts, wear, seed, look, glow, rim }: Coat): THREE.Mesh {
       ...look,
     }),
   );
-  material.userData.paint = wear.metalness;
-  material.userData.rim = rim;
-  material.onBeforeCompile = hullShader;
-  return new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE, 'readable'), CREASE), material);
+  // a coat the plating renews has a material for every step, one program for all of them
+  const materials = fresh ? Array.from({ length: PLATE_STEPS.length }, make) : [make()];
+  const renewed = fresh && hullSurface(seed, fresh.wear);
+  for (const material of materials) {
+    material.userData.paint = wear.metalness;
+    material.userData.rim = rim;
+    material.onBeforeCompile = hullShader;
+    // the fresh plates' look is written into the program: one program for each look
+    const key = fresh ? `hull:${fresh.shade}:${fresh.saturation}:${fresh.film}` : 'hull';
+    material.customProgramCacheKey = () => key;
+  }
+  const geometry = boxUv(mergeGeometries(parts), TILE, 'readable');
+  if (fresh && renewed) {
+    const { plates } = platedCoat(materials, seed, wear);
+    for (const material of materials) material.userData.fresh = { ...fresh, plates, map: renewed.map, orm: renewed.orm } satisfies FreshLook;
+    plateFore(geometry);
+  }
+  return new THREE.Mesh(toCreasedNormals(geometry, CREASE), materials[0]);
 }
 
 /**
@@ -616,6 +693,15 @@ const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
 export const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25, flakes: true };
 /** Its fins: the same paint and wear on ribbed plates in riveted frames. */
 const DEPOT_FINS: Wear = { ...DEPOT, stencils: ['07', 'NO STEP'], relief: 'ribs' };
+/**
+ * The plates the hangar's plating puts on it (see ship/plating): spares of a new batch from the
+ * depot, in the same olive but a shade darker and richer than the old sun-bleached paint, glossier,
+ * hardly a chip, a speck of rust or a scratch yet, and here and there the depot's part number
+ * stenciled crisp on a plate. Money went into the ship; it is still a depot's fighter.
+ */
+const SPARES: Wear = { rust: 0.02, chips: 0.05, grime: 0.12, scratches: 0.12, seams: 0.6, stencils: [], parts: ['P/N 41-0772', 'SPARE 3B', 'LOT 2583-K', 'P/N 07-118', 'DEPOT 9'], roughness: 0.32, metalness: 0.25, flakes: true };
+const FRESH_PAINT: Fresh = { wear: SPARES, shade: [1, 0.5], saturation: [1, 1.4], film: [1, 1] };
+const FRESH_FINS: Fresh = { ...FRESH_PAINT, wear: { ...SPARES, parts: ['P/N 41-0790', 'SPARE 3B'], relief: 'ribs' } };
 
 /**
  * A hoop around a part lofted through `ends`: `half` deep on either side of depth `z`, standing
@@ -713,8 +799,8 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...VENTS.map((x) => radiator(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }, () => 0.8)),
   ];
   const coats: Coat[] = [
-    { parts, wear: DEPOT, seed: 41 },
-    { parts: fins, wear: DEPOT_FINS, seed: 42 },
+    { parts, wear: DEPOT, seed: 41, fresh: FRESH_PAINT },
+    { parts: fins, wear: DEPOT_FINS, seed: 42, fresh: FRESH_FINS },
   ];
   const root = hull(original, 'humanHull', coats, HUMAN_NOZZLES, trim, radiators, { parts: lights, color: TAIL_LIGHT });
   root.add(humanBoltOns(), ...marks(THRUSTER_LAYOUTS.human, driveBells([0, 0, 0], 0)));
@@ -1313,7 +1399,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
   const trim = racingStripes(fuselage(ALIEN_BODY, []), ALIEN_BODY[0].z + 30, ALIEN_BODY[2].z, null);
   // the inner side blades are its radiators, hottest at the body
   const radiators = pair(radiator(BLADE, ALIEN_FIN[0], ALIEN_FIN[1], (p) => 1 - 0.7 * THREE.MathUtils.smoothstep(Math.abs(p.x), 60, 130)));
-  const root = hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW }], ALIEN_NOZZLES, trim, radiators, { parts: veins, color: VEIN });
+  const root = hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW, fresh: GROWN }], ALIEN_NOZZLES, trim, radiators, { parts: veins, color: VEIN });
   // radiator fins standing out from the drive pods, a rack of tubes on each side blade's top
   root.add(boltOns(radiatorFins({ x: ALIEN_POD[1].x! + ALIEN_POD[1].w, y: ALIEN_POD[1].y!, z: ALIEN_POD[1].z }, true), tubeRack({ x: 118, y: -14, z: 200, length: 110 }, 18)));
   // its drives' ends, the pods' last stretch, for the hangar to point at
@@ -1334,5 +1420,16 @@ const ALIEN_NOZZLES: Nozzle[] = [1, -1].map((side) => ({
   bell: [shell(ALIEN_LINER, -SHELL_GAP), shell([at(ALIEN_POD, ALIEN_LINER[0].z), ALIEN_POD[1]], SHELL_GAP)],
 }));
 
-/** The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never rusting. */
-const SCARRED: Wear = { rust: 0, chips: 0.25, grime: 0.35, scratches: 0.9, seams: 0.6, stencils: [], roughness: 0.35, metalness: 0.55, relief: 'scales' };
+/**
+ * The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never
+ * rusting, but tarnished: scorched in patches, scales chipped down to the bare horn, their violet
+ * faded towards grey, the film over them dull and barely a trace of its colors left (see GROWN). Every
+ * alien interceptor wears it until the hangar's plating grows new scales on it.
+ */
+const SCARRED: Wear = { rust: 0, chips: 0.5, grime: 0.75, scratches: 1, seams: 0.7, stencils: [], roughness: 0.75, metalness: 0.35, relief: 'scales' };
+/**
+ * The scales the hangar's plating grows on it (see ship/plating): smooth, unscored, the film over
+ * them whole and playing in its colors more strongly than the coat's own (FILM), where the old
+ * scales keep barely a trace of it.
+ */
+const GROWN: Fresh = { wear: { rust: 0, chips: 0.02, grime: 0.05, scratches: 0.12, seams: 0.6, stencils: [], roughness: 0.25, metalness: 0.4, relief: 'scales' }, shade: [1.2, 1], saturation: [0.4, 1.35], film: [0.15, 1.25] };

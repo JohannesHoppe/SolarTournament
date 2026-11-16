@@ -4,7 +4,8 @@ import type { Assets, ShipType } from '../assets';
 import type { Perks, UpgradeId } from '../game/hangar';
 import { Ship } from '../ship/ship';
 import { SOVEREIGN_GOLD } from '../ship/tints';
-import { showMagpie } from '../ship/models';
+import { showMagpie, TILE } from '../ship/models';
+import { platedOf, plateFragment, PLATE_STEPS, PLATE_VERTEX, PLATE_VERTEX_MAIN } from '../ship/plating';
 import { HologramLight } from './hologram';
 import { hazardSurface, lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
@@ -221,7 +222,9 @@ export class Showcase {
     ship.model.updateWorldMatrix(true, true);
     const inverse = markInverse.copy(ship.model.matrixWorld).invert();
     for (const part of ship.partsOf(upgrade)) {
-      const mark = new THREE.Mesh(part.geometry, MARK_MATERIAL);
+      // on a coat the plating renews, only the plates of its step (the first step's before any is bought)
+      const plated = upgrade === 'plating' ? platedOf(part.material) : undefined;
+      const mark = new THREE.Mesh(part.geometry, plated ? plateMarks(plated.plates, Math.max(1, ship.platingShown)) : MARK_MATERIAL);
       mark.matrixAutoUpdate = false;
       mark.matrix.multiplyMatrices(inverse, part.matrixWorld);
       mark.renderOrder = 3;
@@ -490,6 +493,28 @@ const MARK_MATERIAL = new THREE.ShaderMaterial({
   polygonOffsetFactor: -4,
   polygonOffsetUnits: -4,
 });
+
+const plateMarksMade = new Map<string, THREE.ShaderMaterial>();
+
+/**
+ * The marks' light over the plates the plating renews at a step (see ship/plating): the same
+ * light as MARK_MATERIAL, its strength shared, on the fresh plates alone, whose seams it traces.
+ */
+function plateMarks(plates: THREE.Texture, step: number): THREE.ShaderMaterial {
+  const key = `${plates.id}:${step}`;
+  const kept = plateMarksMade.get(key);
+  if (kept) return kept;
+  const material = MARK_MATERIAL.clone();
+  material.uniforms = { ...MARK_MATERIAL.uniforms, plateMap: { value: plates }, plateThreshold: { value: PLATE_STEPS[step] } };
+  material.vertexShader = MARK_MATERIAL.vertexShader
+    .replace('varying float vFacing;', `varying float vFacing;\nvarying vec2 vPlateUv;\n${PLATE_VERTEX}`)
+    .replace('void main() {', `void main() {\n${PLATE_VERTEX_MAIN}\n      vPlateUv = uv;`);
+  material.fragmentShader = MARK_MATERIAL.fragmentShader
+    .replace('varying float vFacing;', `varying float vFacing;\nvarying vec2 vPlateUv;\n${plateFragment(TILE)}`)
+    .replace('float rim =', 'if ( plateFresh( vPlateUv ) < 0.5 ) discard;\n      float rim =');
+  plateMarksMade.set(key, material);
+  return material;
+}
 
 /** Every solid mesh of a ship on show throws its shadow onto the pad; light (glows, jets, neon) throws none. */
 function castsShadow(root: THREE.Object3D) {
