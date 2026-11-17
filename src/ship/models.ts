@@ -661,7 +661,8 @@ function radiatorFins(on: { x: number; y: number; z: number }, out: boolean): (s
  * A rack of torpedo tubes on the hull, both sides (`on`: where the rack's first tube lies, its
  * middle, the depth of its muzzle and its length; `across`: how far apart the tubes stand): one
  * tube on the first step, two on the second, three on the third, 90 cm across, strapped to a
- * saddle plate, a cable run from each back into the hull.
+ * saddle plate, a cable run from each back into the hull. The tubes are one make, so they come in
+ * one paint, gunmetal; only the saddle plate is whatever surplus the racks held.
  */
 function tubeRack(on: { x: number; y: number; z: number; length: number }, across: number): (step: number) => THREE.BufferGeometry[] {
   return (step) => {
@@ -672,9 +673,8 @@ function tubeRack(on: { x: number; y: number; z: number; length: number }, acros
     const middle = (tubes[0] + tubes[tubes.length - 1]) / 2;
     const width = (tubes[tubes.length - 1] - tubes[0]) / 2 + 11;
     parts.push(...pair(paint(loft(RECTANGLE, { z: back - 10, w: width, h: 1.5, x: middle, y: on.y - 8 }, { z: on.z + 10, w: width, h: 1.5, x: middle, y: on.y - 8 }), surplus(step))));
-    tubes.forEach((x, k) => {
-      const paintOf = surplus(k + step + 1);
-      parts.push(...pair(paint(loft(OCTAGON, { z: back, w: 9, h: 9, x, y: on.y }, { z: on.z, w: 9, h: 9, x, y: on.y }), paintOf)));
+    tubes.forEach((x) => {
+      parts.push(...pair(paint(loft(OCTAGON, { z: back, w: 9, h: 9, x, y: on.y }, { z: on.z, w: 9, h: 9, x, y: on.y }), GUNMETAL)));
       // the muzzle's dark cap, two straps, the cable to the hull
       parts.push(...pair(sooty(loft(OCTAGON, { z: on.z + 0.5, w: 7, h: 7, x, y: on.y }, { z: on.z - 0.5, w: 7, h: 7, x, y: on.y }))));
       for (const z of [on.z + 20, back - 20]) parts.push(...pair(paint(loft(OCTAGON, { z: z + 2, w: 10, h: 10, x, y: on.y }, { z: z - 2, w: 10, h: 10, x, y: on.y }), RUST_BROWN)));
