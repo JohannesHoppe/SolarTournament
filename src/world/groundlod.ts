@@ -16,8 +16,13 @@ const TILE = 64;
 /** The levels' steps: every cell of the grid, every second, every fourth, … */
 const STEPS = [1, 2, 4, 8, 16];
 /** How far (px) a coarser level may put the ground from where the full grid has it, on a picture PICTURE px high. */
-const TOLERANCE = 2;
+export const TOLERANCE = 2;
 const PICTURE = 1440;
+
+/** The pixels a stray of `error` units shows at `distance` units from a camera with `projectionY` (its projection matrix's element 5) on a picture PICTURE px high. */
+export function strayPixels(error: number, distance: number, projectionY: number): number {
+  return (error * (PICTURE / 2) * projectionY) / Math.max(distance, 1e-6);
+}
 /** A skirt reaches this far (units, 1 m) below the widest gap it may have to close. */
 const SKIRT_MARGIN = 20;
 
@@ -46,10 +51,9 @@ class GroundTile extends THREE.LOD {
     eye.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inverse.copy(this.matrixWorld).invert());
     const scale = this.matrixWorld.getMaxScaleOnAxis();
     const distance = this.box.distanceToPoint(eye) * scale;
-    // pixels per unit at unit distance: the projection's focal length on a picture PICTURE px high
-    const focal = (PICTURE / 2) * camera.projectionMatrix.elements[5];
+    const projectionY = camera.projectionMatrix.elements[5];
     let level = 0;
-    while (level + 1 < levels.length && this.errors[level + 1] * scale * focal <= TOLERANCE * distance) level++;
+    while (level + 1 < levels.length && strayPixels(this.errors[level + 1] * scale, distance, projectionY) <= TOLERANCE) level++;
     for (let i = 0; i < levels.length; i++) levels[i].object.visible = i === level;
     this.level = level;
   }
