@@ -31,12 +31,14 @@ export interface Look {
   landmark: number;
   /** Steps the black hole's lens marches along each pixel's ray toward its source (see view/lensing): fewer leaves the bend coarser, never unbent; the whole march is a small part of the lens's cost. */
   lens: number;
+  /** Share of the traces people left on a world's ground drawn (see world/traces, setTraceDetail): 1 all, from 0.5 only the wide ones (tracks, treads, scars, blast rings and the ships' scrapes), without the bootprints and the sleds' runners. */
+  traces: number;
 }
 
 /** Knobs whose change compiles shaders anew: the governor turns them only where a hitch goes unseen (see Look, safe). */
 export const COMPILING: readonly (keyof Look)[] = ['shadows', 'lacquer'];
 
-const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true, landmark: 1, lens: 6 };
+const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true, landmark: 1, lens: 6, traces: 1 };
 
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
@@ -54,7 +56,8 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
  * about as much as; the black hole's lens (seen only in its own arena) covers the whole picture
  * whenever the hole is ahead, its cost going with the picture's resolution: its whole march is a
  * small part of it, so it marches fewer steps alongside the bloom and saves mostly by the
- * resolution coming down.
+ * resolution coming down. The fine traces on a world's ground (bootprints, sleds' runners), fine
+ * detail as the particles are, go with them; the wide traces stay on every rung.
  */
 const STEPS: Partial<Look>[] = [
   {},
@@ -66,7 +69,7 @@ const STEPS: Partial<Look>[] = [
   { pixelRatio: 1.5, showcase: { pixelRatio: 1.5, shadows: true, every: 1 } },
   { shadows: 1024 },
   { pixelRatio: 1.25, showcase: { pixelRatio: 1, shadows: false, every: 1 } },
-  { particles: 0.5, belt: 0.5, landmark: 0.25 },
+  { particles: 0.5, belt: 0.5, landmark: 0.25, traces: 0.5 },
   { shadows: 0 },
   { pixelRatio: 1, rocks: 0, belt: 0.25, showcase: { pixelRatio: 1, shadows: false, every: 2 }, spokes: false, lens: 2 },
   { bloom: 0 },

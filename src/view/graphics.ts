@@ -12,6 +12,7 @@ import type { ReferencePlane } from './plane';
 import type { Showcase } from './showcase';
 import { setHologramLook } from './hologram';
 import { setLacquer } from './surfaces';
+import { setTraceDetail } from '../world/traces';
 
 /**
  * The picture's quality as the game draws it: the rung of the ladder (see view/quality) the
@@ -139,6 +140,7 @@ export class Graphics {
     this.landmarks.setGrains(next.particles);
     this.mining.setShare(next.particles);
     this.lensing.setSamples(next.lens);
+    setTraceDetail(next.traces);
     if (next.pixelRatio !== before.pixelRatio) this.resize();
   }
 

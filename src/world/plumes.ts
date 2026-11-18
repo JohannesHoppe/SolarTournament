@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
+import type { TracePlan } from './traces';
 import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { Randomizer } from '../random';
@@ -18,7 +19,10 @@ const ENCELADUS_TINT = 0xf4f7fa;
 const ENCELADUS_GLOW = 0x4a5058;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/enceladus gives (see reliefGround). */
-export const enceladusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, ENCELADUS_TINT, ENCELADUS_GLOW);
+export const enceladusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, ENCELADUS_TINT, ENCELADUS_GLOW, undefined, undefined, ENCELADUS_TRACES);
+
+/** Nobody stays at the Plumes: an old landing site and a few lone lines of prints out on the plain (see world/traces). */
+const ENCELADUS_TRACES: TracePlan = { seed: 4297, sites: [], wilds: 2, landings: 1 };
 
 /** Enceladus's colors beyond the field: the plain's white snow of fallen plume grains, the stripes' troughs a little blue and grey, where fresh ice and old dust show. */
 const SNOW = new THREE.Color(0.44, 0.46, 0.48);

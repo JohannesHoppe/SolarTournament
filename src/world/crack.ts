@@ -345,10 +345,13 @@ const OUTPOSTS: readonly [number, number][] = [
   [-3.2 * KM, 1],
   [-6.4 * KM, 1],
 ];
+/** Where the station (first) and the outposts stand, in x and z (units). */
+export const STATION_SPOTS: readonly THREE.Vector3[] = [new THREE.Vector3(riftMiddle(STATION_Z) + STATION_OFF, 0, STATION_Z), ...OUTPOSTS.map(([z, side]) => new THREE.Vector3(riftMiddle(z) + side * (floorHalf(z) + WALL_STEPS * WALL_STEP + 2400), 0, z))];
+
 /** The station and the outposts as pieces of the field (type `type`, half extents `half`), standing on the ground beneath their middles, sunk in by a little. */
 export function stationPlacements(type: number, half: THREE.Vector3): Placement[] {
-  const spots = [new THREE.Vector3(riftMiddle(STATION_Z) + STATION_OFF, 0, STATION_Z), ...OUTPOSTS.map(([z, side]) => new THREE.Vector3(riftMiddle(z) + side * (floorHalf(z) + WALL_STEPS * WALL_STEP + 2400), 0, z))];
-  return spots.map((at, k) => {
+  return STATION_SPOTS.map((spot, k) => {
+    const at = spot.clone();
     at.y = riftHeight(at.x, at.z) + half.y - 200;
     return { kind: 'rack', type, scale: 1, position: at, orientation: setFromAxisAngle(new THREE.Quaternion(), new THREE.Vector3(0, 1, 0), k ? Math.PI / 2 : 0), solid: true };
   });

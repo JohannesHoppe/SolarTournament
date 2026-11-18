@@ -28,7 +28,8 @@ import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
 import { vestaGround } from './rheasilvia';
-import { tiledGround } from './groundlod';
+import { gridOf, tiledGround } from './groundlod';
+import { dustPatchTexture, groundTraces, PATCH_GLSL, type TracePlan } from './traces';
 
 /**
  * How the Boneyard on Psyche looks (the campaign's first place; where things stand in
@@ -840,21 +841,28 @@ function relief(list: readonly Pit[], x: number, z: number): number {
 /**
  * A world's ground in the three layers of the crater floor (dust and pebbles, the photograph of a
  * real surface, the grime), in `color` and lit a little by `emissive` (a light that keeps it from
- * going black where the sun stands low); its geometries take their texture coordinates from
- * groundUv.
+ * going black where the sun stands low); over them patches of fine dust and of bare rock some
+ * hundred meters to a kilometer across, as on the real bodies (see world/traces, dustPatches): in
+ * the dust the pebbles and the photograph's relief smoothed away and the ground a little darker,
+ * on bare rock the relief stronger and the ground a little brighter. Its geometries take their
+ * texture coordinates from groundUv.
  */
 export function groundMaterial(color: number, emissive: number, metalness: number): THREE.MeshStandardMaterial {
   grime ??= grimeTexture();
   const middle = groundPhoto();
   const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness, color, emissive, aoMap: grime, aoMapIntensity: 0 });
+  const dustPatches = dustPatchTexture();
   material.onBeforeCompile = (shader) => {
     shader.uniforms.middleMap = { value: middle };
+    shader.uniforms.dustPatchMap = { value: dustPatches };
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'uniform sampler2D middleMap;\nvoid main() {')
+      .replace('void main() {', 'uniform sampler2D middleMap;\nuniform sampler2D dustPatchMap;\nvoid main() {')
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-  diffuseColor.rgb *= texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
+  vec3 middleValue = texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
+  ${PATCH_GLSL.replace('GROUND_DUST_TILE', DUST_TILE.toFixed(1))}
+  diffuseColor.rgb *= middleValue;
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };
@@ -890,9 +898,10 @@ const RELIEF_CELL = 1500;
  * layers in `color` lit a little by `emissive`; the yards' set gives the field the same relief
  * (RACK_RELIEFS in world/yard), so it collides as this very ground; `shade` gives each vertex a tone of its own over the tint.
  * Drawn in tiles that thin out their grid with distance (see world/groundlod); the collisions
- * always take the relief itself.
+ * always take the relief itself. On an airless world `traces` lays the traces people left on it
+ * (see world/traces), on the ground as its finest level draws it.
  */
-export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void): THREE.Group {
+export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void, traces?: TracePlan): THREE.Group {
   const geometry = flatGrid(half, cell);
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
@@ -917,8 +926,10 @@ export function reliefGround(half: THREE.Vector3, relief: Relief, color: number,
     material.customProgramCacheKey = () => 'ground-toned';
   }
   // drawn in tiles, each in less detail the farther it lies (see world/groundlod)
-  const ground = tiledGround(groundUv(geometry), geometry.parameters.widthSegments, geometry.parameters.heightSegments, material);
+  const { widthSegments, heightSegments } = geometry.parameters;
+  const ground = tiledGround(groundUv(geometry), widthSegments, heightSegments, material);
   ground.traverse((object) => (object.receiveShadow = object.castShadow = object instanceof THREE.Mesh));
+  if (traces) ground.add(groundTraces(traces, gridOf(geometry, widthSegments, heightSegments)));
   return withCollider(ground, half);
 }
 
@@ -964,8 +975,31 @@ function crater(): THREE.Group {
     group.add(mesh);
   }
   group.add(boulders(list, half.y, material));
+  group.add(groundTraces(YARD_TRACES, gridOf(floor, 320, 320)));
   return group;
 }
+
+/**
+ * What centuries of the yard's work left on the crater floor (see world/traces): the crawlers
+ * hauling fighters to and from the racks down the lane and along the aisles between the rows,
+ * driven over and over; the depot at the lane's end the busiest site, ships set down beside it;
+ * the yard itself a site whose roads run out across the crater; and the rack hands' prints.
+ */
+const YARD_TRACES: TracePlan = {
+  seed: YARD_SEED + 80,
+  sites: [
+    { x: (BAY_MOUTH + BAY_BACK) / 2 + 600, z: 0, size: 3000, busy: 1, pads: 3 },
+    { x: 0, z: 0, size: 21000, busy: 0.7 },
+    ...[-3, -1, 2, 3].map((row, k) => ({ x: (k - 1.5) * 2 * (RACK_LENGTH + 1600), z: (row - Math.sign(row) * 0.5) * 5200, size: RACK_DEPTH, busy: 0.15 })),
+  ],
+  ways: [
+    { kind: 'crawler', points: [-21000, 0, BAY_MOUTH, 0], passes: 4 },
+    ...[-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5].map((row) => ({ kind: 'crawler' as const, points: [-21000, row * 5200, 21000, row * 5200], passes: Math.abs(row) < 2 ? 2 : 1 })),
+    ...[-2.5, 1.5].map((row) => ({ kind: 'rover' as const, points: [-20000, row * 5200 + 400, 20500, row * 5200 - 300], passes: 2 })),
+  ],
+  wilds: 4,
+  landings: 2,
+};
 
 /** Boulders on the crater floor: how many, and their size from 0.5 to 6 m (units). */
 const BOULDERS = 24000;
