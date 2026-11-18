@@ -76,6 +76,16 @@ const direction = new THREE.Vector3();
 const at = new THREE.Vector3();
 const beside = new THREE.Vector3();
 
+/**
+ * How far around a drawn point the canvas is cleared again (px): half the bold horizon's shade
+ * (AIR_HORIZON_WIDTH + 3), its antialiasing and the hairline's offset.
+ */
+const INK = 6;
+/** A rung's number in the ladder's font is at most this wide per character, and its letters reach this far above and below their line (px). */
+const CHAR = 7;
+const ASCENT = 12;
+const DESCENT = 4;
+
 export class Attitude extends Overlay {
   private drawn = false;
   /** What the picture on the canvas was drawn for: the camera's turn and lens, and the tape shown or not (see update). */
@@ -88,9 +98,58 @@ export class Attitude extends Overlay {
   /** The up this picture refers to. */
   private readonly up = new THREE.Vector3();
   private air = false;
+  /**
+   * The boxes around what is on the canvas (px: left, top, right, bottom, one after the other):
+   * each half of a rung, each number, the tape, the bank scale, its pointer. Only they are
+   * cleared for the next picture: clearing a large part of a full-screen canvas costs more than
+   * drawing all the lines on it, and a level ladder's boxes are thin.
+   */
+  private readonly boxes: number[] = [];
 
   protected resized() {
     this.drawn = false;
+    this.boxes.length = 0;
+  }
+
+  /** Clears what was drawn: the boxes around it. */
+  private clear() {
+    const { boxes, context } = this;
+    context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+    for (let i = 0; i < boxes.length; i += 4) {
+      if (boxes[i] <= boxes[i + 2]) context.clearRect(boxes[i] - INK, boxes[i + 1] - INK, boxes[i + 2] - boxes[i] + 2 * INK, boxes[i + 3] - boxes[i + 1] + 2 * INK);
+    }
+    boxes.length = 0;
+  }
+
+  /** A new box around what is drawn next (see ink). */
+  private box() {
+    this.boxes.push(Infinity, Infinity, -Infinity, -Infinity);
+  }
+
+  /** The last box takes in the point (x, y). */
+  private ink(x: number, y: number) {
+    const boxes = this.boxes;
+    const i = boxes.length - 4;
+    if (x < boxes[i]) boxes[i] = x;
+    if (y < boxes[i + 1]) boxes[i + 1] = y;
+    if (x > boxes[i + 2]) boxes[i + 2] = x;
+    if (y > boxes[i + 3]) boxes[i + 3] = y;
+  }
+
+  /** A line of the ladder or the scales to (x, y), its point in the last box. */
+  private to(x: number, y: number, move = false) {
+    this.ink(x, y);
+    if (move) this.context.moveTo(x, y);
+    else this.context.lineTo(x, y);
+  }
+
+  /** Text, in a box of its own unless `own` is false (then in the last box): `width` (px) from x as `align` places it, from its letters' top to their bottom. */
+  private write(text: string, x: number, y: number, width: number, align: CanvasTextAlign, own = true) {
+    const left = align === 'center' ? x - width / 2 : x;
+    if (own) this.box();
+    this.ink(left, y - ASCENT);
+    this.ink(left + width, y + DESCENT);
+    this.context.fillText(text, x, y);
   }
 
   /**
@@ -104,7 +163,7 @@ export class Attitude extends Overlay {
   update(camera: THREE.Camera, show: boolean, tape: boolean, sky: Readonly<THREE.Vector3> | null = null) {
     const context = this.context;
     if (!show) {
-      if (this.drawn) context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      if (this.drawn) this.clear();
       this.drawn = false;
       return;
     }
@@ -121,8 +180,7 @@ export class Attitude extends Overlay {
     if (air) this.drawnUp.copy(sky);
     this.air = air;
     this.up.copy(sky ?? PLANE_UP);
-    context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-    context.clearRect(0, 0, this.width, this.height);
+    this.clear();
     camera.getWorldDirection(forward);
     // the horizon is the reference plane's, or in a planet's air the planet's, seen from the camera (see world/reference)
     footOf(forward, level, this.up);
@@ -167,28 +225,34 @@ export class Attitude extends Overlay {
       // dashed, and named: it is the level, not the clouds' curved edge the Host sees
       context.setLineDash(AIR_DASH);
       context.lineWidth = AIR_HORIZON_WIDTH + 3;
-      this.stroke(x, y, dx, dy, half, pitch, AIR_SHADE);
+      this.stroke(x, y, dx, dy, half, pitch, AIR_SHADE, true);
       context.lineWidth = AIR_HORIZON_WIDTH;
-      this.stroke(x, y, dx, dy, half, pitch, AIR_LINE);
+      this.stroke(x, y, dx, dy, half, pitch, AIR_LINE, false);
       context.lineWidth = 1.5;
       context.fillStyle = AIR_LINE;
       context.textAlign = 'left';
       // at its left end, clear of the radar at the right, just above it (square to the line on the screen)
-      context.fillText(t('Level'), x - dx * half + dy * 10, y - dy * half - dx * 10);
+      const level = t('Level');
+      this.write(level, x - dx * half + dy * 10, y - dy * half - dx * 10, context.measureText(level).width, 'left');
     } else {
-      this.stroke(x + 1, y + 1, dx, dy, half, pitch, SHADE);
-      this.stroke(x, y, dx, dy, half, pitch, pitch === 0 ? LINE_STRONG : LINE);
+      this.stroke(x + 1, y + 1, dx, dy, half, pitch, SHADE, false);
+      this.stroke(x, y, dx, dy, half, pitch, pitch === 0 ? LINE_STRONG : LINE, true);
     }
     context.setLineDash(SOLID);
     if (pitch !== 0) {
       context.fillStyle = LINE;
       context.textAlign = 'left';
-      context.fillText(LABELS[Math.abs(pitch) / PITCH_STEP], x + dx * (half + 6), y + dy * (half + 6) + 4);
+      const label = LABELS[Math.abs(pitch) / PITCH_STEP];
+      this.write(label, x + dx * (half + 6), y + dy * (half + 6) + 4, label.length * CHAR, 'left');
     }
   }
 
-  /** Both halves of a rung around (x, y), along (dx, dy), broken by the gap in the middle; a rung's ends bend towards the horizon, so they say which way level is. */
-  private stroke(x: number, y: number, dx: number, dy: number, half: number, pitch: number, color: string) {
+  /**
+   * Both halves of a rung around (x, y), along (dx, dy), broken by the gap in the middle; a
+   * rung's ends bend towards the horizon, so they say which way level is. `boxed`: each half in
+   * a box of its own (the line over the shade, whose box INK covers).
+   */
+  private stroke(x: number, y: number, dx: number, dy: number, half: number, pitch: number, color: string, boxed: boolean) {
     const context = this.context;
     // square to the rung on the screen, towards the horizon
     const bendX = -dy * BEND * Math.sign(pitch);
@@ -201,6 +265,11 @@ export class Attitude extends Overlay {
       context.moveTo(x + sign * dx * GAP, y + sign * dy * GAP);
       context.lineTo(endX, endY);
       if (pitch !== 0) context.lineTo(endX + bendX, endY + bendY);
+      if (!boxed) continue;
+      this.box();
+      this.ink(x + sign * dx * GAP, y + sign * dy * GAP);
+      this.ink(endX, endY);
+      this.ink(endX + bendX, endY + bendY);
     }
     context.stroke();
   }
@@ -213,14 +282,15 @@ export class Attitude extends Overlay {
     const radius = this.height * LADDER_REACH + BANK_ABOVE;
     context.strokeStyle = LINE;
     context.beginPath();
+    this.box();
     for (const degrees of BANK_TICKS) {
       const long = degrees === 0 || degrees === 30 ? 9 : 5;
       for (let sign = -1; sign <= (degrees ? 1 : -1); sign += 2) {
         const angle = THREE.MathUtils.degToRad(degrees * sign);
         const sinA = sin(angle);
         const cosA = cos(angle);
-        context.moveTo(x + sinA * radius, y - cosA * radius);
-        context.lineTo(x + sinA * (radius + long), y - cosA * (radius + long));
+        this.to(x + sinA * radius, y - cosA * radius, true);
+        this.to(x + sinA * (radius + long), y - cosA * (radius + long));
       }
     }
     context.stroke();
@@ -235,9 +305,10 @@ export class Attitude extends Overlay {
     const baseY = y - cosA * (radius - 9);
     context.fillStyle = LINE_STRONG;
     context.beginPath();
-    context.moveTo(tipX, tipY);
-    context.lineTo(baseX + cosA * 5, baseY + sinA * 5);
-    context.lineTo(baseX - cosA * 5, baseY - sinA * 5);
+    this.box();
+    this.to(tipX, tipY, true);
+    this.to(baseX + cosA * 5, baseY + sinA * 5);
+    this.to(baseX - cosA * 5, baseY - sinA * 5);
     context.closePath();
     context.fill();
   }
@@ -254,19 +325,23 @@ export class Attitude extends Overlay {
     context.fillStyle = LINE;
     context.textAlign = 'center';
     context.beginPath();
+    this.box();
     const first = Math.ceil((degrees - TAPE_SPAN / 2) / TICK) * TICK;
     for (let tick = first; tick <= degrees + TAPE_SPAN / 2; tick += TICK) {
       const x = center + (tick - degrees) * scale;
       const labeled = ((tick % LABEL) + LABEL) % LABEL === 0;
-      context.moveTo(x, top);
-      context.lineTo(x, top + (labeled ? 8 : 4));
-      if (labeled) context.fillText(HEADINGS[((tick % 360) + 360) % 360], x, top + 20);
+      this.to(x, top, true);
+      this.to(x, top + (labeled ? 8 : 4));
+      if (labeled) this.write(HEADINGS[((tick % 360) + 360) % 360], x, top + 20, 3 * CHAR, 'center', false);
     }
     context.stroke();
     // the nose's heading in a box over the tape
     context.strokeStyle = LINE_STRONG;
     context.strokeRect(center - 18, top - 18, 36, 14);
+    this.box();
+    this.ink(center - 18, top - 18);
+    this.ink(center + 18, top - 4);
     context.fillStyle = LINE_STRONG;
-    context.fillText(HEADINGS[Math.round(degrees) % 360], center, top - 7);
+    this.write(HEADINGS[Math.round(degrees) % 360], center, top - 7, 3 * CHAR, 'center', false);
   }
 }
