@@ -44,7 +44,7 @@ describe('the race course', () => {
     expect(hashes).toEqual({
       belt: 'a10aeee72b0d9370',
       rings: '12b7d627ea098b9b',
-      junkyard: '2819f33e8124ed30',
+      junkyard: 'c589a39cdd876596',
       giant: '7e467fcf70662eda',
       derelict: 'b85ad9dcd96b2eef',
       crack: '10f331ef438e512c',
@@ -64,7 +64,7 @@ describe('the race course', () => {
     expect(hashes).toEqual({
       belt: '6ff8d86f136e6ed6',
       rings: '3624f8ed4b4a7158',
-      junkyard: 'f8a0ada27367a2d5',
+      junkyard: '2fd70ac3acbd1f69',
       giant: '9a6892a3a356f2a6',
       derelict: '777d0a716818840b',
       crack: '9596d7592bb9a672',

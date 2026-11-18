@@ -50,7 +50,7 @@ export const COINS_PER_POINT = 1;
  * The upgrades. What they do per step: radiators shed heat 15 % faster, the thrusters push and
  * turn 8 % harder, the main drive pushes 5 % harder (the speed limit stays), the torpedo tubes
  * hold two more torpedoes at the first and at the third step, the plating takes 7 % of every
- * damage away. The neon trim lights tubes in the Host's tint along both flanks, adds a bar across
+ * damage away and renews the hull's plates (see ship/plating). The neon trim lights tubes in the Host's tint along both flanks, adds a bar across
  * the stern and a ring around each nacelle, then a pair low on the flanks and a chase light (see
  * view/neon); the drive flame burns azure, violet with shock diamonds, then white-hot (see
  * view/flame).
@@ -182,7 +182,7 @@ export const DRIVE_STEP = 0.05;
 export const PLATING_STEP = 0.07;
 
 /** The steps of the upgrades a ship shows (see shownLooks) and other browsers are told of (see packLooks). */
-export type Looks = { flame: number; neon: number; radiators: number; drive: number; thrusters: number; tubes: number };
+export type Looks = { flame: number; neon: number; radiators: number; drive: number; thrusters: number; tubes: number; plating: number };
 /** The step a multiplier of an upgrade stands for (`per`: what a step adds), 0 to LEVELS. */
 const stepOf = (value: number, per: number) => Math.max(0, Math.min(LEVELS, Math.round((value - 1) / per)));
 /** The steps of a ship's upgrades as its perks hold them. */
@@ -193,19 +193,23 @@ export const stepsOf = (perks: Perks): Looks => ({
   drive: stepOf(perks.drive, DRIVE_STEP),
   thrusters: stepOf(perks.thrusters, THRUSTER_STEP),
   tubes: perks.tubes,
+  plating: stepOf(2 - perks.damage, PLATING_STEP),
 });
 
 /**
  * What a ship's hull shows of its upgrades: its steps, but the trophies' as they are built. The
- * Sovereign takes no trimmings and needs none: no stripes, no colored flame, no bolt-ons, only
- * what its drive and thrusters do (their jets as long and their puffs as large as its steps make
- * them). The Magpie, Lot 7731 as Pim finished it, keeps everything she welded on over the
- * campaign: the third step's stripes, flame, radiator fins and tube racks, fixed.
+ * Sovereign takes no trimmings and needs none: no stripes, no colored flame, no bolt-ons, no
+ * plates renewed, only what its drive and thrusters do (their jets as long and their puffs as
+ * large as its steps make them). The Magpie, Lot 7731 as Pim finished it, keeps everything she
+ * welded on over the campaign: the third step's stripes, flame, radiator fins and tube racks,
+ * fixed, and her plates welded from scraps, never the depot's spares (nor does the campaign's
+ * hull before it show any).
  */
 export function shownLooks(type: ShipType, perks: Perks): Looks {
   const steps = stepsOf(perks);
-  if (type === 'sovereign') return { ...steps, flame: 0, neon: 0, radiators: 0, tubes: 0 };
-  if (perks.magpie) return { ...steps, flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS };
+  if (type === 'sovereign') return { ...steps, flame: 0, neon: 0, radiators: 0, tubes: 0, plating: 0 };
+  if (perks.magpie) return { ...steps, flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS, plating: 0 };
+  if (type === 'magpie') return { ...steps, plating: 0 };
   return steps;
 }
 
@@ -213,9 +217,9 @@ export function shownLooks(type: ShipType, perks: Perks): Looks {
  * What other browsers are told of a ship's upgrades (a ship state's `lo`), two bits a step from
  * the lowest in the order of LOOK_STEPS: the looks in full, and the radiators (so they heat it in a
  * planet's air as its own browser does, see view/reentry), the main drive (its jet and its plume,
- * which grills them, see ship/plume), the thrusters (their puffs) and the torpedo tubes (their
- * racks), each online at most ONLINE_LEVEL; at most MAX_LOOKS, every step within its cap
- * (fitsLooks).
+ * which grills them, see ship/plume), the thrusters (their puffs), the torpedo tubes (their
+ * racks) and the plating (the plates it renews, see ship/plating), each online at most
+ * ONLINE_LEVEL; at most MAX_LOOKS, every step within its cap (fitsLooks).
  */
 const LOOK_STEPS: readonly [keyof Looks, number][] = [
   ['flame', LEVELS],
@@ -224,6 +228,7 @@ const LOOK_STEPS: readonly [keyof Looks, number][] = [
   ['drive', ONLINE_LEVEL],
   ['thrusters', ONLINE_LEVEL],
   ['tubes', ONLINE_LEVEL],
+  ['plating', ONLINE_LEVEL],
 ];
 export const packLooks = (perks: Perks) => {
   const steps = stepsOf(perks);
@@ -242,6 +247,7 @@ export function unpackLooks(looks: number, type: ShipType): Perks {
     drive: 1 + DRIVE_STEP * step('drive'),
     thrusters: 1 + THRUSTER_STEP * step('thrusters'),
     tubes: step('tubes'),
+    damage: 1 - PLATING_STEP * step('plating'),
     neon: step('neon'),
     flame: step('flame'),
   });

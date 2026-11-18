@@ -80,6 +80,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, WRECK_CRUMPLE, type Wreck, type WreckState } from '../world/wrecks';
+import { ScrapeMarks } from '../world/traces';
 import { arenaById, arenasFor, ARENAS, DEFAULT_ARENA, arenaByKey, arenaOfRound, FIGHT_WORLDS, PREVIEW_FROM, RACE_WORLDS, TOURNAMENT_ARENAS, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { JET_WELDS } from '../world/derelict';
@@ -1045,6 +1046,8 @@ export class Game implements OnlineGame {
   /** The last picture was the kill cam's. */
   private replaying = false;
   private readonly wrecks = new Wrecks();
+  /** The marks hulls leave where they glide on a world's ground (see world/traces). */
+  private readonly scrapes = new ScrapeMarks();
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks: Landmarks;
@@ -1683,7 +1686,7 @@ export class Game implements OnlineGame {
     // the comet hangs in the scene only while one flies, the belt and the Belt's mining only in their arenas (see hang)
     this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.hunt.group);
     this.hudScene.add(this.plane.group, this.orbitPath.line);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.scrapes.mesh, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -3239,7 +3242,10 @@ export class Game implements OnlineGame {
     this.haze.setAir(air, arena.hazeLight?.deck ?? this.landmarks.jupiter.deckLight, arena.hazeLight?.deep ?? this.landmarks.jupiter.deepLight);
     this.hang(this.belt.group, arena.id === 'belt');
     this.mining.setSun(arena.sun.color, arena.sun.intensity);
+    // hulls leave their scrape marks on airless ground only, as the traces people left lie there alone (see world/traces)
+    this.scrapes.mesh.visible = !air;
     if (!keepWreckage) {
+      this.scrapes.clear();
       this.wrecks.clear();
       this.torpedoes.clear();
       this.decoys.clear();
@@ -5324,6 +5330,7 @@ export class Game implements OnlineGame {
     this.mineOwn(now, dt);
     this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field, this.grinds);
+    this.scrapes.update(now);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
     this.decoys.update(dt, now, this.torpedoes.list);
@@ -9431,6 +9438,7 @@ export class Game implements OnlineGame {
   private glideOver(ship: Ship, dt: number, now: number) {
     const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
+    this.scrapes.add(ship, scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), normal, now);
     if (into >= SAFE_IMPACT * 0.4) {
       ship.syncTransform();
       this.bounceHurts(ship, into, now, 'ground');

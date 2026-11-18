@@ -11,8 +11,8 @@ import * as THREE from 'three';
  * the chase stand still with reduced motion.
  */
 
-/** How bright the stripes burn by the steps of the look: blooming from the first. */
-const BRIGHTNESS = [0, 1.2, 1.3, 1.4];
+/** How bright the stripes burn by the steps of the look: a glow that reads without pulling the eye off the fight. */
+const BRIGHTNESS = [0, 0.6, 0.65, 0.7];
 /** The chase light: pulses on the ship's length at once, how many lengths they run a second on the third step and during a shove. */
 const PULSES = 2;
 const RUN = 0.5;

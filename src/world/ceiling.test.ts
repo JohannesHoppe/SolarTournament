@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Randomizer } from '../random';
-import { reliefRay, type Relief } from './asteroids';
+import { reliefContact, reliefRay, type Relief } from './asteroids';
 import { pyramidOf } from './ceiling';
 import { RACK_BOXES, RACK_RELIEFS } from './yard';
 
@@ -58,6 +58,39 @@ describe("a world's ground's ceiling", () => {
       }
       // the rays do meet the ground, most of them
       expect(hits).toBeGreaterThan(750);
+    });
+
+    it(`leaves every sphere over ground ${type} touching it where the ground alone has it touched`, () => {
+      const plain: Relief = (x, z) => relief(x, z);
+      const pyramid = pyramidOf(relief.ceiling!, half);
+      const random = new Randomizer(7303 + type);
+      const center = new THREE.Vector3();
+      const fastNormal = new THREE.Vector3();
+      const exactNormal = new THREE.Vector3();
+      const fastPoint = new THREE.Vector3();
+      const exactPoint = new THREE.Vector3();
+      let touched = 0;
+      let skipped = 0;
+      for (let k = 0; k < 4000; k++) {
+        // a ship's sphere, or a wider reach, from in the ground to well over it, now and then beyond the footprint's edge
+        const radius = random.nextFloat() < 0.7 ? random.range(100, 800) : random.range(800, 8000);
+        const x = random.range(-half.x, half.x) * (random.nextFloat() < 0.1 ? 1.05 : 1);
+        const z = random.range(-half.z, half.z) * (random.nextFloat() < 0.1 ? 1.05 : 1);
+        const ground = Math.min(half.y, relief(THREE.MathUtils.clamp(x, -half.x, half.x), THREE.MathUtils.clamp(z, -half.z, half.z)));
+        center.set(x, ground + random.range(-radius, radius * 3), z);
+        if (Math.abs(x) <= half.x && Math.abs(z) <= half.z && pyramid.highest(x - radius, z - radius, x + radius, z + radius) < center.y - radius) skipped++;
+        const fast = reliefContact(center, half, relief, radius, fastNormal, fastPoint);
+        const exact = reliefContact(center, half, plain, radius, exactNormal, exactPoint);
+        if ((fast === null) !== (exact === null)) throw new Error(`ground ${type}: sphere ${k} touched ${fast !== null}, alone ${exact !== null}`);
+        if (fast === null) continue;
+        touched++;
+        for (const axis of ['x', 'y', 'z'] as const) {
+          if (!Object.is(fastPoint[axis], exactPoint[axis]) || !Object.is(fastNormal[axis], exactNormal[axis])) throw new Error(`ground ${type}: sphere ${k} touched at another point or normal`);
+        }
+      }
+      // both kinds are there: spheres the ceiling answers, and spheres the ground touches
+      expect(skipped).toBeGreaterThan(400);
+      expect(touched).toBeGreaterThan(400);
     });
   }
 });

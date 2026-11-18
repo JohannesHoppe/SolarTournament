@@ -14,7 +14,7 @@ const HOME_REDIRECT = `<script>${HOME_SCRIPT}</script>`;
 /**
  * What the pages may load and run, sent by Cloudflare Pages with every page (dist/_headers,
  * written by the build): scripts and styles of the site itself (the one inline script by its
- * hash, and blob: for the audio worklets Tone.js writes for the radio), connections to the site and to the Nostr relays of the online tournament (by name: the
+ * hash), connections to the site and to the Nostr relays of the online tournament (by name: the
  * checked list in src/net/relays.json and Trystero's built-in list, its fallback; WebRTC itself,
  * STUN and TURN are not subject to it), no frames around the game. It keeps what the privacy
  * policy promises (nothing from third-party servers) even if a bug slipped someone else's
@@ -22,7 +22,7 @@ const HOME_REDIRECT = `<script>${HOME_SCRIPT}</script>`;
  */
 const RELAY_SOURCES = [...new Set([...relayList.relays, ...defaultRelayUrls])].join(' ');
 const SECURITY_HEADERS = [
-  `Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'sha256-${createHash('sha256').update(HOME_SCRIPT).digest('base64')}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${RELAY_SOURCES} data: blob:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`,
+  `Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-${createHash('sha256').update(HOME_SCRIPT).digest('base64')}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${RELAY_SOURCES} data: blob:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`,
   'X-Content-Type-Options: nosniff',
   'Referrer-Policy: no-referrer',
 ];

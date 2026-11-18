@@ -6,7 +6,8 @@ import { boxUv, hazardSurface, industrialSurface, signTexture, surfaced, wreckIn
 import { paint } from './worldship';
 import { rotateX, rotateY, rotateZ } from '../detthree';
 import { CALLISTO_TINT } from './valhalla';
-import { BATTLE_GROUND_CELL, battleRelief, CROSS, freshIce, HALL, HULL_HALF } from './battlefield';
+import { BATTLE_GROUND_CELL, battleRelief, CROSS, freshIce, HALL, HALVES, HULL_HALF, PAD_AT, PAD_HALF } from './battlefield';
+import type { TracePlan } from './traces';
 
 /**
  * How Valhalla looks as a world fought over (where things are in world/battlefield): its ground,
@@ -31,8 +32,16 @@ const BARE = new THREE.Color(1.45, 1.5, 1.62);
 
 /** The ground of the arena in its box's frame (`half` its half extents): Callisto's dust, bright where the ice lies bare (see freshIce). */
 export function battleGround(half: THREE.Vector3): THREE.Group {
-  return reliefGround(half, battleRelief, CALLISTO_TINT, BATTLE_GLOW, BATTLE_GROUND_CELL, (x, z, color) => color.copy(DUST).lerp(BARE, freshIce(x, z)));
+  return reliefGround(half, battleRelief, CALLISTO_TINT, BATTLE_GLOW, BATTLE_GROUND_CELL, (x, z, color) => color.copy(DUST).lerp(BARE, freshIce(x, z)), BATTLE_TRACES);
 }
+
+/** The Steadfast's halves the busiest sites, picked over by salvagers ever since she came down; the clones' pads lone sites of their own, their crews' prints round them (see world/traces). */
+const BATTLE_TRACES: TracePlan = {
+  seed: 4299,
+  sites: [...HALVES.map(({ position }) => ({ x: position.x, z: position.z, size: HULL_HALF.x, busy: 0.7, pads: 1 })), ...PAD_AT.map(({ x, z }) => ({ x, z, size: PAD_HALF.x * 1.4, busy: 0.1 }))],
+  wilds: 1,
+  landings: 0,
+};
 
 /** Old neon: dark for a moment now and then, lit for good where motion is to be reduced. */
 const reducedMotion = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;

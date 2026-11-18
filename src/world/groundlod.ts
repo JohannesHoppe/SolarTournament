@@ -123,6 +123,57 @@ function strays({ x0, x1, z0, z1 }: TileSpan, height: (ix: number, iz: number) =
 }
 
 /**
+ * A grid laid out as world/boneyard's flatGrid lays it, as something to stand on: its first
+ * vertex at (`x0`, `z0`), cells `cellX` by `cellZ`, `nx` by `nz` of them, `height` the grid's at a
+ * vertex. `at` gives the height at any point as the finest level draws it (the cell's two faces
+ * split as THREE.PlaneGeometry splits them, from (ix, iz) to (ix + 1, iz) and (ix, iz + 1)), held to
+ * the grid's border; `cell` gives a point's place on the grid in cells, for finding where a line
+ * crosses the faces' edges (the grid's lines and each cell's diagonal, along which ix + iz is whole).
+ */
+export interface GroundGrid {
+  x0: number;
+  z0: number;
+  cellX: number;
+  cellZ: number;
+  nx: number;
+  nz: number;
+  height(ix: number, iz: number): number;
+}
+
+/** The height of `grid` at (x, z) as its finest level draws it (see GroundGrid). */
+export function gridHeight(grid: GroundGrid, x: number, z: number): number {
+  const gx = Math.min(grid.nx, Math.max(0, (x - grid.x0) / grid.cellX));
+  const gz = Math.min(grid.nz, Math.max(0, (z - grid.z0) / grid.cellZ));
+  const ix = Math.min(grid.nx - 1, Math.floor(gx));
+  const iz = Math.min(grid.nz - 1, Math.floor(gz));
+  const u = gx - ix;
+  const v = gz - iz;
+  const hb = grid.height(ix, iz + 1);
+  const hd = grid.height(ix + 1, iz);
+  // the faces (a, b, d) and (b, c, d), as the grid's index and the levels' errors take them
+  if (u + v <= 1) {
+    const ha = grid.height(ix, iz);
+    return ha + u * (hd - ha) + v * (hb - ha);
+  }
+  const hc = grid.height(ix + 1, iz + 1);
+  return hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
+}
+
+/** The grid of a flatGrid geometry `full` of `nx` by `nz` cells, its heights its vertices' y. */
+export function gridOf(full: THREE.BufferGeometry, nx: number, nz: number): GroundGrid {
+  const position = full.getAttribute('position');
+  return {
+    x0: position.getX(0),
+    z0: position.getZ(0),
+    cellX: position.getX(1) - position.getX(0),
+    cellZ: position.getZ(nx + 1) - position.getZ(0),
+    nx,
+    nz,
+    height: (ix, iz) => position.getY(ix + iz * (nx + 1)),
+  };
+}
+
+/**
  * The ground of `full`, a grid of `nx` by `nz` cells laid out as world/boneyard's flatGrid lays it
  * (a vertex `ix + iz * (nx + 1)`, its faces wound as THREE.PlaneGeometry winds them), in tiles of
  * levels drawn with `material` (see the comment above). Each tile's vertices are the full grid's

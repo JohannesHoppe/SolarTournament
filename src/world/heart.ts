@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
+import type { TracePlan } from './traces';
 import { behindAll, moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { CHARON_AT, CHARON_SIZE, GROUND_HALF, groundRelief, LAND, surfaceHeight } from './pluto';
@@ -20,7 +21,10 @@ const NITROGEN = new THREE.Color(1, 0.98, 0.95);
 const WATER_ICE = new THREE.Color(0.55, 0.5, 0.46);
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/pluto gives (see reliefGround), the mountains in their own tone. */
-export const plutoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PLUTO_TINT, PLUTO_GLOW, undefined, (x, z, color) => color.copy(NITROGEN).lerp(WATER_ICE, THREE.MathUtils.smoothstep(surfaceHeight(x, z) - LAND, 400, 4000)));
+export const plutoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PLUTO_TINT, PLUTO_GLOW, undefined, (x, z, color) => color.copy(NITROGEN).lerp(WATER_ICE, THREE.MathUtils.smoothstep(surfaceHeight(x, z) - LAND, 400, 4000)), PLUTO_TRACES);
+
+/** Nobody stays at Last Light: an old landing site on the plain and a few lone lines of prints (see world/traces). */
+const PLUTO_TRACES: TracePlan = { seed: 4294, sites: [], wilds: 2, landings: 1 };
 
 /** Pluto beyond the field: the heart's pale plain and, past its edges, the dark reddish tholins. */
 const HEART = new THREE.Color(0.48, 0.46, 0.44);
