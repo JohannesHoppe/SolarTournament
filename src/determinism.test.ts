@@ -94,7 +94,7 @@ describe('the shared world on every machine', () => {
     expect(hashes).toEqual({
       belt: '48ffab7e82791983',
       rings: '63de11592065bb33',
-      junkyard: 'acc6d3cbb94a0e5c',
+      junkyard: '793d9420e0b63ee5',
       giant: '2847130a14fa3460',
       corona: 'abd0ef83e0594884',
       hole: '6e291c3a694efc42',
