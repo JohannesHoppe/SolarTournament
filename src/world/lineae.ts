@@ -3,8 +3,9 @@ import { DUST_TILE, groundMaterial, macroUv, reliefGround, withCollider } from '
 import { boxUv } from '../view/surfaces';
 import { moonBeyond } from './horizon';
 import { Noise } from './noise';
-import { fightRelief, GROUND_CELL, GROUND_HALF, groundRelief, lineaeTones, surfaceHeight } from './europa';
-import { CRACK_GROUND_HALF, crackRelief, crackTones, riftHeight } from './crack';
+import { fightRelief, GROUND_CELL, GROUND_HALF, groundRelief, lineaeTones, STATION_AT, surfaceHeight } from './europa';
+import { CRACK_GROUND_HALF, crackRelief, crackTones, riftHeight, STATION_SPOTS } from './crack';
+import type { TracePlan } from './traces';
 import { listeningPost } from './valhalla';
 
 /**
@@ -57,9 +58,9 @@ function icy(material: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   return material;
 }
 
-/** A ground of Europa's ice on `relief`, its tones from `paint`. */
-function iceGround(half: THREE.Vector3, relief: (x: number, z: number) => number, paint: (x: number, z: number, color: THREE.Color) => void): THREE.Group {
-  const group = reliefGround(half, relief, ICE_TINT, EUROPA_GLOW, GROUND_CELL, paint);
+/** A ground of Europa's ice on `relief`, its tones from `paint`, the traces of `traces` on it. */
+function iceGround(half: THREE.Vector3, relief: (x: number, z: number) => number, paint: (x: number, z: number, color: THREE.Color) => void, traces: TracePlan): THREE.Group {
+  const group = reliefGround(half, relief, ICE_TINT, EUROPA_GLOW, GROUND_CELL, paint, traces);
   // the ground's tiles share one material: made icy once
   const materials = new Set<THREE.MeshStandardMaterial>();
   group.traverse((object) => {
@@ -81,13 +82,18 @@ const crackPaint = (x: number, z: number, color: THREE.Color) => {
 };
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/europa gives, on its fine grid (see reliefGround). */
-export const europaGround = (half: THREE.Vector3): THREE.Group => iceGround(half, groundRelief, lineaePaint(false));
+export const europaGround = (half: THREE.Vector3): THREE.Group => iceGround(half, groundRelief, lineaePaint(false), LINEAE_TRACES);
 
 /** The ground of the Lineae as a world fought over (see world/europa, fightHeight): the same ice with the chaos's rafts east of the Crack. */
-export const lineaeGround = (half: THREE.Vector3): THREE.Group => iceGround(half, fightRelief, lineaePaint(true));
+export const lineaeGround = (half: THREE.Vector3): THREE.Group => iceGround(half, fightRelief, lineaePaint(true), LINEAE_TRACES);
 
 /** The race world's ground on the Crack (see world/crack): the same ice on its rift, along its longer box. */
-export const crackGround = (half: THREE.Vector3): THREE.Group => iceGround(half, crackRelief, crackPaint);
+export const crackGround = (half: THREE.Vector3): THREE.Group => iceGround(half, crackRelief, crackPaint, CRACK_TRACES);
+
+/** The science station on the Crack's floor the one site at the Lineae, its crews' tracks along the floor and up onto the ice (see world/traces). */
+const LINEAE_TRACES: TracePlan = { seed: 4300, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: 900, busy: 0.6, pads: 2 }] };
+/** On the Crack the station on its floor and the Rockborn's outposts on its eastern rim, a road between each and the next. */
+const CRACK_TRACES: TracePlan = { seed: 4301, sites: STATION_SPOTS.map(({ x, z }, k) => ({ x, z, size: 900, busy: k ? 0.35 : 0.6, pads: 1 })) };
 
 /** The slab's ice: the rift walls' clean blue-white, its faces cracked and lumpy by up to SLAB_LUMP (3 m), never out of its collider box. */
 const SLAB_TINT = 0xd6e8ff;

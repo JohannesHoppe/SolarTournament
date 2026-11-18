@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Noise } from './noise';
 import { groundMaterial, groundUv, withCollider } from './boneyard';
 import { horizonMesh } from './horizon';
+import { groundTraces, type TracePlan } from './traces';
 import { RISE, slopeGround, SURFACE_REACH, surfaceHeight, VESTA_GROUND } from './vesta';
 
 /**
@@ -28,24 +29,43 @@ const FLAT_TO = 110000;
  * of ground, tinted to Vesta's basalt.
  */
 export function vestaGround(half: THREE.Vector3): THREE.Group {
-  const geometry = new THREE.PlaneGeometry(GROUND_REACH * 2, GROUND_REACH * 2, 240, 240).applyMatrix4(FLAT);
+  const geometry = new THREE.PlaneGeometry(GROUND_REACH * 2, GROUND_REACH * 2, GROUND_CELLS, GROUND_CELLS).applyMatrix4(FLAT);
   const position = geometry.getAttribute('position');
   // built where it lies in the place, then taken into its leaning box's own frame
   const box = slopeGround(0);
   const intoBox = new THREE.Matrix4().compose(box.position, box.orientation, new THREE.Vector3(1, 1, 1)).invert();
   const point = new THREE.Vector3();
+  // the heights where the ground lies in the place, for the traces laid on it there
+  const heights = new Float32Array(position.count);
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i);
     const z = position.getZ(i);
     const bend = THREE.MathUtils.smoothstep(Math.max(Math.abs(x), Math.abs(z)), FLAT_TO, GROUND_REACH);
     const flank = VESTA_GROUND + RISE * x;
-    position.setXYZ(i, ...point.set(x, flank + (surfaceHeight(x, z) - flank) * bend, z).applyMatrix4(intoBox).toArray());
+    heights[i] = flank + (surfaceHeight(x, z) - flank) * bend;
+    position.setXYZ(i, ...point.set(x, heights[i], z).applyMatrix4(intoBox).toArray());
   }
   geometry.computeVertexNormals();
   const mesh = new THREE.Mesh(groundUv(geometry), groundMaterial(VESTA_TINT, VESTA_GLOW, 0.05));
   mesh.receiveShadow = true;
-  return withCollider(new THREE.Group().add(mesh), half);
+  const cell = (GROUND_REACH * 2) / GROUND_CELLS;
+  const traces = groundTraces(VESTA_TRACES, { x0: -GROUND_REACH, z0: -GROUND_REACH, cellX: cell, cellZ: cell, nx: GROUND_CELLS, nz: GROUND_CELLS, height: (ix, iz) => heights[ix + iz * (GROUND_CELLS + 1)] });
+  traces.applyMatrix4(intoBox);
+  return withCollider(new THREE.Group().add(mesh, traces), half);
 }
+
+/** The slope's grid: GROUND_CELLS cells along each side (75 m). */
+const GROUND_CELLS = 240;
+
+/** The Rockborn's claims on the flank, worked for generations: the busiest in the field's middle, two smaller up and down the slope, their crawlers and sleds hauling ore between them (see world/traces). */
+const VESTA_TRACES: TracePlan = {
+  seed: 4302,
+  sites: [
+    { x: 0, z: 0, size: 3000, busy: 0.8, pads: 2 },
+    { x: 42000, z: 26000, size: 1500, busy: 0.4 },
+    { x: -38000, z: -30000, size: 1500, busy: 0.4, pads: 1 },
+  ],
+};
 
 /** Vesta's colors: grey basalt with a little brown, darker eucrite on the basin's floor, a pale streak of fresh dust down the peak's flank. */
 const BASALT = new THREE.Color(0.2, 0.185, 0.165);

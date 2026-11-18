@@ -1,13 +1,13 @@
 {
-  "updated": "2026-11-09",
+  "updated": "2026-11-16",
   "relays": [
     "wss://cdn.satellite.earth",
-    "wss://nostr.chaima.info",
     "wss://nostr.christiansass.de",
     "wss://nostr.satoshisfrens.win",
     "wss://nostrcity-club.fly.dev",
     "wss://relay-dev.gulugulu.moe",
     "wss://relay.aarpia.com",
+    "wss://relay.agentry.com",
     "wss://relay.ditto.pub",
     "wss://relay.nearhood.co.uk",
     "wss://relay.nostr.com",

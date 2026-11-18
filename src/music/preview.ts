@@ -64,10 +64,6 @@ export async function renderTrack(song: Song, from: number, seconds: number, sam
     run(until: number) {
       for (; this.blocks * block < until; this.blocks++) this.emit('tick');
     }
-    /** The bit crushers run as audio worklets, which have to be loaded before the render starts. */
-    worklets() {
-      return this.workletsAreReady();
-    }
   })({ context: raw, clockSource: 'offline', lookAhead: 0, updateInterval: block });
   // Tone builds on its global context: the band's nodes are made in this one, and the global
   // context is handed back before anything is awaited
@@ -110,7 +106,6 @@ export async function renderTrack(song: Song, from: number, seconds: number, sam
       void raw.resume();
     });
   }
-  await context.worklets();
   const rendered = await raw.startRendering();
   const skip = Math.round((pre + LEAD) * sampleRate);
   const out = [0, 1].map((c) => rendered.getChannelData(c).subarray(skip));

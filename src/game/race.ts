@@ -6,6 +6,7 @@ import type { AsteroidField, CircuitName, CourseForm } from '../world/asteroids'
 import { GateKit } from '../world/gates';
 import { bendRadius, BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
 import { inGrip, WELL_CAUTION } from './alarms';
+import { ROUND_SECONDS } from '../music/songs';
 
 /** Gates of a lap, and laps of a race. */
 export const GATES = 8;
@@ -64,7 +65,9 @@ const LOOP_LIFTS = [0, 12000, -12000];
  * a lap, never deep enough for the air to heat a hull at the tournament's limit.
  */
 const AIR_LIFTS = [0];
+/** A loop is looked at for rock at LOOP_CHECKS points around it, in runs of LOOP_RUN points held in a sphere each (see Course.layout). */
 const LOOP_CHECKS = 256;
+const LOOP_RUN = 16;
 /**
  * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
  * 40 m from its center) is pulled through by the ring's magnetic field and leaves it
@@ -106,6 +109,18 @@ const GATE_GAP = 24000;
 const GATE_BEND = 30000;
 const BEND_ARC = 2400;
 const GATE_CLEAR = 3;
+/**
+ * A gate keeps off the bows not only of rock as the field starts out but of where every piece
+ * that moves flies over a round (see Course.layout): every WATCH_STEP (s of field time) up to
+ * ROUND_SECONDS and WATCH_SLACK more (the intro, the last racers' finish), for a piece that
+ * moves more than WATCH_STILL (units, 25 m) away from where it starts in that time. A piece
+ * crossing a gate would pin the line in the gate while it bows round the piece beside it, a
+ * kink racers brake for (the Satellite Junkyard's junk crosses at 25 m/s); one crossing the
+ * course between the gates only bows the line for a while.
+ */
+const WATCH_STEP = 5;
+const WATCH_SLACK = 30;
+const WATCH_STILL = 500;
 /** The variant search builds the racing lines of this many of its best loops, at most (see Course). */
 const LINE_TRIES = 32;
 /**
@@ -275,6 +290,30 @@ const CIRCUITS: Record<CircuitName, readonly CircuitPiece[]> = {
 const CIRCUIT_STEP = 1000;
 const KM = 20000;
 const circuits = new Map<CircuitName, THREE.Vector3[]>();
+
+/** Where a piece that moves flies over a round (see WATCH_STEP): its centers one after the other (x, y, z), and its reach plus the racing line's clearance. */
+interface Path {
+  points: Float64Array;
+  reach: number;
+}
+
+/** The paths of the pieces of `field` that move over a round (see WATCH_STEP), from its clock on: the same on every browser, from the field as generated. */
+function movingPaths(field: AsteroidField): Path[] {
+  const paths: Path[] = [];
+  const steps = Math.floor((ROUND_SECONDS + WATCH_SLACK) / WATCH_STEP);
+  const at = new THREE.Vector3();
+  for (const rock of field.asteroids.values()) {
+    if (rock.ground || rock.spanned) continue;
+    const points = new Float64Array(steps * 3);
+    let moved = 0;
+    for (let k = 0; k < steps; k++) {
+      field.positionOf(rock, field.clock + (k + 1) * WATCH_STEP, at).toArray(points, k * 3);
+      moved = Math.max(moved, at.distanceTo(rock.object.position));
+    }
+    if (moved > WATCH_STILL) paths.push({ points, reach: rock.radius + CLEARANCE });
+  }
+  return paths;
+}
 
 /** The heading of a piece (degrees) as a direction in the field's plane. */
 const along = (heading: number, out: THREE.Vector3) => out.set(cos((heading * Math.PI) / 180), 0, sin((heading * Math.PI) / 180));
@@ -607,6 +646,7 @@ export class Course {
     // of LOOP_LIFTS heights (only the plane's through a ring's layer), LOOP_RADII distances, swells
     // and turns of the swell, the loops ranked by how deep their gates lie in rock or in the racing
     // line's bows around it, then by how far they run through rock
+    const paths = movingPaths(field);
     const candidates: { shape: typeof shape; angles: number[]; badness: number; intrusion: number }[] = [];
     for (const lift of dives ? [0] : field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
@@ -615,7 +655,7 @@ export class Course {
         for (const swell of form ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
             Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
-            candidates.push({ shape: { ...shape }, ...this.layout(field, loop, start, jitter) });
+            candidates.push({ shape: { ...shape }, ...this.layout(field, loop, start, jitter, paths) });
           }
         }
       }
@@ -670,37 +710,79 @@ export class Course {
    * angles, how deep they lie in rock or bows together (rad, 0 for none), and how far the loop
    * runs into rock all along (units, summed over LOOP_CHECKS points).
    */
-  private layout(field: AsteroidField, loop: (angle: number, out: THREE.Vector3) => THREE.Vector3, start: number, jitter: readonly number[]) {
-    const bows: { angle: number; half: number }[] = [];
+  private layout(field: AsteroidField, loop: (angle: number, out: THREE.Vector3) => THREE.Vector3, start: number, jitter: readonly number[], paths: readonly Path[]) {
+    // the bows of the rock as the field starts out, each where its rock reaches deepest into the
+    // loop (one of its LOOP_CHECKS points) and how far it reaches along the loop to either side
+    const bows: { at: number; half: number }[] = [];
+    // the widest bow at each of the loop's points, of the rock as the field starts out and of
+    // where the pieces that move fly over the round (see WATCH_STEP)
+    const widest = new Float64Array(LOOP_CHECKS).fill(-Infinity);
     let intrusion = 0;
     // the loop's points where rock is looked for: they depend on the layout alone, so they are
     // taken once for all the rocks
     const samples = new Float64Array(LOOP_CHECKS * 3);
     for (let k = 0; k < LOOP_CHECKS; k++) loop((k / LOOP_CHECKS) * Math.PI * 2, probe).toArray(samples, k * 3);
+    // the points in runs of LOOP_RUN, each run in a sphere (x, y, z, radius): a rock whose reach
+    // misses a run's sphere reaches none of its points, so they need not be looked at
+    const runs = new Float64Array((LOOP_CHECKS / LOOP_RUN) * 4);
+    for (let r = 0; r < LOOP_CHECKS / LOOP_RUN; r++) {
+      probe.set(0, 0, 0);
+      for (let k = r * LOOP_RUN; k < (r + 1) * LOOP_RUN; k++) probe.add(paceFrom.fromArray(samples, k * 3));
+      probe.divideScalar(LOOP_RUN).toArray(runs, r * 4);
+      let radius = 0;
+      for (let k = r * LOOP_RUN; k < (r + 1) * LOOP_RUN; k++) radius = Math.max(radius, paceFrom.fromArray(samples, k * 3).distanceTo(probe));
+      runs[r * 4 + 3] = radius;
+    }
     // how far along the loop a step of angle goes there (units per rad), for stretches given in units
     const pace = (angle: number) => loop(angle + 1e-3, paceTo).distanceTo(loop(angle - 1e-3, paceFrom)) / 2e-3;
-    const bowAround = (center: THREE.Vector3, reach: number) => {
+    // the bow a rock at `center` with `reach` lays into the loop, or null; `counted` adds how far the loop runs into it to `intrusion`
+    const bowAround = (center: THREE.Vector3, reach: number, counted = true) => {
       let deepest = -Infinity;
       let deepestAt = 0;
-      for (let k = 0; k < LOOP_CHECKS; k++) {
-        const dx = samples[k * 3] - center.x, dy = samples[k * 3 + 1] - center.y, dz = samples[k * 3 + 2] - center.z;
-        const depth = reach - Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (depth > 0) intrusion += depth;
-        if (depth > deepest) {
-          deepest = depth;
-          deepestAt = k;
+      for (let r = 0; r < LOOP_CHECKS / LOOP_RUN; r++) {
+        const rx = runs[r * 4] - center.x, ry = runs[r * 4 + 1] - center.y, rz = runs[r * 4 + 2] - center.z;
+        if (Math.sqrt(rx * rx + ry * ry + rz * rz) - runs[r * 4 + 3] >= reach) continue;
+        for (let k = r * LOOP_RUN; k < (r + 1) * LOOP_RUN; k++) {
+          const dx = samples[k * 3] - center.x, dy = samples[k * 3 + 1] - center.y, dz = samples[k * 3 + 2] - center.z;
+          const depth = reach - Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (depth > 0 && counted) intrusion += depth;
+          if (depth > deepest) {
+            deepest = depth;
+            deepestAt = k;
+          }
         }
       }
-      if (deepest <= 0) return;
-      const angle = (deepestAt / LOOP_CHECKS) * Math.PI * 2;
-      bows.push({ angle, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / pace(angle) });
+      if (deepest <= 0) return null;
+      const bow = { at: deepestAt, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / pace((deepestAt / LOOP_CHECKS) * Math.PI * 2) };
+      widest[deepestAt] = Math.max(widest[deepestAt], bow.half);
+      return bow;
     };
-    for (const rock of field.asteroids.values()) bowAround(rock.object.position, rock.radius + CLEARANCE);
-    if (field.well) bowAround(field.well.position, field.well.radius + CLEARANCE * 2);
+    for (const rock of field.asteroids.values()) {
+      const bow = bowAround(rock.object.position, rock.radius + CLEARANCE);
+      if (bow) bows.push(bow);
+    }
+    if (field.well) {
+      const bow = bowAround(field.well.position, field.well.radius + CLEARANCE * 2);
+      if (bow) bows.push(bow);
+    }
+    // the points each moving piece's bows over the round lie at
+    const crossings: Set<number>[] = [];
+    for (const path of paths) {
+      const mine = new Set<number>();
+      for (let k = 0; k < path.points.length; k += 3) {
+        const bow = bowAround(probe.fromArray(path.points, k), path.reach, false);
+        if (bow) mine.add(bow.at);
+      }
+      if (mine.size) crossings.push(mine);
+    }
     // how far into a bow a gate at `angle` would lie (rad, 0 outside every bow)
     const inBow = (angle: number) => {
       let deepest = 0;
-      for (const bow of bows) deepest = Math.max(deepest, bow.half - Math.abs(atan2(sin(angle - bow.angle), cos(angle - bow.angle))));
+      for (let k = 0; k < LOOP_CHECKS; k++) {
+        if (widest[k] === -Infinity) continue;
+        const at = (k / LOOP_CHECKS) * Math.PI * 2;
+        deepest = Math.max(deepest, widest[k] - Math.abs(atan2(sin(angle - at), cos(angle - at))));
+      }
       return deepest;
     };
     // how far a gate at `angle` lies inside a bend tighter than GATE_BEND (0 outside, up to 1)
@@ -734,8 +816,12 @@ export class Course {
       angles.push(angle);
       badness += worst;
     }
-    // a bow around rock in one of the loop's tight bends bends the line tighter yet
-    for (const bow of bows) badness += inBend(bow.angle);
+    // a bow around rock in one of the loop's tight bends bends the line tighter yet, and so does a
+    // moving piece crossing one (the deepest of its bows there, once a piece)
+    const bent = new Float64Array(LOOP_CHECKS).fill(-1);
+    const bendAt = (k: number) => (bent[k] >= 0 ? bent[k] : (bent[k] = inBend((k / LOOP_CHECKS) * Math.PI * 2)));
+    for (const bow of bows) badness += bendAt(bow.at);
+    for (const mine of crossings) badness += Math.max(...[...mine].map(bendAt));
     return { angles, badness, intrusion };
   }
 

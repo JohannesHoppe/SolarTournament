@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { reliefGround } from './boneyard';
+import type { TracePlan } from './traces';
 import { moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { GROUND_HALF, groundRelief, surfaceHeight } from './phobos';
@@ -15,7 +16,10 @@ const PHOBOS_TINT = 0xd6c4b6;
 const PHOBOS_GLOW = 0x2a1d17;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/phobos gives (see reliefGround). */
-export const phobosGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PHOBOS_TINT, PHOBOS_GLOW);
+export const phobosGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PHOBOS_TINT, PHOBOS_GLOW, undefined, undefined, PHOBOS_TRACES);
+
+/** Nobody stays in Stickney: only the old landing sites of those who came to look and their prints out over the bowl (see world/traces). */
+const PHOBOS_TRACES: TracePlan = { seed: 4290, sites: [], wilds: 3, landings: 2 };
 
 /** Phobos's colors beyond the field: dark grey dust, a little red, in broad patches. */
 const DUST = new THREE.Color(0.06, 0.05, 0.045);

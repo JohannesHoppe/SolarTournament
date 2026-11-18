@@ -11,6 +11,7 @@ import { HULL_LENGTH } from './blow';
 import type { Controls } from '../input/input';
 import { DRILL_TORPEDOES, ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
+import { platedOf } from './plating';
 import { packLooks, shownLooks, STOCK, unpackLooks, type Looks, type Perks, type UpgradeId } from '../game/hangar';
 import { brightGlow, driveLength, FLAMES, FlameLook, MAGPIE_FLAME, STOCK_JET, type FlameLevel } from '../view/flame';
 import { NeonLook } from '../view/neon';
@@ -503,7 +504,7 @@ export class Ship {
   /** The looks another browser last told of this ship (a state's `lo`, see applyState); none yet. */
   private looksTold = -1;
   /** What its hull shows of its upgrades (see outfit). */
-  private looks: Looks = { flame: 0, neon: 0, radiators: 0, drive: 0, thrusters: 0, tubes: 0 };
+  private looks: Looks = { flame: 0, neon: 0, radiators: 0, drive: 0, thrusters: 0, tubes: 0, plating: 0 };
   /** The glowing skins of the radiator fins bolted on (see models, boltOns), glowing with the radiators. */
   private readonly radiatorExtras: THREE.Mesh[] = [];
   /** The color the trim burns in (see setTint). */
@@ -720,7 +721,7 @@ export class Ship {
    * The meshes of the hull an upgrade changes, for the hangar to point at (see view/showcase,
    * highlight): the radiators' skin and the fins of their step (the first step's where none are
    * fitted yet), the thrusters' clusters, the drives' bells, the tube rack of its step (the first's
-   * where none is), the plating of the whole hull, the stripes; none of the trimmings a hull does
+   * where none is), the hull's coats as it shows them for the plating (an interceptor's those it renews), the stripes; none of the trimmings a hull does
    * not take (the Sovereign's).
    */
   partsOf(upgrade: UpgradeId): THREE.Mesh[] {
@@ -736,11 +737,27 @@ export class Ship {
         return named('markBells');
       case 'tubes':
         return plain ? [] : named(`pods${Math.max(1, this.looks.tubes)}`);
-      case 'plating':
-        return named(`${this.type === 'magpie' ? 'human' : this.type}Hull`);
+      case 'plating': {
+        // the coats as the hull shows them: the scrap hull's or the Magpie's, the panels on its flank once fitted;
+        // of an interceptor's, the coats whose plates it renews (see ship/plating), a trophy's all of them
+        const hull = named(`${this.type === 'magpie' ? 'human' : this.type}Hull`, 'panels', 'magpie').filter((mesh) => this.shows(mesh));
+        const plated = hull.filter((mesh) => platedOf(mesh.material));
+        return plated.length ? plated : hull;
+      }
       case 'neon':
         return plain ? [] : named('trimLight');
     }
+  }
+
+  /** The step of the plating its hull shows (see outfit, ship/plating). */
+  get platingShown() {
+    return this.looks.plating;
+  }
+
+  /** Whether a part of the hull is shown: it and everything it hangs on in the model visible. */
+  private shows(part: THREE.Object3D) {
+    for (let o: THREE.Object3D | null = part; o && o !== this.model; o = o.parent) if (!o.visible) return false;
+    return true;
   }
 
   /** Leaves out the looks' finest parts while the camera at `camera` is too far to see them (see TRIM_SEEN, JET_SEEN). */
@@ -754,8 +771,8 @@ export class Ship {
   /**
    * Fits the ship with its upgrades: how it flies and fights (read where they act), and what its
    * hull shows of them (see hangar, shownLooks): the drive flame's look, the neon trim's racing
-   * stripes, the radiator fins and the tube racks bolted on, the jet and the plume as long as the
-   * main drive's step makes them.
+   * stripes, the radiator fins and the tube racks bolted on, the plates the plating renews (see
+   * ship/plating), the jet and the plume as long as the main drive's step makes them.
    */
   outfit(perks: Perks) {
     this.perks = perks;
@@ -787,6 +804,11 @@ export class Ship {
     // the neon trim: the racing stripes of the step, in the pilot's tint
     this.trim.group.visible = looks.neon > 0 && this.trimSeen;
     this.trim.neon.wear(looks.neon, this.neonTint, perks.magpie);
+    // the plates the plating renews: each coat's material of the step (a hologram's light stays)
+    this.model.traverse((o) => {
+      const plated = o instanceof THREE.Mesh && platedOf(o.material);
+      if (plated) o.material = plated.steps[looks.plating];
+    });
     // the bolt-ons: the radiator fins and the tube rack of their steps (see models, boltOns)
     for (let step = 1; step <= 3; step++) {
       const fins = this.model.getObjectByName(`radiators${step}`);
@@ -796,11 +818,13 @@ export class Ship {
     }
   }
 
-  /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
-  idle(dt: number, throttle: number) {
+  /** The drive burning at a throttle without flying anywhere, and the radiators as warm as `warmth` of the laser's limit, for a ship on show (see view/showcase). */
+  idle(dt: number, throttle: number, warmth: number) {
     this.flight.throttle = throttle;
     this.plumeHidden = true;
     this.animateEngine(dt);
+    this.heat = warmth * MAX_HEAT;
+    this.radiate(dt);
   }
 
   /** The glow of a nova core: it pulses and runs through every color, so everyone sees who holds it. */

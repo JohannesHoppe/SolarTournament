@@ -4,7 +4,8 @@ import { behindAll, moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { listeningPost } from './valhalla';
 import type { Jets } from './plumes';
-import { GEYSER_HEIGHT, GEYSER_RADIUS, GEYSERS_AT, GROUND_HALF, groundRelief, NEPTUNE_AT, NEPTUNE_SIZE, surfaceHeight } from './triton';
+import { GEYSER_HEIGHT, GEYSER_RADIUS, GEYSERS_AT, GROUND_HALF, groundRelief, NEPTUNE_AT, NEPTUNE_SIZE, STATION_AT, surfaceHeight } from './triton';
+import type { TracePlan } from './traces';
 
 /**
  * How Memorial on Triton looks (where things are in world/triton): the ground of the field as the
@@ -19,7 +20,10 @@ const TRITON_TINT = 0xf2dcd6;
 const TRITON_GLOW = 0x48404a;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/triton gives (see reliefGround). */
-export const tritonGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, TRITON_TINT, TRITON_GLOW);
+export const tritonGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, TRITON_TINT, TRITON_GLOW, undefined, undefined, TRITON_TRACES);
+
+/** The Navy's Memorial Station the one site, its pilgrims' landers set down beside it and their prints (see world/traces). */
+const TRITON_TRACES: TracePlan = { seed: 4291, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: 900, busy: 0.4, pads: 2 }] };
 
 /** The Memorial Station's plating: the Navy's oldest grey, its stencils. */
 const MEMORIAL_PAINT = { key: 'navy-memorial', seed: 14101, tint: 0x7f8590, texts: ['UEN MEMORIAL STATION', 'NAVY', 'FIRST FLEET', 'NOBODY LEAVES', 'TRITON'] };
