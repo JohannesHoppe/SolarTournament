@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
+import { linearOf } from '../srgb';
 import type { Relief, TemplateSet } from './asteroids';
 import { boxUv, hazardSurface, industrialSurface, STATION_TILE, stationSurface, surfaced, wornSurface } from '../view/surfaces';
 import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
@@ -761,12 +762,15 @@ function groundPhoto(): THREE.Texture {
 /** The ground's fine detail (dust, grit and pebbles): one tile every DUST_TILE units (20 m). */
 export const DUST_TILE = 400;
 
+/** The dust's own tone (sRGB bytes) under its grit and pebbles: what a patch of fine dust shows of it (see groundMaterial). */
+const PLAIN_DUST = [138, 133, 124] as const;
+
 /** The dust of the crater floor up close: grains of metal dust in many greys, grit, pebbles with their shadows on the side away from the sun's usual side. */
 function dustTexture(): THREE.Texture {
   if (typeof document === 'undefined') return new THREE.Texture();
   const size = 512;
   const [element, g] = sheet(size);
-  g.fillStyle = '#8a857c';
+  g.fillStyle = `rgb(${PLAIN_DUST.join(', ')})`;
   g.fillRect(0, 0, size, size);
   const r = new Randomizer(YARD_SEED + 72);
   for (let k = 0; k < 30000; k++) {
@@ -861,7 +865,7 @@ export function groundMaterial(color: number, emissive: number, metalness: numbe
         '#include <map_fragment>',
         `#include <map_fragment>
   vec3 middleValue = texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
-  ${PATCH_GLSL.replace('GROUND_DUST_TILE', DUST_TILE.toFixed(1))}
+  ${PATCH_GLSL.replace('GROUND_DUST_TILE', DUST_TILE.toFixed(1)).replace('PLAIN_DUST', `vec3(${PLAIN_DUST.map((byte) => linearOf(byte).toFixed(4)).join(', ')})`)}
   diffuseColor.rgb *= middleValue;
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );

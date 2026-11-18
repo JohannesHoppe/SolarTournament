@@ -861,8 +861,9 @@ export function dustPatchTexture(): THREE.DataTexture {
 }
 
 /**
- * The patches in groundMaterial's fragment shader, after the dust's map is read (`map` the dust,
- * `middle` the photograph's value already doubled, both changed in place): in fine dust the
+ * The patches in groundMaterial's fragment shader, after the dust's map is read (`middleValue`
+ * the photograph's value already doubled, changed in place; PLAIN_DUST the dust's own tone without
+ * its grit and pebbles, as linear light): in fine dust the
  * pebbles and the photograph's relief smoothed away and the ground a little darker, as mature
  * fine dust is; on bare rock the photograph's relief stronger and the ground a little brighter.
  */
@@ -872,7 +873,7 @@ export const PATCH_GLSL = `
   float patchValue = texture2D(dustPatchMap, groundAt / ${DUST_PATCH_TILE.toFixed(1)}).r * 0.62 + texture2D(dustPatchMap, patchTurn * groundAt / ${DUST_PATCH_TILE_2.toFixed(1)} + ${PATCH_SHIFT}).r * 0.38;
   float fineDust = smoothstep(${FINE_DUST[0]}, ${FINE_DUST[1]}, patchValue);
   float bareRock = smoothstep(${BARE_ROCK[0]}, ${BARE_ROCK[1]}, patchValue);
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * texture2D(map, vMapUv, 8.0).rgb, fineDust * 0.75);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * PLAIN_DUST, fineDust * 0.75);
   middleValue = mix(middleValue, vec3(1.0), fineDust * 0.6);
   middleValue = mix(middleValue, 1.0 + (middleValue - 1.0) * 1.35, bareRock);
   middleValue *= 1.0 - 0.1 * fineDust + 0.1 * bareRock;`;
