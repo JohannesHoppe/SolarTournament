@@ -2,7 +2,7 @@ import type * as ToneLib from 'tone';
 import { clipKey, phraseKey, phrases, words, type Language } from './lines';
 import * as i18n from '../i18n/i18n';
 import { barSeconds, GLITCH_MAX, glitchSteps, hash, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
-import { atan, cos, pow, sin, tanh } from '../detmath';
+import { atan, cos, exp, log, pow, sin, tanh } from '../detmath';
 
 type Tone = typeof ToneLib;
 
@@ -77,6 +77,13 @@ const DRIVE_CLAP = { spacing: 0.009, length: 0.1, Q: 0.6, level: -7, sizzle: 5, 
 /** The other flavors' clap: three bursts a few milliseconds apart into its body, its level, its reverb. */
 const CLAP = { offsets: [0, 0.011, 0.023], length: 0.11, Q: 1, level: -11, room: 1 } as const;
 
+/**
+ * How the kick's distortion and the master's soft clip are oversampled against aliasing: twice
+ * puts the folded harmonics of the hardest kick some 60 dB down, and costs a phone's audio thread
+ * a third of four times (see README, Radio 2584).
+ */
+const OVERSAMPLE = '2x';
+
 /** The music ducks under a voice line and comes back over this long (s), without a click. */
 const DUCK_RAMP = 0.02;
 /** Level of the shared echo and reverb sends, and how much of the echo comes back each time. */
@@ -102,6 +109,87 @@ const STAMMER_STEPS = 8;
 /** A glitch's bursts of noise (see glitchSteps): the band each burst of a storm sounds in, the first one lowest (Hz), and its length (share of a sixteenth). */
 const GLITCH_BANDS = [600, 1200, 2400, 4800];
 const GLITCH_BURST = 0.9;
+
+/**
+ * A connection only some tracks need (see Band.wire): a part of the band that a track never plays
+ * is left out of the mix, so the audio thread does not work on its silence. A started oscillator,
+ * a chorus's or phaser's sweep and a bit crusher's worklet run on every block while anything
+ * listens to them, played or not; a phone's audio thread cannot afford the band's every part at once.
+ */
+interface Link {
+  from: ToneLib.ToneAudioNode;
+  to: ToneLib.InputNode;
+  on: boolean;
+}
+
+/** Points of a crusher's staircase over -1..1: each step's edge a ramp of 1/32768. */
+const CRUSH_POINTS = 65537;
+
+/**
+ * A bit crusher made of the browser's own nodes: the signal rounded to the nearest of 2^(bits-1)
+ * steps a unit, as Tone's BitCrusher rounds it (whose audio worklet would move all of the page's
+ * audio onto a thread of its own, see README, Radio 2584), mixed into the dry signal by `wet` (an
+ * equal-power crossfade, as Tone's effects mix). Each depth it can take is a waveshaper of its
+ * own; one sounds at a time, switched at an audio time (see depth), so a depth falling over a bar
+ * steps down bit by bit.
+ */
+class Crusher {
+  readonly input: ToneLib.Gain;
+  readonly output: ToneLib.CrossFade;
+  readonly wet: ToneLib.Signal<'normalRange'>;
+  private readonly levels = new Map<number, ToneLib.Gain>();
+
+  constructor(T: Tone, depths: number[], bits: number, wet: number) {
+    this.input = new T.Gain(1);
+    this.output = new T.CrossFade(wet);
+    this.wet = this.output.fade;
+    this.input.connect(this.output.a);
+    for (const depth of depths) {
+      const step = pow(0.5, depth - 1);
+      const level = new T.Gain(depth === bits ? 1 : 0).connect(this.output.b);
+      this.input.connect(new T.WaveShaper(curve((x) => step * Math.floor(x / step + 0.5), CRUSH_POINTS)).connect(level));
+      this.levels.set(depth, level);
+    }
+  }
+
+  /** From audio time `t` on the signal is crushed to `bits` (one of the depths it was made with). */
+  depth(bits: number, t: number) {
+    for (const [depth, level] of this.levels) level.gain.setValueAtTime(depth === bits ? 1 : 0, t);
+  }
+}
+
+/** The rumble's reverb: its decay and pre-delay (s). */
+const RUMBLE_DECAY = 3.5;
+const RUMBLE_PREDELAY = 0.01;
+
+/**
+ * A reverb with one channel: white noise falling away over `decay` seconds after RUMBLE_PREDELAY,
+ * the impulse response Tone's Reverb renders (a curve towards silence, its time constant
+ * ln(decay + 1) / ln 200, cut to silence in a straight line over the last tenth), in one channel
+ * instead of two. The rumble is mono anyway (see Band); a convolution of one channel costs the
+ * audio thread half of two, and its 3.5 s are the band's longest.
+ */
+function monoReverb(T: Tone, decay: number): ConvolverNode {
+  const context = T.getContext();
+  const rate = context.sampleRate;
+  const length = Math.ceil((decay + RUMBLE_PREDELAY) * rate);
+  const buffer = context.createBuffer(1, length, rate);
+  const data = buffer.getChannelData(0);
+  const constant = log(decay + 1) / log(200);
+  const hold = RUMBLE_PREDELAY + 0.9 * decay;
+  const held = exp(-(0.9 * decay) / constant);
+  for (let i = Math.round(RUMBLE_PREDELAY * rate); i < length; i++) {
+    const t = i / rate;
+    const envelope = t < hold ? exp(-(t - RUMBLE_PREDELAY) / constant) : held * Math.max(0, (RUMBLE_PREDELAY + decay - t) / (0.1 * decay));
+    data[i] = (Math.random() * 2 - 1) * envelope;
+  }
+  const reverb = context.createConvolver();
+  reverb.buffer = buffer;
+  return reverb;
+}
+
+/** A connection, not wired yet (see Band.wire). */
+const link = (from: ToneLib.ToneAudioNode, to: ToneLib.InputNode): Link => ({ from, to, on: false });
 
 /** The rendered words of the voices (see tools/voice/render.ts). */
 export interface Voice {
@@ -144,6 +232,17 @@ export class Band {
   private readonly echo: ToneLib.FeedbackDelay;
   private readonly echoSend: ToneLib.Gain;
   private readonly reverbs: ToneLib.Reverb[] = [];
+  /** The connections a track's parts need, each wired only while the track plays the part (see wire). */
+  private readonly links = {
+    pedal: [] as Link[],
+    chorus: [] as Link[],
+    phaser: [] as Link[],
+    flanger: [] as Link[],
+    hoover: [] as Link[],
+    french: [] as Link[],
+    crush: [] as Link[],
+    plainHats: [] as Link[],
+  };
 
   private readonly kickOsc: ToneLib.Oscillator;
   private readonly kickDrive: ToneLib.Gain;
@@ -159,7 +258,7 @@ export class Band {
 
   private readonly hat: ToneLib.NoiseSynth;
   private readonly openHat: ToneLib.NoiseSynth;
-  private readonly crush: ToneLib.BitCrusher;
+  private readonly crush: Crusher;
   private readonly ride: ToneLib.NoiseSynth;
   private readonly clap: ToneLib.NoiseSynth;
   private readonly clapBody: ToneLib.Filter;
@@ -167,7 +266,7 @@ export class Band {
   /** How much of the clap goes into the shared reverb. */
   private readonly clapRoom: ToneLib.Gain;
   private readonly perc: ToneLib.MembraneSynth;
-  private readonly percCrush: ToneLib.BitCrusher;
+  private readonly percCrush: Crusher;
   private readonly cowbell: ToneLib.PolySynth;
   private readonly clave: ToneLib.Synth;
 
@@ -223,7 +322,7 @@ export class Band {
     // master: filter -> level -> glue compressor -> soft clipper -> -1 dB ceiling
     this.output = new T.Gain(T.dbToGain(-1));
     const clipper = new T.WaveShaper(saturate(1.6), 4096).connect(this.output);
-    clipper.oversample = '4x';
+    clipper.oversample = OVERSAMPLE;
     // voices join after the glue compressor, so the music cannot squash them
     this.voiceBus = new T.Gain(1).connect(clipper);
     this.glue = new T.Compressor({ threshold: -14, ratio: 4, attack: 0.02, release: 0.12, knee: 6 }).connect(new T.Gain(0.9).connect(this.voiceBus));
@@ -246,7 +345,7 @@ export class Band {
     this.kickAmp = new T.AmplitudeEnvelope({ attack: 0.001, decay: 0.01, sustain: 0.75, release: 0.03 }).connect(this.kickHighpass);
     this.kickTone = new T.Filter({ type: 'lowpass', frequency: 7900, Q: 0 }).connect(this.kickAmp);
     this.kickShaper = new T.WaveShaper(gabber, 4096).connect(this.kickTone);
-    this.kickShaper.oversample = '4x';
+    this.kickShaper.oversample = OVERSAMPLE;
     this.kickDrive = new T.Gain(1).connect(this.kickShaper);
     this.kickOsc = new T.Oscillator({ type: 'sine', frequency: 55 }).connect(this.kickDrive);
     this.kickOsc.start();
@@ -256,23 +355,29 @@ export class Band {
     // rumble: kick -> long reverb -> distortion -> sub band -> mono -> ducked by the kick
     this.rumbleLevel = new T.Gain(0.75).connect(this.master);
     this.rumbleDuck = new T.Gain(1).connect(this.rumbleLevel);
-    const rumbleMono = new T.Mono().connect(this.rumbleDuck);
+    // the mono reverb's one tail, distorted, sounds as loud as the mean of a stereo reverb's two
+    // decorrelated tails distorted each (the level the rumble is tuned to) only 3 dB down
+    const rumbleMono = new T.Mono().connect(new T.Gain(Math.SQRT1_2).connect(this.rumbleDuck));
     const rumbleHigh = new T.Filter({ type: 'highpass', frequency: 30, Q: 0 }).connect(rumbleMono);
     this.rumbleLow = new T.Filter({ type: 'lowpass', frequency: 170, rolloff: -24, Q: 0 }).connect(rumbleHigh);
     const rumbleGrit = new T.WaveShaper(saturate(6), 2048).connect(this.rumbleLow);
-    const rumbleVerb = this.reverb(T, 3.5);
-    rumbleVerb.connect(new T.Gain(3).connect(rumbleGrit));
-    this.rumbleSend = new T.Gain(0).connect(rumbleVerb);
+    const rumbleVerb = monoReverb(T, RUMBLE_DECAY);
+    rumbleVerb.connect(new T.Gain(3).connect(rumbleGrit).input);
+    this.rumbleSend = new T.Gain(0);
+    this.rumbleSend.connect(rumbleVerb);
     kickBus.connect(this.rumbleSend);
 
     // hats, ride, clap, percussion, metal
     const hatBus = new T.Gain(1).connect(this.master);
-    this.crush = new T.BitCrusher({ bits: 6 }).connect(hatBus);
-    this.crush.wet.value = 0;
-    this.hat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 }, volume: -15 })
-      .connect(new T.Filter({ type: 'highpass', frequency: 8200, Q: 0 }).connect(this.crush));
-    this.openHat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.24, sustain: 0 }, volume: -17 })
-      .connect(new T.Filter({ type: 'highpass', frequency: 7600, Q: 0 }).connect(this.crush));
+    // the hats' crusher: 6 bits, and every depth from 12 to 3 for a bit drop's fall (see surprise)
+    this.crush = new Crusher(T, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3], 6, 0);
+    // the hats run through the crusher only in a track that crushes them (see prepare)
+    const hatTone = new T.Filter({ type: 'highpass', frequency: 8200, Q: 0 });
+    const openHatTone = new T.Filter({ type: 'highpass', frequency: 7600, Q: 0 });
+    this.hat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 }, volume: -15 }).connect(hatTone);
+    this.openHat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.24, sustain: 0 }, volume: -17 }).connect(openHatTone);
+    this.links.crush.push(link(hatTone, this.crush.input), link(openHatTone, this.crush.input), link(this.crush.output, hatBus));
+    this.links.plainHats.push(link(hatTone, hatBus), link(openHatTone, hatBus));
     // ride: noise through two resonant bands, a metallic shimmer that can retrigger any time
     this.ride = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.35, sustain: 0 }, volume: -12 });
     this.ride.fan(
@@ -289,16 +394,16 @@ export class Band {
     this.clapSizzle = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: DRIVE_CLAP.length, sustain: 0, decayCurve: 'linear' }, volume: DRIVE_CLAP.level - DRIVE_CLAP.sizzle })
       .connect(new T.Filter({ type: 'highpass', frequency: 2000, Q: 0 }).connect(clapDrive));
 
-    this.percCrush = new T.BitCrusher({ bits: 5 }).connect(this.master);
-    this.percCrush.connect(this.echoSend);
-    this.percCrush.wet.value = 0;
+    this.percCrush = new Crusher(T, [5], 5, 0);
+    this.percCrush.output.connect(this.master);
+    this.percCrush.output.connect(this.echoSend);
     this.perc = new T.MembraneSynth({ pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.05 }, volume: -15 })
-      .connect(new T.Filter({ type: 'highpass', frequency: 120, Q: 0 }).connect(this.percCrush));
+      .connect(new T.Filter({ type: 'highpass', frequency: 120, Q: 0 }).connect(this.percCrush.input));
     // 808-style cowbell: two square tones at 587 and 845 Hz through a band at 2.64 kHz
-    const metalBand = new T.Filter({ type: 'bandpass', frequency: 2640, Q: 3 }).connect(this.percCrush);
+    const metalBand = new T.Filter({ type: 'bandpass', frequency: 2640, Q: 3 }).connect(this.percCrush.input);
     this.cowbell = new T.PolySynth(T.Synth, { oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.22, sustain: 0, release: 0.05 }, volume: -22 }).connect(metalBand);
     // clave: a short triangle click, woody
-    this.clave = new T.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 }, volume: -14 }).connect(this.percCrush);
+    this.clave = new T.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 }, volume: -14 }).connect(this.percCrush.input);
 
     // bass: saw -> filter envelope -> highpass (the rumble owns the sub) -> drive; a 16th echo for moroder pulses
     const bassShaper = new T.WaveShaper(saturate(3), 2048).connect(this.pump);
@@ -316,23 +421,28 @@ export class Band {
     // the pedal bass (drive's analog bassline, see PEDAL_TRACK): two free-running saws through a
     // steep low-pass that every note snaps open, into its amplitude, then one effect of three
     // (chorus, phaser, a flanger: a short delay swept slowly) and hardly any drive
-    const pedalWarmth = new T.WaveShaper(saturate(1.3), 2048).connect(this.pump);
+    // (the one effect of the track, see Song.fx: the others are never wet in it and left out)
+    const pedalWarmth = new T.WaveShaper(saturate(1.3), 2048);
+    this.links.pedal.push(link(pedalWarmth, this.pump));
     this.pedalFlanger = new T.FeedbackDelay({ delayTime: PEDAL_FLANGE[1], feedback: 0.6, wet: 0 }).connect(pedalWarmth);
     new T.LFO({ frequency: 0.3, min: PEDAL_FLANGE[0], max: PEDAL_FLANGE[1] }).connect(this.pedalFlanger.delayTime).start();
-    this.pedalPhaser = new T.Phaser({ frequency: 0.2, octaves: 3, baseFrequency: 400, Q: 6, wet: 0 }).connect(this.pedalFlanger);
-    this.pedalChorus = new T.Chorus({ frequency: 0.8, delayTime: 3.5, depth: PEDAL_CHORUS_DEPTH, spread: 180, wet: 0 }).connect(this.pedalPhaser);
+    this.pedalPhaser = new T.Phaser({ frequency: 0.2, octaves: 3, baseFrequency: 400, Q: 6, wet: 0 }).connect(pedalWarmth);
+    this.pedalChorus = new T.Chorus({ frequency: 0.8, delayTime: 3.5, depth: PEDAL_CHORUS_DEPTH, spread: 180, wet: 0 }).connect(pedalWarmth);
     this.pedalChorus.start();
-    this.pedalAmp = new T.Gain(0).connect(this.pedalChorus);
+    this.pedalAmp = new T.Gain(0);
+    this.links.chorus.push(link(this.pedalAmp, this.pedalChorus));
+    this.links.phaser.push(link(this.pedalAmp, this.pedalPhaser));
+    this.links.flanger.push(link(this.pedalAmp, this.pedalFlanger));
     this.pedalFilter = new T.Filter({ type: 'lowpass', frequency: 600, rolloff: -24, Q: PEDAL_Q }).connect(this.pedalAmp);
     const sawLevel = new T.Gain(0.5).connect(this.pedalFilter);
     this.pedalSaws = [0, 1].map(() => new T.Oscillator({ type: 'sawtooth', frequency: 65 }).connect(sawLevel).start()) as [ToneLib.Oscillator, ToneLib.Oscillator];
     // drive's hook in its finale: a bright, brassy lead (three detuned saws whose filter swells
     // open a little late on every note, as a brass section's does), through a slow chorus, with
     // echo and some reverb
-    const hookOut = new T.Chorus({ frequency: 0.6, delayTime: 4, depth: 0.3, spread: 180, wet: 0.4 }).connect(this.pump);
+    // (only a pedal bass's loop has a hook: its melody notes)
+    const hookOut = new T.Chorus({ frequency: 0.6, delayTime: 4, depth: 0.3, spread: 180, wet: 0.4 });
     hookOut.start();
-    hookOut.connect(this.echoSend);
-    hookOut.connect(this.fxSend);
+    this.links.pedal.push(link(hookOut, this.pump), link(hookOut, this.echoSend), link(hookOut, this.fxSend));
     this.hook = new T.MonoSynth({
       oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
       portamento: 0.02,
@@ -349,7 +459,10 @@ export class Band {
       envelope: { attack: 0.003, decay: 0.2, sustain: 0.8, release: 0.05 },
       filterEnvelope: { attack: 0.003, decay: 0.1, sustain: 1, release: 0.05, baseFrequency: 220, octaves: 0 },
       volume: -11,
-    }).connect(new T.Filter({ type: 'highpass', frequency: 30, Q: 0 }).connect(this.pump));
+    });
+    const subLow = new T.Filter({ type: 'highpass', frequency: 30, Q: 0 });
+    this.pedalSub.connect(subLow);
+    this.links.pedal.push(link(subLow, this.pump));
 
     // acid: saw/square -> resonant squelch filter -> drive, with echo
     const acidShaper = new T.WaveShaper(saturate(4), 2048).connect(this.pump);
@@ -372,7 +485,8 @@ export class Band {
     this.stab = new T.PolySynth(T.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 30 }, envelope: { attack: 0.002, decay: 0.17, sustain: 0, release: 0.1 }, volume: -19 }).connect(this.stabDrive);
 
     // french touch: a chord loop through a phaser and a filter that opens and closes over 8 bars
-    this.frenchFilter = new T.Filter({ type: 'lowpass', frequency: 600, rolloff: -24, Q: 4 }).connect(this.pump);
+    this.frenchFilter = new T.Filter({ type: 'lowpass', frequency: 600, rolloff: -24, Q: 4 });
+    this.links.french.push(link(this.frenchFilter, this.pump));
     const phaser = new T.Phaser({ frequency: 0.3, octaves: 3, baseFrequency: 350, wet: 0.5 }).connect(this.frenchFilter);
     this.french = new T.PolySynth(T.Synth, { oscillator: { type: 'fatsawtooth', count: 2, spread: 18 }, envelope: { attack: 0.004, decay: 0.2, sustain: 0.35, release: 0.08 }, volume: -16 }).connect(phaser);
 
@@ -382,8 +496,8 @@ export class Band {
     this.pad = new T.PolySynth(T.Synth, { oscillator: { type: 'fatsawtooth', count: 3, spread: 24 }, envelope: { attack: 0.8, decay: 0.5, sustain: 0.7, release: 1.5 }, volume: -25 }).connect(padTone);
 
     // hoover: pulse width modulation, gliding, chorus
-    const chorus = new T.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, spread: 180, wet: 0.5 }).connect(this.pump);
-    chorus.connect(this.fxSend);
+    const chorus = new T.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, spread: 180, wet: 0.5 });
+    this.links.hoover.push(link(chorus, this.pump), link(chorus, this.fxSend));
     chorus.start();
     this.hoover = new T.MonoSynth({
       oscillator: { type: 'pwm', modulationFrequency: 6 },
@@ -439,10 +553,10 @@ export class Band {
     const voiceLevel = new T.Compressor({ threshold: -26, ratio: 4, attack: 0.003, release: 0.08, knee: 6 }).connect(voiceOut);
     const voiceGrit = new T.Chebyshev({ order: 3, wet: 0.1 }).connect(voiceLevel);
     voiceGrit.connect(new T.Gain(0.25).connect(this.fxSend));
-    const voiceCrush = new T.BitCrusher({ bits: 8 }).connect(voiceGrit);
-    voiceCrush.wet.value = 0.1;
+    const voiceCrush = new Crusher(T, [8], 8, 0.1);
+    voiceCrush.output.connect(voiceGrit);
     // presence around 2.5 kHz, where the consonants live
-    const voicePresence = new T.Filter({ type: 'peaking', frequency: 2500, Q: 0.9, gain: 4 }).connect(voiceCrush);
+    const voicePresence = new T.Filter({ type: 'peaking', frequency: 2500, Q: 0.9, gain: 4 }).connect(voiceCrush.input);
     const voiceHigh = new T.Filter({ type: 'highpass', frequency: 160, Q: 0 }).connect(voicePresence);
     const ring = new T.Gain(0).connect(new T.Gain(0.15).connect(voiceHigh));
     new T.Oscillator({ type: 'square', frequency: 62 }).connect(ring.gain).start();
@@ -498,6 +612,15 @@ export class Band {
     this.clap.volume.value = drive ? DRIVE_CLAP.level : CLAP.level;
     this.clapBody.Q.value = drive ? DRIVE_CLAP.Q : CLAP.Q;
     this.clapRoom.gain.value = drive ? DRIVE_CLAP.room : CLAP.room;
+    // only the parts the track plays are in the mix
+    const pedal = song.bassStyle === 'pedal';
+    this.wire(this.links.pedal, pedal);
+    for (const fx of ['chorus', 'phaser', 'flanger'] as const) this.wire(this.links[fx], pedal && song.fx === fx);
+    this.wire(this.links.hoover, song.lead === 'hoover');
+    this.wire(this.links.french, song.flavor === 'french');
+    const crushed = song.flavor === 'industrial' || song.flavor === 'ebm' || song.surprises.some((s) => s.type === 'bitDrop');
+    this.wire(this.links.crush, crushed);
+    this.wire(this.links.plainHats, !crushed);
     if (this.flavor === song.flavor) return;
     this.flavor = song.flavor;
     this.crush.wet.value = this.hatCrush();
@@ -505,6 +628,16 @@ export class Band {
     this.acid.oscillator.type = song.flavor === 'acid' ? 'sawtooth' : 'square';
     // when the acid carries the track, the bass makes room above the rumble
     this.bassFloor = song.flavor === 'acid' ? 150 : 60;
+  }
+
+  /** Wires the connections in or out of the mix. */
+  private wire(links: Link[], on: boolean) {
+    for (const l of links) {
+      if (l.on === on) continue;
+      if (on) l.from.connect(l.to);
+      else l.from.disconnect(l.to);
+      l.on = on;
+    }
   }
 
   /** How much of the hats goes through the bit crusher: much in the industrial flavors, none in the rest. */
@@ -670,11 +803,10 @@ export class Band {
         break;
       }
       case 'bitDrop':
-        // the drums lose their bits for a bar
+        // the drums lose their bits for a bar: from 12 down to 3, a bit at a time over three quarters of it
         this.crush.wet.setValueAtTime(1, t);
-        this.crush.bits.setValueAtTime(12, t);
-        this.crush.bits.linearRampToValueAtTime(3, t + bar * 0.75);
-        this.crush.bits.setValueAtTime(6, t + bar);
+        for (let bits = 12; bits >= 3; bits--) this.crush.depth(bits, t + ((12 - bits) / 9) * bar * 0.75);
+        this.crush.depth(6, t + bar);
         this.crush.wet.setValueAtTime(this.hatCrush(), t + bar);
         break;
       default:
