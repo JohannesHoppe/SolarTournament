@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAGPIE_LOOKS, MAX_LOOKS, fitsLooks, shownLooks, stepsOf, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAGPIE_LOOKS, MAX_LOOKS, fitsLooks, shownLooks, stepsOf, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, PLATING_STEP, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -103,10 +103,28 @@ describe('the hangar', () => {
     expect(fitsLooks(3 << 4)).toBe(false);
   });
 
+  it('tells other browsers the step of its plating, within its cap online and in full alone, so they show its renewed plates', () => {
+    for (let level = 0; level <= LEVELS; level++) {
+      const hangar = emptyHangar();
+      hangar.levels.alien.plating = level;
+      const solo = perksOf(hangar, 'alien', false);
+      expect(stepsOf(solo).plating).toBe(level);
+      expect(shownLooks('alien', solo).plating).toBe(level);
+      const online = perksOf(hangar, 'alien', true);
+      const seen = unpackLooks(packLooks(online), 'alien');
+      expect(stepsOf(seen).plating).toBe(Math.min(level, ONLINE_LEVEL));
+      expect(seen.damage).toBeCloseTo(online.damage);
+    }
+    // the plating's bits past the online cap: refused
+    expect(fitsLooks(2 << 12)).toBe(false);
+  });
+
   it('shows the Sovereign without trimmings and the Magpie with every bolt-on Pim welded on', () => {
     const sovereign = shownLooks('sovereign', perksOf(emptyHangar(), 'sovereign', false));
-    expect(sovereign).toEqual({ flame: 0, neon: 0, radiators: 0, tubes: 0, drive: LEVELS, thrusters: LEVELS });
-    expect(shownLooks('magpie', perksOf(emptyHangar(), 'magpie', true))).toMatchObject({ flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS });
+    expect(sovereign).toEqual({ flame: 0, neon: 0, radiators: 0, tubes: 0, plating: 0, drive: LEVELS, thrusters: LEVELS });
+    // nor does the Magpie show the depot's plates, nor the campaign's hull before it
+    expect(shownLooks('magpie', perksOf(emptyHangar(), 'magpie', true))).toMatchObject({ flame: LEVELS, neon: LEVELS, radiators: LEVELS, tubes: LEVELS, plating: 0 });
+    expect(shownLooks('magpie', { ...STOCK, damage: 1 - PLATING_STEP }).plating).toBe(0);
     expect(shownLooks('human', perksOf(maxed(), 'human', true))).toEqual(stepsOf(perksOf(maxed(), 'human', true)));
   });
 

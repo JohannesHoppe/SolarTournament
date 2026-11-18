@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, RCS_THRUST } from './flight';
 import { NANO_SECONDS, NANO_WAIT, Ship } from './ship';
-import { emptyHangar, HANGAR_SHIPS, LEVELS, packLooks, perksOf, STOCK, UPGRADES, type Perks } from '../game/hangar';
+import { emptyHangar, HANGAR_SHIPS, LEVELS, packLooks, perksOf, PLATING_STEP, STOCK, UPGRADES, type Perks } from '../game/hangar';
 import type { ShipType } from '../assets';
 import { shipState } from '../net/validate';
 import { Plausibility } from '../net/plausible';
@@ -118,6 +118,11 @@ describe("another browser's ship", () => {
       owner.perks = { ...perks, neon: perks.neon === 1 ? 2 : 1 };
       for (let t = 5; t < 8; t++) seen.applyState(shipState(owner.toState(t, true))!, t);
       expect(seen.outfits, type).toBe(2);
+      // and so does a step of its plating, which renews its plates (see ship/plating)
+      owner.perks = { ...owner.perks, damage: owner.perks.damage === 1 ? 1 - PLATING_STEP : 1 };
+      for (let t = 8; t < 11; t++) seen.applyState(shipState(owner.toState(t, true))!, t);
+      expect(seen.outfits, type).toBe(3);
+      expect(seen.perks.damage, type).toBeCloseTo(owner.perks.damage);
     }
   });
 

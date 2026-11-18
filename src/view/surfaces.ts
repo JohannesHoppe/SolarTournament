@@ -60,6 +60,8 @@ export interface Wear {
   brushed?: number;
   /** The chips as small flakes, a rim of primer around bare metal (see flakes), instead of plain scars. */
   flakes?: boolean;
+  /** Part numbers stenciled crisp inside a few of the plates (see plateLayout, partNumbers): spares fresh from a depot. */
+  parts?: readonly string[];
 }
 
 /**
@@ -579,6 +581,7 @@ function drawWorn(seed: number, wear: Wear, detail = 1, glowing = false) {
   (wear.flakes ? flakes : chips)(r, color[1], orm[1], wear.chips);
   scratches(r, color[1], orm[1], wear.scratches);
   stencils(r, color[1], wear.stencils);
+  if (wear.parts) partNumbers(seed, wear, color[1]);
   return { color, orm, bump, glow };
 }
 
@@ -594,6 +597,153 @@ export function wornSurface(seed: number, wear: Wear): Surface {
   const surface = textures(color[0], orm[0], bump[0]);
   worn.set(key, surface);
   return surface;
+}
+
+/**
+ * A plate of a hull's tile as the hangar's plating replaces it (see ship/models, PLATE_GLSL): its
+ * middle (px of SIZE, canvas down), its rank among the tile's plates (0..1, from the seed), and
+ * for a plate of riveted panels or ribs its rectangle (px of SIZE: x0, y0, x1, y1), where a
+ * part number can be stenciled.
+ */
+export type Plate = { x: number; y: number; rank: number; box: [number, number, number, number] | null };
+/** The plates of a tile, and which of them holds a point (px of SIZE, canvas down, inside the tile). */
+export type PlateLayout = { plates: Plate[]; at: (x: number, y: number) => number };
+
+/** Scales are replaced in patches of this many rows by this many scales of a row (5 by 2.5 m), not one by one: a single new scale would read as a glitter, not a repair. */
+const PATCH_ROWS = 4;
+const PATCH_SCALES = 4;
+/** The ribs' plates: a quarter of the tile between two frames, this wide (px of SIZE, eight ribs). */
+const RIB_PLATE = 64;
+
+/**
+ * The plates of a hull's tile, laid out exactly as its surface draws them from the same seed:
+ * the panels between the seams of riveted plating, the stretches of ribs between the frames, or
+ * patches of scales, each scale's pixels its own as the overlapping rows cover each other.
+ * Computed without drawing, so the unit tests read it in Node.
+ */
+export function plateLayout(seed: number, wear: Wear): PlateLayout {
+  const ranks = new Randomizer(seed * 7919 + 13);
+  const plates: Plate[] = [];
+  if (wear.relief === 'scales') {
+    const columns = SIZE / SCALE_PITCH / PATCH_SCALES;
+    const rows = SIZE / SCALE_ROW / PATCH_ROWS;
+    for (let pr = 0; pr < rows; pr++) {
+      for (let pc = 0; pc < columns; pc++) {
+        // the patch's middle: its rows' middle, its scales' middle (odd rows shifted by half a scale)
+        plates.push({ x: (pc * PATCH_SCALES + (PATCH_SCALES - 1) / 2) * SCALE_PITCH + SCALE_PITCH / 4, y: (pr * PATCH_ROWS + (PATCH_ROWS - 1) / 2) * SCALE_ROW, rank: ranks.nextFloat(), box: null });
+      }
+    }
+    // a point belongs to the scale drawn last over it (see scales): the copies below the tile
+    // after those in it, a lower row after a higher one, a scale further along after one before
+    const at = (x: number, y: number) => {
+      let best = -1;
+      let owner = 0;
+      for (let copy = 0; copy < 3; copy++) {
+        const dy = (copy - 1) * SIZE;
+        const from = Math.max(0, Math.floor((y - dy - SCALE_RADIUS) / SCALE_ROW));
+        const to = Math.min(SIZE / SCALE_ROW - 1, Math.ceil((y - dy + SCALE_RADIUS) / SCALE_ROW));
+        for (let row = from; row <= to; row++) {
+          const shift = row % 2 ? SCALE_PITCH / 2 : 0;
+          const cy = row * SCALE_ROW + dy;
+          for (let column = 0; column < SIZE / SCALE_PITCH; column++) {
+            const cx = shift + column * SCALE_PITCH;
+            for (const dx of [-SIZE, 0, SIZE]) {
+              const ox = x - cx - dx;
+              const oy = y - cy;
+              if (ox * ox + oy * oy > SCALE_RADIUS * SCALE_RADIUS) continue;
+              const order = (copy * SIZE + row) * SIZE + column * 3 + dx / SIZE + 1;
+              if (order > best) {
+                best = order;
+                owner = Math.floor(row / PATCH_ROWS) * columns + Math.floor(column / PATCH_SCALES);
+              }
+            }
+          }
+        }
+      }
+      return owner;
+    };
+    return { plates, at };
+  }
+  // the rows of panels, each split at its seams (see panelLayout); the ribs between their frames
+  const rows: number[][] = [];
+  if (wear.relief === 'ribs') for (let y = 0; y < SIZE; y += PANEL_ROW) rows.push(Array.from({ length: SIZE / RIB_PLATE + 1 }, (_, i) => i * RIB_PLATE));
+  else {
+    const { seams } = panelLayout(new Randomizer(seed), wear.relief);
+    for (let y = 0; y < SIZE; y += PANEL_ROW) {
+      const cuts = seams.filter(([x0, y0, x1]) => x0 === x1 && y0 === y).map(([x]) => x);
+      rows.push([...new Set([...cuts, SIZE])].sort((a, b) => a - b));
+    }
+  }
+  const first: number[] = [];
+  rows.forEach((cuts, row) => {
+    first.push(plates.length);
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const y = row * PANEL_ROW;
+      plates.push({ x: (cuts[i] + cuts[i + 1]) / 2, y: y + PANEL_ROW / 2, rank: ranks.nextFloat(), box: [cuts[i], y, cuts[i + 1], y + PANEL_ROW] });
+    }
+  });
+  const at = (x: number, y: number) => {
+    const row = Math.min(rows.length - 1, Math.max(0, Math.floor(y / PANEL_ROW)));
+    const cuts = rows[row];
+    let i = 0;
+    while (i + 2 < cuts.length && x >= cuts[i + 1]) i++;
+    return first[row] + i;
+  };
+  return { plates, at };
+}
+
+/** How finely the plate map holds the plates' outlines: as the hull's surface (see HULL_DETAIL). */
+const PLATE_DETAIL = 2;
+const plateMaps = new Map<string, THREE.DataTexture>();
+
+/**
+ * The plates of a hull's tile as a texture the hull's shader reads (see ship/models, PLATE_GLSL),
+ * nearest texel, never blended: red the plate's rank, green and blue its middle across and up
+ * the tile (so every texel of a plate holds the same three values). Built in Node too.
+ */
+export function plateMap(seed: number, wear: Wear): THREE.DataTexture {
+  const key = `${seed}:${wear.relief}`;
+  const kept = plateMaps.get(key);
+  if (kept) return kept;
+  const { plates, at } = plateLayout(seed, wear);
+  const size = SIZE * PLATE_DETAIL;
+  const data = new Uint8Array(size * size * 4);
+  const byte = (value: number) => Math.round(Math.max(0, Math.min(1, value)) * 255);
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const plate = plates[at((px + 0.5) / PLATE_DETAIL, (py + 0.5) / PLATE_DETAIL)];
+      // the texture's rows run up the tile, the canvas's down it
+      const i = ((size - 1 - py) * size + px) * 4;
+      data[i] = byte(plate.rank);
+      data[i + 1] = byte(plate.x / SIZE);
+      data[i + 2] = byte(1 - plate.y / SIZE);
+      data[i + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size);
+  texture.magFilter = texture.minFilter = THREE.NearestFilter;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  plateMaps.set(key, texture);
+  return texture;
+}
+
+/** Part numbers stenciled on a spare plate: crisp, small, in fresh dark paint, on about every third plate, in a corner of it. */
+function partNumbers(seed: number, wear: Wear, color: CanvasRenderingContext2D) {
+  const r = new Randomizer(seed * 31 + 7);
+  const texts = wear.parts!;
+  color.font = 'bold 7px monospace';
+  color.textBaseline = 'top';
+  for (const { box } of plateLayout(seed, wear).plates) {
+    if (!box || r.nextFloat() > 0.35) continue;
+    const [x0, y0, x1, y1] = box;
+    const text = texts[r.nextInt() % texts.length];
+    const width = color.measureText(text).width;
+    if (x1 - x0 < width + 8) continue;
+    color.fillStyle = `rgba(8, 8, 8, ${r.range(0.75, 0.9)})`;
+    color.fillText(text, r.nextFloat() < 0.5 ? x0 + 4 : x1 - 4 - width, r.nextFloat() < 0.5 ? y0 + 5 : y1 - 12);
+  }
 }
 
 /**
@@ -1958,6 +2108,14 @@ export function surfaced(surface: Surface, bumpScale: number) {
   return { map: surface.map, roughnessMap: surface.orm, metalnessMap: surface.orm, roughness: 1, metalness: 1, bumpMap: surface.bump, bumpScale };
 }
 
+/** The axis a vertex's face is projected along by boxUv: its normal's dominant one (0 x, 1 y, 2 z). */
+export function boxAxis(normal: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number): 0 | 1 | 2 {
+  const nx = Math.abs(normal.getX(i));
+  const ny = Math.abs(normal.getY(i));
+  const nz = Math.abs(normal.getZ(i));
+  return nx >= ny && nx >= nz ? 0 : ny >= nz ? 1 : 2;
+}
+
 /**
  * Texture coordinates for flat-faced parts: each face takes the surface at the same density
  * (one tile per `tile` units), projected along its dominant axis, so long and short parts look
@@ -1972,17 +2130,15 @@ export function boxUv(geometry: THREE.BufferGeometry, tile: number, layout: 'pla
   const normal = geometry.attributes.normal;
   const uv = new Float32Array(position.count * 2);
   for (let i = 0; i < position.count; i++) {
-    const nx = Math.abs(normal.getX(i));
-    const ny = Math.abs(normal.getY(i));
-    const nz = Math.abs(normal.getZ(i));
     const x = position.getX(i);
     const z = position.getZ(i);
     // which way a face looks along its axis, if it is to read the right way round
     const side = (axis: number) => (readable ? Math.sign(axis) : 1);
+    const axis = boxAxis(normal, i);
     const [u, v] =
-      nx >= ny && nx >= nz
+      axis === 0
         ? [readable ? -Math.sign(normal.getX(i)) * z : z, position.getY(i)]
-        : ny >= nz
+        : axis === 1
           ? layout === 'lengthwise'
             ? [z, x]
             : [side(normal.getY(i)) * x, readable ? -z : z]

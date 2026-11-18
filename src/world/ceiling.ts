@@ -31,6 +31,8 @@ const CEILING_CELL = 800;
 const CELL_SLACK = 1;
 /** How far each bound is raised over the ceiling reckoned (units, 5 cm): the height function's rounding is some 10⁻⁹ of that. */
 const CEILING_MARGIN = 1;
+/** The most cells `highest` reads on one level (see Pyramid.highest): a ship's sphere covers four of the finest at most, a wide reach is read a level or more up. */
+const HIGHEST_CELLS = 16;
 
 /** The pyramid of a ground's ceiling: its levels' bounds, finest first, each level half as many cells either way as the one before. */
 export class Pyramid {
@@ -109,6 +111,38 @@ export class Pyramid {
       }
     }
     return false;
+  }
+
+  /**
+   * A bound no point of the ground rises over anywhere in the rectangle [x0, x1] × [z0, z1] (its
+   * relief's coordinates; a point beyond the footprint taken at its edge): the most of the finest
+   * cells it covers, or of the cells of the first level up where it covers no more than
+   * HIGHEST_CELLS of them. Every point of the rectangle lies in one of those cells as `above`
+   * finds them (the cell of a point never lies before the cell of a point before it), and a
+   * coarser cell's bound holds its finer cells' (see reliefContact).
+   */
+  highest(x0: number, z0: number, x1: number, z1: number): number {
+    const columns = this.columns[0];
+    const rows = this.rows[0];
+    const half = this.half;
+    let i0 = Math.min(columns - 1, Math.max(0, Math.floor((x0 + half.x) / CEILING_CELL)));
+    let i1 = Math.min(columns - 1, Math.max(0, Math.floor((x1 + half.x) / CEILING_CELL)));
+    let j0 = Math.min(rows - 1, Math.max(0, Math.floor((z0 + half.z) / CEILING_CELL)));
+    let j1 = Math.min(rows - 1, Math.max(0, Math.floor((z1 + half.z) / CEILING_CELL)));
+    // a level's cell holds the finer cells 2i and 2i + 1 of the level below
+    let k = 0;
+    while ((i1 - i0 + 1) * (j1 - j0 + 1) > HIGHEST_CELLS && k + 1 < this.levels.length) {
+      k++;
+      i0 >>= 1;
+      i1 >>= 1;
+      j0 >>= 1;
+      j1 >>= 1;
+    }
+    const level = this.levels[k];
+    const across = this.columns[k];
+    let most = -Infinity;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) most = Math.max(most, level[j * across + i]);
+    return most;
   }
 
   /** The bound of the finest cell over (x, z), for the tests. */

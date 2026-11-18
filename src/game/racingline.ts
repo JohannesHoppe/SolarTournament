@@ -156,6 +156,11 @@ export class RacingLine {
     return this.gates.length;
   }
 
+  /** How many samples the line's length was measured over (see arcs): closest looks among as many along each stretch. */
+  get sampleCount() {
+    return this.arcs.length;
+  }
+
   /** Where along the line gate `i` lies (units). */
   gateArc(i: number): number {
     return this.gates[i];
@@ -345,17 +350,44 @@ export class RacingLine {
    * `from` to `to` (units along the line; `to` may run past the length of a closed line).
    */
   private closest(position: THREE.Vector3, from: number, to: number): number {
-    const steps = Math.max(1, Math.ceil(((to - from) / this.length) * (this.arcs.length - 1)));
+    const stretch = this.stretch(from, to);
     let best = from;
     let distance = Infinity;
-    for (let i = 0; i <= steps; i++) {
-      const s = from + ((to - from) * i) / steps;
-      const d = this.point(s, sample).distanceToSquared(position);
+    for (let k = 0; k < stretch.length; k += 4) {
+      const d = sample.set(stretch[k + 1], stretch[k + 2], stretch[k + 3]).distanceToSquared(position);
       if (d < distance) {
         distance = d;
-        best = s;
+        best = stretch[k];
       }
     }
     return best;
   }
+
+  /**
+   * The samples closest looks among on the stretch from `from` to `to`: for each its distance
+   * along the line and its point (s, x, y, z), as many as the line has samples there. The line
+   * never changes, and a racer asks for the stretch to its next gate every step, so each
+   * stretch is sampled once and kept, the very points point gives.
+   */
+  private stretch(from: number, to: number): Float64Array {
+    let ends = this.stretches.get(from);
+    if (!ends) this.stretches.set(from, (ends = new Map()));
+    let kept = ends.get(to);
+    if (kept) return kept;
+    const steps = Math.max(1, Math.ceil(((to - from) / this.length) * (this.arcs.length - 1)));
+    kept = new Float64Array((steps + 1) * 4);
+    for (let i = 0; i <= steps; i++) {
+      const s = from + ((to - from) * i) / steps;
+      this.point(s, sample);
+      kept[i * 4] = s;
+      kept[i * 4 + 1] = sample.x;
+      kept[i * 4 + 2] = sample.y;
+      kept[i * 4 + 3] = sample.z;
+    }
+    ends.set(to, kept);
+    return kept;
+  }
+
+  /** The stretches sampled so far (see stretch), by their start and end. */
+  private readonly stretches = new Map<number, Map<number, Float64Array>>();
 }
