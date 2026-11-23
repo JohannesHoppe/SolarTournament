@@ -309,13 +309,17 @@ export interface TraceWay {
   passes: number;
 }
 
-/** What a place's ground is marked with: its `seed`, its sites, the ways it lays itself (`ways`), the lone lines of prints in the wilds (`wilds`, 3 unless given) and the old landing sites out there (`landings`, 1 unless given). */
+/**
+ * What a place's ground is marked with: its `seed`, its sites, the ways it lays itself (`ways`), the lone lines of prints in the wilds (`wilds`, 3 unless given) and the old landing sites out there (`landings`, 1 unless given).
+ * `weathering` (0..1, none unless given) is the share by which a trace fades where nobody walks it again, far from every site: on a world whose ground is not still, frost settling out of a thin air (Pluto, Triton) or the snow of its plumes (Enceladus) softens over centuries what lies there undisturbed, while round a site the traffic keeps its tracks fresh.
+ */
 export interface TracePlan {
   seed: number;
   sites: readonly TraceSite[];
   ways?: readonly TraceWay[];
   wilds?: number;
   landings?: number;
+  weathering?: number;
 }
 
 /** One trace as laid: its kind, its middle line (x, z pairs, units), its width across (units), how strongly it shows (0..1). */
@@ -358,7 +362,11 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
   const height = (x: number, z: number) => gridHeight(grid, x, z);
   const nearest = (x: number, z: number) => plan.sites.reduce((best, site) => Math.min(best, Math.max(0, hypot(x - site.x, z - site.z) - site.size)), Infinity);
   /** How strongly a trace shows where it starts: fainter far from every site. */
-  const strengthAt = (x: number, z: number) => (plan.sites.length ? 0.55 + 0.45 * exp(-nearest(x, z) / (3 * KM)) : 0.7) * r.range(0.75, 1);
+  const weathering = plan.weathering ?? 0;
+  const strengthAt = (x: number, z: number) => {
+    const near = plan.sites.length ? exp(-nearest(x, z) / (3 * KM)) : 0;
+    return (plan.sites.length ? 0.55 + 0.45 * near : 0.7) * (1 - weathering * (1 - near)) * r.range(0.75, 1);
+  };
 
   /** A walk from (x, z) heading `heading` for `length` units in steps of `step`, its heading wandering by up to `wander` a step and turned towards `toward` if given; it turns off a slope too steep for `kind` and stops where it finds no way or leaves the ground. */
   const walk = (kind: TraceKind, x: number, z: number, heading: number, length: number, step: number, wander: number, toward?: { x: number; z: number; pull: number }): number[] => {
@@ -520,7 +528,8 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
     road(way.kind, points, r.range(0.85, 1), way.passes);
   }
 
-  // the wilds: a place far from every site
+  // the wilds: a place far from every site, where nobody walks a trace again
+  const aged = 1 - weathering;
   const far = (): [number, number] | null => {
     for (let k = 0; k < 30; k++) {
       const x = r.range(minX, maxX);
@@ -531,13 +540,13 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
   };
   for (let k = 0; k < (plan.wilds ?? 3); k++) {
     const at = far();
-    if (at) prints(at[0], at[1], r.range(0, TAU), r.range(0.4, 2) * KM, r.range(0.6, 0.9));
+    if (at) prints(at[0], at[1], r.range(0, TAU), r.range(0.4, 2) * KM, aged * r.range(0.6, 0.9));
   }
   for (let k = 0; k < (plan.landings ?? 1); k++) {
     const at = far();
     if (!at) continue;
-    landing(at[0], at[1], r.range(0.6, 0.9));
-    add('rover', walk('rover', at[0] + 40 * M, at[1], r.range(0, TAU), r.range(0.3, 1.2) * KM, 10 * M, 0.12), r.range(0.6, 0.9));
+    landing(at[0], at[1], aged * r.range(0.6, 0.9));
+    add('rover', walk('rover', at[0] + 40 * M, at[1], r.range(0, TAU), r.range(0.3, 1.2) * KM, 10 * M, 0.12), aged * r.range(0.6, 0.9));
   }
   return { trails, rings };
 }

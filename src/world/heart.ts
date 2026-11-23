@@ -24,7 +24,8 @@ const WATER_ICE = new THREE.Color(0.55, 0.5, 0.46);
 export const plutoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, PLUTO_TINT, PLUTO_GLOW, undefined, (x, z, color) => color.copy(NITROGEN).lerp(WATER_ICE, THREE.MathUtils.smoothstep(surfaceHeight(x, z) - LAND, 400, 4000)), PLUTO_TRACES);
 
 /** Nobody stays at Last Light: an old landing site on the plain and a few lone lines of prints (see world/traces). */
-const PLUTO_TRACES: TracePlan = { seed: 4294, sites: [], wilds: 2, landings: 1 };
+/** Pluto's thin nitrogen air frosts its plain over and its winds raise dunes of methane ice: centuries soften an old trace by half. */
+const PLUTO_TRACES: TracePlan = { seed: 4294, sites: [], wilds: 2, landings: 1, weathering: 0.5 };
 
 /** Pluto beyond the field: the heart's pale plain and, past its edges, the dark reddish tholins. */
 const HEART = new THREE.Color(0.48, 0.46, 0.44);

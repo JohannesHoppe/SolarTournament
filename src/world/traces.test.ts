@@ -220,6 +220,25 @@ describe('the traces on the ground', () => {
     expect(trails.filter((trail) => trail.kind === 'boots').length).toBeGreaterThanOrEqual(3);
     expect(trails.every((trail) => trail.kind === 'boots' || trail.kind === 'rover')).toBe(true);
   });
+
+  it('weathers only what nobody walks again: the same traces, faded far from the sites and kept fresh round them', () => {
+    const { grid } = ground();
+    const still = layTraces(plan, grid);
+    const weathered = layTraces({ ...plan, weathering: 0.5 }, grid);
+    expect(weathered.trails.length).toBe(still.trails.length);
+    const site = plan.sites[0];
+    for (let k = 0; k < still.trails.length; k++) {
+      const [a, b] = [still.trails[k], weathered.trails[k]];
+      expect(b.points).toEqual(a.points);
+      const ratio = b.strength / a.strength;
+      expect(ratio).toBeGreaterThanOrEqual(0.5 - 1e-9);
+      expect(ratio).toBeLessThanOrEqual(1 + 1e-9);
+      if (hypot(a.points[0] - site.x, a.points[1] - site.z) < site.size) expect(ratio).toBeGreaterThan(0.99);
+    }
+    const lonely = layTraces({ seed: 4902, sites: [], wilds: 3, landings: 1, weathering: 0.6 }, grid);
+    const fresh = layTraces({ seed: 4902, sites: [], wilds: 3, landings: 1 }, grid);
+    lonely.trails.forEach((trail, k) => expect(trail.strength).toBeCloseTo(fresh.trails[k].strength * 0.4, 9));
+  });
 });
 
 describe('a ship\'s scrape marks', () => {

@@ -23,7 +23,8 @@ const TRITON_GLOW = 0x48404a;
 export const tritonGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, TRITON_TINT, TRITON_GLOW, undefined, undefined, TRITON_TRACES);
 
 /** The Navy's Memorial Station the one site, its pilgrims' landers set down beside it and their prints (see world/traces). */
-const TRITON_TRACES: TracePlan = { seed: 4291, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: 900, busy: 0.4, pads: 2 }] };
+/** Triton's seasonal nitrogen frost and its geysers' dark fallout soften a trace far from the station by half over centuries. */
+const TRITON_TRACES: TracePlan = { seed: 4291, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: 900, busy: 0.4, pads: 2 }], weathering: 0.5 };
 
 /** The Memorial Station's plating: the Navy's oldest grey, its stencils. */
 const MEMORIAL_PAINT = { key: 'navy-memorial', seed: 14101, tint: 0x7f8590, texts: ['UEN MEMORIAL STATION', 'NAVY', 'FIRST FLEET', 'NOBODY LEAVES', 'TRITON'] };
