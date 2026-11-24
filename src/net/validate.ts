@@ -35,11 +35,15 @@ export const MAX_FIELD_TIME = 1e7;
 export const ROUND_LIMIT = 3600;
 /** Ship and rock ids are short ("p:abc…", "b:abc…:2", "12.0.1"). */
 const MAX_ID = 64;
+/** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
+export const MAX_FAMILY = 13;
+/** The roots of a tournament's field stay below this: the largest, the Rings of Saturn's, has 136 (120 in the layer and 16 beyond), with room. */
+export const MAX_ROOTS = 160;
 /**
- * A field's snapshot never lists more rocks than this, alive or broken: the largest fields have
- * 90 pieces, and each breaks into up to 3, twice (90 · (1 + 3 + 9) = 1170).
+ * A field's snapshot never lists more pieces than this in any of its lists: every family alive,
+ * broken or gone to dust in full (160 · 13 = 2080).
  */
-const MAX_ROCKS = 1200;
+const MAX_ROCKS = MAX_ROOTS * MAX_FAMILY;
 /** Probes in flight at once, and the seconds a probe drifts at most (see game/items). */
 const MAX_PROBES = 64;
 const MAX_PROBE_SECONDS = 200;
@@ -196,9 +200,7 @@ function dustOf(x: unknown, max: number, broken: readonly string[]): string[] | 
   });
 }
 
-/** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
-const MAX_FAMILY = 13;
-/** A slice never holds more families than this: the largest field's 160 roots in SYNC_SLICES slices, with room. */
+/** A slice never holds more families than this: MAX_ROOTS in SYNC_SLICES slices, with room. */
 const MAX_SLICE = 64;
 
 /** A family's list of ids with a number each (its breaks with their field times, its pieces with their hits), each id one of the family's; with `timed`, a piece's entry may name the field time of its last hit after its hits. */
