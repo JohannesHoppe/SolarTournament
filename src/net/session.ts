@@ -196,7 +196,8 @@ export class Session {
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec, at: number) => void = () => {};
-  onSelfDestruct: (ship: string, position: Vec) => void = () => {};
+  /** A ship of another browser blew itself up, here, at field time `at` (see Game.selfDestruct). */
+  onSelfDestruct: (ship: string, position: Vec, at: number) => void = () => {};
   /** A ship of another browser dropped a decoy, here, flying so (see game/decoys). */
   onDecoy: (ship: string, position: Vec, velocity: Vec) => void = () => {};
   /** A ship of another browser hooked a rock (a point in the rock's frame), a ship, a core of Capture the Flag (its side), a torpedo or a sponsor probe (by id), with this much cable out; or let go (null). */
@@ -422,7 +423,8 @@ export class Session {
     transport.on('sd', (d, from) => {
       const ship = id(d?.s);
       const position = vec(d?.p, 3, MAX_COORDINATE);
-      if (ship && position && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onSelfDestruct(ship, position));
+      const at = num(d?.t, 0, MAX_FIELD_TIME);
+      if (ship && position && at !== null && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onSelfDestruct(ship, position, at));
     });
     transport.on('ch', (d, from) => {
       const ship = id(d?.s);
@@ -685,9 +687,9 @@ export class Session {
     this.transport.send('dc', { s: ship, p: position, v: velocity });
   }
 
-  /** Tells everyone that a ship this browser runs blew itself up where it is (see Game.selfDestruct). */
-  sendSelfDestruct(ship: string, position: Vec) {
-    this.transport.send('sd', { s: ship, p: position });
+  /** Tells everyone that a ship this browser runs blew itself up where it is, at field time `at` (s): every browser breaks the rock in its blast at that field time (see Game.selfDestruct, game/blasts). */
+  sendSelfDestruct(ship: string, position: Vec, at: number) {
+    this.transport.send('sd', { s: ship, p: position, t: +at.toFixed(3) });
   }
 
   /** Tells everyone that a ship of another browser did something no honest browser reports. */

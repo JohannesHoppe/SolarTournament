@@ -372,8 +372,17 @@ type Ball = { center: THREE.Vector3; radius: number; part: number };
 /** A battery's shot (see Fleet.firing): the part that fires and the number of its shot. */
 type Shot = { zone: number; shot: number };
 
-/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn, each part's heat and whether it is overheated (see heatUp); and the field time a comet's head broke up on its hull, once one did (see rammedAt). */
-export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number; k: number[]; o: number[]; c?: number };
+/**
+ * What the lead browser sends: whether the battleship went down, the hits on each part, where it
+ * is, its motion and turn, whom its stern hunts and whether its drives burn, each part's heat and
+ * whether it is overheated (see heatUp); the field time a comet's head broke up on its hull, once
+ * one did (see rammedAt); and once it went down, the field time and the place it did (`s`, `w`:
+ * where and when it goes up on every browser, see goesUp).
+ */
+export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number; k: number[]; o: number[]; c?: number; s?: number; w?: number[] };
+
+/** Where and when (field time, s) the battleship goes up (see Fleet.goesUp). */
+export type SinkBlast = { position: THREE.Vector3; at: number };
 
 /** What the fleet needs to know of a ship. */
 export interface Target {
@@ -790,8 +799,12 @@ export class Fleet implements Obstacle {
   private lastClock = 0;
   /** The field time of the frame it was last shown in (see update). */
   private clock = 0;
-  /** When the battleship went down (field time). */
+  /** When the battleship went down (field time, to the millisecond as the lead sends it). */
   private sunkAt = -Infinity;
+  /** Where it went down (units, whole as the lead sends it). */
+  private readonly sunkWhere = new THREE.Vector3();
+  /** When and where the lead's battleship went down, once its state said so (see follow, goesUp). */
+  private told: { at: number; where: THREE.Vector3 } | null = null;
   /** This browser has heard the lead's battleship still in the fight (see follow). */
   private afloat = false;
   /** Everything of it a piece of the field it dodges keeps out of (see aside): its colliders whatever its phase and its broken parts, and the hangar tunnels. */
@@ -2158,12 +2171,14 @@ export class Fleet implements Obstacle {
       k: this.heat.map(Math.round),
       o: this.overheated.map((hot) => (hot ? 1 : 0)),
       ...(this.rammedAt === null ? {} : { c: this.rammedAt }),
+      ...(this.down && this.sunkAt > -Infinity ? { s: this.sunkAt, w: this.sunkWhere.toArray() } : {}),
     };
   }
 
   /** Takes the lead's state: the battleship went down there first, the hits it counts, where it is, when a comet broke up on it. */
   follow(state: FleetState): FleetEvent[] {
     if (state.c !== undefined) this.rammedAt = state.c;
+    if (state.s !== undefined && state.w) this.told = { at: state.s, where: new THREE.Vector3().fromArray(state.w) };
     if (this.down) return [];
     // a browser that came after it went down saw no fight: it is gone, without a blast or points
     if (state.d && !this.afloat) {
@@ -2206,6 +2221,16 @@ export class Fleet implements Obstacle {
     this.position.lerp(this.heard, Math.min(1, dt * 4));
     slerp(this.quaternion, this.heardTurn, Math.min(1, dt * 4));
     this.root.updateMatrixWorld();
+  }
+
+  /**
+   * Where and when the battleship that went down goes up: SINK_SECONDS after the lead's went
+   * down, where it did, once its state told it (so every browser breaks the same rock at the
+   * same field time, see game/blasts); until then, after this browser's own.
+   */
+  goesUp(): SinkBlast {
+    const at = this.told?.at ?? this.sunkAt;
+    return { position: (this.told?.where ?? this.sunkWhere).clone(), at: at + SINK_SECONDS };
   }
 
   /** The battleship that went down burns this long before it goes up (s). */
@@ -2269,7 +2294,8 @@ export class Fleet implements Obstacle {
   /** The battleship went down (here, or on the lead browser first): its reactor goes critical, and SINK_SECONDS later it goes up. */
   sink(): FleetEvent[] {
     this.down = true;
-    this.sunkAt = this.lastClock;
+    this.sunkAt = +this.lastClock.toFixed(3);
+    this.sunkWhere.copy(this.position).round();
     this.target = null;
     this.burning = false;
     return [{ kind: 'sunk', zone: -1, position: this.position.clone() }];

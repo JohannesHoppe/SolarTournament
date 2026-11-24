@@ -288,6 +288,20 @@ describe('the lead browser', () => {
     expect(rammed.length).toBeLessThan(100);
   });
 
+  it("takes a self-destruct only from the ship's own browser, with the field time it went off at to the millisecond", () => {
+    const { transport, session } = joined('n');
+    const heard: [string, number][] = [];
+    session.onSelfDestruct = (ship, _position, at) => heard.push([ship, at]);
+    const sd = (data: object, from: string) => transport.handlers.get('sd')!(data, from);
+    sd({ s: 'p:h2', p: [1, 2, 3], t: 61.234 }, 'h2');
+    sd({ s: 'p:h2', p: [1, 2, 3], t: 61.234 }, 'h3');
+    for (const t of [undefined, -1, 'now', Infinity]) sd({ s: 'p:h2', p: [1, 2, 3], t }, 'h2');
+    expect(heard).toEqual([['p:h2', 61.234]]);
+    // what it sends: the field time to the millisecond, as the sender takes it itself
+    session.sendSelfDestruct('p:n', [0, 0, 0], 61.2345678);
+    expect(transport.sent.at(-1)).toEqual({ type: 'sd', data: { s: 'p:n', p: [0, 0, 0], t: 61.235 }, to: undefined });
+  });
+
   it("takes a contact of the field's pieces only from the lead, checked, and no faster than its budget", () => {
     const { transport, session } = joined('n');
     const knocked: string[] = [];

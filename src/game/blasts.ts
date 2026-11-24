@@ -48,6 +48,8 @@ export function breakReach(energy: number, meanRadius: number, kind: 'rock' | 'i
 export const BLAST_STEP = 0.1;
 /** A blast's field time on that grid, alike on every browser that heard of it. */
 export const blastTime = (at: number) => Math.floor(at / BLAST_STEP) * BLAST_STEP;
+/** The field's clock to the millisecond, as a message carries it (s): a blast's sender takes this very time for itself, so its blastTime is every browser's. */
+export const blastClock = (clock: number) => +clock.toFixed(3);
 
 const toward = new THREE.Vector3();
 
@@ -55,13 +57,17 @@ const toward = new THREE.Vector3();
  * The pieces of rock and ice a blast of `energy` (J) at `center` breaks at field time `at`
  * (see breakReach): each whole one into its fragments, a fragment to dust, as the comet breaks
  * them; nothing that stands, is solid or is a world's ground. Each is chosen before any breaks,
- * by id, so every browser breaks the same; a piece shielded by another between it and the blast
- * stands. Returns what broke.
+ * by id, with every piece posed where it is at `at` (see AsteroidField.pose), so every browser
+ * breaks the same however late it heard of the blast; a piece shielded by another between it and
+ * the blast stands. Returns what broke.
  */
 export function blastBreaks(field: AsteroidField, center: THREE.Vector3, energy: number, at: number): Asteroid[] {
+  for (const piece of field.asteroids.values()) field.pose(piece, at);
   const doomed: Asteroid[] = [];
   for (const rock of field.asteroids.values()) {
     if (rock.solid || rock.ground || (rock.kind !== 'rock' && rock.kind !== 'ice')) continue;
+    // a piece not broken off yet, or gone to dust, by then
+    if (rock.born > at || rock.crumbles <= at) continue;
     const distance = rock.object.position.distanceTo(center);
     if (distance > breakReach(energy, rock.meanRadius, rock.kind)) continue;
     // the first piece on the line from the blast to it is it: nothing shields it
@@ -71,6 +77,7 @@ export function blastBreaks(field: AsteroidField, center: THREE.Vector3, energy:
     }
     doomed.push(rock);
   }
+  for (const piece of field.asteroids.values()) field.posed(piece);
   doomed.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
   const broken: Asteroid[] = [];
   for (const rock of doomed) {

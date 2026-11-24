@@ -286,8 +286,11 @@ export function fleetState(x: unknown): FleetState | null {
   const target = x.t === null ? null : id(x.t);
   // the field time a comet broke up on its hull, once one did
   const rammed = x.c === undefined ? undefined : num(x.c, 0, MAX_FIELD_TIME);
-  if (!state || (x.t !== null && target === null) || rammed === null || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
-  return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }) };
+  // the field time and the place it went down, both or neither, only once it did
+  const sunk = x.s === undefined ? undefined : num(x.s, 0, MAX_FIELD_TIME);
+  const where = x.w === undefined ? undefined : vec(x.w, 3, MAX_COORDINATE);
+  if (!state || (x.t !== null && target === null) || rammed === null || sunk === null || where === null || (sunk === undefined) !== (where === undefined) || (sunk !== undefined && state.d !== 1) || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
+  return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }), ...(sunk === undefined || !where ? {} : { s: sunk, w: where }) };
 }
 
 /** The DJ's word in the lead's round state (see music/dj): a step within MAX_DJ_OFFSET, a start within the round's limit, a title only exactly as the DJ's own words are tidied (djTitle); null for anything else. */

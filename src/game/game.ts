@@ -102,7 +102,7 @@ import { bendRadius, RacingLine } from './racingline';
 import { bounceOff, bump, feltBlow, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT, strikeJunk } from '../ship/impact';
 import { shoveSpin } from '../ship/blow';
 import { blastOn, CHARGE_BLAST, CHARGE_FUSE, Charges } from './charges';
-import { blastBreaks, blastEnergy, blastTime } from './blasts';
+import { blastBreaks, blastClock, blastEnergy, blastTime } from './blasts';
 import { PLUME_BURN, PLUME_HEAT, plumeStrength } from '../ship/plume';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, TRACK_RESPAWN_SECONDS, TRACK_RESPAWN_SPEED, type RoomMode, type RoundMode } from './race';
@@ -6042,24 +6042,29 @@ export class Game implements OnlineGame {
       } else if (event.kind === 'sunk') {
         // the reactor goes critical; SINK_SECONDS later the battleship goes up
         const position = event.position.clone();
+        const fallback = this.field.clock + SINK_SECONDS;
         devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'sunk', ship: shooter?.name ?? null, part: 'reactor', zone: -1, weapon: null, count: 0 });
         this.speaker.say(COMPUTER.reactorCritical, 'urgent');
         this.hud.flashMessage(this.time, t('Reactor critical · get clear · {distance}', { distance: meters(SINK_BLAST) }), SINK_SECONDS);
-        this.cue(SINK_SECONDS, () => this.sinkBlast(position));
+        // where and when the lead's battleship went down, as its state told it by then
+        this.cue(SINK_SECONDS, () => {
+          const blast = this.fleet?.goesUp() ?? { position, at: fallback };
+          this.sinkBlast(blast.position, blast.at);
+        });
       }
     }
   }
 
   /**
    * The battleship goes up: every ship this browser runs within SINK_BLAST goes with it, and
-   * every ship it runs scores the sinking.
+   * every ship it runs scores the sinking; the rock in it breaks at field time `at`.
    */
-  private sinkBlast(position: THREE.Vector3) {
+  private sinkBlast(position: THREE.Vector3, at: number) {
     const now = this.time;
     this.effects.explosion(position, 12000, scratch.set(0, 0, 0));
     this.shockwave(position);
     this.radio.announce(pick(ANNOUNCER_FLEET.sunk), null);
-    this.blastRock(position, blastEnergy(SINK_BLAST), blastTime(this.field.clock), 'sink');
+    this.blastRock(position, blastEnergy(SINK_BLAST), blastTime(at), 'sink');
     for (const ship of [...this.ships]) {
       if (ship.owner !== null || ship === this.drone) continue;
       if (!this.roundOver) ship.score += SINK_POINTS;
@@ -7681,21 +7686,23 @@ export class Game implements OnlineGame {
       return;
     }
     this.selfDestructSince = null;
-    this.online?.sendSelfDestruct(me, me.flight.position);
-    this.selfDestruct(me, me.flight.position);
+    const at = blastClock(this.field.clock);
+    this.online?.sendSelfDestruct(me, me.flight.position, at);
+    this.selfDestruct(me, me.flight.position, at);
   }
 
   /**
    * A self-destruct goes off where `holder` is: a small blast that destroys every ship this
    * browser runs within SELF_DESTRUCT_RADIUS (a kill of the holder's) and the holder itself, a
    * death of its own as a crash is, its sponsor break and all; the torpedoes and wreckage in it
-   * go too. Every browser hears of it and does the same for the ships it runs.
+   * go too. Every browser hears of it and does the same for the ships it runs; the rock in it
+   * breaks at the sender's field time `at` (see game/blasts).
    */
-  selfDestruct(holder: Ship, position: THREE.Vector3) {
+  selfDestruct(holder: Ship, position: THREE.Vector3, at: number) {
     const now = this.time;
     this.effects.explosion(position, holder.radius * 6, holder.flight.velocity);
     this.shockwave(position);
-    this.blastRock(position, blastEnergy(SELF_DESTRUCT_RADIUS), blastTime(this.field.clock), 'self');
+    this.blastRock(position, blastEnergy(SELF_DESTRUCT_RADIUS), blastTime(at), 'self');
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > SELF_DESTRUCT_RADIUS) continue;
       if (!this.field.lineOfSight(position, ship.flight.position, Infinity)) continue;
@@ -8831,8 +8838,9 @@ export class Game implements OnlineGame {
     if (shooter.nova) {
       shooter.nova = false;
       const position = shooter.flight.position.clone();
-      this.online?.sendNova(shooter, position, this.field.clock);
-      this.novaBlast(shooter, position, this.field.clock);
+      const at = blastClock(this.field.clock);
+      this.online?.sendNova(shooter, position, at);
+      this.novaBlast(shooter, position, at);
       return;
     }
     const origin = shooter.nose(muzzle);

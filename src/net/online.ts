@@ -78,7 +78,7 @@ export interface OnlineGame {
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
   /** A nova goes off at field time `at` on its holder's browser: the comet's head and the rock it breaks break then (see comet breakHead, game/blasts). */
   novaBlast(holder: Ship, position: THREE.Vector3, at: number): void;
-  selfDestruct(holder: Ship, position: THREE.Vector3): void;
+  selfDestruct(holder: Ship, position: THREE.Vector3, at: number): void;
   remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
   remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number): void;
@@ -337,10 +337,10 @@ export class Online {
       game.novaBlast(holder, from, at);
     };
     // a self-destruct only from a living ship, where it is; it is gear bought, which no other browser can see
-    session.onSelfDestruct = (ship, p) => {
+    session.onSelfDestruct = (ship, p, at) => {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.selfDestruct(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
-      game.selfDestruct(holder, from.fromArray(p));
+      game.selfDestruct(holder, from.fromArray(p), at);
     };
     // a decoy only from a living ship whose state says it holds one, near where it is
     session.onDecoy = (ship, p, v) => {
@@ -500,8 +500,8 @@ export class Online {
     this.session.sendDecoy(ship.id, round(position), round(velocity));
   }
 
-  sendSelfDestruct(ship: Ship, position: THREE.Vector3) {
-    this.session.sendSelfDestruct(ship.id, round(position));
+  sendSelfDestruct(ship: Ship, position: THREE.Vector3, at: number) {
+    this.session.sendSelfDestruct(ship.id, round(position), at);
   }
 
   sendNova(ship: Ship, position: THREE.Vector3, at: number) {

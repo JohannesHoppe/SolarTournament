@@ -116,6 +116,14 @@ describe('messages from other browsers', () => {
     // the field time a comet broke up on its hull, once one did
     expect(fleetState({ ...fleet, c: 98.4 })?.c).toBe(98.4);
     for (const c of [-1, 'soon', null, Infinity]) expect(fleetState({ ...fleet, c })).toBeNull();
+    // the field time and the place it went down, both, and only once it did
+    const sunk = { ...fleet, d: 1, s: 212.345, w: [100, -2000, 30000] };
+    expect(fleetState(sunk)).toEqual(sunk);
+    expect(fleetState({ ...sunk, d: 0 })).toBeNull();
+    expect(fleetState({ ...sunk, w: undefined })).toBeNull();
+    expect(fleetState({ ...sunk, s: undefined })).toBeNull();
+    for (const s of [-1, 'soon', null, Infinity]) expect(fleetState({ ...sunk, s })).toBeNull();
+    for (const w of [[1, 2], [0, 0, 1e12], 'here']) expect(fleetState({ ...sunk, w })).toBeNull();
   });
 
   it('take a piece of the field shoved by a comet, rammed by the battleship or knocked by another piece, and drop it broken', () => {
