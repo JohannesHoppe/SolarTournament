@@ -176,11 +176,12 @@ const DECK_TOP = 1300;
 const KEEL = -1100;
 /**
  * The battleship's sensors see a comet's route (see comet.ts) FLEET_LOOKOUT seconds before its
- * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 975 m:
- * the shower's width, a piece, its own reach and 75 m to spare) it leaves its orbit and burns
+ * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 1,424.5 m:
+ * the shower's width of 700 m, a piece of 12 m, its own reach of 637.5 m and 75 m to spare) it leaves its orbit and burns
  * straight away from the route at EVADE_SPEED (units/s, 50 m/s), turning onto that course
  * EVADE_BURN times as hard as onto its orbit, until the shower has passed. Clear of the route
- * by 975 m from right on it takes it about 21 s. With its drives shot out it cannot get away.
+ * by FLEET_CLEAR from right on it takes it about 30 s (28.5 s at full speed, 1.7 s more while its
+ * course turns over at STEER × EVADE_BURN). With its drives shot out it cannot get away.
  */
 const FLEET_LOOKOUT = 40;
 const FLEET_CLEAR = SHOWER_WIDE + PIECE_RADIUS + REACH + 1500;
@@ -291,7 +292,7 @@ const SECTIONS: readonly Section[] = [
 ];
 /**
  * A battleship circles the center this far out (units, 2.5 km), its inner flank along the outer
- * rocks and its outer one some 800 m inside the arena's edge, so a pilot can attack it from
+ * rocks and its outer one some 670 m inside the arena's edge, so a pilot can attack it from
  * every side.
  */
 const ORBIT = FIELD_RADIUS * 1.05 + sized(Math.max(...SECTIONS.map((s) => s.half)));

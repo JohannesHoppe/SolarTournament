@@ -163,6 +163,8 @@ export const groundPlacement = piece.placement;
  * solid box of POST_HALF (units, 70 by 90 by 50 m) standing BURIED in the ground at POST_SPOT.
  */
 export const POST_HALF = new THREE.Vector3(700, 900, 500);
+/** The radius (units, 45 m) round a building of the listening post's build (POST_HALF) where the traces people left start (see world/traces, TraceSite): past its corners, 43 m from its middle. */
+export const POST_SITE = 900;
 // a flat stretch between the craters: the ground under the box within 3 m of level
 const POST_SPOT = [10000, -34000] as const;
 const BURIED = 200;

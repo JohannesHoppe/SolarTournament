@@ -467,24 +467,7 @@ const markInverse = new THREE.Matrix4();
  */
 const MARK_MATERIAL = new THREE.ShaderMaterial({
   uniforms: { strength: { value: 0 }, color: { value: new THREE.Color(0x4d91ff) } },
-  vertexShader: /* glsl */ `
-    varying float vFacing;
-    void main() {
-      vec4 view = modelViewMatrix * vec4(position, 1.0);
-      vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-view.xyz)));
-      gl_Position = projectionMatrix * view;
-    }
-  `,
-  fragmentShader: /* glsl */ `
-    uniform float strength;
-    uniform vec3 color;
-    varying float vFacing;
-    void main() {
-      float rim = pow(1.0 - vFacing, 2.0);
-      vec3 light = color * strength * (0.35 + 1.6 * rim);
-      gl_FragColor = vec4(light, clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0));
-    }
-  `,
+  ...markShaders('0.35 + 1.6 * rim'),
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
@@ -506,6 +489,40 @@ const MARK_MATERIAL = new THREE.ShaderMaterial({
  * plates its `step` renews, filled a little more (FRESH_FILL), so they stand out against the old ones.
  * One material a normal map and step, its glow the other marks'.
  */
+/**
+ * The marks' shaders: how squarely a part faces the eye, the rim that gives (brightest where the
+ * part turns away), and the light added onto the picture, its alpha as bright as it is. `weight`
+ * is the GLSL of the light's share of the strength, from `rim` and whatever `fragment` defines in
+ * main before it; `vertex` and `fragment` hold what a mark adds (declarations in `head`, lines in
+ * `main`).
+ */
+function markShaders(weight: string, vertex = { head: '', main: '' }, fragment = { head: '', main: '' }) {
+  return {
+    vertexShader: /* glsl */ `
+      varying float vFacing;
+      ${vertex.head}
+      void main() {
+        ${vertex.main}
+        vec4 view = modelViewMatrix * vec4(position, 1.0);
+        vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-view.xyz)));
+        gl_Position = projectionMatrix * view;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float strength;
+      uniform vec3 color;
+      varying float vFacing;
+      ${fragment.head}
+      void main() {
+        float rim = pow(1.0 - vFacing, 2.0);
+        ${fragment.main}
+        vec3 light = color * strength * (${weight});
+        gl_FragColor = vec4(light, clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0));
+      }
+    `,
+  };
+}
+
 const PLATE_MARKS = new Map<string, THREE.ShaderMaterial>();
 function plateMark(part: THREE.Mesh, step: number): THREE.ShaderMaterial | null {
   const normal = (part.material as THREE.MeshStandardMaterial).normalMap;
@@ -518,35 +535,19 @@ function plateMark(part: THREE.Mesh, step: number): THREE.ShaderMaterial | null 
     const dense = ['ribs', 'scales'].includes((part.material as THREE.Material).userData.relief);
     material.uniforms = { ...MARK_MATERIAL.uniforms, relief: { value: normal }, seams: { value: dense ? DENSE_SEAMS : 1 } };
     if (plated) Object.assign(material.uniforms, { plateMap: { value: plated.plates }, plateThreshold: { value: PLATE_STEPS[step] } });
-    material.vertexShader = /* glsl */ `
-      varying float vFacing;
-      varying vec2 vUv;
-      ${plated ? PLATE_VERTEX : ''}
-      void main() {
-        ${plated ? PLATE_VERTEX_MAIN : ''}
-        vUv = uv;
-        vec4 view = modelViewMatrix * vec4(position, 1.0);
-        vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-view.xyz)));
-        gl_Position = projectionMatrix * view;
-      }
-    `;
-    material.fragmentShader = /* glsl */ `
-      uniform float strength;
-      uniform vec3 color;
-      uniform sampler2D relief;
-      uniform float seams;
-      varying float vFacing;
-      varying vec2 vUv;
-      ${plated ? plateFragment(TILE) : ''}
-      void main() {
-        ${plated ? 'if ( plateFresh( vUv ) < 0.5 ) discard;' : ''}
+    Object.assign(
+      material,
+      markShaders(
+        `${(plated ? FRESH_FILL : PLATE_FILL).toFixed(2)} + 2.2 * seam + 0.35 * rim`,
+        { head: `varying vec2 vUv;\n${plated ? PLATE_VERTEX : ''}`, main: `${plated ? PLATE_VERTEX_MAIN : ''}\nvUv = uv;` },
+        {
+          head: `uniform sampler2D relief;\nuniform float seams;\nvarying vec2 vUv;\n${plated ? plateFragment(TILE) : ''}`,
+          main: `${plated ? 'if ( plateFresh( vUv ) < 0.5 ) discard;' : ''}
         vec2 tilt = texture2D(relief, vUv, ${PLATE_BIAS.toFixed(1)}).xy * 2.0 - 1.0;
-        float seam = seams * smoothstep(0.04, 0.3, length(tilt));
-        float rim = pow(1.0 - vFacing, 2.0);
-        vec3 light = color * strength * (${(plated ? FRESH_FILL : PLATE_FILL).toFixed(2)} + 2.2 * seam + 0.35 * rim);
-        gl_FragColor = vec4(light, clamp(max(light.r, max(light.g, light.b)), 0.0, 1.0));
-      }
-    `;
+        float seam = seams * smoothstep(0.04, 0.3, length(tilt));`,
+        },
+      ),
+    );
     PLATE_MARKS.set(key, material);
   }
   return material;

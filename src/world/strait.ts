@@ -87,6 +87,9 @@ const ARCH_TINT = 0x8a6e52;
 const ARCH_GLOW = 0x3a2410;
 const archNoise = new Noise(9203);
 
+/** The rock of an arch: its texture coordinates laid on with one unit every this far (units, 150 m), its dust and grain once each; the patches of dust and bare rock read at their own size on it (see groundMaterial). */
+const ARCH_TILE = 3000;
+
 /** An arch of rock across the strait: a slab spanning from bluff to bluff, its faces broken and its underside sagging into a curve. */
 export function rockArch(half: THREE.Vector3): THREE.Group {
   const geometry = new THREE.BoxGeometry(half.x * 2, half.y * 2, half.z * 2, 48, 6, 8);
@@ -102,7 +105,7 @@ export function rockArch(half: THREE.Vector3): THREE.Group {
     position.setXYZ(i, x, y + sag * 0.6 + rough * 0.4, z + rough);
   }
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(boxUv(geometry.toNonIndexed(), 3000), groundMaterial(ARCH_TINT, ARCH_GLOW, 0.02));
+  const mesh = new THREE.Mesh(boxUv(geometry.toNonIndexed(), ARCH_TILE), groundMaterial(ARCH_TINT, ARCH_GLOW, 0.02, ARCH_TILE));
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return withCollider(new THREE.Group().add(mesh), half);

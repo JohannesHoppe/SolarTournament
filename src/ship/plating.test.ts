@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { alienInterceptor, humanInterceptor, sovereign, TILE } from './models';
 import { freshAt, PLATE_STEPS, platedOf } from './plating';
-import { plateLayout, plateMap, SIZE, type Wear } from '../view/surfaces';
+import { plateLayout, plateMap, SCALE_PITCH, SCALE_RADIUS, SCALE_ROW, SIZE, type Wear } from '../view/surfaces';
 
 /** The coats of a hull the plating renews, with the wear their plates are laid out by. */
 function platedCoats(root: THREE.Object3D) {
@@ -93,6 +93,43 @@ describe('the plating on the hull', () => {
 
   it('gives the Sovereign no plates to renew', () => {
     expect(platedCoats(sovereign(original()))).toHaveLength(0);
+  });
+
+  it('decides every scale of the alien skin once, also where it crosses the edge of the tile into the next repeat', () => {
+    // the scales' lattice as the skin is drawn, over the whole plane (canvas down): a scale's
+    // crescent that shows for certain lies within its radius, clear of its neighbors in the row
+    // and of every scale of the rows below it, which lie over it
+    const covering = [[-1, 0], [1, 0], [-0.5, 1], [0.5, 1], [-1.5, 1], [1.5, 1], [0, 2], [-1, 2], [1, 2], [-0.5, 3], [0.5, 3]].map(([dx, dy]) => [dx * SCALE_PITCH, dy * SCALE_ROW]);
+    const layout = plateLayout(23, { relief: 'scales' } as Wear);
+    const fores = [[1, 0, 0], [-1, 0, 0], [0, -1, 0], [0, 0, 1]] as const;
+    let crossing = 0;
+    // the scales whose crescent crosses the tile's left or top edge, in a few repeats of the tile
+    for (const [tu, tv] of [[0, 0], [3, -2], [-5, 7]]) {
+      for (let row = -1; row <= SIZE / SCALE_ROW; row++) {
+        for (let column = -1; column <= SIZE / SCALE_PITCH; column++) {
+          const cx = (row & 1 ? SCALE_PITCH / 2 : 0) + column * SCALE_PITCH;
+          const cy = row * SCALE_ROW;
+          const points: [number, number][] = [];
+          for (let y = cy - SCALE_RADIUS; y <= cy + SCALE_RADIUS; y += 0.25) {
+            for (let x = cx - SCALE_RADIUS; x <= cx + SCALE_RADIUS; x += 0.25) {
+              const within = (ox: number, oy: number) => (x - ox) * (x - ox) + (y - oy) * (y - oy) <= SCALE_RADIUS * SCALE_RADIUS;
+              if (!within(cx, cy) || covering.some(([dx, dy]) => within(cx + dx, cy + dy))) continue;
+              points.push([x, y]);
+            }
+          }
+          const sides = new Set(points.map(([x, y]) => `${Math.floor(x / SIZE)}:${Math.floor(y / SIZE)}`));
+          if (sides.size < 2) continue;
+          crossing++;
+          for (const fore of fores) {
+            for (const step of [1, 2]) {
+              const fresh = new Set(points.map(([x, y]) => freshAt(layout, tu + x / SIZE, tv + 1 - y / SIZE, fore, 0, TILE, step)));
+              expect(fresh.size, `scale ${row}:${column} of tile ${tu}:${tv}, ${fore}, step ${step}`).toBe(1);
+            }
+          }
+        }
+      }
+    }
+    expect(crossing).toBeGreaterThan(30);
   });
 
   it('lays every plate of a tile out whole: a point of the tile in exactly one plate, the panels between the seams', () => {

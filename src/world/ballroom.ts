@@ -22,7 +22,7 @@ const MOON_TINT = 0xd6d4d0;
 const MOON_GLOW = 0x1e1e20;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/moon gives (see reliefGround). */
-export const moonGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MOON_TINT, MOON_GLOW, undefined, undefined, MOON_TRACES);
+export const moonGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MOON_TINT, MOON_GLOW, { traces: MOON_TRACES });
 
 /** The Ballroom the one site, the busiest: the guests' landers set down round it, its crews' and builders' tracks out over the plain (see world/traces). */
 const MOON_TRACES: TracePlan = { seed: 4295, sites: [{ x: 0, z: 0, size: DOME_RADIUS, busy: 1, pads: 4 }] };

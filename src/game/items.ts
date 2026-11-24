@@ -26,7 +26,7 @@ const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, 
  * - torpedoes: four more (TORPEDOES_PER_PROBE; a drill's lean load in the flight school and a campaign's job, DRILL_TORPEDOES).
  * - overdrive: a charge for the overdrive's dump: ready at once.
  * - repair: nanobots and their feedstock make hull, drive and thrusters whole over a few seconds (see ship/ship, REPAIR_SECONDS).
- * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
+ * - nova: an overcharged reactor core, among the rarer kinds (WEIGHTS). The ship that holds it pulses for
  *   everyone to see, and its next shot is no laser: the core goes off, and every other ship
  *   around it is gone, and so is its own clone, printed again at once without counting as a
  *   death (see Game.novaBlast). The President's battleship takes it on every part it reaches
