@@ -66,6 +66,8 @@ export const MAX_SUBSCRIPTIONS = 5000;
 export const PUSH_BATCH = 25;
 /** A source (see sourceOf) whose other tournament was heard within this long (s) opens no new one: a Host plays one tournament at a time. */
 export const SOURCE_GAP = 60 * 60;
+/** Tournaments heard within this are kept and counted on the admin page as the last day's (s); older rows are deleted with the next word heard. */
+const TOURNAMENT_KEEP = 24 * 60 * 60;
 /** A tournament's word heard again within this long (s) is not written again: its lead says it every OPEN_HEARTBEAT. */
 const HEARD_EVERY = OPEN_HEARTBEAT / 2;
 /** The longest endpoint taken (characters): push services' addresses are far shorter. */
@@ -340,7 +342,7 @@ export function d1Store(db: D1Like): PushStore {
     async heard(room, now, source) {
       await (await run('INSERT INTO tournaments (room, heard, source) VALUES (?1, ?2, ?3) ON CONFLICT(room) DO UPDATE SET heard = ?2, source = ?3', room, now, source)).run();
       // the tournaments gone for a day are of no use any more, nor their sources
-      await (await run('DELETE FROM tournaments WHERE heard < ?1', now - 24 * 60 * 60)).run();
+      await (await run('DELETE FROM tournaments WHERE heard < ?1', now - TOURNAMENT_KEEP)).run();
     },
     async sourceBusy(source, room, since) {
       return (await (await run('SELECT 1 AS busy FROM tournaments WHERE source = ?1 AND room <> ?2 AND heard >= ?3 LIMIT 1', source, room, since)).first<{ busy: number }>()) !== null;
@@ -382,7 +384,7 @@ export function d1Store(db: D1Like): PushStore {
         subscribers: (await one<{ n: number }>('SELECT COUNT(*) AS n FROM subscriptions'))?.n ?? 0,
         writes: (await one<{ writes: number }>('SELECT writes FROM days WHERE day = ?1', day))?.writes ?? 0,
         open: await this.openCount(now),
-        heardToday: (await one<{ n: number }>('SELECT COUNT(*) AS n FROM tournaments'))?.n ?? 0,
+        heardToday: (await one<{ n: number }>('SELECT COUNT(*) AS n FROM tournaments WHERE heard >= ?1', now - TOURNAMENT_KEEP))?.n ?? 0,
         lastPush: (await value('lastPush')) ?? -Infinity,
         pushes: (await value('pushes')) ?? 0,
       };
