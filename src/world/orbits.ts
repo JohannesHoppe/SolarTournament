@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { cos, cosh, sin, sinh } from '../detmath';
+import { cos, cosh, log, sin, sinh } from '../detmath';
 
 /**
  * Free flight in a body's gravity, in closed form from a start, so a piece of the field stands
@@ -47,6 +47,15 @@ export function kepler(mu: number, position: THREE.Vector3, velocity: THREE.Vect
   const alpha = 2 / r0 - velocity.lengthSq() / mu;
   let chi = rootMu * Math.abs(alpha) * dt;
   if (Math.abs(alpha) < 1e-12) chi = (rootMu * dt) / r0;
+  else if (alpha < 0) {
+    // a hyperbola: the guess grows with the logarithm of the time, as the hyperbolic anomaly
+    // does far out (Vallado's start); the bound one's guess, linear in time, overshoots
+    // so far on a clearly unbound conic that Newton's steps run off to infinity
+    const a = 1 / alpha;
+    const sign = dt < 0 ? -1 : 1;
+    const span = (-2 * mu * alpha * dt) / (r0 * radial + sign * Math.sqrt(-mu * a) * (1 - r0 * alpha));
+    if (span > 0 && Number.isFinite(span)) chi = sign * Math.sqrt(-a) * log(span);
+  }
   for (let k = 0; k < KEPLER_STEPS; k++) {
     const z = alpha * chi * chi;
     stumpffOf(z);
