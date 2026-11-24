@@ -401,10 +401,154 @@ const M = 20;
  * crawler treads and sled ruts, some driven again and again beside each other), rover loops
  * round it, many short lines of prints wandering off its edge, its landers' blast rings with the
  * crew's prints round them, and the scars of ships that slid in; a road to the nearest other
- * site; the place's own ways along its lanes; out in the wilds a few lone lines of prints far from anything and an old landing site.
+ * site a vehicle can reach, found round whatever stands between and never laid where it would not arrive (`routeRoad`); the place's own ways along its lanes; out in the wilds a few lone lines of prints far from anything and an old landing site.
  * A trace keeps off slopes too steep for it (a rover off 19°, a walker off 27°) and to the
  * ground, and shows fainter the farther it lies from the sites, older and less walked.
  */
+/** The lattice a road between two sites is searched on, in units (20 m): fine enough to find a valley head's ramp, coarse enough to search a world's ground in a few milliseconds. */
+const ROUTE_CELL = 20 * M;
+
+/**
+ * The shortest way a vehicle of slope limit `limit` (rise over run) drives from (x, z) to within
+ * `reach` of (tx, tz), on a lattice of ROUTE_CELL with its diagonals, every step and its middle
+ * no steeper than the limit, inside `inside`, searched within a box round the two ends reaching out as far again as they lie apart, at least 4 km (A*);
+ * as points every 10 m, smoothed where the smoothing keeps every stretch within the limit, or
+ * null where no such way exists, so a road between two sites is always one that arrives.
+ */
+export function routeRoad(x: number, z: number, tx: number, tz: number, reach: number, limit: number, inside: (x: number, z: number) => boolean, height: (x: number, z: number) => number): number[] | null {
+  const span = hypot(tx - x, tz - z);
+  const pad = Math.max(4 * KM, span);
+  const x0 = Math.min(x, tx) - pad;
+  const z0 = Math.min(z, tz) - pad;
+  const nx = Math.ceil((Math.max(x, tx) + pad - x0) / ROUTE_CELL) + 1;
+  const nz = Math.ceil((Math.max(z, tz) + pad - z0) / ROUTE_CELL) + 1;
+  const px = (i: number) => x0 + (i % nx) * ROUTE_CELL;
+  const pz = (i: number) => z0 + Math.floor(i / nx) * ROUTE_CELL;
+  const start = Math.round((z - z0) / ROUTE_CELL) * nx + Math.round((x - x0) / ROUTE_CELL);
+  const cost = new Float64Array(nx * nz).fill(Infinity);
+  const from = new Int32Array(nx * nz).fill(-1);
+  const done = new Uint8Array(nx * nz);
+  // a binary heap of (estimate, node)
+  const heap: number[] = [];
+  const push = (f: number, node: number) => {
+    heap.push(f, node);
+    for (let c = heap.length - 2; c > 0; ) {
+      const p = (((c >> 1) - 1) >> 1) << 1;
+      if (heap[p] <= heap[c]) break;
+      [heap[p], heap[c], heap[p + 1], heap[c + 1]] = [heap[c], heap[p], heap[c + 1], heap[p + 1]];
+      c = p;
+    }
+  };
+  const pop = (): number => {
+    const node = heap[1];
+    const lastF = heap[heap.length - 2];
+    const lastN = heap[heap.length - 1];
+    heap.length -= 2;
+    if (heap.length) {
+      heap[0] = lastF;
+      heap[1] = lastN;
+      for (let p = 0; ; ) {
+        const a = 2 * p + 2;
+        const b = a + 2;
+        let m = p;
+        if (a < heap.length && heap[a] < heap[m]) m = a;
+        if (b < heap.length && heap[b] < heap[m]) m = b;
+        if (m === p) break;
+        [heap[p], heap[m], heap[p + 1], heap[m + 1]] = [heap[m], heap[p], heap[m + 1], heap[p + 1]];
+        p = m;
+      }
+    }
+    return node;
+  };
+  const steep = (ax: number, az: number, bx: number, bz: number, run: number) => {
+    const mx = (ax + bx) / 2;
+    const mz = (az + bz) / 2;
+    const ha = height(ax, az);
+    const hm = height(mx, mz);
+    return Math.abs(hm - ha) > (limit * run) / 2 || Math.abs(height(bx, bz) - hm) > (limit * run) / 2;
+  };
+  if (start < 0 || start >= nx * nz) return null;
+  cost[start] = 0;
+  push(span, start);
+  let goal = -1;
+  while (heap.length) {
+    const node = pop();
+    if (done[node]) continue;
+    done[node] = 1;
+    const ax = px(node);
+    const az = pz(node);
+    if (hypot(tx - ax, tz - az) < reach) {
+      goal = node;
+      break;
+    }
+    const col = node % nx;
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dz) || col + dx < 0 || col + dx >= nx) continue;
+        const next = node + dz * nx + dx;
+        if (next < 0 || next >= nx * nz || done[next]) continue;
+        const bx = px(next);
+        const bz = pz(next);
+        const run = dx && dz ? ROUTE_CELL * Math.SQRT2 : ROUTE_CELL;
+        if (!inside(bx, bz) || steep(ax, az, bx, bz, run)) continue;
+        const g = cost[node] + run;
+        if (g >= cost[next]) continue;
+        cost[next] = g;
+        from[next] = node;
+        push(g + hypot(tx - bx, tz - bz), next);
+      }
+  }
+  if (goal < 0) return null;
+  const corners: number[] = [];
+  for (let node = goal; node >= 0; node = from[node]) corners.unshift(px(node), pz(node));
+  corners[0] = x;
+  corners[1] = z;
+  // the lattice's corners pulled straight: from each corner on to the farthest one, up to 3 km
+  // on, that a straight drive reaches within the slope, every 10 m of it checked (the lattice's
+  // stairs gone)
+  const STRIDE_10M = 10 * M;
+  const clear = (i: number, j: number) => {
+    const steps = Math.max(1, Math.ceil(hypot(corners[j] - corners[i], corners[j + 1] - corners[i + 1]) / STRIDE_10M));
+    for (let s = 1; s <= steps; s++) {
+      const ax = corners[i] + ((corners[j] - corners[i]) * (s - 1)) / steps;
+      const az = corners[i + 1] + ((corners[j + 1] - corners[i + 1]) * (s - 1)) / steps;
+      const bx = corners[i] + ((corners[j] - corners[i]) * s) / steps;
+      const bz = corners[i + 1] + ((corners[j + 1] - corners[i + 1]) * s) / steps;
+      if (!inside(bx, bz) || steep(ax, az, bx, bz, hypot(bx - ax, bz - az))) return false;
+    }
+    return true;
+  };
+  const pulled = [corners[0], corners[1]];
+  for (let i = 0; i + 2 < corners.length; ) {
+    let j = i + 2;
+    while (j + 2 < corners.length && j - i < 2 * 150 && clear(i, j + 2)) j += 2;
+    pulled.push(corners[j], corners[j + 1]);
+    i = j;
+  }
+  // a point every 10 m along them
+  const raw: number[] = [];
+  for (let i = 0; i + 3 < pulled.length; i += 2) {
+    const steps = Math.max(1, Math.round(hypot(pulled[i + 2] - pulled[i], pulled[i + 3] - pulled[i + 1]) / STRIDE_10M));
+    for (let s = i ? 1 : 0; s <= steps; s++) raw.push(pulled[i] + ((pulled[i + 2] - pulled[i]) * s) / steps, pulled[i + 1] + ((pulled[i + 3] - pulled[i + 1]) * s) / steps);
+  }
+  // the corners rounded into a driven curve, a point kept where moving it would make a stretch too steep
+  let points = raw.slice();
+  for (let pass = 0; pass < 24; pass++) {
+    const next = points.slice();
+    for (let i = 2; i + 3 < points.length; i += 2) {
+      const sx = (points[i - 2] + 2 * points[i] + points[i + 2]) / 4;
+      const sz = (points[i - 1] + 2 * points[i + 1] + points[i + 3]) / 4;
+      const run = 10 * M;
+      if (!steep(next[i - 2], next[i - 1], sx, sz, run) && !steep(sx, sz, points[i + 2], points[i + 3], run)) {
+        next[i] = sx;
+        next[i + 1] = sz;
+      }
+    }
+    points = next;
+  }
+  return points;
+}
+
 export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[]; rings: Ring[] } {
   const r = new Randomizer(plan.seed);
   const trails: Trail[] = [];
@@ -509,14 +653,8 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
     }
   };
 
-  // each site's nearest other site, or −1 for a site alone
-  const nearestSite = plan.sites.map((site, index) => {
-    let other = -1;
-    plan.sites.forEach((s, j) => {
-      if (j !== index && (other < 0 || hypot(s.x - site.x, s.z - site.z) < hypot(plan.sites[other].x - site.x, plan.sites[other].z - site.z))) other = j;
-    });
-    return other;
-  });
+  // the pairs of sites a road joins (the lower index times the count, plus the higher)
+  const joined = new Set<number>();
   plan.sites.forEach((site, index) => {
     const { busy, size } = site;
     const edge = (angle: number, out = 0) => [site.x + cos(angle) * (size + out), site.z + sin(angle) * (size + out)] as const;
@@ -567,14 +705,27 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
       const [x, z] = edge(angle, r.range(100, 800) * M);
       add('slide', walk('slide', x, z, r.range(0, TAU), r.range(60, 250) * M, 5 * M, 0.01), strengthAt(x, z), r.range(160, 280));
     }
-    // a road to the nearest other site, unless that one already runs its own road here
-    const other = nearestSite[index];
-    if (other >= 0 && (other > index || nearestSite[other] !== index)) {
+    // a road to the nearest other site a vehicle can reach, unless the two are joined already:
+    // the way is searched round whatever stands between (along a rift's rim to a valley head and
+    // down it), and a road that cannot arrive is never laid, since nobody drives one that leads
+    // nowhere; the next nearest is tried instead, and a site no vehicle can leave for any other
+    // keeps only its roads out into the land
+    const others = plan.sites
+      .map((_, j) => j)
+      .filter((j) => j !== index)
+      .sort((a, b) => hypot(plan.sites[a].x - site.x, plan.sites[a].z - site.z) - hypot(plan.sites[b].x - site.x, plan.sites[b].z - site.z));
+    const kind = r.nextFloat() < 0.7 ? 'rover' : 'crawler';
+    const passes = 2 + Math.floor(r.range(0, 2));
+    for (const other of others) {
+      const pair = Math.min(index, other) * plan.sites.length + Math.max(index, other);
+      if (joined.has(pair)) break;
       const to = plan.sites[other];
-      const angle = atan2(to.z - site.z, to.x - site.x);
-      const [x, z] = edge(angle);
-      const kind = r.nextFloat() < 0.7 ? 'rover' : 'crawler';
-      road(kind, walk(kind, x, z, angle, 4 * hypot(to.x - site.x, to.z - site.z), 10 * M, 0.04, { x: to.x, z: to.z, pull: 0.15 }), strengthAt(x, z), 2 + Math.floor(r.range(0, 2)));
+      const [x, z] = edge(atan2(to.z - site.z, to.x - site.x));
+      const points = routeRoad(x, z, to.x, to.z, to.size, TRACE_KINDS[kind].slope, inside, height);
+      if (!points) continue;
+      joined.add(pair);
+      road(kind, points, strengthAt(x, z), passes);
+      break;
     }
   });
 

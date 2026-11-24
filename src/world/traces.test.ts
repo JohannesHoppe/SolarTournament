@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { flatGrid } from './boneyard';
 import { gridHeight, gridOf, levelHeight, STEPS, TILE, tiledGround, type GroundGrid } from './groundlod';
 import { cos, hypot, sin } from '../detmath';
-import { atlasU, ATLAS_HEIGHT, ATLAS_WIDTH, BARE_ROCK, COLUMN, drapeTriangle, dustPatches, FINE_DUST, GUTTER, layTraces, NEUTRAL, patchAt, PATCH_SIZE, sampleRepeat, ScrapeMarks, SCRAPE_KEEP, SCRAPE_TICK, SCRAPE_TRIANGLES, STRIDE, traceAtlas, traceChunks, TRACE_KINDS, type TraceKind, type TracePlan } from './traces';
+import { atlasU, ATLAS_HEIGHT, ATLAS_WIDTH, BARE_ROCK, COLUMN, drapeTriangle, dustPatches, FINE_DUST, GUTTER, layTraces, routeRoad, NEUTRAL, patchAt, PATCH_SIZE, sampleRepeat, ScrapeMarks, SCRAPE_KEEP, SCRAPE_TICK, SCRAPE_TRIANGLES, STRIDE, traceAtlas, traceChunks, TRACE_KINDS, type TraceKind, type TracePlan } from './traces';
 
 /** A ground of 160 by 120 cells of 25 m, rolling hills, a steep scarp and a pit, as reliefGround lays it. */
 const land = (x: number, z: number) => 300 * sin(x / 2600) + 250 * sin(z / 1900) + (x > 12000 ? 3000 : 0) - (hypot(x + 15000, z - 8000) < 3000 ? 800 : 0);
@@ -412,5 +412,29 @@ describe('a ship\'s scrape marks', () => {
     marks.clear();
     expect(laid(marks).length).toBe(0);
     expect(marks.mesh.visible).toBe(false);
+  });
+});
+
+describe('a road between two sites', () => {
+  // a cliff 100 m high along x = 0, a ramp up it only where |z − 8 km| < 2 km (rise 0.15 a unit run)
+  const ramped = (x: number, z: number) => (Math.abs(z - 160000) < 40000 ? Math.min(2000, Math.max(0, (x + 6667) * 0.15)) : x > 0 ? 2000 : 0);
+  const sheer = (x: number) => (x > 0 ? 2000 : 0);
+  const anywhere = () => true;
+  const limit = TRACE_KINDS.rover.slope;
+
+  it('goes round a cliff to its ramp and arrives, every stretch within the vehicle\'s slope', () => {
+    const points = routeRoad(-100000, 0, 100000, 0, 2000, limit, anywhere, ramped);
+    expect(points).not.toBeNull();
+    const way = points!;
+    expect(hypot(way[way.length - 2] - 100000, way[way.length - 1])).toBeLessThan(2000 + 400);
+    expect(Math.max(...way.filter((_, i) => i % 2))).toBeGreaterThan(120000);
+    for (let i = 2; i + 1 < way.length; i += 2) {
+      const run = hypot(way[i] - way[i - 2], way[i + 1] - way[i - 1]);
+      expect(Math.abs(ramped(way[i], way[i + 1]) - ramped(way[i - 2], way[i - 1]))).toBeLessThanOrEqual(limit * run + 1e-6);
+    }
+  });
+
+  it('is never laid where no vehicle gets through: a road leading nowhere is no road', () => {
+    expect(routeRoad(-100000, 0, 100000, 0, 2000, limit, anywhere, sheer)).toBeNull();
   });
 });
