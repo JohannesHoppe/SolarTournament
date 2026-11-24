@@ -34,6 +34,14 @@ const CEILING_MARGIN = 1;
 /** The most cells `highest` reads on one level (see Pyramid.highest): a ship's sphere covers four of the finest at most, a wide reach is read a level or more up. */
 const HIGHEST_CELLS = 16;
 
+/**
+ * The column (or row) of a level's cells of `size` that a coordinate `at` falls in, over a
+ * footprint reaching `halfExtent` either way with `count` cells across, a coordinate beyond it
+ * taken at its edge: the one lookup above, highest and finest share, so the bound a sphere reads
+ * (highest) comes from the very cells a ray's steps find (above).
+ */
+const cellOf = (at: number, halfExtent: number, size: number, count: number) => Math.min(count - 1, Math.max(0, Math.floor((at + halfExtent) / size)));
+
 /** The pyramid of a ground's ceiling: its levels' bounds, finest first, each level half as many cells either way as the one before. */
 export class Pyramid {
   private readonly levels: Float64Array[] = [];
@@ -98,8 +106,8 @@ export class Pyramid {
     for (let k = this.levels.length - 1; k >= 0; k--) {
       const size = this.sizes[k];
       const columns = this.columns[k];
-      const i = Math.min(columns - 1, Math.max(0, Math.floor((x + half.x) / size)));
-      const j = Math.min(this.rows[k] - 1, Math.max(0, Math.floor((z + half.z) / size)));
+      const i = cellOf(x, half.x, size, columns);
+      const j = cellOf(z, half.z, size, this.rows[k]);
       const bound = this.levels[k][j * columns + i];
       if (y > bound) {
         this.bound = bound;
@@ -125,10 +133,10 @@ export class Pyramid {
     const columns = this.columns[0];
     const rows = this.rows[0];
     const half = this.half;
-    let i0 = Math.min(columns - 1, Math.max(0, Math.floor((x0 + half.x) / CEILING_CELL)));
-    let i1 = Math.min(columns - 1, Math.max(0, Math.floor((x1 + half.x) / CEILING_CELL)));
-    let j0 = Math.min(rows - 1, Math.max(0, Math.floor((z0 + half.z) / CEILING_CELL)));
-    let j1 = Math.min(rows - 1, Math.max(0, Math.floor((z1 + half.z) / CEILING_CELL)));
+    let i0 = cellOf(x0, half.x, CEILING_CELL, columns);
+    let i1 = cellOf(x1, half.x, CEILING_CELL, columns);
+    let j0 = cellOf(z0, half.z, CEILING_CELL, rows);
+    let j1 = cellOf(z1, half.z, CEILING_CELL, rows);
     // a level's cell holds the finer cells 2i and 2i + 1 of the level below
     let k = 0;
     while ((i1 - i0 + 1) * (j1 - j0 + 1) > HIGHEST_CELLS && k + 1 < this.levels.length) {
@@ -148,8 +156,8 @@ export class Pyramid {
   /** The bound of the finest cell over (x, z), for the tests. */
   finest(x: number, z: number): number {
     const columns = this.columns[0];
-    const i = Math.min(columns - 1, Math.max(0, Math.floor((x + this.half.x) / CEILING_CELL)));
-    const j = Math.min(this.rows[0] - 1, Math.max(0, Math.floor((z + this.half.z) / CEILING_CELL)));
+    const i = cellOf(x, this.half.x, CEILING_CELL, columns);
+    const j = cellOf(z, this.half.z, CEILING_CELL, this.rows[0]);
     return this.levels[0][j * columns + i];
   }
 }

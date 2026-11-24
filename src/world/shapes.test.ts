@@ -65,6 +65,8 @@ describe('the junk of the Orbital Freedom Network', () => {
     const vertex = new THREE.Vector3();
     let checked = 0;
     let outside = 0;
+    // the parts' world matrices, as the renderer reckons them before it draws (the field keeps only its pieces' own)
+    field.group.updateMatrixWorld(true);
     for (const piece of field.asteroids.values()) {
       piece.object.traverse((o) => {
         // the bulk: foil, wings, livery; the small details (vertex-colored hardware) and the sign's neon are left out

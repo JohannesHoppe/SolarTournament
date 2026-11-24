@@ -76,6 +76,8 @@ export class Radar {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.backdropCtx = this.backdrop.getContext('2d')!;
+    // a GPU reset loses an accelerated canvas's pixels: the sphere is drawn again on the next draw
+    this.backdrop.addEventListener('contextrestored', () => (this.backdropCss = 0));
     // its size is told when it changes, not asked every draw (which would lay out the page mid-frame)
     new ResizeObserver(([entry]) => (this.css = entry.contentRect.width)).observe(canvas);
   }
