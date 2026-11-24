@@ -62,7 +62,9 @@ describe("a world's ground's ceiling", () => {
 
     it(`leaves every sphere over ground ${type} touching it where the ground alone has it touched`, () => {
       const plain: Relief = (x, z) => relief(x, z);
-      const pyramid = pyramidOf(relief.ceiling!, half);
+      // the ground with its ceiling, counting its samples: a sphere it answers without one is one the ceiling answered
+      let samples = 0;
+      const counted: Relief = Object.assign((x: number, z: number) => (samples++, relief(x, z)), { ceiling: relief.ceiling });
       const random = new Randomizer(7303 + type);
       const center = new THREE.Vector3();
       const fastNormal = new THREE.Vector3();
@@ -78,8 +80,9 @@ describe("a world's ground's ceiling", () => {
         const z = random.range(-half.z, half.z) * (random.nextFloat() < 0.1 ? 1.05 : 1);
         const ground = Math.min(half.y, relief(THREE.MathUtils.clamp(x, -half.x, half.x), THREE.MathUtils.clamp(z, -half.z, half.z)));
         center.set(x, ground + random.range(-radius, radius * 3), z);
-        if (Math.abs(x) <= half.x && Math.abs(z) <= half.z && pyramid.highest(x - radius, z - radius, x + radius, z + radius) < center.y - radius) skipped++;
-        const fast = reliefContact(center, half, relief, radius, fastNormal, fastPoint);
+        samples = 0;
+        const fast = reliefContact(center, half, counted, radius, fastNormal, fastPoint);
+        if (Math.abs(x) <= half.x && Math.abs(z) <= half.z && center.y >= -half.y - radius && samples === 0) skipped++;
         const exact = reliefContact(center, half, plain, radius, exactNormal, exactPoint);
         if ((fast === null) !== (exact === null)) throw new Error(`ground ${type}: sphere ${k} touched ${fast !== null}, alone ${exact !== null}`);
         if (fast === null) continue;
