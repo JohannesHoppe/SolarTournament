@@ -15,6 +15,7 @@ import { aimHook, anchorPoint, CABLE_BREAK, cablePull, clearOf, flightTime, floo
 import { readOrbit, orbitable, type OrbitState } from '../game/orbit';
 import { DRILL_TORPEDOES, Torpedoes, torpedoDamage, type Torpedo } from '../game/torpedoes';
 import { BOT_GEAR, hullLooks } from '../game/hangar';
+import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS } from '../game/sponsors';
 import { hullOf, spareSkills, type Campaign, type Choice, type Mission } from '../campaign/campaign';
 import type { SceneName } from '../campaign/scenes';
 import type { ItemKind } from '../game/items';
@@ -45,9 +46,6 @@ export const JOB_STEP = 1 / 30;
 /** A line takes this long to say (s) per word, and this long at least: Nicole's pace, read off the rendered voice roughly. */
 const WORD_SECONDS = 0.38;
 const LINE_MIN = 1.5;
-/** A dead clone's next is printed after this (s), as the game's RESPAWN_SECONDS; a bot's after its ad as well (see sponsors). */
-const CLONE_SECONDS = 3;
-const BOT_CLONE_SECONDS = 8;
 /** The last clone's death goes black this long before the attempt starts over (see Drill.lastClone). */
 const NO_CLONE_SECONDS = 4;
 /** The game's sides and numbers for raiders (see Game.jumpers): the side they fight on, how near a ship comes before they fight it, how far their saw reaches. */
@@ -561,7 +559,8 @@ export class JobWorld implements SchoolContext {
 
   /** A ship lost: its killer's kill, its clone's wait (see Game.shipDestroyed). */
   private destroyed(victim: Ship, killer: Ship | null, cause: string) {
-    victim.respawnAt = this.now + (victim === this.me ? CLONE_SECONDS : BOT_CLONE_SECONDS);
+    // the game's waits (see game/sponsors): the Host's clone RESPAWN_SECONDS, a bot's after its ad as well
+    victim.respawnAt = this.now + (victim === this.me ? RESPAWN_SECONDS : BOT_RESPAWN_SECONDS);
     if (killer && killer !== victim && !killer.allyOf(victim)) killer.kills++;
     if (victim === this.me && killer && killer !== victim) this.ease = Math.min(1, this.ease + DEATH_EASE);
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
