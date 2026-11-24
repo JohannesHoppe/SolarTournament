@@ -21,7 +21,7 @@ const KM = 20000;
 export const WALL_TOP = 4000;
 const WALL_DEPTH = 8 * KM;
 const WALL_REACH = 8 * KM;
-/** Its thickness (units, 20 m): girders and mesh. */
+/** Its thickness (units, 10 m): girders and mesh. */
 const WALL_THICK = 200;
 /** The wall's solid box. */
 export const WALL_HALF = new THREE.Vector3(WALL_THICK / 2, WALL_DEPTH / 2, WALL_REACH);
