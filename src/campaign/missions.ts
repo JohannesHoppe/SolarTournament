@@ -296,6 +296,21 @@ function takeGlint(ctx: SchoolContext, a: Attempt, markers: Markers) {
   a.next++;
 }
 
+/** The middle of the field's piece nearest the pilot that is not solid (rock or ice it can break), if any; walks the field without allocating, as it runs every step. */
+function nearestRock(ctx: SchoolContext): THREE.Vector3 | null {
+  let best: THREE.Vector3 | null = null;
+  let nearest = Infinity;
+  for (const rock of ctx.field.asteroids.values()) {
+    if (rock.solid) continue;
+    const distance = rock.object.position.distanceToSquared(ctx.me.flight.position);
+    if (distance < nearest) {
+      nearest = distance;
+      best = rock.object.position;
+    }
+  }
+  return best;
+}
+
 /** The point of `points` nearest the pilot, if any. */
 function nearestOf(ctx: SchoolContext, points: readonly THREE.Vector3[]): THREE.Vector3 | null {
   let best: THREE.Vector3 | null = null;
@@ -331,7 +346,7 @@ const firstCut: Drill = {
     takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
-  waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
+  waypoint: (ctx, a) => (a.points.length ? nearestOf(ctx, a.points) : nearestRock(ctx)),
   mark: (ctx, a) =>
     t('Rock {n}/{total} · ore {ore}/{needed}', { n: Math.min(FIRST_CUT, ctx.rocksBroken - a.count + (ctx.rocksBroken - a.count < FIRST_CUT ? 1 : 0)), total: FIRST_CUT, ore: a.next, needed: ORE_NEEDED }),
 };
@@ -2113,7 +2128,7 @@ function miningRun(arena: ArenaId): Drill {
       return a.next >= MINE_ORE;
     },
     fail: (_, a) => (a.seconds - a.clockFrom > MINE_SECONDS ? CAMPAIGN.miningSlow : null),
-    waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
+    waypoint: (ctx, a) => (a.points.length ? nearestOf(ctx, a.points) : nearestRock(ctx)),
     mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Ore {ore}/{needed} · {seconds} s left', { ore: a.next, needed: MINE_ORE, seconds: Math.max(0, Math.ceil(MINE_SECONDS - (a.seconds - a.clockFrom))) }) : t('Ore {ore}/{needed}', { ore: a.next, needed: MINE_ORE })),
   };
 }
@@ -3290,6 +3305,14 @@ const tankerTurn = new THREE.Quaternion();
 const tankerSide = new THREE.Vector3();
 const tankerOff = [new THREE.Vector3()];
 const tankerLost = [false];
+/** The seconds since the tanker set out, for its lane (see tankerLane), set every step of the escort. */
+const tankerClock = { seconds: 0 };
+/** The tanker's lane as haul reads it: where the tanker is now (into `out`); made once, as the escort runs every step. */
+const tankerLane = (_: number, out: THREE.Vector3) => {
+  tankerAt(tankerClock.seconds, out);
+  return out;
+};
+const noLoss = () => undefined;
 
 /** Where the tanker is `seconds` after it set out, along its lane (into `out`), and the leg it flies (its index into TANKER_LANE's points, from 1). */
 export function tankerAt(seconds: number, out: THREE.Vector3): number {
@@ -3320,14 +3343,11 @@ const doseRun: Drill = {
     const dt = stepOf(a);
     const leg = tankerAt(a.seconds, tugNow);
     tankerSide.subVectors(TANKER_LANE[leg], TANKER_LANE[leg - 1]).normalize();
-    tankerTurn.setFromUnitVectors(new THREE.Vector3(-1, 0, 0), tankerSide);
+    tankerTurn.setFromUnitVectors(BOW, tankerSide);
     tankerSide.set(-tankerSide.z, 0, tankerSide.x).normalize();
-    const onLane = (_: number, out: THREE.Vector3) => {
-      tankerAt(a.seconds, out);
-      return out;
-    };
+    tankerClock.seconds = a.seconds;
     // the Loose go for the tanker where it is, on its cable or not (haul leaves it in tugNow)
-    haul(markers, dt, 1, onLane, tankerSide, tankerTurn, tankerOff, tankerLost, () => undefined);
+    haul(markers, dt, 1, tankerLane, tankerSide, tankerTurn, tankerOff, tankerLost, noLoss);
     ctx.moveJumpers(tugNow);
     if (a.count === 0 && leg > TANKER_OUT) {
       ctx.spawnJumpers(null, tugNow, TANKER_RAIDERS, LOOSE_SKILL, LOOSE_NAMES, LOOSE_HOLD, false, true);
