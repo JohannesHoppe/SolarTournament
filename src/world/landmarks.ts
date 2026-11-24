@@ -836,6 +836,8 @@ export class Landmarks {
   private sharpAsked = false;
   private sharpFailures = 0;
   private readonly sharp = new Map<Planet, THREE.Texture>();
+  /** The planets whose sharp map is on its way, never asked for twice at once. */
+  private readonly sharpLoading = new Set<Planet>();
   private sharpWanted = false;
   /** The share of detail the rung last asked for (see setDetail). */
   private detailShare = 0;
@@ -1001,13 +1003,19 @@ export class Landmarks {
     this.sharpWanted = share >= 0.5;
     if (this.sharpWanted && !this.sharpAsked) {
       this.sharpAsked = true;
+      // only the maps not loaded yet: a retry after one planet's failure fetches that one again, never those already held
       for (const planet of this.planets.keys()) {
+        if (this.sharp.has(planet) || this.sharpLoading.has(planet)) continue;
+        this.sharpLoading.add(planet);
         loadPlanetMap(planet).then(
           (texture) => {
+            this.sharpLoading.delete(planet);
+            this.sharp.get(planet)?.dispose();
             this.sharp.set(planet, texture);
             this.useMaps();
           },
           (error: unknown) => {
+            this.sharpLoading.delete(planet);
             console.warn(`The sharp map of ${planet} did not load`, error);
             // asked again after a pause, doubling with each failure, so a dropped connection does not keep the planet on its small map for good
             if (this.sharpAsked) setTimeout(() => this.setDetail(this.detailShare), SHARP_RETRY_MS * pow(2, this.sharpFailures++));
