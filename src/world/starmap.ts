@@ -46,7 +46,7 @@ export function skyTurn(sun: THREE.Vector3): THREE.Matrix4 {
 /**
  * A star's light on screen (see starVertex) is its brightness (starfile's magnitudeFlux) times
  * this: a star of the sixth magnitude about 0.7, the catalogue's faintest about 0.25 (barely
- * seen), Sirius about 28 (a disk of six pixels whose middle the bloom catches).
+ * seen), Sirius about 42 (its flux 59, a disk of about seven pixels whose middle the bloom catches).
  */
 const STAR_GAIN = 0.7;
 /** The Milky Way's glow, as bright as its cube map holds it times this: its brightest star clouds (the map's 1) a dim 0.22, under the brightest stars. */
