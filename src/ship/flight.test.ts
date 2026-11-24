@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { InputRecorder, type Recording } from '../recorder';
+import { InputRecorder, shipState, type Recording } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
@@ -24,10 +24,7 @@ const direction = (yaw: number, pitch = 0) => new THREE.Vector3(sin(yaw) * cos(p
 /** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
 const kept = (flight: FlightModel) => ({
   gravity: [0, 0, 0] as [number, number, number],
-  position: flight.position.toArray(),
-  velocity: flight.velocity.toArray(),
-  orientation: flight.orientation.toArray() as [number, number, number, number],
-  spin: flight.angularVelocity.toArray(),
+  ...shipState(flight),
   drive: 1,
   thrusters: 1,
 });

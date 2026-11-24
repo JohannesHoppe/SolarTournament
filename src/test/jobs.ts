@@ -5,6 +5,7 @@ import { Bot, evenSkills, pressOn, raceSpeedOf, Turns, skillsFrom, type Skill, t
 import { flyByNose, MAIN_THRUST, MAX_SPEED, type Ground } from '../ship/flight';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
 import { cos, sin } from '../detmath';
+import { randomDirection } from '../detthree';
 import { firstHull, LASER_RANGE, MAX_HEAT, Ship } from '../ship/ship';
 import { bounceOff, impactDamage, ram, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { FlightSchool, type Attempt, type SchoolContext } from '../game/school';
@@ -597,7 +598,7 @@ export class JobWorld implements SchoolContext {
       toward.set(...start.toward);
     } else {
       for (let i = 0; i < 24; i++) {
-        at.randomDirection().multiplyScalar(FIELD_RADIUS);
+        randomDirection(at).multiplyScalar(FIELD_RADIUS);
         if (!this.field.overlap(at, ship.radius * 10) && !this.field.insideWell(at, ship.radius * 40)) break;
       }
     }

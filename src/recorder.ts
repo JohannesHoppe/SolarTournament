@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import type { Controls } from './input/input';
 
 /**
@@ -39,6 +40,16 @@ export interface InputFrame {
   /** Drive and thrusters, 0..1. */
   drive: number;
   thrusters: number;
+}
+
+/** What a frame keeps of the ship before its step (see InputFrame): its position, velocity, orientation and spin. */
+export function shipState(flight: { position: THREE.Vector3; velocity: THREE.Vector3; orientation: THREE.Quaternion; angularVelocity: THREE.Vector3 }) {
+  return {
+    position: flight.position.toArray(),
+    velocity: flight.velocity.toArray(),
+    orientation: flight.orientation.toArray() as [number, number, number, number],
+    spin: flight.angularVelocity.toArray(),
+  };
 }
 
 /** A saved flight. */

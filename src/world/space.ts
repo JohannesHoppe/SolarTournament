@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { pow } from '../detmath';
+import { randomDirection } from '../detthree';
 import { radialTexture } from '../view/textures';
 import { IMPOSTOR_SUN } from '../view/impostor';
 import { CLOUD_SHAPES, MAX_NEBULAE, cloudTexture, type Mood } from './nebula';
@@ -198,7 +199,7 @@ export class Space {
     const color = new THREE.Color();
     const v = new THREE.Vector3();
     for (let i = 0; i < STAR_COUNT; i++) {
-      v.randomDirection().multiplyScalar(SKY_RADIUS);
+      randomDirection(v).multiplyScalar(SKY_RADIUS);
       positions.set([v.x, v.y, v.z], i * 3);
       const brightness = pow(Math.random(), 3) * 0.9 + 0.1;
       color.setHSL(0.55 + Math.random() * 0.15 - (Math.random() < 0.2 ? 0.5 : 0), 0.4, brightness);

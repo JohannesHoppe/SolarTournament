@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { angleTo, applyAxisAngle, CentripetalCurve, makeRotationAxis, makeRotationX, makeRotationY, makeRotationZ, quaternionAngleTo, rotateTowards, rotateX, rotateY, rotateZ, setFromAxisAngle, setFromEuler, setRotation, slerp } from './detthree';
+import { angleTo, applyAxisAngle, CentripetalCurve, randomDirection, makeRotationAxis, makeRotationX, makeRotationY, makeRotationZ, quaternionAngleTo, rotateTowards, rotateX, rotateY, rotateZ, setFromAxisAngle, setFromEuler, setRotation, slerp } from './detthree';
 import { Randomizer } from './random';
 
 // Each helper does what three.js's own does, to the rounding of the last bits.
@@ -31,6 +31,28 @@ describe("detthree: three.js's rotations on the deterministic functions", () => 
         const [x, y, z] = [angle(), angle(), angle()];
         near(setFromEuler(new THREE.Quaternion(), x, y, z, order), new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, order)));
       }
+    }
+  });
+
+  it('draws a random direction as three.js does from the same numbers', () => {
+    const draws = new Randomizer(11);
+    const numbers = Array.from({ length: 400 }, () => draws.nextFloat());
+    let k = 0;
+    const ours = new THREE.Vector3();
+    const theirs = new THREE.Vector3();
+    const random = Math.random;
+    try {
+      for (let i = 0; i < 200; i++) {
+        randomDirection(ours, () => numbers[k++]);
+        k -= 2;
+        Math.random = () => numbers[k++];
+        theirs.randomDirection();
+        Math.random = random;
+        near(ours, theirs);
+        expect(ours.length()).toBeCloseTo(1, 14);
+      }
+    } finally {
+      Math.random = random;
     }
   });
 

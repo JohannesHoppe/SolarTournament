@@ -32,9 +32,14 @@ const bare = (text: string) => code(text).replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\
 const MATH = /\bMath\.(sin|cos|tan|asin|acos|atan|atan2|exp|expm1|log|log1p|log2|log10|pow|sinh|cosh|tanh|asinh|acosh|atanh|cbrt|hypot)\b/;
 /** The power operator, which is Math.pow. */
 const POWER = /\*\*/;
-/** three.js's helpers that call Math's trigonometry or powers. */
+/**
+ * three.js's helpers that call Math's trigonometry or powers (its math classes read through for
+ * every call of them: Vector2/3/4, Quaternion, Euler, Matrix3/4, Spherical, Cylindrical,
+ * MathUtils, Object3D): a quaternion or a direction drawn at random (`random`, `randomDirection`)
+ * among them; `Math.random` itself is no such helper.
+ */
 const THREE_TRIG =
-  /\.(setFromAxisAngle|setFromEuler|makeRotationX|makeRotationY|makeRotationZ|makeRotationAxis|makeRotationFromEuler|applyAxisAngle|applyEuler|setFromSpherical|setFromSphericalCoords|setFromCylindrical|setFromCylindricalCoords|angleTo|rotateTowards|slerp|slerpQuaternions|rotateX|rotateY|rotateZ|rotateOnAxis|rotateOnWorldAxis)\(|\bTHREE\.(Euler|Spherical|Cylindrical|CatmullRomCurve3)\b|MathUtils\.damp\b|\.rotation\.(set\(|[xyz]\s*[-+*/]?=(?!=))/;
+  /\.(setFromAxisAngle|setFromEuler|makeRotationX|makeRotationY|makeRotationZ|makeRotationAxis|makeRotationFromEuler|makeRotation|setUvTransform|applyAxisAngle|applyEuler|setFromSpherical|setFromSphericalCoords|setFromCylindrical|setFromCylindricalCoords|setFromCartesianCoords|setAxisAngleFromQuaternion|setAxisAngleFromRotationMatrix|angleTo|rotateTowards|rotateAround|slerp|slerpFlat|slerpQuaternions|rotateX|rotateY|rotateZ|rotateOnAxis|rotateOnWorldAxis|randomDirection)\(|(?<!\bMath)\.random\(|\.angle\(\)|\bTHREE\.(Euler|Spherical|Cylindrical|CatmullRomCurve3)\b|MathUtils\.(damp|isPowerOfTwo|ceilPowerOfTwo|floorPowerOfTwo|setQuaternionFromProperEuler)\b|\.rotation\.(set\w*\(|[xyz]\s*[-+*/]?=(?!=))/;
 
 describe('the deterministic mathematics', () => {
   const scanned = SCANNED.flatMap(files);
@@ -65,9 +70,9 @@ describe('the deterministic mathematics', () => {
   });
 
   it('finds what it looks for, and only that', () => {
-    const lines = ['x = Math.sin(a);', 'y = values.map(Math.cos);', 'z = a ** 2;', 'q.setFromAxisAngle(axis, 1);', 'mesh.rotation.x = 1;', 'mesh.rotation.y += 1;', 'v.angleTo(w)', 'new THREE.Euler()'];
+    const lines = ['x = Math.sin(a);', 'y = values.map(Math.cos);', 'z = a ** 2;', 'q.setFromAxisAngle(axis, 1);', 'mesh.rotation.x = 1;', 'mesh.rotation.y += 1;', 'v.angleTo(w)', 'new THREE.Euler()', 'v.randomDirection()', 'q.random()', 'p.angle()', 'm.makeRotation(1)', 'mesh.rotation.setFromQuaternion(q)', 'MathUtils.ceilPowerOfTwo(n)'];
     expect(lines.filter((line) => MATH.test(bare(line)) || POWER.test(bare(line)) || THREE_TRIG.test(bare(line)))).toEqual(lines);
-    const fine = ['x = sin(a); // Math.sin(a) differs', '/** a ** b */ y = pow(a, b);', "glob('**/*.ts')", 'mesh.rotation.x === 1', 'rotateX(geometry, 1)', 'Math.sqrt(x)', 'q.setFromRotationMatrix(m)'];
+    const fine = ['x = sin(a); // Math.sin(a) differs', '/** a ** b */ y = pow(a, b);', "glob('**/*.ts')", 'mesh.rotation.x === 1', 'rotateX(geometry, 1)', 'Math.sqrt(x)', 'q.setFromRotationMatrix(m)', 'x = Math.random();', 'ctx.rotate(0.1)', 'randomDirection(v)', 'v.angles()'];
     expect(fine.filter((line) => MATH.test(code(line)) || POWER.test(bare(line)) || THREE_TRIG.test(code(line)))).toEqual([]);
   });
 });
