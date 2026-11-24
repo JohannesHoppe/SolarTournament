@@ -1188,19 +1188,29 @@ test('The Drain: Scout One lies among the Feeders’ ice by the hole, named on t
   test.setTimeout(300_000);
   const errors = await takeJobFrom(page, ninthHull());
   await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.drone?.name === 'Scout One', null, { timeout: 180_000 });
-  // the nose held on her from a kilometer off until the scan is done
+  // the nose held on her from a kilometer off until the scan is done, each frame from the one of six
+  // points a kilometer round her that lies farthest from the Feeders' ice (their pieces orbit the
+  // hole, and one sweeping through a fixed point kills the clone and starts the scan over)
   await page.evaluate(async () => {
     const game = window.game;
     const scout = game.drone.flight.position;
     const Vector = scout.constructor;
     const ahead = new Vector(0, 0, -1);
-    const west = new Vector(-1, 0, 0);
+    const offsets = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map(([x, y, z]) => new Vector(x * 20000, y * 20000, z * 20000));
+    const point = new Vector();
+    const clearance = (at: typeof point) => Math.min(...[...game.field.asteroids.values()].map((piece: { object: { position: typeof point }; radius: number }) => piece.object.position.distanceTo(at) - piece.radius));
     const start = game.time;
     while (game.school?.stepIndex === 1 && game.time - start < 15) {
-      game.me.flight.position.copy(scout).add(new Vector(20000, 0, 0));
+      let best = offsets[0];
+      let room = -Infinity;
+      for (const offset of offsets) {
+        const free = clearance(point.copy(scout).add(offset));
+        if (free > room) [best, room] = [offset, free];
+      }
+      game.me.flight.position.copy(scout).add(best);
       game.me.flight.velocity.set(0, 0, 0);
       game.me.flight.angularVelocity.set(0, 0, 0);
-      game.me.flight.orientation.setFromUnitVectors(ahead, west);
+      game.me.flight.orientation.setFromUnitVectors(ahead, best.clone().negate().normalize());
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   });
