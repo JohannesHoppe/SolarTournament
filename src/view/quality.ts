@@ -31,14 +31,14 @@ export interface Look {
   landmark: number;
   /** Steps the black hole's lens marches along each pixel's ray toward its source (see view/lensing): fewer leaves the bend coarser, never unbent; the whole march is a small part of the lens's cost. */
   lens: number;
-  /** Share of the traces people left on a world's ground drawn (see world/traces, setTraceDetail): 1 all, from 0.5 only the wide ones (tracks, treads, scars, blast rings and the ships' scrapes), without the bootprints and the sleds' runners. */
-  traces: number;
+  /** Whether the fine traces people left on a world's ground are drawn (see world/traces, setTraceDetail): the bootprints and the sleds' runners; the wide ones (tracks, treads, scars, blast rings and the ships' scrapes) are drawn on every rung. */
+  traces: boolean;
 }
 
 /** Knobs whose change compiles shaders anew: the governor turns them only where a hitch goes unseen (see Look, safe). */
 export const COMPILING: readonly (keyof Look)[] = ['shadows', 'lacquer'];
 
-const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true, landmark: 1, lens: 6, traces: 1 };
+const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true, landmark: 1, lens: 6, traces: true };
 
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
@@ -69,7 +69,7 @@ const STEPS: Partial<Look>[] = [
   { pixelRatio: 1.5, showcase: { pixelRatio: 1.5, shadows: true, every: 1 } },
   { shadows: 1024 },
   { pixelRatio: 1.25, showcase: { pixelRatio: 1, shadows: false, every: 1 } },
-  { particles: 0.5, belt: 0.5, landmark: 0.25, traces: 0.5 },
+  { particles: 0.5, belt: 0.5, landmark: 0.25, traces: false },
   { shadows: 0 },
   { pixelRatio: 1, rocks: 0, belt: 0.25, showcase: { pixelRatio: 1, shadows: false, every: 2 }, spokes: false, lens: 2 },
   { bloom: 0 },

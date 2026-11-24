@@ -32,7 +32,7 @@ const BARE = new THREE.Color(1.45, 1.5, 1.62);
 
 /** The ground of the arena in its box's frame (`half` its half extents): Callisto's dust, bright where the ice lies bare (see freshIce). */
 export function battleGround(half: THREE.Vector3): THREE.Group {
-  return reliefGround(half, battleRelief, CALLISTO_TINT, BATTLE_GLOW, BATTLE_GROUND_CELL, (x, z, color) => color.copy(DUST).lerp(BARE, freshIce(x, z)), BATTLE_TRACES);
+  return reliefGround(half, battleRelief, CALLISTO_TINT, BATTLE_GLOW, { cell: BATTLE_GROUND_CELL, shade: (x, z, color) => color.copy(DUST).lerp(BARE, freshIce(x, z)), traces: BATTLE_TRACES });
 }
 
 /** The Steadfast's halves the busiest sites, picked over by salvagers ever since she came down; the clones' pads lone sites of their own, their crews' prints round them (see world/traces). */

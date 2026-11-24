@@ -19,10 +19,9 @@ const ENCELADUS_TINT = 0xf4f7fa;
 const ENCELADUS_GLOW = 0x4a5058;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/enceladus gives (see reliefGround). */
-export const enceladusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, ENCELADUS_TINT, ENCELADUS_GLOW, undefined, undefined, ENCELADUS_TRACES);
+export const enceladusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, ENCELADUS_TINT, ENCELADUS_GLOW, { traces: ENCELADUS_TRACES });
 
-/** Nobody stays at the Plumes: an old landing site and a few lone lines of prints out on the plain (see world/traces). */
-/** The plumes' snow falls on the south pole by a millimeter or so a year, burying an old landing site's ring within centuries: only fresh lines of prints, faint already. */
+/** Nobody stays at the Plumes, only a few lone lines of prints out on the plain (see world/traces): the plumes' snow falls on the south pole by a millimeter or so a year, burying an old landing site's ring within centuries: only fresh lines of prints, faint already. */
 const ENCELADUS_TRACES: TracePlan = { seed: 4297, sites: [], wilds: 2, landings: 0, weathering: 0.6 };
 
 /** Enceladus's colors beyond the field: the plain's white snow of fallen plume grains, the stripes' troughs a little blue and grey, where fresh ice and old dust show. */

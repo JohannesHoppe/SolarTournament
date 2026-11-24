@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
+import { boxUv, hullFinish, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
 import { platedCoat, plateFore, plateFragment, PLATE_STEPS, PLATE_VERTEX, PLATE_VERTEX_MAIN } from './plating';
 import { letteringTexture, numberAspect, numberTexture } from '../view/lettering';
@@ -253,81 +253,89 @@ function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWi
   const direct = 'clearcoatSpecularDirect';
   const capped = `${direct} * min( 1.0, glintPeak / max( max( ${direct}.r, ${direct}.g ), max( ${direct}.b, 1e-4 ) ) )`;
   const steel = `vec3( ${BARE_STEEL.r.toFixed(4)}, ${BARE_STEEL.g.toFixed(4)}, ${BARE_STEEL.b.toFixed(4)} )`;
-  let fragment =
-    'uniform float glintPeak;\nuniform float paintMetal;\nuniform vec3 rimGlow;\n' +
-    shader.fragmentShader
-      .replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`)
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-	totalEmissiveRadiance += rimGlow * pow( 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ), 3.0 );`,
-      )
-      .replace(
-        '#include <metalnessmap_fragment>',
-        `#include <metalnessmap_fragment>
+  const fresh = freshLines(this, shader);
+  shader.fragmentShader = [
+    [`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`],
+    ['#include <map_fragment>', fresh.map],
+    ['#include <color_fragment>', `#include <color_fragment>${fresh.color}`],
+    ['#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>${fresh.roughness}`],
+    [
+      '#include <metalnessmap_fragment>',
+      `#include <metalnessmap_fragment>${fresh.metalness}
 	diffuseColor.rgb = mix( diffuseColor.rgb, ${steel} * sampledDiffuseColor.rgb, smoothstep( paintMetal + 0.15, paintMetal + 0.4, metalnessFactor ) * vColor.a );
 	// the part's finish (see paint): soot is dull, neither polished nor metal
 	roughnessFactor = mix( 1.0, roughnessFactor, vColor.a );
 	metalnessFactor *= vColor.a;`,
-      )
-      .replace(
-        '#include <lights_physical_fragment>',
-        `#include <lights_physical_fragment>
+    ],
+    [
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+	totalEmissiveRadiance += rimGlow * pow( 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ), 3.0 );`,
+    ],
+    [
+      '#include <lights_physical_fragment>',
+      `#include <lights_physical_fragment>${fresh.lights}
 	#ifdef USE_CLEARCOAT
 		material.clearcoat *= vColor.a;
 	#endif
 	#ifdef USE_IRIDESCENCE
 		material.iridescence *= vColor.a;
 	#endif`,
-      );
+    ],
+  ].reduce((source, [from, to]) => swap(source, from, to), `uniform float glintPeak;\nuniform float paintMetal;\nuniform vec3 rimGlow;\n${fresh.head}${shader.fragmentShader}`);
+}
 
-  const fresh: FreshLook | undefined = this.userData.fresh;
-  if (fresh) {
-    // the plating's fresh plates (see ship/plating): their own color and finish, the paint a
-    // shade darker and richer, the film over the alien's scales stronger than on the old ones
-    Object.assign(shader.uniforms, {
-      plateMap: { value: fresh.plates },
-      plateThreshold: { value: PLATE_STEPS[this.userData.platingStep] },
-      freshMap: { value: fresh.map },
-      freshOrm: { value: fresh.orm },
-    });
-    shader.vertexShader = PLATE_VERTEX + shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>${PLATE_VERTEX_MAIN}`);
-    fragment = `${plateFragment(TILE)}uniform sampler2D freshMap;\nuniform sampler2D freshOrm;\n${fragment}`
-      .replace(
-        '#include <map_fragment>',
-        `float fresh = plateFresh( vMapUv );
-	vec4 freshTexel = texture2D( freshOrm, vMapUv );
-	vec4 sampledDiffuseColor = mix( texture2D( map, vMapUv ), texture2D( freshMap, vMapUv ), fresh );
+/** Replaces `from` in a shader's source by `to`, and fails where the source lacks it: a line that silently fell out would still compile. */
+function swap(source: string, from: string, to: string) {
+  if (!source.includes(from)) throw new Error(`hull shader: no ${from}`);
+  return source.replace(from, to);
+}
+
+/**
+ * The hull shader's lines for the plating's fresh plates (see ship/plating) on a coat the plating
+ * renews (`userData.fresh`), each written in right after the chunk it follows: their own color and
+ * finish, the paint a shade darker and richer, the film over the alien's scales stronger than on
+ * the old ones. A stock hull (step 0) branches past them on its uniform, fetching nothing of them
+ * and binding none of their textures. Another material gets the chunks as three.js writes them.
+ */
+function freshLines(material: THREE.Material, shader: THREE.WebGLProgramParametersWithUniforms) {
+  const fresh: FreshLook | undefined = material.userData.fresh;
+  if (!fresh) return { head: '', map: '#include <map_fragment>', color: '', roughness: '', metalness: '', lights: '' };
+  const step: number = material.userData.platingStep;
+  Object.assign(shader.uniforms, {
+    plateMap: { value: step > 0 ? fresh.plates : null },
+    plateThreshold: { value: PLATE_STEPS[step] },
+    freshMap: { value: step > 0 ? fresh.map : null },
+    freshOrm: { value: step > 0 ? fresh.orm : null },
+  });
+  shader.vertexShader = PLATE_VERTEX + swap(shader.vertexShader, '#include <begin_vertex>', `#include <begin_vertex>${PLATE_VERTEX_MAIN}`);
+  const between = (pair: [number, number]) => `mix( ${pair[0].toFixed(3)}, ${pair[1].toFixed(3)}, fresh )`;
+  return {
+    head: `${plateFragment(TILE)}uniform sampler2D freshMap;\nuniform sampler2D freshOrm;\n`,
+    map: `float fresh = 0.0;
+	vec4 freshTexel = vec4( 0.0 );
+	vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+	if ( plateThreshold >= 0.0 ) {
+		fresh = plateFresh( vMapUv );
+		freshTexel = texture2D( freshOrm, vMapUv );
+		sampledDiffuseColor = mix( sampledDiffuseColor, texture2D( freshMap, vMapUv ), fresh );
+	}
 	diffuseColor *= sampledDiffuseColor;`,
-      )
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
+    color: `
 	float freshLuma = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-	diffuseColor.rgb = max( mix( vec3( freshLuma ), diffuseColor.rgb, mix( ${fresh.saturation[0].toFixed(3)}, ${fresh.saturation[1].toFixed(3)}, fresh ) ), 0.0 ) * mix( ${fresh.shade[0].toFixed(3)}, ${fresh.shade[1].toFixed(3)}, fresh );`,
-      )
-      .replace(
-        '#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>
+	diffuseColor.rgb = max( mix( vec3( freshLuma ), diffuseColor.rgb, ${between(fresh.saturation)} ), 0.0 ) * ${between(fresh.shade)};`,
+    roughness: `
 	roughnessFactor = mix( roughnessFactor, roughness * freshTexel.g, fresh );`,
-      )
-      .replace(
-        '#include <metalnessmap_fragment>',
-        `#include <metalnessmap_fragment>
+    metalness: `
 	metalnessFactor = mix( metalnessFactor, metalness * freshTexel.b, fresh );`,
-      )
-      .replace(
-        '#include <lights_physical_fragment>',
-        `#include <lights_physical_fragment>
+    lights: `
 	#ifdef USE_CLEARCOAT
 		material.clearcoat = mix( material.clearcoat, min( 1.0, clearcoat * ${FRESH_COAT.toFixed(3)} ) * freshTexel.r, fresh );
 	#endif
 	#ifdef USE_IRIDESCENCE
-		material.iridescence *= mix( ${fresh.film[0].toFixed(3)}, ${fresh.film[1].toFixed(3)}, fresh );
+		material.iridescence *= ${between(fresh.film)};
 	#endif`,
-      );
-  }
-  shader.fragmentShader = fragment;
+  };
 }
 
 /**
@@ -379,12 +387,13 @@ function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vec
 type Coat = { parts: THREE.BufferGeometry[]; wear: Wear; seed: number; look?: THREE.MeshPhysicalMaterialParameters; glow?: THREE.Color; rim?: THREE.Color; fresh?: Fresh };
 
 /**
- * The plates the hangar's plating puts on a coat (see ship/plating): their `wear` (the same seed
- * lays out the same plates and seams), and for the old plates and the fresh ones how bright
+ * The plates the hangar's plating puts on a coat (see ship/plating): their `wear`, drawn from the
+ * coat's seed in the coat's relief, so the same plates and seams lie where the coat's do (the
+ * plate map is laid out from them), and for the old plates and the fresh ones how bright
  * (`shade`) and how rich in color (`saturation`) their paint is against the coat's own, and how
  * strong the film over them is as a share of the coat's (`film`, the alien's scales).
  */
-type Fresh = { wear: Wear; shade: [number, number]; saturation: [number, number]; film: [number, number] };
+type Fresh = { wear: Omit<Wear, 'relief'>; shade: [number, number]; saturation: [number, number]; film: [number, number] };
 /** What the hull's shader takes of a coat's fresh plates (see hullShader). */
 type FreshLook = Fresh & { plates: THREE.Texture; map: THREE.Texture; orm: THREE.Texture };
 
@@ -417,7 +426,7 @@ function coat({ parts, wear, seed, look, glow, rim, fresh }: Coat): THREE.Mesh {
   );
   // a coat the plating renews has a material for every step, one program for all of them
   const materials = fresh ? Array.from({ length: PLATE_STEPS.length }, make) : [make()];
-  const renewed = fresh && hullSurface(seed, fresh.wear);
+  const renewed = fresh && hullFinish(seed, { ...fresh.wear, relief: wear.relief });
   for (const material of materials) {
     material.userData.paint = wear.metalness;
     material.userData.rim = rim;
@@ -730,7 +739,7 @@ const DEPOT_FINS: Wear = { ...DEPOT, stencils: ['07', 'NO STEP'], relief: 'ribs'
  */
 const SPARES: Wear = { rust: 0.02, chips: 0.05, grime: 0.12, scratches: 0.12, seams: 0.6, stencils: [], parts: ['P/N 41-0772', 'SPARE 3B', 'LOT 2583-K', 'P/N 07-118', 'DEPOT 9'], roughness: 0.32, metalness: 0.25, flakes: true };
 const FRESH_PAINT: Fresh = { wear: SPARES, shade: [1, 0.5], saturation: [1, 1.4], film: [1, 1] };
-const FRESH_FINS: Fresh = { ...FRESH_PAINT, wear: { ...SPARES, parts: ['P/N 41-0790', 'SPARE 3B'], relief: 'ribs' } };
+const FRESH_FINS: Fresh = { ...FRESH_PAINT, wear: { ...SPARES, parts: ['P/N 41-0790', 'SPARE 3B'] } };
 
 /**
  * A hoop around a part lofted through `ends`: `half` deep on either side of depth `z`, standing
@@ -1461,4 +1470,4 @@ const SCARRED: Wear = { rust: 0, chips: 0.5, grime: 0.75, scratches: 1, seams: 0
  * them whole and playing in its colors more strongly than the coat's own (FILM), where the old
  * scales keep barely a trace of it.
  */
-const GROWN: Fresh = { wear: { rust: 0, chips: 0.02, grime: 0.05, scratches: 0.12, seams: 0.6, stencils: [], roughness: 0.25, metalness: 0.4, relief: 'scales' }, shade: [1.2, 1], saturation: [0.4, 1.35], film: [0.15, 1.25] };
+const GROWN: Fresh = { wear: { rust: 0, chips: 0.02, grime: 0.05, scratches: 0.12, seams: 0.6, stencils: [], roughness: 0.25, metalness: 0.4 }, shade: [1.2, 1], saturation: [0.4, 1.35], film: [0.15, 1.25] };

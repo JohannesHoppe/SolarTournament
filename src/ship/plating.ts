@@ -10,9 +10,11 @@ import { boxAxis, plateMap, SIZE, type PlateLayout, type Wear } from '../view/su
  * Which plates a step replaces is fixed for a hull: each plate of the surface's tile has a rank
  * from the hull's seed (see view/surfaces, plateLayout), shuffled once more for every repeat of
  * the tile on the hull and every way the surface is projected (see boxUv), and weighted by how
- * far back the plate's middle lies along the hull and whether it lies on a flank. The plates
- * whose order (plateOrder) lies under a step's threshold (PLATE_STEPS) are fresh. The hull's
- * shader reckons it per pixel from the plate map (PLATE_GLSL), so every ship of a type shares
+ * far back the plate's middle lies along the hull and whether it lies on a flank. A plate
+ * reaching over the tile's edge (a scale) is reckoned with the repeat it belongs to on both
+ * sides, so it is renewed whole. The plates whose order (plateOrder) lies under a step's
+ * threshold (PLATE_STEPS) are fresh. The hull's shader reckons it per pixel from the plate map
+ * (plateFragment), so every ship of a type shares
  * its textures and only the step differs; plateOrder is the same reckoning in TypeScript, for
  * the unit tests. Looks only: nothing of it is shared or decides anything.
  */
@@ -60,10 +62,12 @@ export function plateOrder(rank: number, tileU: number, tileV: number, fore: For
 export function freshAt(layout: PlateLayout, u: number, v: number, fore: Fore, z: number, tile: number, step: number): boolean {
   const tileU = Math.floor(u);
   const tileV = Math.floor(v);
-  const plate = layout.plates[layout.at((u - tileU) * SIZE, (1 - (v - tileV)) * SIZE)];
+  const plate = layout.plates[layout.at((u - tileU) * SIZE, (1 - (v - tileV)) * SIZE, own)];
   const byte = (value: number) => Math.round(Math.max(0, Math.min(1, value)) * 255) / 255;
-  return plateOrder(Math.round(plate.rank * 255) / 255, tileU, tileV, fore, [byte(plate.x / SIZE), byte(1 - plate.y / SIZE)], z, tile) < PLATE_STEPS[step];
+  return plateOrder(Math.round(plate.rank * 255) / 255, tileU + own[0], tileV + own[1], fore, [byte(plate.x / SIZE), byte(1 - plate.y / SIZE)], z, tile) < PLATE_STEPS[step];
 }
+/** The repeat of the tile a plate belongs to, from the point's (see PlateLayout). */
+const own = [0, 0];
 
 /**
  * Gives every vertex of a hull's coat, its texture coordinates laid by boxUv ('readable'), how
@@ -110,7 +114,9 @@ float plateHash( vec2 tile, float key ) {
 }
 float plateFresh( vec2 uv ) {
 	vec4 plate = texture2D( plateMap, uv );
-	vec2 tile = floor( uv );
+	// the repeat of the tile the plate belongs to (a scale reaching over the tile's edge, see view/surfaces, plateMap)
+	float own = floor( plate.a * 255.0 + 0.5 );
+	vec2 tile = floor( uv ) + vec2( mod( own, 3.0 ), floor( own / 3.0 ) ) - 1.0;
 	vec3 fore = floor( vPlateFore + 0.5 );
 	float along = ( fore.x * ( tile.x + plate.g ) + fore.y * ( tile.y + plate.b ) ) * ${tile.toFixed(1)} + fore.z * vPlateZ;
 	float aft = clamp( ( along - ${NOSE.toFixed(1)} ) / ${(STERN - NOSE).toFixed(1)}, 0.0, 1.0 );

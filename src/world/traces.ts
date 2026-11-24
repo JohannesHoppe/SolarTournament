@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { atan2, cos, exp, hypot, sin } from '../detmath';
 import { Randomizer } from '../random';
-import { gridHeight, type GroundGrid } from './groundlod';
+import { DETAIL_RES, tileNoise } from './rocks';
+import { drawnOn, gridHeight, levelHeight, STEPS, TILE, tileLevel, type GroundGrid } from './groundlod';
 
 /**
  * What people left on an airless world's ground: in vacuum nothing blows a print away, so every
@@ -11,15 +12,20 @@ import { gridHeight, type GroundGrid } from './groundlod';
  * where now and then a lone line of prints runs far out. Looks only: never collided with, never
  * shared, laid from the place's seed so every visit finds them where they were.
  *
- * Each trace is a strip lying on the ground as its finest level draws it (see world/groundlod,
- * gridHeight), a vertex wherever the strip's middle crosses an edge of the ground's faces, so it
- * bends with them; it reads its pattern from one baked atlas (see traceAtlas) and multiplies the
- * ground already drawn under it by twice that pattern's value (0.5 leaves the ground as it is),
- * so the ground's own light, shadow and color stay and a print only darkens or brightens them.
- * A strip fades out where it would be narrower than a few pixels on screen, so a line of prints
- * never shimmers in the distance. The wide traces (tracks, ruts of crawlers, scars and blast
- * rings) are one draw call, the fine ones (bootprints, sled runners) another; the cheaper rungs of
- * the picture's quality drop the fine ones first (see setTraceDetail).
+ * Each trace is a strip cut at every edge of the ground's faces (see drapeTriangle), so each of
+ * its pieces lies in one face, on the ground as its finest level draws it (see world/groundlod,
+ * gridHeight); every corner also carries how far each coarser level of the ground's tile lies
+ * above or below it there, and the strip rises or sinks onto the level its tile draws, so it lies
+ * on the ground as drawn at every distance. It reads its pattern from one baked atlas (see
+ * traceAtlas) and multiplies the ground already drawn under it by twice that pattern's value (0.5
+ * leaves the ground as it is), so the ground's own light, shadow and color stay and a print only
+ * darkens or brightens them. A strip fades out where it would be narrower than a few pixels on
+ * screen, so a line of prints never shimmers in the distance. A ground's traces are drawn in
+ * chunks, one for each tile of the ground (see world/groundlod, TILE), the wide traces (tracks,
+ * ruts of crawlers, scars and blast rings) and the fine ones (bootprints, sled runners) apart: a
+ * chunk out of view, or so far that all its strips would be thinner than a few pixels, is not
+ * drawn, each one drawn is a draw call. The cheaper rungs of the picture's quality drop the fine
+ * ones (see setTraceDetail).
  */
 
 /** The kinds of traces, each a column of the atlas. */
@@ -32,6 +38,11 @@ export type TraceKind = 'boots' | 'rover' | 'crawler' | 'sled' | 'slide' | 'blas
  * two tyres 26 cm wide on a gauge of 1.9 m with a chevron tread every 10 cm; a crawler's two
  * treads 1.4 m wide on a gauge of 4 m, a cleat every 30 cm; a sled's two runners 20 cm wide on a
  * gauge of 2.4 m; a slid ship's scar 12 m wide; a blast ring its radius wide (the ring's own).
+ * `slope` is the steepest ground (rise over run) a trace of the kind runs up or down: a walker in
+ * a suit on loose dust 0.5 (27°), a rover 0.35 (19°), a loaded crawler 0.3 (17°, its haul sliding
+ * back beyond), a sled 0.25 (14°, a dragged load running away downhill beyond), a slid ship 0.6
+ * (31°: it ploughs on where it fell, kept only off cliffs); a blast ring is laid where its lander
+ * set down, never walked, and has none.
  */
 export const TRACE_KINDS: Readonly<Record<TraceKind, { column: number; width: number; tile: number; fine: boolean; slope: number }>> = {
   boots: { column: 0, width: 14, tile: 64, fine: true, slope: 0.5 },
@@ -39,7 +50,7 @@ export const TRACE_KINDS: Readonly<Record<TraceKind, { column: number; width: nu
   crawler: { column: 2, width: 120, tile: 24, fine: false, slope: 0.3 },
   sled: { column: 3, width: 64, tile: 80, fine: true, slope: 0.25 },
   slide: { column: 4, width: 240, tile: 400, fine: false, slope: 0.6 },
-  blast: { column: 5, width: 0, tile: 0, fine: false, slope: 1 },
+  blast: { column: 5, width: 0, tile: 0, fine: false, slope: Infinity },
 };
 
 /** The atlas: ATLAS_COLUMNS columns of COLUMN × ATLAS_HEIGHT texels, one per kind; a column's pattern spans its texels from GUTTER to COLUMN − GUTTER, neutral outside. */
@@ -54,10 +65,7 @@ export const NEUTRAL = 128;
 export const atlasU = (kind: TraceKind, a: number) => (TRACE_KINDS[kind].column * COLUMN + GUTTER + a * (COLUMN - 2 * GUTTER)) / ATLAS_WIDTH;
 
 const TAU = Math.PI * 2;
-const smooth = (edge0: number, edge1: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-};
+const { smoothstep } = THREE.MathUtils;
 /** A rounded box's signed distance: negative inside the box of half extents (hw, hl), corners rounded by `r`. */
 function roundedBox(p: number, q: number, hw: number, hl: number, r: number): number {
   const dx = Math.abs(p) - hw + r;
@@ -67,14 +75,17 @@ function roundedBox(p: number, q: number, hw: number, hl: number, r: number): nu
 }
 /** A print pressed into dust (its signed distance `sdf`, units): dark where it is pressed, `inside` gives its floor's tone; a bright rim of pushed-up dust `rim` wide around it. */
 function pressed(sdf: number, inside: number, rim: number, bright = 0.1): number {
-  if (sdf < 0) return inside + (0.5 + bright - inside) * smooth(-0.4, 0, sdf);
-  return 0.5 + bright * (1 - smooth(0, rim, sdf));
+  if (sdf < 0) return inside + (0.5 + bright - inside) * smoothstep(sdf, -0.4, 0);
+  return 0.5 + bright * (1 - smoothstep(sdf, 0, rim));
 }
 
-/** The steps of a tile of bootprints: where along (units), how far off the strip's middle, how turned (rad); seeded so no two steps are alike. */
-const STEPS = (() => {
+/** The steps of a tile of bootprints: where along (units), how far off the strip's middle, how turned (rad, with its cosine and sine); seeded so no two steps are alike. */
+const FOOTSTEPS = (() => {
   const r = new Randomizer(4101);
-  return Array.from({ length: 4 }, (_, k) => ({ along: (k + 0.5) * 16 + r.range(-1, 1), side: (k % 2 ? 1 : -1) * (2.2 + r.range(-0.3, 0.3)), turn: r.range(-0.12, 0.12) + (k % 2 ? 0.05 : -0.05) }));
+  return Array.from({ length: 4 }, (_, k) => {
+    const step = { along: (k + 0.5) * 16 + r.range(-1, 1), side: (k % 2 ? 1 : -1) * (2.2 + r.range(-0.3, 0.3)), turn: r.range(-0.12, 0.12) + (k % 2 ? 0.05 : -0.05) };
+    return { ...step, c: cos(step.turn), s: sin(step.turn) };
+  });
 })();
 /** A slid ship's gouges across its scar: middle (units off the scar's middle), half width, depth, and a wander along it. */
 const GOUGES = (() => {
@@ -88,84 +99,110 @@ const RAYS = (() => {
 })();
 
 /**
- * A kind's pattern at `a` across its strip (0..1) and `b` along its tile (0..1, the pattern
- * tiles), 0.5 neutral, darker where the ground is pressed or scoured, brighter where dust was
+ * A kind's pattern along one row of its tile, at `b` along it (0..1, the pattern tiles): what
+ * depends on `b` alone reckoned once, the pattern at `a` across the strip (0..1) handed back as a
+ * function. 0.5 neutral, darker where the ground is pressed or scoured, brighter where dust was
  * pushed up or swept clean.
  */
-export function tracePattern(kind: TraceKind, a: number, b: number): number {
+function patternRow(kind: TraceKind, b: number): (a: number) => number {
   const { width, tile } = TRACE_KINDS[kind];
-  const x = (a - 0.5) * width;
   const y = b * tile;
+  const across = (a: number) => (a - 0.5) * width;
   switch (kind) {
     case 'boots': {
-      let m = 0.5;
-      for (const step of STEPS) {
+      // the steps whose prints reach this row, each of the tile's and its neighbours'
+      const near: { step: (typeof FOOTSTEPS)[number]; dy: number }[] = [];
+      for (const step of FOOTSTEPS) {
         for (const shift of [-tile, 0, tile]) {
-          const dx = x - step.side;
           const dy = y - step.along - shift;
-          if (Math.abs(dy) > 6 || Math.abs(dx) > 4) continue;
-          const c = cos(step.turn);
-          const s = sin(step.turn);
-          const p = dx * c - dy * s;
-          const q = dx * s + dy * c;
+          if (Math.abs(dy) <= 6) near.push({ step, dy });
+        }
+      }
+      return (a) => {
+        const x = across(a);
+        let m = 0.5;
+        for (const { step, dy } of near) {
+          const dx = x - step.side;
+          if (Math.abs(dx) > 4) continue;
+          const p = dx * step.c - dy * step.s;
+          const q = dx * step.s + dy * step.c;
           // the sole wider at its toe (+q), lugs across it every 4.5 cm
           const sdf = roundedBox(p, q, 1.1 + 0.15 * (q / 3.2), 3.2, 0.9);
           const lugs = 0.36 + 0.07 * sin((TAU * q) / 0.9);
           const v = pressed(sdf, lugs, 0.7, 0.11);
           if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
         }
-      }
-      return m;
+        return m;
+      };
     }
-    case 'rover': {
-      let m = 0.5;
-      for (const middle of [-19, 19]) {
-        const off = Math.abs(x - middle);
-        const chevrons = 0.4 + 0.06 * sin((TAU * (y + off * 0.6)) / 2);
-        const v = pressed(off - 2.6, chevrons, 1.6, 0.09);
-        if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
-      }
-      return m;
-    }
+    case 'rover':
+      return (a) => {
+        const x = across(a);
+        let m = 0.5;
+        for (const middle of [-19, 19]) {
+          const off = Math.abs(x - middle);
+          const chevrons = 0.4 + 0.06 * sin((TAU * (y + off * 0.6)) / 2);
+          const v = pressed(off - 2.6, chevrons, 1.6, 0.09);
+          if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
+        }
+        return m;
+      };
     case 'crawler': {
-      let m = 0.5;
-      for (const middle of [-40, 40]) {
-        const off = Math.abs(x - middle);
-        const cleat = smooth(0.25, 0.32, (y / 6) % 1) * (1 - smooth(0.6, 0.68, (y / 6) % 1));
-        const v = pressed(off - 14, 0.42 - 0.1 * cleat, 3, 0.1);
-        if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
-      }
-      return m;
+      const cleat = smoothstep((y / 6) % 1, 0.25, 0.32) * (1 - smoothstep((y / 6) % 1, 0.6, 0.68));
+      return (a) => {
+        const x = across(a);
+        let m = 0.5;
+        for (const middle of [-40, 40]) {
+          const off = Math.abs(x - middle);
+          const v = pressed(off - 14, 0.42 - 0.1 * cleat, 3, 0.1);
+          if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
+        }
+        return m;
+      };
     }
     case 'sled': {
-      // a faint drag of the load between the runners, varying slowly along
-      let m = 0.5 - 0.03 * (1 - smooth(10, 18, Math.abs(x))) * (0.8 + 0.2 * sin(TAU * b));
-      for (const middle of [-24, 24]) {
-        const off = Math.abs(x - middle);
-        const v = pressed(off - 2, 0.38 + 0.04 * (off / 2) * (off / 2), 1.5, 0.08);
-        if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
-      }
-      return m;
+      const drag = 0.8 + 0.2 * sin(TAU * b);
+      return (a) => {
+        const x = across(a);
+        // a faint drag of the load between the runners, varying slowly along
+        let m = 0.5 - 0.03 * (1 - smoothstep(Math.abs(x), 10, 18)) * drag;
+        for (const middle of [-24, 24]) {
+          const off = Math.abs(x - middle);
+          const v = pressed(off - 2, 0.38 + 0.04 * (off / 2) * (off / 2), 1.5, 0.08);
+          if (Math.abs(v - 0.5) > Math.abs(m - 0.5)) m = v;
+        }
+        return m;
+      };
     }
     case 'slide': {
-      // the whole scar scuffed a little darker, fading out at its sides
-      let m = 0.5 - 0.035 * (1 - smooth(96, 116, Math.abs(x)));
-      for (const g of GOUGES) {
-        const off = Math.abs(x - g.middle - g.wander * sin(TAU * b + g.phase));
-        if (off < g.half) m -= g.depth * (1 - (off / g.half) * (off / g.half));
-        else if (off < 2 * g.half) m += 0.9 * g.depth * (1 - (off - g.half) / g.half);
-      }
-      return Math.min(0.75, Math.max(0.22, m));
+      const middles = GOUGES.map((g) => g.middle + g.wander * sin(TAU * b + g.phase));
+      return (a) => {
+        const x = across(a);
+        // the whole scar scuffed a little darker, fading out at its sides
+        let m = 0.5 - 0.035 * (1 - smoothstep(Math.abs(x), 96, 116));
+        for (let k = 0; k < GOUGES.length; k++) {
+          const g = GOUGES[k];
+          const off = Math.abs(x - middles[k]);
+          if (off < g.half) m -= g.depth * (1 - (off / g.half) * (off / g.half));
+          else if (off < 2 * g.half) m += 0.9 * g.depth * (1 - (off - g.half) / g.half);
+        }
+        return Math.min(0.75, Math.max(0.22, m));
+      };
     }
     case 'blast': {
-      // `a` the share of the ring's radius out from its middle: the ground under the lander scoured, a bright halo swept clean round it with rays, fading out to the rim
       let rays = 0;
       for (const ray of RAYS) rays += ray.weight * sin(TAU * ray.count * b + ray.phase);
-      const halo = 0.15 * (1 - smooth(0.12, 1, a)) * (1 + 0.12 * rays);
-      return 0.5 + halo * smooth(0.1, 0.22, a) - 0.07 * (1 - smooth(0.1, 0.2, a));
+      // `a` the share of the ring's radius out from its middle: the ground under the lander scoured, a bright halo swept clean round it with rays, fading out to the rim
+      return (a) => {
+        const halo = 0.15 * (1 - smoothstep(a, 0.12, 1)) * (1 + 0.12 * rays);
+        return 0.5 + halo * smoothstep(a, 0.1, 0.22) - 0.07 * (1 - smoothstep(a, 0.1, 0.2));
+      };
     }
   }
 }
+
+/** A kind's pattern at `a` across its strip (0..1) and `b` along its tile (0..1), as patternRow reckons it. */
+export const tracePattern = (kind: TraceKind, a: number, b: number): number => patternRow(kind, b)(a);
 
 /** The atlas's texels (one byte each, value t meaning t · 255 / 256 · 2 times the ground): every kind's pattern, 3 × 3 samples a texel. */
 export function traceAtlas(): Uint8Array {
@@ -174,9 +211,10 @@ export function traceAtlas(): Uint8Array {
   for (const kind of Object.keys(TRACE_KINDS) as TraceKind[]) {
     const column = TRACE_KINDS[kind].column;
     for (let j = 0; j < ATLAS_HEIGHT; j++) {
+      const rows = [0, 1, 2].map((sj) => patternRow(kind, (j + (sj + 0.5) / 3) / ATLAS_HEIGHT));
       for (let i = 0; i < span; i++) {
         let sum = 0;
-        for (let sj = 0; sj < 3; sj++) for (let si = 0; si < 3; si++) sum += tracePattern(kind, (i + (si + 0.5) / 3) / span, (j + (sj + 0.5) / 3) / ATLAS_HEIGHT);
+        for (let sj = 0; sj < 3; sj++) for (let si = 0; si < 3; si++) sum += rows[sj]((i + (si + 0.5) / 3) / span);
         data[j * ATLAS_WIDTH + column * COLUMN + GUTTER + i] = Math.min(255, Math.max(0, Math.round((sum / 9) * 256)));
       }
     }
@@ -200,8 +238,9 @@ function atlasTexture(): THREE.DataTexture {
 
 /**
  * How far a strip's vertex is drawn towards the camera (units): TRACE_LIFT, and TRACE_LIFT_SHARE
- * of its distance more, for a coarser level of the ground strays from the finest by up to 2 px
- * (see world/groundlod), some 0.2 % of the distance.
+ * of its distance more, for the depth buffer's steps grow with the distance (on a 24-bit buffer
+ * and a near plane of 50 cm about 2 units at 1 km), and where a tile's last coarse cells are not
+ * square their faces bend across a finest face by a little more than the strip follows.
  */
 const TRACE_LIFT = 2;
 const TRACE_LIFT_SHARE = 0.0025;
@@ -209,31 +248,50 @@ const TRACE_LIFT_SHARE = 0.0025;
 const FADE_PX = [1.5, 4] as const;
 /** A ship's scrape mark fades out over the last third of SCRAPE_LIFE (s) after it was made. */
 export const SCRAPE_LIFE = 180;
+/**
+ * The traces are drawn after the ground and before every other see-through thing (sparks, smoke,
+ * explosions, jets, renderOrder 0), so they multiply the ground alone and never what glows above
+ * it; after the backdrops behind everything (renderOrder −2 to −1), which they never cover.
+ */
+const TRACE_ORDER = -0.5;
 
 /** The picture's height in pixels, for a strip's width on screen; set before each strip is drawn. */
 const picture = { value: 1080 };
 const now = { value: 0 };
+/** The scrape marks' triangles laid so far (see ScrapeMarks): a mark fades as newer ones come to take its place. */
+const head = { value: 0 };
+/** The atlas, baked the first time a trace is drawn (see prepare). */
+const atlasUniform: { value: THREE.DataTexture | null } = { value: null };
 
 function traceMaterial(fades: boolean): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { atlas: { value: atlasTexture() }, picture, now },
-    defines: fades ? { FADES: '', LIFE: SCRAPE_LIFE.toFixed(1) } : {},
+    uniforms: { atlas: atlasUniform, picture, now, head, level: { value: new THREE.Vector4() } },
+    defines: fades ? { FADES: '', LIFE: SCRAPE_LIFE.toFixed(1), KEEP: SCRAPE_KEEP.toFixed(1) } : {},
     vertexShader: `
       attribute vec2 trace;
       #ifdef FADES
-      attribute float born;
+      attribute vec2 age;
       uniform float now;
+      uniform float head;
+      #else
+      attribute vec4 coarse;
+      uniform vec4 level;
       #endif
       uniform float picture;
       varying vec2 vUv;
       varying float vStrength;
       void main() {
-        vec4 eye = modelViewMatrix * vec4(position, 1.0);
+        vec3 at = position;
+        #ifndef FADES
+        // onto the level its tile of the ground draws (see coarse)
+        at.y += dot(coarse, level);
+        #endif
+        vec4 eye = modelViewMatrix * vec4(at, 1.0);
         float d = max(length(eye.xyz), 1.0);
         float px = trace.y * projectionMatrix[1][1] * picture * 0.5 / d;
         vStrength = trace.x * smoothstep(${FADE_PX[0].toFixed(1)}, ${FADE_PX[1].toFixed(1)}, px);
         #ifdef FADES
-        vStrength *= 1.0 - smoothstep(LIFE * 0.667, LIFE, now - born);
+        vStrength *= (1.0 - smoothstep(LIFE * 0.667, LIFE, now - age.x)) * (1.0 - smoothstep(KEEP * 0.667, KEEP, head - age.y));
         #endif
         eye.xyz *= 1.0 - min(0.5, (${TRACE_LIFT.toFixed(1)} + d * ${TRACE_LIFT_SHARE}) / d);
         gl_Position = projectionMatrix * eye;
@@ -259,7 +317,9 @@ function traceMaterial(fades: boolean): THREE.ShaderMaterial {
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -4,
+    // seen from either side (a scrape mark is laid facing down), in one pass: a strip lies flat and never hides itself
     side: THREE.DoubleSide,
+    forceSinglePass: true,
     toneMapped: false,
   });
 }
@@ -267,24 +327,20 @@ function traceMaterial(fades: boolean): THREE.ShaderMaterial {
 let wideMaterial: THREE.ShaderMaterial | null = null;
 let fineMaterial: THREE.ShaderMaterial | null = null;
 let scrapeMaterial: THREE.ShaderMaterial | null = null;
-/** The share of the traces drawn, as the picture's quality last set it (see setTraceDetail). */
-let detail = 1;
 const materials = () => {
   wideMaterial ??= traceMaterial(false);
   fineMaterial ??= traceMaterial(false);
   scrapeMaterial ??= traceMaterial(true);
   return { wide: wideMaterial, fine: fineMaterial, scrape: scrapeMaterial };
 };
-/** The traces the picture's quality draws (see view/quality, Look.traces): 1 all of them, from 0.5 only the wide ones and the ships' scrapes, 0 none. */
-export function setTraceDetail(share: number) {
-  detail = share;
-  const { wide, fine, scrape } = materials();
-  wide.visible = scrape.visible = share > 0;
-  fine.visible = share >= 1;
+/** Whether the fine traces (bootprints, sleds' runners) are drawn, as the picture's quality sets it (see view/quality, Look.traces); the wide ones and the ships' scrapes always are. */
+export function setTraceDetail(fine: boolean) {
+  materials().fine.visible = fine;
 }
 
-/** Sets the picture's height before a strip is drawn: the render target's, or the canvas's. */
-function measurePicture(renderer: THREE.WebGLRenderer) {
+/** Before a trace is drawn: the atlas baked the first time, the picture's height (the render target's, or the canvas's) for a strip's width on screen. */
+function prepare(renderer: THREE.WebGLRenderer) {
+  atlasUniform.value ??= atlasTexture();
   const target = renderer.getRenderTarget();
   picture.value = target ? target.height : renderer.domElement.height;
 }
@@ -345,10 +401,154 @@ const M = 20;
  * crawler treads and sled ruts, some driven again and again beside each other), rover loops
  * round it, many short lines of prints wandering off its edge, its landers' blast rings with the
  * crew's prints round them, and the scars of ships that slid in; a road to the nearest other
- * site; the place's own ways along its lanes; out in the wilds a few lone lines of prints far from anything and an old landing site.
+ * site a vehicle can reach, found round whatever stands between and never laid where it would not arrive (`routeRoad`); the place's own ways along its lanes; out in the wilds a few lone lines of prints far from anything and an old landing site.
  * A trace keeps off slopes too steep for it (a rover off 19°, a walker off 27°) and to the
  * ground, and shows fainter the farther it lies from the sites, older and less walked.
  */
+/** The lattice a road between two sites is searched on, in units (20 m): fine enough to find a valley head's ramp, coarse enough to search a world's ground in a few milliseconds. */
+const ROUTE_CELL = 20 * M;
+
+/**
+ * The shortest way a vehicle of slope limit `limit` (rise over run) drives from (x, z) to within
+ * `reach` of (tx, tz), on a lattice of ROUTE_CELL with its diagonals, every step and its middle
+ * no steeper than the limit, inside `inside`, searched within a box round the two ends reaching out as far again as they lie apart, at least 4 km (A*);
+ * as points every 10 m, smoothed where the smoothing keeps every stretch within the limit, or
+ * null where no such way exists, so a road between two sites is always one that arrives.
+ */
+export function routeRoad(x: number, z: number, tx: number, tz: number, reach: number, limit: number, inside: (x: number, z: number) => boolean, height: (x: number, z: number) => number): number[] | null {
+  const span = hypot(tx - x, tz - z);
+  const pad = Math.max(4 * KM, span);
+  const x0 = Math.min(x, tx) - pad;
+  const z0 = Math.min(z, tz) - pad;
+  const nx = Math.ceil((Math.max(x, tx) + pad - x0) / ROUTE_CELL) + 1;
+  const nz = Math.ceil((Math.max(z, tz) + pad - z0) / ROUTE_CELL) + 1;
+  const px = (i: number) => x0 + (i % nx) * ROUTE_CELL;
+  const pz = (i: number) => z0 + Math.floor(i / nx) * ROUTE_CELL;
+  const start = Math.round((z - z0) / ROUTE_CELL) * nx + Math.round((x - x0) / ROUTE_CELL);
+  const cost = new Float64Array(nx * nz).fill(Infinity);
+  const from = new Int32Array(nx * nz).fill(-1);
+  const done = new Uint8Array(nx * nz);
+  // a binary heap of (estimate, node)
+  const heap: number[] = [];
+  const push = (f: number, node: number) => {
+    heap.push(f, node);
+    for (let c = heap.length - 2; c > 0; ) {
+      const p = (((c >> 1) - 1) >> 1) << 1;
+      if (heap[p] <= heap[c]) break;
+      [heap[p], heap[c], heap[p + 1], heap[c + 1]] = [heap[c], heap[p], heap[c + 1], heap[p + 1]];
+      c = p;
+    }
+  };
+  const pop = (): number => {
+    const node = heap[1];
+    const lastF = heap[heap.length - 2];
+    const lastN = heap[heap.length - 1];
+    heap.length -= 2;
+    if (heap.length) {
+      heap[0] = lastF;
+      heap[1] = lastN;
+      for (let p = 0; ; ) {
+        const a = 2 * p + 2;
+        const b = a + 2;
+        let m = p;
+        if (a < heap.length && heap[a] < heap[m]) m = a;
+        if (b < heap.length && heap[b] < heap[m]) m = b;
+        if (m === p) break;
+        [heap[p], heap[m], heap[p + 1], heap[m + 1]] = [heap[m], heap[p], heap[m + 1], heap[p + 1]];
+        p = m;
+      }
+    }
+    return node;
+  };
+  const steep = (ax: number, az: number, bx: number, bz: number, run: number) => {
+    const mx = (ax + bx) / 2;
+    const mz = (az + bz) / 2;
+    const ha = height(ax, az);
+    const hm = height(mx, mz);
+    return Math.abs(hm - ha) > (limit * run) / 2 || Math.abs(height(bx, bz) - hm) > (limit * run) / 2;
+  };
+  if (start < 0 || start >= nx * nz) return null;
+  cost[start] = 0;
+  push(span, start);
+  let goal = -1;
+  while (heap.length) {
+    const node = pop();
+    if (done[node]) continue;
+    done[node] = 1;
+    const ax = px(node);
+    const az = pz(node);
+    if (hypot(tx - ax, tz - az) < reach) {
+      goal = node;
+      break;
+    }
+    const col = node % nx;
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dz) || col + dx < 0 || col + dx >= nx) continue;
+        const next = node + dz * nx + dx;
+        if (next < 0 || next >= nx * nz || done[next]) continue;
+        const bx = px(next);
+        const bz = pz(next);
+        const run = dx && dz ? ROUTE_CELL * Math.SQRT2 : ROUTE_CELL;
+        if (!inside(bx, bz) || steep(ax, az, bx, bz, run)) continue;
+        const g = cost[node] + run;
+        if (g >= cost[next]) continue;
+        cost[next] = g;
+        from[next] = node;
+        push(g + hypot(tx - bx, tz - bz), next);
+      }
+  }
+  if (goal < 0) return null;
+  const corners: number[] = [];
+  for (let node = goal; node >= 0; node = from[node]) corners.unshift(px(node), pz(node));
+  corners[0] = x;
+  corners[1] = z;
+  // the lattice's corners pulled straight: from each corner on to the farthest one, up to 3 km
+  // on, that a straight drive reaches within the slope, every 10 m of it checked (the lattice's
+  // stairs gone)
+  const STRIDE_10M = 10 * M;
+  const clear = (i: number, j: number) => {
+    const steps = Math.max(1, Math.ceil(hypot(corners[j] - corners[i], corners[j + 1] - corners[i + 1]) / STRIDE_10M));
+    for (let s = 1; s <= steps; s++) {
+      const ax = corners[i] + ((corners[j] - corners[i]) * (s - 1)) / steps;
+      const az = corners[i + 1] + ((corners[j + 1] - corners[i + 1]) * (s - 1)) / steps;
+      const bx = corners[i] + ((corners[j] - corners[i]) * s) / steps;
+      const bz = corners[i + 1] + ((corners[j + 1] - corners[i + 1]) * s) / steps;
+      if (!inside(bx, bz) || steep(ax, az, bx, bz, hypot(bx - ax, bz - az))) return false;
+    }
+    return true;
+  };
+  const pulled = [corners[0], corners[1]];
+  for (let i = 0; i + 2 < corners.length; ) {
+    let j = i + 2;
+    while (j + 2 < corners.length && j - i < 2 * 150 && clear(i, j + 2)) j += 2;
+    pulled.push(corners[j], corners[j + 1]);
+    i = j;
+  }
+  // a point every 10 m along them
+  const raw: number[] = [];
+  for (let i = 0; i + 3 < pulled.length; i += 2) {
+    const steps = Math.max(1, Math.round(hypot(pulled[i + 2] - pulled[i], pulled[i + 3] - pulled[i + 1]) / STRIDE_10M));
+    for (let s = i ? 1 : 0; s <= steps; s++) raw.push(pulled[i] + ((pulled[i + 2] - pulled[i]) * s) / steps, pulled[i + 1] + ((pulled[i + 3] - pulled[i + 1]) * s) / steps);
+  }
+  // the corners rounded into a driven curve, a point kept where moving it would make a stretch too steep
+  let points = raw.slice();
+  for (let pass = 0; pass < 24; pass++) {
+    const next = points.slice();
+    for (let i = 2; i + 3 < points.length; i += 2) {
+      const sx = (points[i - 2] + 2 * points[i] + points[i + 2]) / 4;
+      const sz = (points[i - 1] + 2 * points[i + 1] + points[i + 3]) / 4;
+      const run = 10 * M;
+      if (!steep(next[i - 2], next[i - 1], sx, sz, run) && !steep(sx, sz, points[i + 2], points[i + 3], run)) {
+        next[i] = sx;
+        next[i + 1] = sz;
+      }
+    }
+    points = next;
+  }
+  return points;
+}
+
 export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[]; rings: Ring[] } {
   const r = new Randomizer(plan.seed);
   const trails: Trail[] = [];
@@ -382,7 +582,7 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
         if (hypot(toward.x - x, toward.z - z) < step * 2) break;
       }
       let moved = false;
-      for (const dodge of [0, 0.5, -0.5, 1, -1]) {
+      for (const dodge of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2]) {
         const nx = x + cos(heading + dodge) * step;
         const nz = z + sin(heading + dodge) * step;
         if (!inside(nx, nz)) continue;
@@ -453,6 +653,8 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
     }
   };
 
+  // the pairs of sites a road joins (the lower index times the count, plus the higher)
+  const joined = new Set<number>();
   plan.sites.forEach((site, index) => {
     const { busy, size } = site;
     const edge = (angle: number, out = 0) => [site.x + cos(angle) * (size + out), site.z + sin(angle) * (size + out)] as const;
@@ -503,17 +705,27 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
       const [x, z] = edge(angle, r.range(100, 800) * M);
       add('slide', walk('slide', x, z, r.range(0, TAU), r.range(60, 250) * M, 5 * M, 0.01), strengthAt(x, z), r.range(160, 280));
     }
-    // a road to the nearest other site
-    let other = -1;
-    plan.sites.forEach((s, j) => {
-      if (j !== index && (other < 0 || hypot(s.x - site.x, s.z - site.z) < hypot(plan.sites[other].x - site.x, plan.sites[other].z - site.z))) other = j;
-    });
-    if (other > index) {
+    // a road to the nearest other site a vehicle can reach, unless the two are joined already:
+    // the way is searched round whatever stands between (along a rift's rim to a valley head and
+    // down it), and a road that cannot arrive is never laid, since nobody drives one that leads
+    // nowhere; the next nearest is tried instead, and a site no vehicle can leave for any other
+    // keeps only its roads out into the land
+    const others = plan.sites
+      .map((_, j) => j)
+      .filter((j) => j !== index)
+      .sort((a, b) => hypot(plan.sites[a].x - site.x, plan.sites[a].z - site.z) - hypot(plan.sites[b].x - site.x, plan.sites[b].z - site.z));
+    const kind = r.nextFloat() < 0.7 ? 'rover' : 'crawler';
+    const passes = 2 + Math.floor(r.range(0, 2));
+    for (const other of others) {
+      const pair = Math.min(index, other) * plan.sites.length + Math.max(index, other);
+      if (joined.has(pair)) break;
       const to = plan.sites[other];
-      const angle = atan2(to.z - site.z, to.x - site.x);
-      const [x, z] = edge(angle);
-      const kind = r.nextFloat() < 0.7 ? 'rover' : 'crawler';
-      road(kind, walk(kind, x, z, angle, 4 * hypot(to.x - site.x, to.z - site.z), 10 * M, 0.04, { x: to.x, z: to.z, pull: 0.15 }), strengthAt(x, z), 2 + Math.floor(r.range(0, 2)));
+      const [x, z] = edge(atan2(to.z - site.z, to.x - site.x));
+      const points = routeRoad(x, z, to.x, to.z, to.size, TRACE_KINDS[kind].slope, inside, height);
+      if (!points) continue;
+      joined.add(pair);
+      road(kind, points, strengthAt(x, z), passes);
+      break;
     }
   });
 
@@ -551,40 +763,180 @@ export function layTraces(plan: TracePlan, grid: GroundGrid): { trails: Trail[];
   return { trails, rings };
 }
 
-/** Where the segment from (ax, az) to (bx, bz) crosses an edge of the grid's faces: its parameters in (0, 1), sorted. */
-export function crossings(grid: GroundGrid, ax: number, az: number, bx: number, bz: number): number[] {
-  const ga = [(ax - grid.x0) / grid.cellX, (az - grid.z0) / grid.cellZ];
-  const gb = [(bx - grid.x0) / grid.cellX, (bz - grid.z0) / grid.cellZ];
-  const out: number[] = [];
-  const lines = (from: number, to: number) => {
-    if (from === to) return;
-    for (let k = Math.ceil(Math.min(from, to)); k <= Math.floor(Math.max(from, to)); k++) {
-      const t = (k - from) / (to - from);
-      if (t > 1e-9 && t < 1 - 1e-9) out.push(t);
-    }
-  };
-  lines(ga[0], gb[0]);
-  lines(ga[1], gb[1]);
-  // each cell's diagonal, where the cell's whole coordinates sum to one more: ix + iz whole
-  lines(ga[0] + ga[1], gb[0] + gb[1]);
-  return out.sort((p, q) => p - q);
+/**
+ * The values each corner of a piece of a trace carries while it is cut (see drapeTriangle): its
+ * x and z in the ground's frame (units), then the atlas's u and v, the strength and the width.
+ */
+export const STRIDE = 6;
+/** A triangle cut by a face's three edges keeps at most six corners: room for them as the cuts go. */
+const MOST_CORNERS = 8;
+const cutA = new Float64Array(MOST_CORNERS * STRIDE);
+const cutB = new Float64Array(MOST_CORNERS * STRIDE);
+/** A piece of a trace smaller than this (units², a square of 1 cm) is a sliver a cut left on an edge: dropped. */
+const SLIVER = 0.04;
+
+/** Which face of `grid` a point lies in: its cell's index, twice over, and one more for the cell's upper face (b, c, d). */
+function faceOf(grid: GroundGrid, x: number, z: number): number {
+  const gx = Math.min(grid.nx - 1e-9, Math.max(0, (x - grid.x0) / grid.cellX));
+  const gz = Math.min(grid.nz - 1e-9, Math.max(0, (z - grid.z0) / grid.cellZ));
+  const ix = Math.floor(gx);
+  const iz = Math.floor(gz);
+  return (iz * grid.nx + ix) * 2 + (gx - ix + (gz - iz) > 1 ? 1 : 0);
 }
 
-/** A strip's buffers as they grow. */
-class StripBuilder {
+/** Keeps of the convex polygon in `from` (`count` corners) what lies where a · gx + b · gz + c ≥ 0 (gx, gz its place on `grid` in cells), into `to`; returns its corners. */
+function cut(grid: GroundGrid, from: Float64Array, count: number, to: Float64Array, a: number, b: number, c: number): number {
+  let out = 0;
+  for (let k = 0; k < count; k++) {
+    const next = (k + 1) % count;
+    const here = (a * (from[k * STRIDE] - grid.x0)) / grid.cellX + (b * (from[k * STRIDE + 1] - grid.z0)) / grid.cellZ + c;
+    const there = (a * (from[next * STRIDE] - grid.x0)) / grid.cellX + (b * (from[next * STRIDE + 1] - grid.z0)) / grid.cellZ + c;
+    if (here >= 0) {
+      for (let v = 0; v < STRIDE; v++) to[out * STRIDE + v] = from[k * STRIDE + v];
+      out++;
+    }
+    if (here >= 0 !== there >= 0) {
+      const t = here / (here - there);
+      for (let v = 0; v < STRIDE; v++) to[out * STRIDE + v] = from[k * STRIDE + v] + (from[next * STRIDE + v] - from[k * STRIDE + v]) * t;
+      out++;
+    }
+  }
+  return out;
+}
+
+/** The area (units²) of the polygon in `poly` with `count` corners. */
+function area(poly: Float64Array, count: number): number {
+  let sum = 0;
+  for (let k = 0; k < count; k++) {
+    const next = (k + 1) % count;
+    sum += poly[k * STRIDE] * poly[next * STRIDE + 1] - poly[next * STRIDE] * poly[k * STRIDE + 1];
+  }
+  return Math.abs(sum) / 2;
+}
+
+/**
+ * Cuts the triangle of a trace in `triangle` (three corners of STRIDE values) at every edge of
+ * `grid`'s faces (the grid's lines and each cell's diagonal), handing each piece, a convex polygon
+ * lying in one face, to `emit` with its corners and the cell it lies in. A triangle within one face
+ * goes whole. Every corner then lies on the face as drawn, and so does every point between them.
+ */
+export function drapeTriangle(grid: GroundGrid, triangle: Float64Array, emit: (piece: Float64Array, count: number, ix: number, iz: number) => void) {
+  const face = faceOf(grid, triangle[0], triangle[1]);
+  if (faceOf(grid, triangle[STRIDE], triangle[STRIDE + 1]) === face && faceOf(grid, triangle[2 * STRIDE], triangle[2 * STRIDE + 1]) === face) {
+    const cell = face >> 1;
+    emit(triangle, 3, cell % grid.nx, Math.floor(cell / grid.nx));
+    return;
+  }
+  let [gx0, gx1, gz0, gz1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (let k = 0; k < 3; k++) {
+    const gx = (triangle[k * STRIDE] - grid.x0) / grid.cellX;
+    const gz = (triangle[k * STRIDE + 1] - grid.z0) / grid.cellZ;
+    [gx0, gx1, gz0, gz1] = [Math.min(gx0, gx), Math.max(gx1, gx), Math.min(gz0, gz), Math.max(gz1, gz)];
+  }
+  const [ix0, ix1] = [Math.max(0, Math.floor(gx0)), Math.min(grid.nx - 1, Math.floor(gx1))];
+  const [iz0, iz1] = [Math.max(0, Math.floor(gz0)), Math.min(grid.nz - 1, Math.floor(gz1))];
+  for (let iz = iz0; iz <= iz1; iz++) {
+    for (let ix = ix0; ix <= ix1; ix++) {
+      // the lower face (a, b, d): right of the cell's left line, above its first row, below its diagonal; the upper (b, c, d) the other way round
+      for (const upper of [false, true]) {
+        const s = upper ? -1 : 1;
+        cutA.set(triangle.subarray(0, 3 * STRIDE));
+        let count = cut(grid, cutA, 3, cutB, s, 0, upper ? ix + 1 : -ix);
+        if (count >= 3) count = cut(grid, cutB, count, cutA, 0, s, upper ? iz + 1 : -iz);
+        if (count >= 3) count = cut(grid, cutA, count, cutB, -s, -s, upper ? -(1 + ix + iz) : 1 + ix + iz);
+        if (count >= 3 && area(cutB, count) > SLIVER) emit(cutB, count, ix, iz);
+      }
+    }
+  }
+}
+
+/** One chunk's buffers as they grow: the pieces of the traces lying on one tile of the ground. */
+class ChunkBuilder {
   readonly position: number[] = [];
   readonly uv: number[] = [];
   readonly trace: number[] = [];
+  readonly coarse: number[] = [];
   readonly index: number[] = [];
-  constructor(private readonly grid: GroundGrid) {}
+  /** The widest strip in the chunk (units): how far it shows (see TraceChunk). */
+  widest = 0;
+}
 
-  /** A trail along its middle line: a row of vertices across it at each of its points and wherever its middle crosses a face's edge, each on the ground beneath it. */
-  trail({ kind, points, width, strength }: Trail, shift: number) {
+/** The traces' pieces sorted into the chunks of a ground: one per tile (see world/groundlod, TILE), the wide traces and the fine ones apart. */
+class TraceBuilder {
+  readonly chunks = new Map<number, { wide: ChunkBuilder; fine: ChunkBuilder }>();
+  private readonly tilesX: number;
+  private readonly corners = new Float64Array(4 * STRIDE);
+  private readonly triangle = new Float64Array(3 * STRIDE);
+  private fine = false;
+
+  /** `tiled` whether the ground is drawn in tiles of levels (see world/groundlod, tiledGround), which the traces follow. */
+  constructor(
+    private readonly grid: GroundGrid,
+    private readonly tiled: boolean,
+  ) {
+    this.tilesX = Math.ceil(grid.nx / TILE);
+  }
+
+  private readonly emit = (piece: Float64Array, count: number, ix: number, iz: number) => {
+    const key = Math.floor(iz / TILE) * this.tilesX + Math.floor(ix / TILE);
+    let chunk = this.chunks.get(key);
+    if (!chunk) this.chunks.set(key, (chunk = { wide: new ChunkBuilder(), fine: new ChunkBuilder() }));
+    const into = this.fine ? chunk.fine : chunk.wide;
+    const first = into.position.length / 3;
     const { grid } = this;
-    const { tile } = TRACE_KINDS[kind];
-    const across = Math.max(2, Math.ceil(width / (Math.min(grid.cellX, grid.cellZ) * 0.5)) + 1);
+    for (let k = 0; k < count; k++) {
+      const o = k * STRIDE;
+      const [x, z] = [piece[o], piece[o + 1]];
+      const y = gridHeight(grid, x, z);
+      into.position.push(x, y, z);
+      into.uv.push(piece[o + 2], piece[o + 3]);
+      into.trace.push(piece[o + 4], piece[o + 5]);
+      into.widest = Math.max(into.widest, piece[o + 5]);
+      // how far each coarser level of the tile lies from the finest here: within one finest face
+      // the coarse faces are planes too, so the strip lies on whichever level is drawn
+      if (this.tiled) for (let level = 1; level < STEPS.length; level++) into.coarse.push(levelHeight(grid, level, x, z) - y);
+    }
+    for (let k = 1; k + 1 < count; k++) into.index.push(first, first + k, first + k + 1);
+  };
+
+  /** A quad of a strip, its corners in `corners` (one side, the other, the other on, the one on): whole when it lies in one face, else its two triangles cut at the faces' edges. */
+  private quad(fine: boolean) {
+    this.fine = fine;
+    const { grid, corners, triangle } = this;
+    const face = faceOf(grid, corners[0], corners[1]);
+    if (faceOf(grid, corners[STRIDE], corners[STRIDE + 1]) === face && faceOf(grid, corners[2 * STRIDE], corners[2 * STRIDE + 1]) === face && faceOf(grid, corners[3 * STRIDE], corners[3 * STRIDE + 1]) === face) {
+      // as two triangles (0, 1, 3) and (1, 2, 3), the same as cut
+      const cell = face >> 1;
+      triangle.set(corners.subarray(0, 2 * STRIDE));
+      triangle.set(corners.subarray(3 * STRIDE, 4 * STRIDE), 2 * STRIDE);
+      this.emit(triangle, 3, cell % grid.nx, Math.floor(cell / grid.nx));
+      triangle.set(corners.subarray(STRIDE, 4 * STRIDE));
+      this.emit(triangle, 3, cell % grid.nx, Math.floor(cell / grid.nx));
+      return;
+    }
+    triangle.set(corners.subarray(0, 2 * STRIDE));
+    triangle.set(corners.subarray(3 * STRIDE, 4 * STRIDE), 2 * STRIDE);
+    drapeTriangle(grid, triangle, this.emit);
+    triangle.set(corners.subarray(STRIDE, 4 * STRIDE));
+    drapeTriangle(grid, triangle, this.emit);
+  }
+
+  /** Sets corner `k` of the quad. */
+  private corner(k: number, x: number, z: number, u: number, v: number, strength: number, width: number) {
+    const o = k * STRIDE;
+    const { corners } = this;
+    corners[o] = x;
+    corners[o + 1] = z;
+    corners[o + 2] = u;
+    corners[o + 3] = v;
+    corners[o + 4] = strength;
+    corners[o + 5] = width;
+  }
+
+  /** A trail along its middle line: a quad from each of its points to the next, across it square to its way (the mean of the two segments' directions at a point). */
+  trail({ kind, points, width, strength }: Trail, shift: number) {
+    const { tile, fine } = TRACE_KINDS[kind];
     const count = points.length / 2;
-    // each point's sideways direction: the mean of its two segments'
     const side = (i: number): [number, number] => {
       const j = Math.min(count - 1, i + 1);
       const k = Math.max(0, i - 1);
@@ -594,188 +946,346 @@ class StripBuilder {
       return [-dz / length, dx / length];
     };
     let along = shift;
-    let previous = -1;
-    const row = (x: number, z: number, sx: number, sz: number) => {
-      const first = this.position.length / 3;
-      for (let c = 0; c < across; c++) {
-        const a = c / (across - 1);
-        const px = x + sx * (a - 0.5) * width;
-        const pz = z + sz * (a - 0.5) * width;
-        this.position.push(px, gridHeight(grid, px, pz), pz);
-        this.uv.push(atlasU(kind, a), along / tile);
-        this.trace.push(strength, width);
-      }
-      if (previous >= 0) for (let c = 0; c + 1 < across; c++) this.index.push(previous + c, previous + c + 1, first + c, previous + c + 1, first + c + 1, first + c);
-      previous = first;
-    };
-    for (let i = 0; i < count; i++) {
-      const [x, z] = [points[i * 2], points[i * 2 + 1]];
+    for (let i = 0; i + 1 < count; i++) {
+      const [ax, az, bx, bz] = [points[i * 2], points[i * 2 + 1], points[i * 2 + 2], points[i * 2 + 3]];
       const [sx, sz] = side(i);
-      row(x, z, sx, sz);
-      if (i + 1 === count) break;
-      const [bx, bz] = [points[i * 2 + 2], points[i * 2 + 3]];
-      const length = hypot(bx - x, bz - z);
       const [tx, tz] = side(i + 1);
-      let last = 0;
-      for (const t of crossings(grid, x, z, bx, bz)) {
-        along += (t - last) * length;
-        last = t;
-        // the direction across turns from the one point's to the next's
-        const mx = sx + (tx - sx) * t;
-        const mz = sz + (tz - sz) * t;
-        const norm = hypot(mx, mz) || 1;
-        row(x + (bx - x) * t, z + (bz - z) * t, mx / norm, mz / norm);
-      }
-      along += (1 - last) * length;
+      const next = along + hypot(bx - ax, bz - az);
+      const half = width / 2;
+      this.corner(0, ax - sx * half, az - sz * half, atlasU(kind, 0), along / tile, strength, width);
+      this.corner(1, ax + sx * half, az + sz * half, atlasU(kind, 1), along / tile, strength, width);
+      this.corner(2, bx + tx * half, bz + tz * half, atlasU(kind, 1), next / tile, strength, width);
+      this.corner(3, bx - tx * half, bz - tz * half, atlasU(kind, 0), next / tile, strength, width);
+      this.quad(fine);
+      along = next;
     }
   }
 
-  /** A blast ring: rows of vertices round it at a fifth of its radius apart from its middle out, a quarter of the pattern's tile every quarter turn. */
+  /** A blast ring: rings of quads round it, a fifth of its radius apart from its middle out, a quarter of the pattern's tile every quarter turn. */
   ring({ x, z, radius, strength }: Ring) {
     const spokes = 48;
-    const rows = 6;
-    const first = this.position.length / 3;
-    for (let s = 0; s <= spokes; s++) {
-      const angle = (s / spokes) * TAU;
-      for (let k = 0; k < rows; k++) {
-        const a = k / (rows - 1);
-        const px = x + cos(angle) * a * radius;
-        const pz = z + sin(angle) * a * radius;
-        this.position.push(px, gridHeight(this.grid, px, pz), pz);
-        this.uv.push(atlasU('blast', a), (s / spokes) * 4);
-        this.trace.push(strength, radius);
-      }
-    }
+    const rows = 5;
     for (let s = 0; s < spokes; s++) {
-      for (let k = 0; k + 1 < rows; k++) {
-        const p = first + s * rows + k;
-        const q = p + rows;
-        this.index.push(p, p + 1, q, p + 1, q + 1, q);
+      const [a0, a1] = [(s / spokes) * TAU, ((s + 1) / spokes) * TAU];
+      const [c0, s0, c1, s1] = [cos(a0), sin(a0), cos(a1), sin(a1)];
+      for (let k = 0; k < rows; k++) {
+        const [r0, r1] = [k / rows, (k + 1) / rows];
+        this.corner(0, x + c0 * r0 * radius, z + s0 * r0 * radius, atlasU('blast', r0), (s / spokes) * 4, strength, radius);
+        this.corner(1, x + c0 * r1 * radius, z + s0 * r1 * radius, atlasU('blast', r1), (s / spokes) * 4, strength, radius);
+        this.corner(2, x + c1 * r1 * radius, z + s1 * r1 * radius, atlasU('blast', r1), ((s + 1) / spokes) * 4, strength, radius);
+        this.corner(3, x + c1 * r0 * radius, z + s1 * r0 * radius, atlasU('blast', r0), ((s + 1) / spokes) * 4, strength, radius);
+        this.quad(false);
       }
     }
   }
+}
 
-  geometry(): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.position, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    geometry.setAttribute('trace', new THREE.Float32BufferAttribute(this.trace, 2));
-    geometry.setIndex(this.index);
-    geometry.computeBoundingSphere();
-    return geometry;
+/** A chunk's geometry, or null when it holds nothing. */
+function chunkGeometry(chunk: ChunkBuilder): THREE.BufferGeometry | null {
+  if (!chunk.index.length) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(chunk.position, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(chunk.uv, 2));
+  geometry.setAttribute('trace', new THREE.Float32BufferAttribute(chunk.trace, 2));
+  if (chunk.coarse.length) geometry.setAttribute('coarse', new THREE.Float32BufferAttribute(chunk.coarse, 4));
+  geometry.setIndex(chunk.index);
+  geometry.computeBoundingSphere();
+  // the strip rises or sinks onto a coarser level by as much as its corners say
+  let most = 0;
+  for (const off of chunk.coarse) most = Math.max(most, Math.abs(off));
+  geometry.boundingSphere!.radius += most;
+  return geometry;
+}
+
+/** A ground's traces as built: each chunk's tile (its index among the ground's tiles), its geometries and the widest strip in each. */
+export interface TraceChunkData {
+  tile: number;
+  wide: THREE.BufferGeometry | null;
+  fine: THREE.BufferGeometry | null;
+  widest: { wide: number; fine: number };
+}
+
+/** The traces' geometries over `grid` as `plan` lays them (see layTraces), in chunks by the ground's tiles; `tiled` whether the ground is drawn in tiles of levels, whose levels the traces follow. */
+export function traceChunks(plan: TracePlan, grid: GroundGrid, tiled: boolean): TraceChunkData[] {
+  const { trails, rings } = layTraces(plan, grid);
+  const builder = new TraceBuilder(grid, tiled);
+  const r = new Randomizer(plan.seed + 1);
+  for (const trail of trails) builder.trail(trail, r.range(0, TRACE_KINDS[trail.kind].tile));
+  for (const ring of rings) builder.ring(ring);
+  return [...builder.chunks].map(([tile, { wide, fine }]) => ({ tile, wide: chunkGeometry(wide), fine: chunkGeometry(fine), widest: { wide: wide.widest, fine: fine.widest } }));
+}
+
+const sphere = new THREE.Sphere();
+const eye = new THREE.Vector3();
+/** The level each chunk of traces is drawn on: one of STEPS's, as a picker of the strip's `coarse` offsets (see the shader). */
+const LEVELS = STEPS.map((_, level) => new THREE.Vector4(level === 1 ? 1 : 0, level === 2 ? 1 : 0, level === 3 ? 1 : 0, level === 4 ? 1 : 0));
+
+/**
+ * A chunk's strips of one kind (wide or fine) as drawn: before each draw the atlas and the
+ * picture's height (see prepare), and the level its tile of the ground draws now (`userData.tile`,
+ * its index among the ground's children, which the chunk's traces follow; −1 for a ground drawn
+ * whole). A class of its own so a clone of the ground keeps all of it.
+ */
+class TraceMesh extends THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  override onBeforeRender(renderer: THREE.WebGLRenderer) {
+    prepare(renderer);
+    const tile = this.userData.tile as number;
+    // the mesh, its chunk, the traces' group, the ground whose children the tiles are
+    const level = tile >= 0 ? tileLevel(this.parent?.parent?.parent?.children[tile]) : 0;
+    this.material.uniforms.level.value = LEVELS[level];
+    this.material.uniformsNeedUpdate = true;
   }
 }
 
-/** The traces' geometries over `grid` as `plan` lays them (see layTraces): the wide ones and the fine ones. */
-export function traceGeometries(plan: TracePlan, grid: GroundGrid): { wide: THREE.BufferGeometry; fine: THREE.BufferGeometry } {
-  const { trails, rings } = layTraces(plan, grid);
-  const wide = new StripBuilder(grid);
-  const fine = new StripBuilder(grid);
-  const r = new Randomizer(plan.seed + 1);
-  for (const trail of trails) (TRACE_KINDS[trail.kind].fine ? fine : wide).trail(trail, r.range(0, TRACE_KINDS[trail.kind].tile));
-  for (const ring of rings) wide.ring(ring);
-  return { wide: wide.geometry(), fine: fine.geometry() };
+/**
+ * A chunk of traces: drawn only while its widest strip (`userData.widest`, units) would be wider
+ * on screen than a strip fades in at, seen from the nearest point of its bounds; the material fades
+ * every strip on its own (see the shader), this only spares the draw of what would show nothing.
+ */
+class TraceChunk extends THREE.LOD {
+  override update(camera: THREE.Camera) {
+    const mesh = this.children[0] as TraceMesh | undefined;
+    if (!mesh) return;
+    sphere.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld);
+    const distance = Math.max(1, eye.setFromMatrixPosition(camera.matrixWorld).distanceTo(sphere.center) - sphere.radius);
+    mesh.visible = ((this.userData.widest as number) * camera.projectionMatrix.elements[5] * picture.value * 0.5) / distance >= FADE_PX[0];
+  }
+
+  override copy(source: this, recursive?: boolean): this {
+    // as any other object, its children with it (a LOD copies only its levels, which a chunk has none of)
+    THREE.Object3D.prototype.copy.call(this, source, recursive);
+    return this;
+  }
 }
 
-/** The traces of `plan` on the ground of `grid`, in the ground's frame: two meshes, the wide traces and the fine ones (see setTraceDetail). */
-export function groundTraces(plan: TracePlan, grid: GroundGrid): THREE.Group {
-  const { wide, fine } = traceGeometries(plan, grid);
+/**
+ * The traces of `plan` on the ground of `grid`, in the ground's frame (see traceChunks); `tiled`
+ * whether the ground is drawn in tiles of levels (see world/groundlod, tiledGround), in which case
+ * the group goes among the tiles' siblings, so each chunk finds its tile. The group also marks the
+ * grid the ground is drawn on (see world/groundlod, drawnOn), for the ships' scrape marks.
+ */
+export function groundTraces(plan: TracePlan, grid: GroundGrid, tiled = false): THREE.Group {
   const look = materials();
-  setTraceDetail(detail);
-  const group = new THREE.Group();
-  for (const [geometry, material] of [
-    [wide, look.wide],
-    [fine, look.fine],
-  ] as const) {
-    if (!geometry.index?.count) continue;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.onBeforeRender = measurePicture;
-    mesh.renderOrder = 1;
-    group.add(mesh);
+  const group = drawnOn(new THREE.Group(), grid);
+  for (const { tile, wide, fine, widest } of traceChunks(plan, grid, tiled)) {
+    for (const [geometry, material, width] of [
+      [wide, look.wide, widest.wide],
+      [fine, look.fine, widest.fine],
+    ] as const) {
+      if (!geometry) continue;
+      const mesh = new TraceMesh(geometry, material);
+      mesh.userData.tile = tiled ? tile : -1;
+      // they lie on ground that casts its own shadow
+      mesh.userData.shadowless = true;
+      mesh.castShadow = false;
+      mesh.renderOrder = TRACE_ORDER;
+      const chunk = new TraceChunk();
+      chunk.userData.widest = width;
+      chunk.add(mesh);
+      group.add(chunk);
+    }
   }
   return group;
 }
 
-/** How many segments of scrape marks are kept (the oldest overwritten first), and how wide a mark is (units, 6 m: the plates of a hull's belly on the ground). */
-export const SCRAPES = 384;
+/** How many triangles of scrape marks are kept, the oldest overwritten first; a mark fades out (see SCRAPE_KEEP) before its place is taken. */
+export const SCRAPE_TRIANGLES = 8192;
+/** The most triangles one stretch of a mark is cut into on the ground's faces (a stretch is at most SCRAPE_JUMP long, the faces at least 25 m across: a few dozen at most). */
+const SCRAPE_STRETCH_MOST = 64;
+/** A mark has faded out once this many triangles were laid after it, before its place in the buffer is taken. */
+export const SCRAPE_KEEP = SCRAPE_TRIANGLES - SCRAPE_STRETCH_MOST;
+/** How wide a mark is (units, 6 m: the plates of a hull's belly on the ground). */
 export const SCRAPE_WIDTH = 120;
-/** A mark goes on once the hull moved this far (units, 1.5 m) on the ground, and starts anew after a gap of SCRAPE_GAP (s) or a jump farther than SCRAPE_JUMP (units, 40 m). */
+/**
+ * A mark's next stretch goes on once the hull moved SCRAPE_STEP (units, 1.5 m) on the ground and
+ * SCRAPE_TICK (s) after the last: at most ten stretches a second a hull, a few triangles each, so
+ * SCRAPE_TRIANGLES hold about SCRAPE_LIFE of a hull gliding all the time. It starts anew after a
+ * gap of SCRAPE_GAP (s) or a jump farther than SCRAPE_JUMP (units, 40 m).
+ */
 const SCRAPE_STEP = 30;
+export const SCRAPE_TICK = 0.1;
 const SCRAPE_GAP = 0.3;
 const SCRAPE_JUMP = 800;
 
+/** A ground as a scrape mark is laid on it (see AsteroidField, drawnGround): its grid and the matrices between the grid's frame and the world. */
+export interface ScrapeGround {
+  grid: GroundGrid;
+  toWorld: THREE.Matrix4;
+  fromWorld: THREE.Matrix4;
+}
+
+/** Where a hull's mark goes on from: the last point and the direction across there (world), how far along its pattern, when it last touched, when it last laid a stretch. */
+interface MarkEnd {
+  point: THREE.Vector3;
+  across: THREE.Vector3;
+  along: number;
+  time: number;
+  laid: number;
+}
+
+const direction = new THREE.Vector3();
+const across = new THREE.Vector3();
+const corner = new THREE.Vector3();
+/** A stretch's four corners (see ScrapeMarks.add) and one of its two triangles, (0, 1, 3) and (1, 2, 3), as the strips' quads are split. */
+const stretch = new Float64Array(4 * STRIDE);
+const scrapeTriangle = new Float64Array(3 * STRIDE);
+const HALVES = [
+  [0, 1, 3],
+  [1, 2, 3],
+] as const;
+const UPLOADED = ['position', 'uv', 'age'] as const;
+
 /**
  * The marks a ship's hull leaves where it glides on a world's ground (see world/hover, glide):
- * a scar SCRAPE_WIDTH wide in the slid ship's pattern, laid flat on the ground under the hull
- * along its way, fading out over SCRAPE_LIFE; the last SCRAPES segments of every ship together,
- * one draw call. Looks only, each browser its own.
+ * a scar SCRAPE_WIDTH wide in the slid ship's pattern under the hull along its way, cut at the
+ * edges of the ground's faces and laid on the ground as drawn (see drapeTriangle), fading out over
+ * SCRAPE_LIFE; every ship's marks in one buffer of SCRAPE_TRIANGLES triangles, one draw call. A
+ * mark fades out sooner, alike, once newer marks come to take its place. Looks only: each browser
+ * lays them itself, for the ships it runs and those it follows alike.
  */
 export class ScrapeMarks {
   readonly mesh: THREE.Mesh;
   private readonly geometry = new THREE.BufferGeometry();
-  private readonly positions = new Float32Array(SCRAPES * 4 * 3);
-  private readonly uvs = new Float32Array(SCRAPES * 4 * 2);
-  private readonly born = new Float32Array(SCRAPES * 4).fill(-1e9);
-  private next = 0;
-  private readonly last = new Map<object, { point: THREE.Vector3; across: THREE.Vector3; along: number; time: number }>();
-  private static readonly direction = new THREE.Vector3();
-  private static readonly across = new THREE.Vector3();
+  private readonly positions = new Float32Array(SCRAPE_TRIANGLES * 3 * 3);
+  private readonly uvs = new Float32Array(SCRAPE_TRIANGLES * 3 * 2);
+  /** Each vertex's time it was laid (s) and the count of triangles laid before it (see head). */
+  private readonly ages = new Float32Array(SCRAPE_TRIANGLES * 3 * 2).fill(-1e9);
+  private last = new WeakMap<object, MarkEnd>();
+  private shown = true;
+  /** The stretch being laid: its ground, the triangles laid before it, its time. */
+  private ground: ScrapeGround | null = null;
+  private start = 0;
+  private time = 0;
 
   constructor() {
-    const index: number[] = [];
-    for (let s = 0; s < SCRAPES; s++) index.push(s * 4, s * 4 + 1, s * 4 + 2, s * 4 + 1, s * 4 + 3, s * 4 + 2);
-    this.geometry.setIndex(index);
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
     this.geometry.setAttribute('uv', new THREE.BufferAttribute(this.uvs, 2).setUsage(THREE.DynamicDrawUsage));
-    this.geometry.setAttribute('born', new THREE.BufferAttribute(this.born, 1).setUsage(THREE.DynamicDrawUsage));
-    this.geometry.setAttribute('trace', new THREE.BufferAttribute(new Float32Array(SCRAPES * 4 * 2).fill(1).map((_, i) => (i % 2 ? SCRAPE_WIDTH : 1)), 2));
+    this.geometry.setAttribute('age', new THREE.BufferAttribute(this.ages, 2).setUsage(THREE.DynamicDrawUsage));
+    this.geometry.setAttribute('trace', new THREE.BufferAttribute(new Float32Array(SCRAPE_TRIANGLES * 3 * 2).map((_, i) => (i % 2 ? SCRAPE_WIDTH : 1)), 2));
+    this.geometry.setDrawRange(0, 0);
     this.mesh = new THREE.Mesh(this.geometry, materials().scrape);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 1;
-    this.mesh.onBeforeRender = measurePicture;
+    this.mesh.renderOrder = TRACE_ORDER;
+    this.mesh.onBeforeRender = prepare;
+    this.mesh.visible = false;
+    // the scrape marks' material is shared, and with it the count of triangles laid: one set of marks at a time
+    head.value = 0;
   }
 
-  /** The hull `key` glides at `point` on the ground (its outward `normal` there) at time `time` (s): the mark goes on from where it was last. */
-  add(key: object, point: THREE.Vector3, normal: THREE.Vector3, time: number) {
+  /** Whether marks are drawn in this arena: on airless ground only, as the traces people left lie there alone. */
+  set enabled(shown: boolean) {
+    this.shown = shown;
+    this.mesh.visible = shown && head.value > 0;
+  }
+
+  get enabled(): boolean {
+    return this.shown;
+  }
+
+  /**
+   * The hull `key` glides at `point` on the ground (its outward `normal` there) at time `time` (s),
+   * on the drawn `ground` if it has one (else the mark lies flat through the point, on a box's
+   * top): the mark goes on from where it was last.
+   */
+  add(key: object, point: THREE.Vector3, normal: THREE.Vector3, time: number, ground: ScrapeGround | null) {
     now.value = time;
-    const last = this.last.get(key);
-    if (!last || time - last.time > SCRAPE_GAP || last.point.distanceTo(point) > SCRAPE_JUMP) {
-      this.last.set(key, { point: point.clone(), across: new THREE.Vector3(), along: 0, time });
-      return;
-    }
+    let last = this.last.get(key);
+    if (!last) this.last.set(key, (last = { point: point.clone(), across: new THREE.Vector3(), along: 0, time: -Infinity, laid: -Infinity }));
     const distance = last.point.distanceTo(point);
-    if (distance < SCRAPE_STEP) {
-      last.time = time;
+    if (time - last.time > SCRAPE_GAP || distance > SCRAPE_JUMP) {
+      last.point.copy(point);
+      last.across.set(0, 0, 0);
+      last.along = 0;
+      last.time = last.laid = time;
       return;
     }
-    const { direction, across } = ScrapeMarks;
-    direction.subVectors(point, last.point).normalize();
-    across.crossVectors(normal, direction).normalize().multiplyScalar(SCRAPE_WIDTH / 2);
-    // a mark's first segment starts square to its way
+    last.time = time;
+    if (distance < SCRAPE_STEP || time - last.laid < SCRAPE_TICK) return;
+    direction.subVectors(point, last.point);
+    // square to the way: on a drawn ground level in its grid's frame, else in the ground's plane
+    if (ground) {
+      direction.transformDirection(ground.fromWorld);
+      across.set(-direction.z, 0, direction.x).transformDirection(ground.toWorld);
+    } else across.crossVectors(normal, direction).normalize();
+    across.multiplyScalar(SCRAPE_WIDTH / 2);
+    // a mark's first stretch starts square to its way
     if (last.across.lengthSq() === 0) last.across.copy(across);
     const along = last.along + distance / TRACE_KINDS.slide.tile;
-    const s = this.next;
-    this.next = (this.next + 1) % SCRAPES;
-    const corners = [
-      [last.point, last.across, -1, last.along],
-      [last.point, last.across, 1, last.along],
-      [point, across, -1, along],
-      [point, across, 1, along],
-    ] as const;
-    corners.forEach(([at, side, sign, v], k) => {
-      const i = s * 4 + k;
-      this.positions[i * 3] = at.x + side.x * sign;
-      this.positions[i * 3 + 1] = at.y + side.y * sign;
-      this.positions[i * 3 + 2] = at.z + side.z * sign;
-      this.uvs[i * 2] = atlasU('slide', sign < 0 ? 0 : 1);
-      this.uvs[i * 2 + 1] = v;
-      this.born[i] = time;
-    });
-    for (const name of ['position', 'uv', 'born']) this.geometry.getAttribute(name).needsUpdate = true;
+    // the stretch's corners: one side and the other where it was, the other and the one side here
+    this.corner(0, last.point, last.across, -1, last.along, ground);
+    this.corner(1, last.point, last.across, 1, last.along, ground);
+    this.corner(2, point, across, 1, along, ground);
+    this.corner(3, point, across, -1, along, ground);
+    this.ground = ground;
+    this.start = head.value;
+    this.time = time;
+    for (const [a, b, c] of HALVES) {
+      scrapeTriangle.set(stretch.subarray(a * STRIDE, a * STRIDE + STRIDE), 0);
+      scrapeTriangle.set(stretch.subarray(b * STRIDE, b * STRIDE + STRIDE), STRIDE);
+      scrapeTriangle.set(stretch.subarray(c * STRIDE, c * STRIDE + STRIDE), 2 * STRIDE);
+      if (ground) drapeTriangle(ground.grid, scrapeTriangle, this.lay);
+      else this.lay(scrapeTriangle, 3);
+    }
+    this.upload(this.start);
     last.point.copy(point);
     last.across.copy(across);
     last.along = along;
-    last.time = time;
+    last.laid = time;
+  }
+
+  /**
+   * Corner `k` of the stretch: `side` off `at` by `sign`, `v` along the pattern. On a drawn ground
+   * its x and z in the grid's frame; on a flat top its world x, y and z in the first, second and
+   * fifth values (the strength's place, which a mark keeps constant in its `trace`).
+   */
+  private corner(k: number, at: THREE.Vector3, side: THREE.Vector3, sign: number, v: number, ground: ScrapeGround | null) {
+    const o = k * STRIDE;
+    corner.copy(at).addScaledVector(side, sign);
+    if (ground) corner.applyMatrix4(ground.fromWorld);
+    stretch[o] = corner.x;
+    stretch[o + 1] = ground ? corner.z : corner.y;
+    stretch[o + 2] = atlasU('slide', sign < 0 ? 0 : 1);
+    stretch[o + 3] = v;
+    stretch[o + 4] = corner.z;
+    stretch[o + 5] = SCRAPE_WIDTH;
+  }
+
+  /** A piece of the stretch into the buffer, fanned into triangles: on its ground its corners at the grid's height taken into the world, on a flat top as they are (see corner). */
+  private readonly lay = (piece: Float64Array, count: number) => {
+    const { ground } = this;
+    for (let k = 1; k + 1 < count && head.value - this.start < SCRAPE_STRETCH_MOST; k++) {
+      const slot = head.value % SCRAPE_TRIANGLES;
+      for (let n = 0; n < 3; n++) {
+        const o = (n === 0 ? 0 : n === 1 ? k : k + 1) * STRIDE;
+        const i = slot * 3 + n;
+        if (ground) corner.set(piece[o], gridHeight(ground.grid, piece[o], piece[o + 1]), piece[o + 1]).applyMatrix4(ground.toWorld);
+        else corner.set(piece[o], piece[o + 1], piece[o + 4]);
+        corner.toArray(this.positions, i * 3);
+        this.uvs[i * 2] = piece[o + 2];
+        this.uvs[i * 2 + 1] = piece[o + 3];
+        this.ages[i * 2] = this.time;
+        this.ages[i * 2 + 1] = head.value;
+      }
+      head.value++;
+    }
+  };
+
+  /** Uploads the triangles laid since `start`, only those (one range, or two where they wrap round the buffer's end). */
+  private upload(start: number) {
+    const count = head.value - start;
+    if (!count) return;
+    const first = start % SCRAPE_TRIANGLES;
+    const tail = Math.min(count, SCRAPE_TRIANGLES - first);
+    for (const name of UPLOADED) {
+      const attribute = this.geometry.getAttribute(name) as THREE.BufferAttribute;
+      const size = attribute.itemSize * 3;
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(first * size, tail * size);
+      if (count > tail) attribute.addUpdateRange(0, (count - tail) * size);
+      attribute.needsUpdate = true;
+    }
+    this.geometry.setDrawRange(0, Math.min(head.value, SCRAPE_TRIANGLES) * 3);
+    this.mesh.visible = this.shown;
   }
 
   /** The frame's time (s), for the marks' fading. */
@@ -785,20 +1295,23 @@ export class ScrapeMarks {
 
   /** Every mark gone: a new arena. */
   clear() {
-    this.born.fill(-1e9);
-    this.positions.fill(0);
-    this.geometry.getAttribute('born').needsUpdate = true;
-    this.geometry.getAttribute('position').needsUpdate = true;
-    this.last.clear();
-    this.next = 0;
+    this.ages.fill(-1e9);
+    const age = this.geometry.getAttribute('age') as THREE.BufferAttribute;
+    age.clearUpdateRanges();
+    age.needsUpdate = true;
+    this.geometry.setDrawRange(0, 0);
+    this.last = new WeakMap();
+    head.value = 0;
+    this.mesh.visible = false;
   }
 }
 
 /**
  * The fine dust and the bare rock of a ground, as patches far larger than its tiles: a tiling
  * texture of PATCH_SIZE² texels of smooth value noise (two octaves on lattices of 8 and 16 that
- * wrap), which world/boneyard's groundMaterial reads twice at scales that never line up
- * (DUST_PATCH_TILE and DUST_PATCH_TILE_2, turned against each other) and sums as patchAt does.
+ * wrap, see world/rocks, tileNoise), which world/boneyard's groundMaterial reads twice at scales
+ * that never line up (DUST_PATCH_TILE and DUST_PATCH_TILE_2, turned against each other) and sums
+ * as patchAt does.
  */
 export const PATCH_SIZE = 128;
 /** The patches' two tiles (units, 2.4 km and 870 m), the second turned by PATCH_TURN (rad) and shifted by PATCH_SHIFT of a tile. */
@@ -813,23 +1326,12 @@ export const BARE_ROCK = [0.46, 0.38] as const;
 /** The patches' texels (one byte each). */
 export function dustPatches(): Uint8Array {
   const data = new Uint8Array(PATCH_SIZE * PATCH_SIZE);
-  const r = new Randomizer(4110);
-  const lattices = [8, 16].map((n) => ({ n, values: Array.from({ length: n * n }, () => r.nextFloat()) }));
-  const fade = (t: number) => t * t * (3 - 2 * t);
+  // a texel's middle on the detail tile tileNoise wraps over
+  const at = (i: number) => ((i + 0.5) / PATCH_SIZE) * DETAIL_RES;
   for (let j = 0; j < PATCH_SIZE; j++) {
     for (let i = 0; i < PATCH_SIZE; i++) {
-      let value = 0;
-      lattices.forEach(({ n, values }, octave) => {
-        const x = ((i + 0.5) / PATCH_SIZE) * n;
-        const y = ((j + 0.5) / PATCH_SIZE) * n;
-        const [ix, iy] = [Math.floor(x), Math.floor(y)];
-        const [u, v] = [fade(x - ix), fade(y - iy)];
-        const at = (a: number, b: number) => values[(((b % n) + n) % n) * n + (((a % n) + n) % n)];
-        const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * u;
-        const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * u;
-        value += (top + (bottom - top) * v) * (octave ? 0.35 : 0.65);
-      });
-      data[j * PATCH_SIZE + i] = Math.round(value * 255);
+      const value = 0.65 * tileNoise(at(i), at(j), 8, 4110) + 0.35 * tileNoise(at(i), at(j), 16, 4111);
+      data[j * PATCH_SIZE + i] = Math.round((0.5 + 0.5 * value) * 255);
     }
   }
   return data;

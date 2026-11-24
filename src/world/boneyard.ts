@@ -8,7 +8,7 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE, RACK_RELIEFS } from './yard';
 import { bottle, colliderOnly, hall, platform } from './highball';
 import { battleGround, clonePad, cruiserHalf, cruiserTower, cruiserTurret, iceBridge } from './hulk';
 import { seaPiece, throatGround } from './kraken';
@@ -29,7 +29,7 @@ import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
 import { vestaGround } from './rheasilvia';
-import { gridOf, tiledGround } from './groundlod';
+import { drawnOn, gridOf, tiledGround } from './groundlod';
 import { dustPatchTexture, groundTraces, PATCH_GLSL, type TracePlan } from './traces';
 
 /**
@@ -73,16 +73,26 @@ export const noUv = (geometry: THREE.BufferGeometry) => {
   return geometry;
 };
 
+/** The pieces of kind 'rack' the worlds of a tournament stand on and among (the race worlds, the worlds fought over): built with the page; the campaign's places are built the first time a place is entered (see TemplateSet.builds). */
+const PUBLIC_TYPES = new Set([CRACK_TYPE, STATION_TYPE, BRIDGE_TYPE, THROAT_TYPE, LINEAE_TYPE, ...Object.values(BATTLE_TYPES), ...Object.values(STRAIT_TYPES)]);
+
 /**
  * The racks: girders (posts at both ends and at every cradle, rails along top and bottom and at
  * every tier, cross braces), three tiers of cradles and the fighters on them; a full rack, one with gaps, an
- * empty frame. Each within its collider box (RACK_BOXES), which is its collision shape.
+ * empty frame. Each within its collider box (RACK_BOXES), which is its collision shape. With them
+ * every other piece of kind 'rack' (see world/yard): those of a tournament's worlds built at once,
+ * the campaign's only when the field first places them, each standing in by its collider box till then.
  */
 export function rackSet(): TemplateSet {
-  const steel = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(YARD_SEED), 2), color: 0x8a8f96 });
-  const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(YARD_SEED + 1, DEPOT), 2), color: 0x7d8466 });
-  const depot = depotLooks();
-  const near = RACK_BOXES.map((half, type) => {
+  let looks: { steel: THREE.MeshStandardMaterial; paint: THREE.MeshStandardMaterial; depot: ReturnType<typeof depotLooks> } | null = null;
+  const shared = () =>
+    (looks ??= {
+      steel: new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(YARD_SEED), 2), color: 0x8a8f96 }),
+      paint: new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(YARD_SEED + 1, DEPOT), 2), color: 0x7d8466 }),
+      depot: depotLooks(),
+    });
+  const build = (type: number): THREE.Object3D => {
+    const half = RACK_BOXES[type];
     if (type === VESTA_GROUND_TYPE) return vestaGround(half);
     if (type === OCCATOR_TYPE) return occatorGround(half);
     if (type > OCCATOR_TYPE && type <= OCCATOR_TYPE + STEPS) return occatorStep(type - OCCATOR_TYPE, half);
@@ -126,6 +136,7 @@ export function rackSet(): TemplateSet {
     if (type === BRIDGE_TYPE) return iceSlab(half);
     if (type === LINEAE_TYPE) return lineaeGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
+    const { steel, paint, depot } = shared();
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
     const girders: THREE.BufferGeometry[] = [];
@@ -153,8 +164,10 @@ export function rackSet(): TemplateSet {
     group.add(new THREE.Mesh(boxUv(mergeGeometries(girders.map(noUv)), 400), steel));
     if (hulls.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(hulls.map(noUv)), 400), paint));
     return withCollider(group, half);
-  });
-  return { near, far: [], box: true, reliefs: RACK_RELIEFS };
+  };
+  const near = RACK_BOXES.map((half, type) => (PUBLIC_TYPES.has(type) ? build(type) : withCollider(new THREE.Group(), half)));
+  const builds = RACK_BOXES.map((_, type) => (PUBLIC_TYPES.has(type) ? null : () => build(type)));
+  return { near, far: [], box: true, reliefs: RACK_RELIEFS, builds };
 }
 
 /** The depot's plating: one tile of it every this far (units, 8 m), the scale of its plates of 0.5 to 2 m (see stationSurface). */
@@ -849,9 +862,11 @@ function relief(list: readonly Pit[], x: number, z: number): number {
  * hundred meters to a kilometer across, as on the real bodies (see world/traces, dustPatches): in
  * the dust the pebbles and the photograph's relief smoothed away and the ground a little darker,
  * on bare rock the relief stronger and the ground a little brighter. Its geometries take their
- * texture coordinates from groundUv.
+ * texture coordinates from groundUv, a unit of them spanning DUST_TILE; a geometry laid on at
+ * another scale names what a unit of its coordinates spans (`tile`, units), so the patches keep
+ * their size on it.
  */
-export function groundMaterial(color: number, emissive: number, metalness: number): THREE.MeshStandardMaterial {
+export function groundMaterial(color: number, emissive: number, metalness: number, tile = DUST_TILE): THREE.MeshStandardMaterial {
   grime ??= grimeTexture();
   const middle = groundPhoto();
   const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness, color, emissive, aoMap: grime, aoMapIntensity: 0 });
@@ -865,11 +880,13 @@ export function groundMaterial(color: number, emissive: number, metalness: numbe
         '#include <map_fragment>',
         `#include <map_fragment>
   vec3 middleValue = texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
-  ${PATCH_GLSL.replace('GROUND_DUST_TILE', DUST_TILE.toFixed(1)).replace('PLAIN_DUST', `vec3(${PLAIN_DUST.map((byte) => linearOf(byte).toFixed(4)).join(', ')})`)}
+  ${PATCH_GLSL.replace('GROUND_DUST_TILE', tile.toFixed(1)).replace('PLAIN_DUST', `vec3(${PLAIN_DUST.map((byte) => linearOf(byte).toFixed(4)).join(', ')})`)}
   diffuseColor.rgb *= middleValue;
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };
+  // one program for each scale the patches are read at
+  material.customProgramCacheKey = () => `ground:${tile}`;
   return material;
 }
 
@@ -896,6 +913,13 @@ export function flatGrid(half: THREE.Vector3, cell: number): THREE.PlaneGeometry
 /** The ground's grid of a relief piece by default: cells of RELIEF_CELL (units, 75 m) over its square. */
 const RELIEF_CELL = 1500;
 
+/** What a place asks of its ground besides the relief and the tint (see reliefGround). */
+export interface ReliefGroundOptions {
+  cell?: number;
+  shade?: (x: number, z: number, color: THREE.Color) => void;
+  traces?: TracePlan;
+}
+
 /**
  * A ground whose top is a relief (see Relief), in its box's frame (`half` its half extents): the
  * relief on a grid of `cell` (units, 75 m unless a place needs it finer), in groundMaterial's
@@ -903,9 +927,9 @@ const RELIEF_CELL = 1500;
  * (RACK_RELIEFS in world/yard), so it collides as this very ground; `shade` gives each vertex a tone of its own over the tint.
  * Drawn in tiles that thin out their grid with distance (see world/groundlod); the collisions
  * always take the relief itself. On an airless world `traces` lays the traces people left on it
- * (see world/traces), on the ground as its finest level draws it.
+ * (see world/traces), on the ground as it is drawn.
  */
-export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void, traces?: TracePlan): THREE.Group {
+export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, { cell = RELIEF_CELL, shade, traces }: ReliefGroundOptions = {}): THREE.Group {
   const geometry = flatGrid(half, cell);
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
@@ -933,7 +957,10 @@ export function reliefGround(half: THREE.Vector3, relief: Relief, color: number,
   const { widthSegments, heightSegments } = geometry.parameters;
   const ground = tiledGround(groundUv(geometry), widthSegments, heightSegments, material);
   ground.traverse((object) => (object.receiveShadow = object.castShadow = object instanceof THREE.Mesh));
-  if (traces) ground.add(groundTraces(traces, gridOf(geometry, widthSegments, heightSegments)));
+  // the traces among the tiles, each chunk following its tile's level; the grid the ground is drawn on marked for the hulls' scrape marks
+  const grid = gridOf(geometry, widthSegments, heightSegments);
+  if (traces) ground.add(groundTraces(traces, grid, true));
+  drawnOn(ground, grid);
   return withCollider(ground, half);
 }
 
@@ -994,12 +1021,12 @@ const YARD_TRACES: TracePlan = {
   sites: [
     { x: (BAY_MOUTH + BAY_BACK) / 2 + 600, z: 0, size: 3000, busy: 1, pads: 3 },
     { x: 0, z: 0, size: 21000, busy: 0.7 },
-    ...[-3, -1, 2, 3].map((row, k) => ({ x: (k - 1.5) * 2 * (RACK_LENGTH + 1600), z: (row - Math.sign(row) * 0.5) * 5200, size: RACK_DEPTH, busy: 0.15 })),
+    ...[-3, -1, 2, 3].map((row, k) => ({ x: (k - 1.5) * 2 * (RACK_LENGTH + RACK_GAP), z: (row - Math.sign(row) * 0.5) * ROW_SPACING, size: RACK_DEPTH, busy: 0.15 })),
   ],
   ways: [
     { kind: 'crawler', points: [-21000, 0, BAY_MOUTH, 0], passes: 4 },
-    ...[-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5].map((row) => ({ kind: 'crawler' as const, points: [-21000, row * 5200, 21000, row * 5200], passes: Math.abs(row) < 2 ? 2 : 1 })),
-    ...[-2.5, 1.5].map((row) => ({ kind: 'rover' as const, points: [-20000, row * 5200 + 400, 20500, row * 5200 - 300], passes: 2 })),
+    ...[-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5].map((row) => ({ kind: 'crawler' as const, points: [-21000, row * ROW_SPACING, 21000, row * ROW_SPACING], passes: Math.abs(row) < 2 ? 2 : 1 })),
+    ...[-2.5, 1.5].map((row) => ({ kind: 'rover' as const, points: [-20000, row * ROW_SPACING + 400, 20500, row * ROW_SPACING - 300], passes: 2 })),
   ],
   wilds: 4,
   landings: 2,

@@ -5,7 +5,7 @@ import { boxUv, industrialSurface, surfaced } from '../view/surfaces';
 import { rotateX, rotateZ } from '../detthree';
 import { moonBeyond } from './horizon';
 import { Noise } from './noise';
-import { GROUND_HALF, groundRelief, POST_AT, surfaceHeight } from './callisto';
+import { GROUND_HALF, groundRelief, POST_AT, POST_SITE, surfaceHeight } from './callisto';
 import type { TracePlan } from './traces';
 
 /**
@@ -20,10 +20,10 @@ export const CALLISTO_TINT = 0xd8d2c8;
 const CALLISTO_GLOW = 0x1c1a16;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/callisto gives (see reliefGround). */
-export const callistoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, CALLISTO_TINT, CALLISTO_GLOW, undefined, undefined, CALLISTO_TRACES);
+export const callistoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, CALLISTO_TINT, CALLISTO_GLOW, { traces: CALLISTO_TRACES });
 
 /** The Navy's old listening post the one site, worked for decades before it was left (see world/traces). */
-const CALLISTO_TRACES: TracePlan = { seed: 4298, sites: [{ x: POST_AT.x, z: POST_AT.z, size: 900, busy: 0.5, pads: 2 }] };
+const CALLISTO_TRACES: TracePlan = { seed: 4298, sites: [{ x: POST_AT.x, z: POST_AT.z, size: POST_SITE, busy: 0.5, pads: 2 }] };
 
 /** The listening post's plating: the Navy's old olive, stencilled, patched where it was hit. */
 export const POST_PAINT = { key: 'navy-post', seed: 5101, tint: 0x8c9480, texts: ['UEN LP-3', 'NAVY', 'NO ENTRY', 'RESTRICTED', 'CALLISTO'] };

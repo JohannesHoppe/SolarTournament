@@ -308,8 +308,7 @@ export class RacingLine {
    * `before` (units) short of the gate. Around a closed loop it may run past `length`.
    */
   progress(position: THREE.Vector3, next: number, before: number): number {
-    const from = this.gateBefore(next);
-    return Math.min(this.closest(position, from, this.gateAfter(next, from)), this.gateAfter(next, from) - before);
+    return Math.min(this.closest(position, next), this.gateAfter(next, this.gateBefore(next)) - before);
   }
 
   /** Where along the line the gate before gate `next` is (the start of an open line). */
@@ -346,12 +345,13 @@ export class RacingLine {
   }
 
   /**
-   * The distance along the line of its point nearest `position`, looked for on the stretch from
-   * `from` to `to` (units along the line; `to` may run past the length of a closed line).
+   * The distance along the line of its point nearest `position`, looked for on the stretch to
+   * gate `next` from the gate before (units along the line; around a closed loop it may run past
+   * its length).
    */
-  private closest(position: THREE.Vector3, from: number, to: number): number {
-    const stretch = this.stretch(from, to);
-    let best = from;
+  private closest(position: THREE.Vector3, next: number): number {
+    const stretch = this.stretch(next);
+    let best = stretch[0];
     let distance = Infinity;
     for (let k = 0; k < stretch.length; k += 4) {
       const d = sample.set(stretch[k + 1], stretch[k + 2], stretch[k + 3]).distanceToSquared(position);
@@ -364,16 +364,17 @@ export class RacingLine {
   }
 
   /**
-   * The samples closest looks among on the stretch from `from` to `to`: for each its distance
-   * along the line and its point (s, x, y, z), as many as the line has samples there. The line
-   * never changes, and a racer asks for the stretch to its next gate every step, so each
-   * stretch is sampled once and kept, the very points point gives.
+   * The samples closest looks among on the stretch to gate `next` from the gate before (or the
+   * start of an open line): for each its distance along the line and its point (s, x, y, z), as
+   * many as the line has samples there. The line never changes, and a racer asks for the stretch
+   * to its next gate every step, so each stretch is sampled once and kept, the very points point
+   * gives.
    */
-  private stretch(from: number, to: number): Float64Array {
-    let ends = this.stretches.get(from);
-    if (!ends) this.stretches.set(from, (ends = new Map()));
-    let kept = ends.get(to);
+  private stretch(next: number): Float64Array {
+    let kept = this.stretches[next];
     if (kept) return kept;
+    const from = this.gateBefore(next);
+    const to = this.gateAfter(next, from);
     const steps = Math.max(1, Math.ceil(((to - from) / this.length) * (this.arcs.length - 1)));
     kept = new Float64Array((steps + 1) * 4);
     for (let i = 0; i <= steps; i++) {
@@ -384,10 +385,10 @@ export class RacingLine {
       kept[i * 4 + 2] = sample.y;
       kept[i * 4 + 3] = sample.z;
     }
-    ends.set(to, kept);
+    this.stretches[next] = kept;
     return kept;
   }
 
-  /** The stretches sampled so far (see stretch), by their start and end. */
-  private readonly stretches = new Map<number, Map<number, Float64Array>>();
+  /** The stretches sampled so far (see stretch), by the gate they lead to. */
+  private readonly stretches: (Float64Array | undefined)[] = [];
 }
