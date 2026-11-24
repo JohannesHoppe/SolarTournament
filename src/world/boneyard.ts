@@ -849,9 +849,11 @@ function relief(list: readonly Pit[], x: number, z: number): number {
  * hundred meters to a kilometer across, as on the real bodies (see world/traces, dustPatches): in
  * the dust the pebbles and the photograph's relief smoothed away and the ground a little darker,
  * on bare rock the relief stronger and the ground a little brighter. Its geometries take their
- * texture coordinates from groundUv.
+ * texture coordinates from groundUv, a unit of them spanning DUST_TILE; a geometry laid on at
+ * another scale names what a unit of its coordinates spans (`tile`, units), so the patches keep
+ * their size on it.
  */
-export function groundMaterial(color: number, emissive: number, metalness: number): THREE.MeshStandardMaterial {
+export function groundMaterial(color: number, emissive: number, metalness: number, tile = DUST_TILE): THREE.MeshStandardMaterial {
   grime ??= grimeTexture();
   const middle = groundPhoto();
   const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness, color, emissive, aoMap: grime, aoMapIntensity: 0 });
@@ -865,11 +867,13 @@ export function groundMaterial(color: number, emissive: number, metalness: numbe
         '#include <map_fragment>',
         `#include <map_fragment>
   vec3 middleValue = texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
-  ${PATCH_GLSL.replace('GROUND_DUST_TILE', DUST_TILE.toFixed(1)).replace('PLAIN_DUST', `vec3(${PLAIN_DUST.map((byte) => linearOf(byte).toFixed(4)).join(', ')})`)}
+  ${PATCH_GLSL.replace('GROUND_DUST_TILE', tile.toFixed(1)).replace('PLAIN_DUST', `vec3(${PLAIN_DUST.map((byte) => linearOf(byte).toFixed(4)).join(', ')})`)}
   diffuseColor.rgb *= middleValue;
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };
+  // one program for each scale the patches are read at
+  material.customProgramCacheKey = () => `ground:${tile}`;
   return material;
 }
 
