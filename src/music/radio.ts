@@ -39,7 +39,9 @@ export function moodCue(mood: Mood, title: string, elapsed: number, roundLength:
  * lost, so the music stutters wherever a frame or a hitch holds the thread longer than the
  * lookahead (a phone's frames, a tab in the background). The lookahead grows to LOOKAHEAD_SLACK
  * times the longest gap between ticks, at most LOOKAHEAD_MAX, and that gap is forgotten again at
- * LOOKAHEAD_FORGET seconds per second, so a fast desktop keeps the short one.
+ * LOOKAHEAD_FORGET seconds per second, so a fast desktop keeps the short one. A gap is counted at
+ * most as long as the one that asks for LOOKAHEAD_MAX (0.8 s): a tab the browser held for minutes
+ * is back to the short lookahead some 13 s after it ticks on time again.
  */
 const LOOKAHEAD = 0.2;
 const LOOKAHEAD_MAX = 1;
@@ -339,7 +341,7 @@ export class Radio {
     const at = performance.now();
     const gap = (at - this.lastTick) / 1000;
     this.lastTick = at;
-    this.slowest = Math.max(gap, this.slowest - LOOKAHEAD_FORGET * gap);
+    this.slowest = Math.max(Math.min(gap, LOOKAHEAD_MAX / LOOKAHEAD_SLACK), this.slowest - LOOKAHEAD_FORGET * gap);
     const cue = this.cue;
     if (!cue || this.context.state !== 'running') return;
     if (!this.band) {
@@ -364,7 +366,8 @@ export class Radio {
     if (key !== this.songKey) {
       this.songKey = key;
       this.song = createSong(cue.title, cue.energy, cue.roundLength, cue.flavor, { bright: cue.bright, voiceless: cue.voiceless });
-      this.band.prepare(this.song);
+      // the old track's notes run up to scheduledUntil: its parts are taken out of the mix only after them
+      this.band.prepare(this.song, Math.max(now, this.scheduledUntil));
       this.start = Infinity;
       this.onSong(this.song);
       // joining a track after its announcement's downbeat: the station names it on the next
@@ -381,7 +384,8 @@ export class Radio {
     const song = this.song!;
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
     if (this.lateAnnouncement) {
-      const nextBar = Math.ceil(elapsed / barSeconds(song) + 0.25);
+      // counted from the track's first step, after the old track's last note, as the joining above
+      const nextBar = Math.ceil((elapsed + Math.max(0, this.scheduledUntil - now)) / barSeconds(song) + 0.25);
       const at = now - elapsed + nextBar * barSeconds(song);
       if (at >= this.band.voiceUntil) this.band.speak(song.voice[0], at, barSeconds(song) / 8);
       this.lateAnnouncement = false;
@@ -392,8 +396,9 @@ export class Radio {
       // the old grid has notes out up to scheduledUntil: the new one starts after them, as
       // the instruments only take times later than their last one
       this.nextStep = Math.max(0, Math.ceil((Math.max(now, this.scheduledUntil + 1e-3) - this.start) / sixteenth));
-      // landing inside a bar: its sound (filters, drive) is set up at once
-      if (this.nextStep % STEPS_PER_BAR !== 0) this.guard(() => this.band!.joinBar(song, this.nextStep, now));
+      // landing inside a bar: its sound (filters, drive) is set up from its first step on, after
+      // whatever the old grid's last bar set up until then
+      if (this.nextStep % STEPS_PER_BAR !== 0) this.guard(() => this.band!.joinBar(song, this.nextStep, this.start + this.nextStep * sixteenth));
     }
     const ahead = now + this.lookahead;
     while (this.start + this.nextStep * sixteenth < ahead) {

@@ -50,10 +50,11 @@ export const COINS_PER_POINT = 1;
  * The upgrades. What they do per step: radiators shed heat 15 % faster, the thrusters push and
  * turn 8 % harder, the main drive pushes 5 % harder (the speed limit stays), the torpedo tubes
  * hold two more torpedoes at the first and at the third step, the plating takes 7 % of every
- * damage away and renews the hull's plates (see ship/plating). The neon trim lights tubes in the Host's tint along both flanks, adds a bar across
- * the stern and a ring around each nacelle, then a pair low on the flanks and a chase light (see
- * view/neon); the drive flame burns azure, violet with shock diamonds, then white-hot (see
- * view/flame).
+ * damage away and renews the hull's plates (see ship/plating). The neon trim lays racing stripes
+ * in the Host's tint down the top of the hull from nose to stern, each step its own, the third
+ * with a light chasing along them (see view/neon); the drive flame burns xenon's smooth blue,
+ * argon's violet-pink in a train of glowing bunches, then hydrogen's white-magenta in a faster
+ * train with its bells glowing with heat (see view/flame).
  */
 export const UPGRADES: readonly Upgrade[] = [
   { id: 'radiators', name: msg('Radiators'), note: msg('Your laser cools faster'), prices: [1000, 2500, 5000], looks: false },

@@ -8,6 +8,7 @@ import { MAX_SPEED, turnRadius } from '../ship/flight';
 import { bendRadius } from './racingline';
 import { densityIn } from '../world/air';
 import { touchRing } from '../world/gates';
+import { ROUND_SECONDS } from '../music/songs';
 
 const course = (arena = ARENAS[0]) => {
   const field = testField();
@@ -141,6 +142,25 @@ describe('the race course', () => {
         worst = Math.min(worst, bend / tightest);
       }
       expect(worst, arena.id).toBeGreaterThan(1);
+    }
+  });
+
+  it("bends gently enough all round long in the Satellite Junkyard, its gates kept off the junk's paths", () => {
+    // the junk crosses the loop at 25 m/s: a piece crossing a gate would pin the line in it while
+    // it bows round the piece, so the bend bound holds every 5 s of a round and its slack (the
+    // intro, the last racers' finish), not only as the field starts out
+    const junkyard = RACE_ARENAS.find((arena) => arena.id === 'junkyard')!;
+    const field = testField();
+    field.generate(junkyard.layout);
+    const { line } = new Course(field, junkyard.layout.seed);
+    const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    // a quarter more room than the tightest turn at the limit, as above (the junkyard has no air)
+    const tightest = turnRadius(MAX_SPEED) * 1.25;
+    for (let t = 0; t <= ROUND_SECONDS + 30; t += 5) {
+      field.setClock(t);
+      let least = Infinity;
+      for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.clear(s - 1000, field, a), line.clear(s, field, b), line.clear(s + 1000, field, c)));
+      expect(least / tightest, `field time ${t} s`).toBeGreaterThan(1);
     }
   });
 

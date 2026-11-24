@@ -1791,6 +1791,8 @@ export class Markers {
   private beacons: Beacon[] = [];
   private beaconSteel: THREE.Material | null = null;
   private beaconHalo: THREE.Texture | null = null;
+  /** What a drill's props built for themselves alone (a pipe's legs, a harpoon piece's steel), freed with them in clear. */
+  private owned: { dispose(): void }[] = [];
 
   /** A spinning diamond (150 units, about 7.5 m, by default). */
   buoy(position: THREE.Vector3, scale = 1) {
@@ -1915,7 +1917,9 @@ export class Markers {
         const top = foot.y - (PIPE_BORE + PIPE_WALL);
         const height = top - ground;
         if (height <= 0) continue;
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(PIPE_LEG, height, PIPE_LEG), this.pipeMaterial);
+        const legGeometry = new THREE.BoxGeometry(PIPE_LEG, height, PIPE_LEG);
+        this.owned.push(legGeometry);
+        const leg = new THREE.Mesh(legGeometry, this.pipeMaterial);
         leg.position.set(foot.x, ground + height / 2, foot.z);
         leg.castShadow = leg.receiveShadow = true;
         this.root.add(leg);
@@ -1982,6 +1986,10 @@ export class Markers {
     const shaft = rotateX(new THREE.CylinderGeometry(8, 8, 220, 8), Math.PI / 2).translate(0, 30, 110);
     const head = rotateX(new THREE.ConeGeometry(22, 50, 6), Math.PI / 2).translate(0, 30, 240);
     piece.add(new THREE.Mesh(boxUv(shaft.toNonIndexed(), STATION_TILE / 2), steel), new THREE.Mesh(boxUv(head.toNonIndexed(), STATION_TILE / 2), steel));
+    this.owned.push(steel);
+    piece.traverse((part) => {
+      if (part instanceof THREE.Mesh) this.owned.push(part.geometry);
+    });
     piece.position.copy(position);
     piece.userData.spin = true;
     this.root.add(piece);
@@ -2212,6 +2220,8 @@ export class Markers {
       beacon.halo?.material.dispose();
     }
     this.beacons = [];
+    for (const resource of this.owned) resource.dispose();
+    this.owned = [];
   }
 
   /** Frees the geometries and materials on the GPU when the flight school ends. */

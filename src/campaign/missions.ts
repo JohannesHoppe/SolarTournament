@@ -28,6 +28,7 @@ import { yacht } from '../world/yacht';
 import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
+import { PLACE_PEOPLE } from './standing';
 import type { Claim } from '../world/mining';
 import { arenaById, type ArenaId } from '../world/arenas';
 import type { AsteroidField } from '../world/asteroids';
@@ -296,6 +297,21 @@ function takeGlint(ctx: SchoolContext, a: Attempt, markers: Markers) {
   a.next++;
 }
 
+/** The middle of the field's piece nearest the pilot that is not solid (rock or ice it can break), if any; walks the field without allocating, as it runs every step. */
+function nearestRock(ctx: SchoolContext): THREE.Vector3 | null {
+  let best: THREE.Vector3 | null = null;
+  let nearest = Infinity;
+  for (const rock of ctx.field.asteroids.values()) {
+    if (rock.solid) continue;
+    const distance = rock.object.position.distanceToSquared(ctx.me.flight.position);
+    if (distance < nearest) {
+      nearest = distance;
+      best = rock.object.position;
+    }
+  }
+  return best;
+}
+
 /** The point of `points` nearest the pilot, if any. */
 function nearestOf(ctx: SchoolContext, points: readonly THREE.Vector3[]): THREE.Vector3 | null {
   let best: THREE.Vector3 | null = null;
@@ -331,7 +347,7 @@ const firstCut: Drill = {
     takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
-  waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
+  waypoint: (ctx, a) => (a.points.length ? nearestOf(ctx, a.points) : nearestRock(ctx)),
   mark: (ctx, a) =>
     t('Rock {n}/{total} · ore {ore}/{needed}', { n: Math.min(FIRST_CUT, ctx.rocksBroken - a.count + (ctx.rocksBroken - a.count < FIRST_CUT ? 1 : 0)), total: FIRST_CUT, ore: a.next, needed: ORE_NEEDED }),
 };
@@ -2113,7 +2129,7 @@ function miningRun(arena: ArenaId): Drill {
       return a.next >= MINE_ORE;
     },
     fail: (_, a) => (a.seconds - a.clockFrom > MINE_SECONDS ? CAMPAIGN.miningSlow : null),
-    waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
+    waypoint: (ctx, a) => (a.points.length ? nearestOf(ctx, a.points) : nearestRock(ctx)),
     mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Ore {ore}/{needed} · {seconds} s left', { ore: a.next, needed: MINE_ORE, seconds: Math.max(0, Math.ceil(MINE_SECONDS - (a.seconds - a.clockFrom))) }) : t('Ore {ore}/{needed}', { ore: a.next, needed: MINE_ORE })),
   };
 }
@@ -2140,8 +2156,12 @@ export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: nu
   { target: 0.5, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
   { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
-/** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
-const WANTED: readonly (readonly [string, string, string])[] = [
+/**
+ * The wanted faces in the order of COURIER_PLACES (never translated): three a place whose people
+ * count the Host (see campaign/standing), the second and third offered only as they trust it;
+ * one where nobody does (the Ballroom, whose guests count nobody).
+ */
+const WANTED: readonly (readonly string[])[] = [
   ['Gravel Mae', 'Scrapjaw', 'Saint Abrasive'],
   ['Twitch Okono', 'The Dowager', 'Lucky Pell'],
   ['Corporal Nobody', 'Red Tibor', 'Halfprint'],
@@ -2158,7 +2178,7 @@ const WANTED: readonly (readonly [string, string, string])[] = [
   ['Last Rung', 'Dysnomia Jane', 'Hollow Ruth'],
   ['Kiln Rat', 'Lantern Moll', 'Glow'],
   ['Feeder Fang', 'Snowball', 'The Harvester'],
-  ['Gala Crasher', 'Champagne Vex', 'Mister Bow Tie'],
+  ['Gala Crasher'],
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
@@ -2187,7 +2207,7 @@ function wanted(arena: ArenaId, name: string, tier: number): Drill {
   };
 }
 
-/** The bounties as jobs: three at each place of the courier runs (see BOUNTY_TIERS). */
+/** The bounties as jobs: three at each place of the courier runs whose people count the Host, one where nobody does (see BOUNTY_TIERS, WANTED). */
 const bounties: Mission[] = COURIER_PLACES.flatMap(([arena, after], p) =>
   WANTED[p].map((name, tier): Mission => ({
     id: `bounty:${arena}:${tier + 1}`,
@@ -2325,8 +2345,8 @@ const pitNight: Drill = {
 /** A night in the Pit, from the Gullet: never done, never the story's (see Mission.pit). */
 const pit: Mission = { id: 'pit', name: msg('The Pit'), drills: [pitNight], pay: 0, pit: true };
 
-/** The smuggling runs as jobs: one at each place of the courier runs, offered once its people count the Host as Known. */
-const smugglingRuns: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
+/** The smuggling runs as jobs: one at each place of the courier runs with a people of its own, offered once they count the Host as Known. */
+const smugglingRuns: Mission[] = COURIER_PLACES.filter(([arena]) => PLACE_PEOPLE[arena]).map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
 
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 
@@ -3290,6 +3310,14 @@ const tankerTurn = new THREE.Quaternion();
 const tankerSide = new THREE.Vector3();
 const tankerOff = [new THREE.Vector3()];
 const tankerLost = [false];
+/** The seconds since the tanker set out, for its lane (see tankerLane), set every step of the escort. */
+const tankerClock = { seconds: 0 };
+/** The tanker's lane as haul reads it: where the tanker is now (into `out`); made once, as the escort runs every step. */
+const tankerLane = (_: number, out: THREE.Vector3) => {
+  tankerAt(tankerClock.seconds, out);
+  return out;
+};
+const noLoss = () => undefined;
 
 /** Where the tanker is `seconds` after it set out, along its lane (into `out`), and the leg it flies (its index into TANKER_LANE's points, from 1). */
 export function tankerAt(seconds: number, out: THREE.Vector3): number {
@@ -3320,14 +3348,11 @@ const doseRun: Drill = {
     const dt = stepOf(a);
     const leg = tankerAt(a.seconds, tugNow);
     tankerSide.subVectors(TANKER_LANE[leg], TANKER_LANE[leg - 1]).normalize();
-    tankerTurn.setFromUnitVectors(new THREE.Vector3(-1, 0, 0), tankerSide);
+    tankerTurn.setFromUnitVectors(BOW, tankerSide);
     tankerSide.set(-tankerSide.z, 0, tankerSide.x).normalize();
-    const onLane = (_: number, out: THREE.Vector3) => {
-      tankerAt(a.seconds, out);
-      return out;
-    };
+    tankerClock.seconds = a.seconds;
     // the Loose go for the tanker where it is, on its cable or not (haul leaves it in tugNow)
-    haul(markers, dt, 1, onLane, tankerSide, tankerTurn, tankerOff, tankerLost, () => undefined);
+    haul(markers, dt, 1, tankerLane, tankerSide, tankerTurn, tankerOff, tankerLost, noLoss);
     ctx.moveJumpers(tugNow);
     if (a.count === 0 && leg > TANKER_OUT) {
       ctx.spawnJumpers(null, tugNow, TANKER_RAIDERS, LOOSE_SKILL, LOOSE_NAMES, LOOSE_HOLD, false, true);

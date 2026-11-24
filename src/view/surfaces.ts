@@ -197,9 +197,20 @@ function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRend
 }
 
 /** The pitch of the scales across and down (px of SIZE) and their radius: rows half a scale apart, every other row shifted by half a scale. */
-const SCALE_PITCH = 16;
-const SCALE_ROW = 8;
-const SCALE_RADIUS = 11;
+export const SCALE_PITCH = 16;
+export const SCALE_ROW = 8;
+export const SCALE_RADIUS = 11;
+/** The scales of a tile: its rows, and the scales of a row. */
+const SCALE_ROWS = SIZE / SCALE_ROW;
+const SCALE_COLUMNS = SIZE / SCALE_PITCH;
+/** Where the scale of a row and column of the tile sits across it (px of SIZE): every other row shifted by half a scale. */
+const scaleX = (row: number, column: number) => (row % 2 ? SCALE_PITCH / 2 : 0) + column * SCALE_PITCH;
+/**
+ * The order the scales are drawn in (see scales), as a number growing with it: the tile's copy
+ * above it (copy 0), the tile itself (1), the copy below it (2); in each its rows down the tile,
+ * a row's scales along it, and each scale's copies left of the tile, in it and right of it (dx −1, 0, 1).
+ */
+const scaleOrder = (copy: number, row: number, column: number, dx: number) => ((copy * SCALE_ROWS + row) * SCALE_COLUMNS + column) * 3 + dx + 1;
 
 /**
  * A fine pattern of scales, as grown rather than riveted: each row overlaps the one above, so
@@ -209,13 +220,14 @@ const SCALE_RADIUS = 11;
  */
 function scales(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, glow?: CanvasRenderingContext2D) {
   const all: { x: number; y: number; shade: number; lit: boolean }[] = [];
-  for (let row = 0; row < SIZE / SCALE_ROW; row++) {
-    for (let x = row % 2 ? SCALE_PITCH / 2 : 0; x < SIZE; x += SCALE_PITCH) {
-      all.push({ x, y: row * SCALE_ROW, shade: r.range(-0.08, 0.08), lit: r.nextFloat() < 0.06 });
+  for (let row = 0; row < SCALE_ROWS; row++) {
+    for (let column = 0; column < SCALE_COLUMNS; column++) {
+      all.push({ x: scaleX(row, column), y: row * SCALE_ROW, shade: r.range(-0.08, 0.08), lit: r.nextFloat() < 0.06 });
     }
   }
   // drawn again across the tile's edges, so the pattern wraps; the copies above the tile come
   // first and those below it last, so that at the seam too every row lies over the one above it
+  // (the order scaleOrder numbers, which plateLayout follows)
   for (const dy of [-SIZE, 0, SIZE]) {
     for (const { x, y, shade, lit } of all) {
       for (const dx of [-SIZE, 0, SIZE]) {
@@ -256,9 +268,10 @@ function scales(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRend
   }
 }
 
-/** The pitch of the ribs (px of SIZE, 60 cm) and the height of the frames that hold them, every quarter of the tile. */
+/** The pitch of the ribs (px of SIZE, 60 cm), the height of the frames that hold them, and how far apart the frames stand down the tile (a quarter of it). */
 const RIB_PITCH = 8;
 const RIB_FRAME = 7;
+const RIB_BAY = SIZE / 4;
 
 /**
  * Ribbed plating, as stiffened plates go: ribs running across u (rounded crests, grooves between
@@ -277,7 +290,7 @@ function ribs(color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, s
     color.fillStyle = `rgba(0, 0, 0, ${0.1 + 0.2 * seams})`;
     color.fillRect(x - 0.75, 0, 1.5, SIZE);
   }
-  for (let y = 0; y < SIZE; y += SIZE / 4) {
+  for (let y = 0; y < SIZE; y += RIB_BAY) {
     bump.fillStyle = '#9a9a9a';
     bump.fillRect(0, y, SIZE, RIB_FRAME);
     bump.fillStyle = '#404040';
@@ -600,20 +613,26 @@ export function wornSurface(seed: number, wear: Wear): Surface {
 }
 
 /**
- * A plate of a hull's tile as the hangar's plating replaces it (see ship/models, PLATE_GLSL): its
- * middle (px of SIZE, canvas down), its rank among the tile's plates (0..1, from the seed), and
- * for a plate of riveted panels or ribs its rectangle (px of SIZE: x0, y0, x1, y1), where a
+ * A plate of a hull's tile as the hangar's plating replaces it (see ship/plating, plateFragment):
+ * its middle (px of SIZE, canvas down), its rank among the tile's plates (0..1, from the seed),
+ * and for a plate of riveted panels or ribs its rectangle (px of SIZE: x0, y0, x1, y1), where a
  * part number can be stenciled.
  */
 export type Plate = { x: number; y: number; rank: number; box: [number, number, number, number] | null };
-/** The plates of a tile, and which of them holds a point (px of SIZE, canvas down, inside the tile). */
-export type PlateLayout = { plates: Plate[]; at: (x: number, y: number) => number };
+/**
+ * The plates of a tile, and which of them holds a point (px of SIZE, canvas down, inside the
+ * tile). A scale reaching over the tile's edge belongs to the repeat of the tile it grows from:
+ * `at` writes into `tile`, if given, how many repeats along u and v (texture coordinates, v up)
+ * the plate's own tile lies from the point's (−1, 0 or 1), so the plate is renewed or kept as a
+ * whole (see ship/plating).
+ */
+export type PlateLayout = { plates: Plate[]; at: (x: number, y: number, tile?: number[]) => number };
 
 /** Scales are replaced in patches of this many rows by this many scales of a row (5 by 2.5 m), not one by one: a single new scale would read as a glitter, not a repair. */
 const PATCH_ROWS = 4;
 const PATCH_SCALES = 4;
-/** The ribs' plates: a quarter of the tile between two frames, this wide (px of SIZE, eight ribs). */
-const RIB_PLATE = 64;
+/** The ribs' plates: a bay between two frames (RIB_BAY), eight ribs wide (px of SIZE, 5 m), from groove to groove. */
+const RIB_PLATE = 8 * RIB_PITCH;
 
 /**
  * The plates of a hull's tile, laid out exactly as its surface draws them from the same seed:
@@ -625,48 +644,65 @@ export function plateLayout(seed: number, wear: Wear): PlateLayout {
   const ranks = new Randomizer(seed * 7919 + 13);
   const plates: Plate[] = [];
   if (wear.relief === 'scales') {
-    const columns = SIZE / SCALE_PITCH / PATCH_SCALES;
-    const rows = SIZE / SCALE_ROW / PATCH_ROWS;
+    const columns = SCALE_COLUMNS / PATCH_SCALES;
+    const rows = SCALE_ROWS / PATCH_ROWS;
     for (let pr = 0; pr < rows; pr++) {
       for (let pc = 0; pc < columns; pc++) {
-        // the patch's middle: its rows' middle, its scales' middle (odd rows shifted by half a scale)
-        plates.push({ x: (pc * PATCH_SCALES + (PATCH_SCALES - 1) / 2) * SCALE_PITCH + SCALE_PITCH / 4, y: (pr * PATCH_ROWS + (PATCH_ROWS - 1) / 2) * SCALE_ROW, rank: ranks.nextFloat(), box: null });
+        // the patch's middle: the mean of its scales' places
+        let x = 0;
+        for (let row = pr * PATCH_ROWS; row < (pr + 1) * PATCH_ROWS; row++) for (let column = pc * PATCH_SCALES; column < (pc + 1) * PATCH_SCALES; column++) x += scaleX(row, column);
+        plates.push({ x: x / (PATCH_ROWS * PATCH_SCALES), y: (pr * PATCH_ROWS + (PATCH_ROWS - 1) / 2) * SCALE_ROW, rank: ranks.nextFloat(), box: null });
       }
     }
-    // a point belongs to the scale drawn last over it (see scales): the copies below the tile
-    // after those in it, a lower row after a higher one, a scale further along after one before
-    const at = (x: number, y: number) => {
+    // a point belongs to the scale drawn last over it (see scales, scaleOrder), among the
+    // scales of the tile and its copies around it that reach it
+    const at = (x: number, y: number, tile?: number[]) => {
       let best = -1;
       let owner = 0;
+      let alongU = 0;
+      let alongV = 0;
       for (let copy = 0; copy < 3; copy++) {
         const dy = (copy - 1) * SIZE;
         const from = Math.max(0, Math.floor((y - dy - SCALE_RADIUS) / SCALE_ROW));
-        const to = Math.min(SIZE / SCALE_ROW - 1, Math.ceil((y - dy + SCALE_RADIUS) / SCALE_ROW));
+        const to = Math.min(SCALE_ROWS - 1, Math.ceil((y - dy + SCALE_RADIUS) / SCALE_ROW));
         for (let row = from; row <= to; row++) {
-          const shift = row % 2 ? SCALE_PITCH / 2 : 0;
           const cy = row * SCALE_ROW + dy;
-          for (let column = 0; column < SIZE / SCALE_PITCH; column++) {
-            const cx = shift + column * SCALE_PITCH;
-            for (const dx of [-SIZE, 0, SIZE]) {
-              const ox = x - cx - dx;
+          const shift = scaleX(row, 0);
+          for (let dx = -1; dx <= 1; dx++) {
+            // only the columns whose scale can reach x
+            const left = x - dx * SIZE - shift;
+            const first = Math.max(0, Math.ceil((left - SCALE_RADIUS) / SCALE_PITCH));
+            const last = Math.min(SCALE_COLUMNS - 1, Math.floor((left + SCALE_RADIUS) / SCALE_PITCH));
+            for (let column = first; column <= last; column++) {
+              const ox = left - column * SCALE_PITCH;
               const oy = y - cy;
               if (ox * ox + oy * oy > SCALE_RADIUS * SCALE_RADIUS) continue;
-              const order = (copy * SIZE + row) * SIZE + column * 3 + dx / SIZE + 1;
+              const order = scaleOrder(copy, row, column, dx);
               if (order > best) {
                 best = order;
                 owner = Math.floor(row / PATCH_ROWS) * columns + Math.floor(column / PATCH_SCALES);
+                // the copy right of the tile grows from the next repeat along u; the copy below
+                // it (canvas down) from the repeat before along v (v up)
+                alongU = dx;
+                alongV = 1 - copy;
               }
             }
           }
         }
       }
+      if (tile) {
+        tile[0] = alongU;
+        tile[1] = alongV;
+      }
       return owner;
     };
     return { plates, at };
   }
-  // the rows of panels, each split at its seams (see panelLayout); the ribs between their frames
+  // the rows of panels, each split at its seams (see panelLayout); the ribs' bays between their
+  // frames, split at every eighth groove
   const rows: number[][] = [];
-  if (wear.relief === 'ribs') for (let y = 0; y < SIZE; y += PANEL_ROW) rows.push(Array.from({ length: SIZE / RIB_PLATE + 1 }, (_, i) => i * RIB_PLATE));
+  const height = wear.relief === 'ribs' ? RIB_BAY : PANEL_ROW;
+  if (wear.relief === 'ribs') for (let y = 0; y < SIZE; y += RIB_BAY) rows.push(Array.from({ length: SIZE / RIB_PLATE + 1 }, (_, i) => i * RIB_PLATE));
   else {
     const { seams } = panelLayout(new Randomizer(seed), wear.relief);
     for (let y = 0; y < SIZE; y += PANEL_ROW) {
@@ -678,15 +714,16 @@ export function plateLayout(seed: number, wear: Wear): PlateLayout {
   rows.forEach((cuts, row) => {
     first.push(plates.length);
     for (let i = 0; i + 1 < cuts.length; i++) {
-      const y = row * PANEL_ROW;
-      plates.push({ x: (cuts[i] + cuts[i + 1]) / 2, y: y + PANEL_ROW / 2, rank: ranks.nextFloat(), box: [cuts[i], y, cuts[i + 1], y + PANEL_ROW] });
+      const y = row * height;
+      plates.push({ x: (cuts[i] + cuts[i + 1]) / 2, y: y + height / 2, rank: ranks.nextFloat(), box: [cuts[i], y, cuts[i + 1], y + height] });
     }
   });
-  const at = (x: number, y: number) => {
-    const row = Math.min(rows.length - 1, Math.max(0, Math.floor(y / PANEL_ROW)));
+  const at = (x: number, y: number, tile?: number[]) => {
+    const row = Math.min(rows.length - 1, Math.max(0, Math.floor(y / height)));
     const cuts = rows[row];
     let i = 0;
     while (i + 2 < cuts.length && x >= cuts[i + 1]) i++;
+    if (tile) tile[0] = tile[1] = 0;
     return first[row] + i;
   };
   return { plates, at };
@@ -697,9 +734,11 @@ const PLATE_DETAIL = 2;
 const plateMaps = new Map<string, THREE.DataTexture>();
 
 /**
- * The plates of a hull's tile as a texture the hull's shader reads (see ship/models, PLATE_GLSL),
- * nearest texel, never blended: red the plate's rank, green and blue its middle across and up
- * the tile (so every texel of a plate holds the same three values). Built in Node too.
+ * The plates of a hull's tile as a texture the hull's shader reads (see ship/plating,
+ * plateFragment), nearest texel, never blended: red the plate's rank, green and blue its middle
+ * across and up its own tile (so every texel of a plate holds the same three values), alpha the
+ * repeat of the tile the plate belongs to from the texel's (see PlateLayout) as the byte
+ * (u + 1) + 3·(v + 1). Built in Node too.
  */
 export function plateMap(seed: number, wear: Wear): THREE.DataTexture {
   const key = `${seed}:${wear.relief}`;
@@ -709,15 +748,16 @@ export function plateMap(seed: number, wear: Wear): THREE.DataTexture {
   const size = SIZE * PLATE_DETAIL;
   const data = new Uint8Array(size * size * 4);
   const byte = (value: number) => Math.round(Math.max(0, Math.min(1, value)) * 255);
+  const tile = [0, 0];
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
-      const plate = plates[at((px + 0.5) / PLATE_DETAIL, (py + 0.5) / PLATE_DETAIL)];
+      const plate = plates[at((px + 0.5) / PLATE_DETAIL, (py + 0.5) / PLATE_DETAIL, tile)];
       // the texture's rows run up the tile, the canvas's down it
       const i = ((size - 1 - py) * size + px) * 4;
       data[i] = byte(plate.rank);
       data[i + 1] = byte(plate.x / SIZE);
       data[i + 2] = byte(1 - plate.y / SIZE);
-      data[i + 3] = 255;
+      data[i + 3] = tile[0] + 1 + 3 * (tile[1] + 1);
     }
   }
   const texture = new THREE.DataTexture(data, size, size);
@@ -778,6 +818,24 @@ export function hullSurface(seed: number, wear: Wear, glowing = false): HullSurf
   const surface = textures(color[0], orm[0], element);
   const made = { map: surface.map, orm: surface.orm, normal: surface.bump, glow: glow && glowTexture(glow[0]) };
   hulls.set(key, made);
+  return made;
+}
+
+/** A hull's color and finish (see hullSurface) without its relief's normal map: for plates that take the relief of the coat they lie in (the plating's fresh plates, see ship/models). */
+export type HullFinish = Pick<HullSurface, 'map' | 'orm'>;
+const finishes = new Map<string, HullFinish>();
+
+/** The color and finish of a hull's surface of a seed and a wear, drawn as hullSurface draws them, built once per pair. */
+export function hullFinish(seed: number, wear: Wear): HullFinish {
+  const key = `${seed}:${JSON.stringify(wear)}`;
+  const kept = finishes.get(key);
+  if (kept) return kept;
+  if (!drawable) return { map: new THREE.Texture(), orm: new THREE.Texture() };
+  const { color, orm, bump } = drawWorn(seed, wear, HULL_DETAIL);
+  // the bump's texture is made but never drawn, so it never reaches the GPU
+  const { map, orm: finish } = textures(color[0], orm[0], bump[0]);
+  const made = { map, orm: finish };
+  finishes.set(key, made);
   return made;
 }
 

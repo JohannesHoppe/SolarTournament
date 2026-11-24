@@ -4,6 +4,7 @@ import { behindAll, moonBeyond } from './horizon';
 import { Noise } from './noise';
 import { Randomizer } from '../random';
 import { listeningPost } from './valhalla';
+import { POST_SITE } from './callisto';
 import { shine, solarWing, WING_CELLS_ACROSS, WING_CELLS_ALONG, WING_FRONT } from '../view/surfaces';
 import { cos, sin } from '../detmath';
 import { CAMP_AT, GROUND_HALF, groundRelief, MERCURY_SUN, surfaceHeight } from './mercury';
@@ -22,10 +23,10 @@ const MERCURY_TINT = 0xb4a898;
 const MERCURY_GLOW = 0x1c1a17;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/mercury gives (see reliefGround). */
-export const mercuryGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MERCURY_TINT, MERCURY_GLOW, undefined, undefined, MERCURY_TRACES);
+export const mercuryGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MERCURY_TINT, MERCURY_GLOW, { traces: MERCURY_TRACES });
 
 /** The sun miners' camp the one site, worked for generations: their crawlers out to the solar fields, their sleds, their landers (see world/traces). */
-const MERCURY_TRACES: TracePlan = { seed: 4296, sites: [{ x: CAMP_AT.x, z: CAMP_AT.z, size: 900, busy: 0.7, pads: 2 }] };
+const MERCURY_TRACES: TracePlan = { seed: 4296, sites: [{ x: CAMP_AT.x, z: CAMP_AT.z, size: POST_SITE, busy: 0.7, pads: 2 }] };
 
 /** The sun miners' camp: the listening post's build (see world/valhalla) in their paint, bleached by a sun seven times as strong as at Earth. */
 const CAMP_PAINT = { key: 'sun-miners', seed: 20101, tint: 0xd8cbb0, texts: ['CALORIS SUN MINERS', 'SHIFT 4', 'SHADE ONLY', 'MIND THE GLARE', 'NOON IS DEATH'] };

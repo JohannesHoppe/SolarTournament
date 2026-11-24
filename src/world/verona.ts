@@ -21,7 +21,7 @@ const MIRANDA_GLOW = 0x1a1d20;
 const GROUND_CELL = 500;
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/miranda gives (see reliefGround). */
-export const mirandaGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MIRANDA_TINT, MIRANDA_GLOW, GROUND_CELL, undefined, MIRANDA_TRACES);
+export const mirandaGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, MIRANDA_TINT, MIRANDA_GLOW, { cell: GROUND_CELL, traces: MIRANDA_TRACES });
 
 /** The Loose's hideout the one site, at the foot under its mouth in the face; its traffic flies, so little of it walks or drives (see world/traces). */
 const MIRANDA_TRACES: TracePlan = { seed: 4293, sites: [{ x: MOUTH.x, z: MOUTH.z, size: 1500, busy: 0.3, pads: 1 }] };
