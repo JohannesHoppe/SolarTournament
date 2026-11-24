@@ -67,7 +67,7 @@ export function keepUpright(flight: FlightModel, out: Controls): Controls {
 }
 
 /**
- * The brake (held): the flight computer turns the ship about flat and burns against the flight
+ * The brake (while it is on, a switch the Host taps on and off, see Game.brakeManeuver): the flight computer turns the ship about flat and burns against the flight
  * until it is at rest, the thrusters pushing against the flight while the nose swings round and
  * taking out the drift across the nose once it points back; slow, the thrusters stop it alone. At rest it holds still until gravity has pulled the ship clearly out of rest.
  */
