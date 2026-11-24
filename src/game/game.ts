@@ -9176,7 +9176,7 @@ export class Game implements OnlineGame {
     // an own side's killer is no one to take revenge on
     if (victim === this.me) this.moments.died(killer && killer !== victim && !killer.allyOf(victim) ? killer.id : null);
     if (ownKill) {
-      const moment = this.moments.ownKill(victim.id, streak, cause === 'nova') ?? (cause === 'knockout' ? 'knockout' : null);
+      const moment = this.moments.ownKill(victim.id, streak, cause === 'nova', this.time) ?? (cause === 'knockout' ? 'knockout' : null);
       if (moment) this.moment(moment, bonus);
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
