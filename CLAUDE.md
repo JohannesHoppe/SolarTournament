@@ -155,7 +155,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `random.ts` | Deterministic random generator |
 | `detmath.ts` | The mathematical functions (sin … hypot), bit for bit alike on every processor and system, within 1 ulp, from `+ - * /` and the square root only (fdlibm's algorithms); the only source of them in the code |
 | `detthree.ts` | three.js's rotations, slerp, angles, rotation matrices and the centripetal Catmull-Rom curve on detmath, for the shared world |
-| `srgb.ts` | Linear light as an sRGB byte, shared by the pictures baked in code (the Milky Way, the battleship's walls) |
+| `srgb.ts` | Linear light as an sRGB byte and back, shared by the pictures baked in code (the Milky Way, the battleship's walls) and the tone of a ground's patches of dust (world/boneyard) |
 | `storage.ts` | The browser's localStorage, where it is available |
 | `recorder.ts` | The input recorder: the own ship's last minute step by step (controls, pointer, commands, ship), read as `game.recorder`, saved with `game.recorder.download()`, replayed by `src/test/cockpit.ts`; null in production |
 | `share.ts` | The share button of every screen and page: the link and text by where the Host is (the game, or a running tournament's own link), the device's share sheet on touch, else its own menu (copy, e-mail, plain share links of the networks) |
