@@ -34,7 +34,7 @@ export interface Transport {
  * a lobby of their own. A change to a message that a build before it would read otherwise (a
  * key added, removed or required, a bound narrowed, a meaning changed) raises it by one.
  */
-export const PROTOCOL = 28;
+export const PROTOCOL = 29;
 /** Identifies the game and its protocol on the signaling relays and between local tabs; peers with other app ids never meet. */
 const APP_ID = `solartournament-2584-p${PROTOCOL}`;
 /**
@@ -88,8 +88,13 @@ async function iceServers(): Promise<{ servers: RTCIceServer[]; off: string | nu
     return { servers: ICE_SERVERS, off: null };
   }
 }
-/** No message is bigger than this (bytes): a slice of the lead's field (see world/fieldsync) stays under some 30 KB; a newcomer's snapshot of a heavily broken field may come near it, and one refused is made good by the lead's sync within a cycle. */
-const MAX_MESSAGE_BYTES = 64 * 1024;
+/**
+ * No message is bigger than this (bytes, its JSON as Trystero sends it): a larger one is refused
+ * by the browser it goes to. A slice of the lead's field (see world/fieldsync) stays under some
+ * 30 KB; a newcomer's snapshot, far larger in a heavily broken field, goes in parts well under it
+ * (see Session.sendSync).
+ */
+export const MAX_MESSAGE_BYTES = 64 * 1024;
 /**
  * Trystero rooms open in this browser: a tournament and the lobby can be open at once, and the
  * relays only go to sleep when the last of them is left.

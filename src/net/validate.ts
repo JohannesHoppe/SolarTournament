@@ -80,7 +80,7 @@ function listOf<T>(x: unknown, max: number, check: (entry: unknown) => T | null)
 }
 
 /** A record of checked fields as the type it stands for, or null when any field failed its check. */
-function complete<T>(fields: Record<string, unknown>): T | null {
+export function complete<T>(fields: Record<string, unknown>): T | null {
   return Object.values(fields).some((value) => value === null) ? null : (fields as T);
 }
 

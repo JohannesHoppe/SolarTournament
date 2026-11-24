@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from './session';
-import type { Transport } from './transport';
+import { MAX_MESSAGE_BYTES, type Transport } from './transport';
+import { MAX_FAMILY, MAX_ROOTS } from './validate';
+import { testField } from '../test/field';
+import { arenaById } from '../world/arenas';
+import { KNOCKED, MAX_GENERATION, type FieldState } from '../world/asteroids';
 
 /** A transport that only delivers what the test hands it. */
 class FakeTransport implements Transport {
@@ -116,7 +120,7 @@ describe('the lead browser', () => {
     const { session, transport } = joined('n');
     const synced: string[] = [];
     session.onSync = (field) => synced.push(field.k);
-    const field = (k: string) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [] });
+    const field = (k: string) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [], i: 0, n: 1 });
     at(1);
     transport.states('old', 100, 'old', true);
     transport.states('h2', 50, 'old');
@@ -138,7 +142,7 @@ describe('the lead browser', () => {
     session.tick();
     at(1.5);
     session.tick();
-    transport.handlers.get('y')!({ f: { k: 'real', t: 5, a: [], x: [] }, w: [], p: [], q: [], g: 100.1 }, 'old');
+    transport.handlers.get('y')!({ f: { k: 'real', t: 5, a: [], x: [] }, w: [], p: [], q: [], i: 0, n: 1, g: 100.1 }, 'old');
     expect(clock).toBe(4500);
     at(4.6);
     session.tick();
@@ -187,7 +191,7 @@ describe('the lead browser', () => {
     let restarts = 0;
     session.onSync = (field) => synced.push(field.k);
     session.onRestart = () => restarts++;
-    const field = (k: string, age: number) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [], g: age });
+    const field = (k: string, age: number) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [], i: 0, n: 1, g: age });
     at(5);
     transport.states('old', 100, 'old', true);
     transport.states('h2', 50, 'old');
@@ -224,7 +228,7 @@ describe('the lead browser', () => {
     };
     at(1);
     room(1, false);
-    transport.handlers.get('y')!({ f: { k: 'field', t: 5, a: [], x: [] }, w: [], p: [], q: [], g: 101 }, 'old');
+    transport.handlers.get('y')!({ f: { k: 'field', t: 5, a: [], x: [] }, w: [], p: [], q: [], i: 0, n: 1, g: 101 }, 'old');
     frames(session, 1, 8, (time) => room(time, false));
     expect(session.rank()).toBe(3);
     // 's' is reached at 8 s: moved up to then, it would rank behind this browser
@@ -407,5 +411,135 @@ describe('the ping to a peer', () => {
     session.tick(); // sends a fresh one, number 2; number 1 is no longer outstanding
     transport.handlers.get('po')!({ n: 1 }, 'a');
     expect(session.pingTo('a')).toBeNull();
+  });
+});
+
+describe("a newcomer's snapshot", () => {
+  beforeEach(() => {
+    clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The bytes of a message as Trystero sends it: its JSON, type and data together, in UTF-8. */
+  const bytes = (message: { type: string; data: unknown }) => new TextEncoder().encode(JSON.stringify({ t: message.type, d: message.data })).length;
+  /** A number as long as JSON writes one: a sign and 17 digits. */
+  const long = (k: number) => -(1234.5678901234567 + k / 7);
+  /** The most wreckage, probes and probes taken the checks let through (see validate), with ids and numbers as long as the game writes them. */
+  const wrecks = Array.from({ length: 100 }, (_, k) => ({ id: `b:abcdefghijklmnopqrst:7.${100 + k}.${k % 10}`, p: [-999999, -999999, -999999], v: [-99999, -99999, -99999], g: 12345.67 }));
+  const probes = Array.from({ length: 64 }, (_, k) => ({ i: `r123.${k}`, k: 'overdrive' as const, p: [-999999, -999999, -999999], v: [-99999, -99999, -99999], u: 123.4, x: 4294967295 }));
+  const taken = Array.from({ length: 200 }, (_, k) => `b:abcdefghijklmnopqrst:${k}`);
+
+  /** The snapshot a lead sends: every message it hands the transport for the newcomer, through the wire. */
+  function sent(field: FieldState) {
+    // the lead came 100 s before the newcomer
+    const now = clock;
+    at(-99);
+    const lead = joined('old');
+    clock = now;
+    lead.session.sendSync('n', field, wrecks, taken, probes);
+    return lead.transport.sent.map((m) => ({ ...m, data: JSON.parse(JSON.stringify(m.data)) as unknown }));
+  }
+
+  /** A newcomer that follows the lead 'old' and takes its field. */
+  function newcomer() {
+    const { session, transport } = joined('n');
+    const synced: FieldState[] = [];
+    session.onSync = (field, w, p, q) => {
+      synced.push(field);
+      expect([w, p, q]).toEqual([wrecks, taken, probes]);
+    };
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    return { session, transport, synced };
+  }
+
+  /** A field's lists in one order, to compare a snapshot joined from its parts with the whole. */
+  const sorted = (field: FieldState) => {
+    const by = <T>(list: readonly T[] = []) => [...list].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    return { k: field.k, t: field.t, a: by(field.a), x: by(field.x), d: by(field.d), m: by(field.m) };
+  };
+
+  /** The Rings broken at `at` as far as `generations` go, every piece left knocked. */
+  function broken(at: number, generations: number) {
+    const field = testField();
+    field.generate(arenaById('rings')!.layout);
+    field.setClock(at);
+    for (let pass = 0; pass < generations; pass++) for (const a of [...field.asteroids.values()]) if (!a.solid) field.shatter(a.id, at - 10 + pass * 7.777);
+    for (const a of field.asteroids.values()) {
+      a.shovedBy = KNOCKED;
+      a.hitPoints = 123.456;
+    }
+    return field;
+  }
+
+  it('goes in parts under half of what a message may hold, for the Rings broken to their last pieces and every one of them knocked, and is the whole field joined', () => {
+    const state = broken(1000.123, MAX_GENERATION).snapshot();
+    // the whole as one message: far beyond the bound
+    expect(bytes({ type: 'y', data: { f: state, w: wrecks, p: taken, q: probes, g: 100.123 } })).toBeGreaterThan(4 * MAX_MESSAGE_BYTES);
+    const messages = sent(state);
+    for (const message of messages) expect(bytes(message)).toBeLessThan(MAX_MESSAGE_BYTES / 2);
+    // the parts in any order make the snapshot
+    const { transport, synced } = newcomer();
+    for (const message of [...messages].reverse()) transport.handlers.get('y')!(message.data, 'old');
+    expect(synced).toHaveLength(1);
+    expect(sorted(synced[0])).toEqual(sorted(JSON.parse(JSON.stringify(state)) as FieldState));
+  }, 60000);
+
+  it('goes in parts under half of what a message may hold with every list of the field at the bound of its check', () => {
+    const roots = Array.from({ length: MAX_ROOTS }, (_, r) => `${100 + r}`);
+    const family = (root: string) => [root, ...[0, 1, 2].flatMap((i) => [`${root}.${i}`, ...[0, 1, 2].map((j) => `${root}.${i}.${j}`)])];
+    const ids = roots.flatMap(family);
+    expect(ids).toHaveLength(MAX_ROOTS * MAX_FAMILY);
+    const state: FieldState = {
+      k: 'rings',
+      t: 1234567.123,
+      a: ids.map((id, k) => ({ id, hp: 123.456, b: 1234567.123 + k })),
+      x: ids.map((id, k) => ({ id, b: 1234567.123 + k })),
+      d: ids,
+      m: ids.map((id, k) => ({ id, b: 1234567.123, p: [long(k), long(k), long(k)], v: [long(k), long(k), long(k)], q: [0.12345678901234567, -0.12345678901234567, 0.12345678901234567, -0.9701425001453319], s: [0.12345678901234567, -0.12345678901234567, 0.9846153846153847, 1.2345678901234567], c: KNOCKED })),
+    };
+    const messages = sent(state);
+    for (const message of messages) expect(bytes(message)).toBeLessThan(MAX_MESSAGE_BYTES / 2);
+    const { transport, synced } = newcomer();
+    for (const message of messages) transport.handlers.get('y')!(message.data, 'old');
+    expect(synced).toHaveLength(1);
+    expect(sorted(synced[0])).toEqual(sorted(state));
+  });
+
+  it('is taken only once every part came: with one missing the newcomer starts over, and takes the field the lead sends it then', () => {
+    const field = broken(50, 1);
+    const first = sent(field.snapshot());
+    expect(first.length).toBeGreaterThan(2);
+    const { session, transport, synced } = newcomer();
+    let restarts = 0;
+    session.onRestart = () => restarts++;
+    for (const message of first.slice(1)) transport.handlers.get('y')!(message.data, 'old');
+    expect(synced).toEqual([]);
+    frames(session, 1.1, 7.5, (time) => transport.states('old', 99 + time, 'old', true));
+    expect(restarts).toBe(1);
+    // the part that was missing, of the snapshot it gave up, makes no field
+    transport.handlers.get('y')!(first[0].data, 'old');
+    expect(synced).toEqual([]);
+    // the lead sends the field again, of a later field time; a part of the old one among it is not mixed in
+    field.setClock(57);
+    const again = sent(field.snapshot());
+    transport.handlers.get('y')!(first[1].data, 'old');
+    for (const message of again) transport.handlers.get('y')!(message.data, 'old');
+    expect(synced).toHaveLength(1);
+    expect(synced[0].t).toBe(57);
+    expect(sorted(synced[0])).toEqual(sorted(JSON.parse(JSON.stringify(field.snapshot())) as FieldState));
+  }, 60000);
+
+  it('is not taken from a part that fails its check, nor from a first part without the wreckage and probes', () => {
+    const { transport, synced } = newcomer();
+    const part = { f: { k: 'rings', t: 5, a: [], x: [] }, g: 100.1 };
+    for (const bad of [{ i: 0, n: 0 }, { i: 1, n: 1 }, { i: -1, n: 2 }, { i: 0.5, n: 2 }, { i: 0, n: 65 }, { n: 1 }]) transport.handlers.get('y')!({ ...part, w: wrecks, p: taken, q: probes, ...bad }, 'old');
+    transport.handlers.get('y')!({ ...part, i: 0, n: 1 }, 'old');
+    expect(synced).toEqual([]);
+    // and a good one is
+    transport.handlers.get('y')!({ ...part, i: 0, n: 1, w: wrecks, p: taken, q: probes }, 'old');
+    expect(synced).toHaveLength(1);
   });
 });

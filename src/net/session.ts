@@ -1,9 +1,9 @@
-import type { FieldState, ShovedState } from '../world/asteroids';
+import { fieldParts, joinParts, type FieldState, type ShovedState } from '../world/asteroids';
 import { SYNC_EVERY, type FieldSlice } from '../world/fieldsync';
 import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
-import { LocalTransport, TrysteroTransport, type Transport } from './transport';
+import { LocalTransport, MAX_MESSAGE_BYTES, TrysteroTransport, type Transport } from './transport';
 import { roomMode } from './room';
 import type { RoomMode } from '../game/race';
 import { arenaById, type ArenaId } from '../world/arenas';
@@ -11,7 +11,7 @@ import type { DjWire } from '../music/dj';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
 import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
-import { djWire, fieldState, fieldSync, flagsState, headTimes, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import { complete, djWire, fieldState, fieldSync, flagsState, headTimes, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -93,8 +93,17 @@ const MAX_SYNCS_PER_SECOND = 2 / SYNC_EVERY;
 const MAX_FLEET_ZONE = 31;
 /** The most hits a part takes (the reactor's): a nova core breaks a part close by outright. */
 const MAX_PART_HITS = Math.max(...Object.values(ZONE_HITS));
-/** The lead sends a newcomer its field once, again when it starts over; a few at once when several join. */
-const MAX_SNAPSHOTS_PER_SECOND = 2;
+/**
+ * A newcomer's snapshot goes in parts (see sendSync), each at most this much JSON (bytes), the
+ * first with the wreckage and probes it carries besides: well under what a message may hold, a
+ * family's whole state (some 4 KB at most) far within it. The Rings broken to their last pieces,
+ * every one knocked, come in some 20 parts.
+ */
+const SNAPSHOT_PART_BYTES = (MAX_MESSAGE_BYTES * 3) / 8;
+/** A snapshot never comes in more parts than this: every list of a field at the bound of its check (see validate, MAX_ROCKS) fills some 40. */
+const MAX_SNAPSHOT_PARTS = 64;
+/** The lead sends a newcomer its field once, again when it starts over; a few at once when several join, each in its parts. */
+const MAX_SNAPSHOTS_PER_SECOND = 2 * MAX_SNAPSHOT_PARTS;
 /** A browser pings every peer this often (s): the scoreboard's reading is never far stale. */
 const PING_INTERVAL = 1;
 /** The reading shown is the median of a peer's last this many round trips, so one slow or lost packet does not jump it around. */
@@ -118,6 +127,9 @@ const MAX_PING_RATE = 4;
 export type RoundState = { id: number; left: number; field: number; m?: RoomMode; a?: ArenaId; c?: 1; f?: FlagsState; b?: FleetState; d?: DjWire };
 
 export type Vec = number[];
+
+/** What a snapshot's first part carries besides its part of the field: the wreckage in flight, the probes taken this round and those in flight. */
+type SnapshotRest = { wrecks: WreckState[]; taken: string[]; probes: ProbeState[] };
 
 /** The peer that runs a ship, read from its id: "p:<peer>" for a Host, "b:<peer>:<n>" for a bot. */
 export function ownerOf(shipId: string): string | null {
@@ -284,6 +296,8 @@ export class Session {
   /** Each peer's last few round trips (ms, see PING_SAMPLES), for the median pingTo reads. */
   private readonly pingSamples = new Map<string, number[]>();
   private synced = false;
+  /** The parts of the lead's snapshot taken so far (see sendSync): whose, how many it comes in, its layout's key and field time, each part by its place, and the wreckage and probes the first carries. */
+  private parts: { from: string; count: number; k: string; t: number; of: Map<number, FieldState>; rest: SnapshotRest | null } | null = null;
   private left = false;
 
   private constructor(private readonly transport: Transport, readonly room: string) {
@@ -460,11 +474,24 @@ export class Session {
       this.hear(from, age);
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
       if (from !== this.leadId || (this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
-      const field = fieldState(d?.f);
-      const wrecks = wreckStates(d?.w);
-      const taken = ids(d?.p);
-      const probes = probeStates(d?.q);
-      if (!field || !wrecks || !taken || !probes) return;
+      const part = fieldState(d?.f);
+      const count = int(d?.n, 1, MAX_SNAPSHOT_PARTS);
+      const index = int(d?.i, 0, MAX_SNAPSHOT_PARTS - 1);
+      if (!part || count === null || index === null || index >= count) return;
+      // the first part carries the wreckage and the probes besides
+      const rest = index === 0 ? complete<SnapshotRest>({ wrecks: wreckStates(d?.w), taken: ids(d?.p), probes: probeStates(d?.q) }) : null;
+      if (index === 0 && !rest) return;
+      // a part of another snapshot (the lead sent it again, of a later field time) starts the parts over
+      let parts = this.parts;
+      if (!parts || parts.from !== from || parts.count !== count || parts.k !== part.k || parts.t !== part.t) parts = this.parts = { from, count, k: part.k, t: part.t, of: new Map(), rest: null };
+      parts.of.set(index, part);
+      if (rest) parts.rest = rest;
+      if (!parts.rest || parts.of.size < count) return;
+      // joined, the field still keeps every bound of one
+      const field = fieldState(joinParts([...parts.of.entries()].sort(([a], [b]) => a - b).map(([, p]) => p)));
+      const { wrecks, taken, probes } = parts.rest;
+      this.parts = null;
+      if (!field) return;
       this.synced = true;
       // building the field cuts the pieces of its broken rocks (seconds on a slow device): that
       // work is no gap in the frames, only the time before the next one
@@ -740,8 +767,16 @@ export class Session {
     this.transport.send('fs', { s: slice, n: round, h: heads });
   }
 
+  /**
+   * Brings a newcomer up to date: the field in parts of whole families (see fieldParts), each a
+   * message of its own well under what one may hold, the first with the wreckage and the probes.
+   * The newcomer takes the field once every part came; while one is missing it has none, and
+   * starts over once the time to take one is over (see resync), which has the lead send it again.
+   */
   sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {
-    this.transport.send('y', { f: field, w: wrecks, p: probesTaken, q: probes, g: this.age() }, to);
+    const rest = { w: wrecks, p: probesTaken, q: probes };
+    const parts = fieldParts(field, SNAPSHOT_PART_BYTES, SNAPSHOT_PART_BYTES - JSON.stringify(rest).length);
+    parts.forEach((part, i) => this.transport.send('y', { f: part, i, n: parts.length, g: this.age(), ...(i === 0 ? rest : {}) }, to));
   }
 
   leave() {
@@ -772,6 +807,7 @@ export class Session {
     const now = seconds();
     this.startedAt = this.restartedAt = now;
     this.synced = false;
+    this.parts = null;
     this.guard(() => this.onRestart());
   }
 
@@ -893,7 +929,7 @@ export class Session {
    * before it, once the time to take one is over, starts over: the lead hands a browser that
    * started over the field again (see Online), which a lead sends once otherwise. That field went
    * out while this browser elected another (the others' votes moved it since, see reconcile), or
-   * it was lost.
+   * a part of it was lost (see sendSync).
    */
   private resync(now: number) {
     const lead = this.leadId;
