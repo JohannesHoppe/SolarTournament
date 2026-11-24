@@ -43,7 +43,7 @@ const MAX_ROCKS = 1200;
 /** Probes in flight at once, and the seconds a probe drifts at most (see game/items). */
 const MAX_PROBES = 64;
 const MAX_PROBE_SECONDS = 200;
-/** Torpedoes a clone holds: its load with every tube, and two from each probe it took, far below this. */
+/** Torpedoes a clone holds: its load with every tube, and four from each probe it took (TORPEDOES_PER_PROBE in game/torpedoes), far below this. */
 const MAX_TORPEDOES = 99;
 /** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
 const MAX_IDS = 200;

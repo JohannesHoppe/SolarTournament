@@ -152,8 +152,8 @@ class Budget {
  * The tournament protocol between peers. Every peer simulates its own ship (and the lead
  * browser its bots) and sends their states. The shooter decides whether a beam hit and tells
  * the owner of the ship it hit; the owner applies the damage and announces a destruction.
- * Asteroid hits and wreckage shot or rammed go to everyone, fragments and the pieces of a
- * wreck are deterministic. The lead browser (the peer
+ * Wreckage shot or rammed goes to everyone, fragments and the pieces of a wreck are
+ * deterministic. The lead browser (the peer
  * longest in the room that is still sending) runs the bots and the round clock and brings
  * newcomers up to date. A browser that lost the others for a while starts over as the newest
  * in the room: the others went on without it, so it takes their round and field. It also pings
@@ -170,7 +170,6 @@ export class Session {
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
   onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean, blast: boolean) => void = () => {};
-  /** `shooter` is the ship whose beam hit the rock, one the sender runs. */
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
