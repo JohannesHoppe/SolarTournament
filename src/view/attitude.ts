@@ -98,42 +98,20 @@ export class Attitude extends Overlay {
   /** The up this picture refers to. */
   private readonly up = new THREE.Vector3();
   private air = false;
-  /**
-   * The boxes around what is on the canvas (px: left, top, right, bottom, one after the other):
-   * each half of a rung, each number, the tape, the bank scale, its pointer. Only they are
-   * cleared for the next picture: clearing a large part of a full-screen canvas costs more than
-   * drawing all the lines on it, and a level ladder's boxes are thin.
-   */
-  private readonly boxes: number[] = [];
+
+  /** Its boxes (see Overlay.box) each half of a rung, each number, the tape, the bank scale, its pointer: a level ladder's boxes are thin. */
+  constructor(canvas: HTMLCanvasElement) {
+    super(canvas, INK);
+  }
 
   protected resized() {
     this.drawn = false;
-    this.boxes.length = 0;
   }
 
-  /** Clears what was drawn: the boxes around it. */
+  /** Clears what was drawn, and draws on in CSS pixels. */
   private clear() {
-    const { boxes, context } = this;
-    context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-    for (let i = 0; i < boxes.length; i += 4) {
-      if (boxes[i] <= boxes[i + 2]) context.clearRect(boxes[i] - INK, boxes[i + 1] - INK, boxes[i + 2] - boxes[i] + 2 * INK, boxes[i + 3] - boxes[i + 1] + 2 * INK);
-    }
-    boxes.length = 0;
-  }
-
-  /** A new box around what is drawn next (see ink). */
-  private box() {
-    this.boxes.push(Infinity, Infinity, -Infinity, -Infinity);
-  }
-
-  /** The last box takes in the point (x, y). */
-  private ink(x: number, y: number) {
-    const boxes = this.boxes;
-    const i = boxes.length - 4;
-    if (x < boxes[i]) boxes[i] = x;
-    if (y < boxes[i + 1]) boxes[i + 1] = y;
-    if (x > boxes[i + 2]) boxes[i + 2] = x;
-    if (y > boxes[i + 3]) boxes[i + 3] = y;
+    this.wipe();
+    this.context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
   }
 
   /** A line of the ladder or the scales to (x, y), its point in the last box. */

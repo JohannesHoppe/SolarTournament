@@ -45,6 +45,8 @@ const EDGE_FADE = 60;
 /** The dashes' strongest opacity, and their line (px). */
 const ALPHA = 0.6;
 const WIDTH = 1.5;
+/** How far around a dash the canvas is cleared again (px): half its line, its round cap and its antialiasing. */
+const INK = 2;
 /** The projection's azure (see --hud in style.css). */
 const COLOR = '#4d91ff';
 /** With reduced motion: this share of the dashes, this much of their length. */
@@ -90,21 +92,17 @@ export class Streaks extends Overlay {
   private readonly y = new Float32Array(STREAKS * NEAR_MORE);
   private readonly age = new Float32Array(STREAKS * NEAR_MORE);
   private readonly life = new Float32Array(STREAKS * NEAR_MORE);
-  /** The box drawn last (px), cleared before the next picture; empty while left > right. */
-  private readonly drawn = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   private last = NaN;
   /** With reduced motion: the flow the standing dashes were drawn for. */
   private readonly stillDrawn: StillDrawn = { count: -1, direction: new THREE.Vector3(), fade: 0, rate: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
-    super(canvas);
+    super(canvas, INK);
     this.resized();
   }
 
   /** The dashes start over, spread over the new screen and through their lives. */
   protected resized() {
-    this.drawn.left = Infinity;
-    this.drawn.right = -Infinity;
     this.stillDrawn.count = -1;
     for (let i = 0; i < this.x.length; i++) this.spawn(i, Math.random());
   }
@@ -121,7 +119,7 @@ export class Streaks extends Overlay {
     const speed = velocity.length();
     const fade = show ? THREE.MathUtils.smoothstep(speed, SHOW_FROM, SHOW_FULL) : 0;
     if (fade <= 0) {
-      this.clear();
+      this.wipe();
       this.stillDrawn.count = -1;
       return;
     }
@@ -138,12 +136,13 @@ export class Streaks extends Overlay {
     const { width, height } = this;
     const focal = (camera.projectionMatrix.elements[5] * height) / 2;
     const context = this.context;
-    this.clear();
+    this.wipe();
+    // all the dashes in one box: they are spread over the whole screen anyway
+    this.box();
     context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     context.strokeStyle = COLOR;
     context.lineWidth = WIDTH;
     context.lineCap = 'round';
-    const box = this.drawn;
     for (let i = 0; i < n; i++) {
       flowAt(this.x[i] - width / 2, height / 2 - this.y[i], seen.x, seen.y, seen.z, rate, focal, motion);
       if (!still) {
@@ -171,10 +170,8 @@ export class Streaks extends Overlay {
       context.moveTo(tailX, tailY);
       context.lineTo(x, y);
       context.stroke();
-      box.left = Math.min(box.left, x, tailX);
-      box.top = Math.min(box.top, y, tailY);
-      box.right = Math.max(box.right, x, tailX);
-      box.bottom = Math.max(box.bottom, y, tailY);
+      this.ink(x, y);
+      this.ink(tailX, tailY);
     }
     context.globalAlpha = 1;
   }
@@ -185,19 +182,5 @@ export class Streaks extends Overlay {
     this.y[i] = Math.random() * this.height;
     this.life[i] = LIFE + Math.random() * LIFE_SPREAD;
     this.age[i] = age * this.life[i];
-  }
-
-  /** Clears what the last picture drew, and starts the next box. */
-  private clear() {
-    const box = this.drawn;
-    if (box.left <= box.right) {
-      const ratio = this.ratio;
-      this.context.setTransform(1, 0, 0, 1, 0, 0);
-      this.context.clearRect(Math.floor((box.left - 2) * ratio), Math.floor((box.top - 2) * ratio), Math.ceil((box.right - box.left + 4) * ratio), Math.ceil((box.bottom - box.top + 4) * ratio));
-    }
-    box.left = Infinity;
-    box.top = Infinity;
-    box.right = -Infinity;
-    box.bottom = -Infinity;
   }
 }
