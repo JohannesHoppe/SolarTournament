@@ -21,7 +21,7 @@ const ICE_TONE = new THREE.Color(1, 1, 1);
 const SOOT_TONE = new THREE.Color(0.04, 0.03, 0.024);
 
 /** The ground of the field in its box's frame (`half` its half extents), on the relief world/iapetus gives (see reliefGround), each vertex in its face's tone. */
-export const iapetusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, IAPETUS_TINT, IAPETUS_GLOW, undefined, (x, z, color) => color.copy(ICE_TONE).lerp(SOOT_TONE, darkness(x, z)), IAPETUS_TRACES);
+export const iapetusGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, IAPETUS_TINT, IAPETUS_GLOW, { shade: (x, z, color) => color.copy(ICE_TONE).lerp(SOOT_TONE, darkness(x, z)), traces: IAPETUS_TRACES });
 
 /** Nobody lives at Two Faces: an old landing site and a few lone lines of prints over the ridge (see world/traces). */
 const IAPETUS_TRACES: TracePlan = { seed: 4292, sites: [], wilds: 3, landings: 1 };

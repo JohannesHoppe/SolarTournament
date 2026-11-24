@@ -7,6 +7,7 @@ import { fightRelief, GROUND_CELL, GROUND_HALF, groundRelief, lineaeTones, STATI
 import { CRACK_GROUND_HALF, crackRelief, crackTones, riftHeight, STATION_SPOTS } from './crack';
 import type { TracePlan } from './traces';
 import { listeningPost } from './valhalla';
+import { POST_SITE } from './callisto';
 
 /**
  * How Europa looks, at the Lineae and on the Crack (where things are in world/europa and
@@ -60,7 +61,7 @@ function icy(material: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
 
 /** A ground of Europa's ice on `relief`, its tones from `paint`, the traces of `traces` on it. */
 function iceGround(half: THREE.Vector3, relief: (x: number, z: number) => number, paint: (x: number, z: number, color: THREE.Color) => void, traces: TracePlan): THREE.Group {
-  const group = reliefGround(half, relief, ICE_TINT, EUROPA_GLOW, GROUND_CELL, paint, traces);
+  const group = reliefGround(half, relief, ICE_TINT, EUROPA_GLOW, { cell: GROUND_CELL, shade: paint, traces });
   // the ground's tiles share one material: made icy once
   const materials = new Set<THREE.MeshStandardMaterial>();
   group.traverse((object) => {
@@ -91,9 +92,9 @@ export const lineaeGround = (half: THREE.Vector3): THREE.Group => iceGround(half
 export const crackGround = (half: THREE.Vector3): THREE.Group => iceGround(half, crackRelief, crackPaint, CRACK_TRACES);
 
 /** The science station on the Crack's floor the one site at the Lineae, its crews' tracks along the floor and up onto the ice (see world/traces). */
-const LINEAE_TRACES: TracePlan = { seed: 4300, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: 900, busy: 0.6, pads: 2 }] };
-/** On the Crack the station on its floor and the Rockborn's outposts on its eastern rim, a road between each and the next. */
-const CRACK_TRACES: TracePlan = { seed: 4301, sites: STATION_SPOTS.map(({ x, z }, k) => ({ x, z, size: 900, busy: k ? 0.35 : 0.6, pads: 1 })) };
+const LINEAE_TRACES: TracePlan = { seed: 4300, sites: [{ x: STATION_AT.x, z: STATION_AT.z, size: POST_SITE, busy: 0.6, pads: 2 }] };
+/** On the Crack the station on its floor and the Rockborn's outposts on its eastern rim, a road setting out from each towards the nearest other, as far as the ice lets a rover or a crawler go: the rift's walls stop it at their foot or at the rim. */
+const CRACK_TRACES: TracePlan = { seed: 4301, sites: STATION_SPOTS.map(({ x, z }, k) => ({ x, z, size: POST_SITE, busy: k ? 0.35 : 0.6, pads: 1 })) };
 
 /** The slab's ice: the rift walls' clean blue-white, its faces cracked and lumpy by up to SLAB_LUMP (3 m), never out of its collider box. */
 const SLAB_TINT = 0xd6e8ff;

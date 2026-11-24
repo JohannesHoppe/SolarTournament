@@ -8,7 +8,7 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE, GANYMEDE_TYPE, TITAN_TYPE, ENCELADUS_TYPE, IAPETUS_TYPE, MIRANDA_TYPE, TRITON_TYPE, MEMORIAL_TYPE, PLUTO_TYPE, MOON_TYPE, BALLROOM_TYPE, MERCURY_TYPE, CAMP_TYPE, CITY_TYPES, CRACK_TYPE, THROAT_TYPE, BATTLE_TYPES, STRAIT_TYPES, BRIDGE_TYPE, LINEAE_TYPE, RACK_RELIEFS } from './yard';
 import { bottle, colliderOnly, hall, platform } from './highball';
 import { battleGround, clonePad, cruiserHalf, cruiserTower, cruiserTurret, iceBridge } from './hulk';
 import { seaPiece, throatGround } from './kraken';
@@ -900,6 +900,13 @@ export function flatGrid(half: THREE.Vector3, cell: number): THREE.PlaneGeometry
 /** The ground's grid of a relief piece by default: cells of RELIEF_CELL (units, 75 m) over its square. */
 const RELIEF_CELL = 1500;
 
+/** What a place asks of its ground besides the relief and the tint (see reliefGround). */
+export interface ReliefGroundOptions {
+  cell?: number;
+  shade?: (x: number, z: number, color: THREE.Color) => void;
+  traces?: TracePlan;
+}
+
 /**
  * A ground whose top is a relief (see Relief), in its box's frame (`half` its half extents): the
  * relief on a grid of `cell` (units, 75 m unless a place needs it finer), in groundMaterial's
@@ -907,9 +914,9 @@ const RELIEF_CELL = 1500;
  * (RACK_RELIEFS in world/yard), so it collides as this very ground; `shade` gives each vertex a tone of its own over the tint.
  * Drawn in tiles that thin out their grid with distance (see world/groundlod); the collisions
  * always take the relief itself. On an airless world `traces` lays the traces people left on it
- * (see world/traces), on the ground as its finest level draws it.
+ * (see world/traces), on the ground as it is drawn.
  */
-export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, cell = RELIEF_CELL, shade?: (x: number, z: number, color: THREE.Color) => void, traces?: TracePlan): THREE.Group {
+export function reliefGround(half: THREE.Vector3, relief: Relief, color: number, emissive: number, { cell = RELIEF_CELL, shade, traces }: ReliefGroundOptions = {}): THREE.Group {
   const geometry = flatGrid(half, cell);
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i++) position.setY(i, Math.min(half.y, relief(position.getX(i), position.getZ(i))));
@@ -998,12 +1005,12 @@ const YARD_TRACES: TracePlan = {
   sites: [
     { x: (BAY_MOUTH + BAY_BACK) / 2 + 600, z: 0, size: 3000, busy: 1, pads: 3 },
     { x: 0, z: 0, size: 21000, busy: 0.7 },
-    ...[-3, -1, 2, 3].map((row, k) => ({ x: (k - 1.5) * 2 * (RACK_LENGTH + 1600), z: (row - Math.sign(row) * 0.5) * 5200, size: RACK_DEPTH, busy: 0.15 })),
+    ...[-3, -1, 2, 3].map((row, k) => ({ x: (k - 1.5) * 2 * (RACK_LENGTH + RACK_GAP), z: (row - Math.sign(row) * 0.5) * ROW_SPACING, size: RACK_DEPTH, busy: 0.15 })),
   ],
   ways: [
     { kind: 'crawler', points: [-21000, 0, BAY_MOUTH, 0], passes: 4 },
-    ...[-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5].map((row) => ({ kind: 'crawler' as const, points: [-21000, row * 5200, 21000, row * 5200], passes: Math.abs(row) < 2 ? 2 : 1 })),
-    ...[-2.5, 1.5].map((row) => ({ kind: 'rover' as const, points: [-20000, row * 5200 + 400, 20500, row * 5200 - 300], passes: 2 })),
+    ...[-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5].map((row) => ({ kind: 'crawler' as const, points: [-21000, row * ROW_SPACING, 21000, row * ROW_SPACING], passes: Math.abs(row) < 2 ? 2 : 1 })),
+    ...[-2.5, 1.5].map((row) => ({ kind: 'rover' as const, points: [-20000, row * ROW_SPACING + 400, 20500, row * ROW_SPACING - 300], passes: 2 })),
   ],
   wilds: 4,
   landings: 2,

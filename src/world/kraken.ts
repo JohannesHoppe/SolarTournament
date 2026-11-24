@@ -53,7 +53,7 @@ const SHORE_CELL = 500;
 
 /** The race world's ground in the Throat (see world/throat): its banks, bluffs and the bed under the water on the shores' grid, and the sea's sheet over the water. */
 export function throatGround(half: THREE.Vector3): THREE.Group {
-  return reliefGround(half, throatLandRelief, SHORE_TINT, SHORE_GLOW, SHORE_CELL).add(seaSheet(half, throatSeaRelief));
+  return reliefGround(half, throatLandRelief, SHORE_TINT, SHORE_GLOW, { cell: SHORE_CELL }).add(seaSheet(half, throatSeaRelief));
 }
 
 /** The ripples of the sea as a normal map: soft swells from a tiling noise. */
