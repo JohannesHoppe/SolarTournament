@@ -137,8 +137,9 @@ export const RAM_SAFE = 300;
  * left. A ram that hurts at all hurts at least as much as a laser's hit (RAM_LEAST hull, and a
  * fifth of the drive's thrust from behind).
  *
- * So a ram hurts from 25 m/s of closing (half of it the felt 12.5 m/s that scratches nothing on
- * rock). At 60 m/s (the dodge kicked into a flank) a flank loses 29 hull points; a nose into a
+ * So every ram (from RAM_SAFE, 15 m/s of closing) costs at least RAM_LEAST; the blow itself bites
+ * a flank from 25 m/s (half of it the felt 12.5 m/s that scratches nothing on rock), a drive from
+ * 19 m/s and the nose from 36 m/s. At 60 m/s (the dodge kicked into a flank) a flank loses 29 hull points; a nose into a
  * nose at 100 m/s costs each 38; two noses meeting faster than 207 m/s (two ships at full
  * speed head on) both go down; from 112 m/s into a drive its reactor goes critical; an
  * overdrive's shove into a flank (about 200 m/s closing) kills the ship ahead.

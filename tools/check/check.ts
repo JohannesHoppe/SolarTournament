@@ -5,7 +5,7 @@
  * one run shows everything that is broken; the exit code is not zero when any gate failed.
  *
  * Run with `npm run check` (a few minutes at most) or `npm run check:full` (the campaign's
- * jobs, the browser tests and about forty minutes of balance runs on top). DEV_PORT moves the dev server the
+ * jobs, the browser tests and about fifty minutes of balance runs on top). DEV_PORT moves the dev server the
  * browser tests start, as for `npm run e2e`.
  */
 import { spawnSync } from 'node:child_process';

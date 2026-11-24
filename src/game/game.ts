@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cos, exp, hypot, pow, sin } from '../detmath';
-import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
+import { angleTo, applyAxisAngle, randomDirection, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom } from '../view/bloom';
@@ -149,7 +149,7 @@ import { MOMENTS, Moments, type Moment } from './moments';
 import { killScore } from './friendly';
 import { streakBonus, Streaks } from './streaks';
 import { devlog, type BlastEvent } from '../devlog';
-import { recorder, type FlightMode, type InputFrame } from '../recorder';
+import { recorder, shipState, type FlightMode, type InputFrame } from '../recorder';
 import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, BRAKE_BURN_ANGLE, BRAKE_REST, Brake, keepUpright } from '../ship/computer';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
@@ -4411,7 +4411,7 @@ export class Game implements OnlineGame {
     const grounded = !course && !start && this.overWorld && this.groundSpawn(ship, position, edge);
     if (grounded) best = 0;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start && !grounded; attempt++) {
-      if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
+      if (base) randomDirection(candidate).multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
       else this.edgePoint(candidate, edge);
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       const score = this.spawnScore(ship, candidate);
@@ -4430,7 +4430,7 @@ export class Game implements OnlineGame {
     }
     // (in Last Clone Standing the open space behind the field, away from the sun, which no flare reaches)
     if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
-    else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
+    else if (best === -Infinity) randomDirection(position).multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
     // over a world, facing the arena's middle at the clone's own height, level over the ground
     if (!course && !start && this.overWorld) candidate.set(0, position.y, 0);
     ship.spawn(position, lookingAt(position, course || start || this.overWorld ? candidate : spawnMiddle, UP), this.time);
@@ -4509,7 +4509,7 @@ export class Game implements OnlineGame {
    * over the ground beneath (SPAWN_OVER_GROUND to four times that), never in it.
    */
   private edgePoint(point: THREE.Vector3, edge: number): THREE.Vector3 {
-    point.randomDirection();
+    randomDirection(point);
     if (!this.overWorld) return point.multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
     point.y = 0;
     if (point.lengthSq() < 1e-6) point.set(1, 0, 0);
@@ -5580,7 +5580,7 @@ export class Game implements OnlineGame {
     const near = eye.distanceTo(flareAt) - FLARE_RADIUS;
     if (Math.abs(near) < EMBER_REACH && Math.random() < dt * 40 * strength) {
       emberDrift.copy(SUN_DIRECTION).multiplyScalar(-1500 - Math.random() * 1500);
-      scratch.randomDirection().multiplyScalar(EMBER_REACH * 0.4 * Math.random()).add(frontPoint);
+      randomDirection(scratch).multiplyScalar(EMBER_REACH * 0.4 * Math.random()).add(frontPoint);
       this.effects.ember(scratch, emberDrift, 120 + Math.random() * 200);
     }
     const subject = this.subject();
@@ -8637,9 +8637,7 @@ export class Game implements OnlineGame {
       pointer: this.input.pointer,
       out: { ...IDLE },
       gravity: this.outside(this.me!, dt, gravity).toArray(),
-      position: flight.position.toArray(),
-      velocity: flight.velocity.toArray(),
-      orientation: flight.orientation.toArray() as [number, number, number, number],
+      ...shipState(flight),
       drive: flight.driveFactor,
       thrusters: flight.thrusterFactor,
     };
@@ -10393,11 +10391,11 @@ export class Game implements OnlineGame {
     this.boostKick *= exp(-BOOST_FADE * dt);
     if (Math.abs(fov - this.camera.fov) > 0.01) this.setFov(fov);
     if (!this.cockpit && !reducedMotion.matches) {
-      if (burn > 0.05) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
+      if (burn > 0.05) this.camera.position.add(randomDirection(scratch).multiplyScalar(me.radius * DRIVE_SHAKE * burn));
       // the hover field's buffeting over the ground, harder while the hull glides on it
-      if (buffet > 0.01) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * buffet));
+      if (buffet > 0.01) this.camera.position.add(randomDirection(scratch).multiplyScalar(me.radius * buffet));
       // a jolt for every hit the own laser lands, bigger for a kill; it fades in a fraction of a second
-      if (this.kick > 0.01) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * KICK_SHAKE * this.kick));
+      if (this.kick > 0.01) this.camera.position.add(randomDirection(scratch).multiplyScalar(me.radius * KICK_SHAKE * this.kick));
     }
     this.kick *= exp(-KICK_FADE * dt);
     // the HUD projects with this frame's camera, not the one of the last rendered frame
@@ -10486,8 +10484,8 @@ export class Game implements OnlineGame {
       for (let left = rate * dt; left > 0; left--) {
         if (left < 1 && Math.random() >= left) break;
         scratch.copy(flight.position).addScaledVector(feltNormal, -(gap + ship.radius));
-        scratch.addScaledVector(dustSpread.randomDirection(), ship.radius * 0.5);
-        dustVelocity.copy(flight.velocity).multiplyScalar(0.1).addScaledVector(feltNormal, LIFT_RISE * (1 + Math.random() * 3)).addScaledVector(dustSpread.randomDirection(), LIFT_RISE * 2);
+        scratch.addScaledVector(randomDirection(dustSpread), ship.radius * 0.5);
+        dustVelocity.copy(flight.velocity).multiplyScalar(0.1).addScaledVector(feltNormal, LIFT_RISE * (1 + Math.random() * 3)).addScaledVector(randomDirection(dustSpread), LIFT_RISE * 2);
         this.effects.soot(scratch, dustVelocity, 2 + Math.random(), ship.radius * 0.5, ship.radius * 3, LIFT_COLOR);
       }
     }

@@ -17,6 +17,7 @@ import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH
 const airFlow = new THREE.Vector3();
 import { plumeStrength } from './plume';
 import { atan, exp, hypot, tan } from '../detmath';
+import { randomDirection } from '../detthree';
 import { CAMERA_FOV, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
@@ -814,9 +815,9 @@ export class Bot {
     if (now >= this.nextRethink) {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
       // the aim wanders around the target: a direction and a share of the full error (see aimError)
-      this.aimOffset.randomDirection().multiplyScalar(Math.random());
+      randomDirection(this.aimOffset).multiplyScalar(Math.random());
       this.snipe = Math.random() < SNIPE_CHANCE;
-      if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * (this.flat ? this.home : 30000));
+      if (Math.random() < 0.2) randomDirection(this.wanderTarget).multiplyScalar(Math.random() * (this.flat ? this.home : 30000));
       if (this.flat) this.wanderTarget.y = this.roof - ROAM_UNDER;
     }
 
@@ -950,7 +951,7 @@ export class Bot {
         desired.copy(goal).normalize().multiplyScalar(approach).add(target.flight.velocity);
         if (target !== this.orbiting) {
           this.orbiting = target;
-          this.orbitAxis.randomDirection();
+          randomDirection(this.orbitAxis);
         }
         // behind it, where the drive is open, the arc is done: the bot settles there and fires
         if (!target.tailToward(toTarget)) {
@@ -1425,6 +1426,6 @@ export class Bot {
     if (now < this.nextJinkRoll) return;
     this.nextJinkRoll = now + 0.2 + Math.random() * 0.2;
     const scatter = Math.min(JINK_SCATTER_MAX, this.jink / (RCS_THRUST * JINK_SCATTER));
-    this.jinkOffset.randomDirection().multiplyScalar(target.radius * scatter * Math.random());
+    randomDirection(this.jinkOffset).multiplyScalar(target.radius * scatter * Math.random());
   }
 }

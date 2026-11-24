@@ -1012,6 +1012,14 @@ export function standClaims(field: AsteroidField, plan: Plan = planMining(field)
   plan.ids.forEach((id, slot) => field.attach(id, plan.solids[slot] ?? []));
 }
 
+let painted: { atlas: THREE.CanvasTexture; cloud: THREE.CanvasTexture; saw: THREE.CanvasTexture } | null = null;
+
+/** The dressing's own textures, drawn once and shared by every layout it dresses. */
+function paints() {
+  painted ??= { atlas: atlasTexture(), cloud: cloudTexture(), saw: sawTexture() };
+  return painted;
+}
+
 /** The atlas of paint and glows (see SLOGAN_CELL and the cells after it): white on black, its red channel read. */
 function atlasTexture(): THREE.CanvasTexture {
   const size = 1024;
@@ -1233,10 +1241,12 @@ export class Mining {
       standClaims(field, plan);
       return;
     }
+    // the dressing of another layout goes with its geometry and materials; the textures are drawn once and shared (see paints)
     for (const child of [...this.group.children]) {
       this.group.remove(child);
-      const mesh = child as THREE.Mesh;
+      const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
       mesh.geometry.dispose();
+      mesh.material.dispose();
     }
     this.layoutKey = field.layout!.key;
     const plan = planMining(field);
@@ -1247,12 +1257,12 @@ export class Mining {
     for (let i = 0; i < plan.holes.length; i++) this.holes.push({ at: new THREE.Vector3(), up: new THREE.Vector3(), live: false });
     const rocks = this.rocks;
     const steel = new THREE.Mesh(plan.steel.geometry(), rockBound(new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(STEEL_SEED, STEEL_WEAR), 1.5), vertexColors: true, envMap: shine(), envMapIntensity: 0.35 }), rocks, true));
-    const stone = new THREE.Mesh(plan.stone.geometry(), rockBound(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, flatShading: false, map: sawTexture() }), rocks));
+    const stone = new THREE.Mesh(plan.stone.geometry(), rockBound(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, flatShading: false, map: paints().saw }), rocks));
     for (const mesh of [steel, stone]) mesh.receiveShadow = true;
     const additive = { blending: THREE.AdditiveBlending, depthWrite: false, transparent: true };
     const common = { rocks, time: this.time, viewport: this.viewport };
     const glow = new THREE.Mesh(plan.glow.geometry(), new THREE.ShaderMaterial({
-      uniforms: { ...common, atlas: { value: atlasTexture() } },
+      uniforms: { ...common, atlas: { value: paints().atlas } },
       vertexShader: glowVertex,
       fragmentShader: glowFragment,
       ...additive,
@@ -1276,7 +1286,7 @@ export class Mining {
     quad.setAttribute('look', new THREE.InterleavedBufferAttribute(cloudData, 4, 4));
     quad.instanceCount = plan.clouds.length / 8;
     const clouds = new THREE.Mesh(quad, new THREE.ShaderMaterial({
-      uniforms: { sun: this.sun, sunColor: this.sunColor, map: { value: cloudTexture() } },
+      uniforms: { sun: this.sun, sunColor: this.sunColor, map: { value: paints().cloud } },
       vertexShader: cloudVertex,
       fragmentShader: cloudFragment,
       ...additive,

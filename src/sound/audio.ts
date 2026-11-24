@@ -2,7 +2,7 @@
  * Sound in vacuum: nothing outside the own ship is audible. What the pilot hears travels
  * through the hull (muffled by a low-pass filter): the own laser, the drive, the thrusters,
  * hits and debris on the own ship. Cockpit beeps from the ship's computer are unfiltered.
- * Inside a planet's air (Jupiter, see world/air) sound carries outside too: the wind roaring
+ * Inside a planet's air (Jupiter's, Titan's or Venus's, see world/air) sound carries outside too: the wind roaring
  * past the hull, the roar of the plasma around a hull flying hot through it, and thunder after
  * lightning, through the hull like the rest.
  * Low over a world's ground the hover field pushes on the hull against the ground's every bump,
