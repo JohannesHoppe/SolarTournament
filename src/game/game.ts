@@ -8628,6 +8628,7 @@ export class Game implements OnlineGame {
       position: flight.position.toArray(),
       velocity: flight.velocity.toArray(),
       orientation: flight.orientation.toArray() as [number, number, number, number],
+      spin: flight.angularVelocity.toArray(),
       drive: flight.driveFactor,
       thrusters: flight.thrusterFactor,
     };

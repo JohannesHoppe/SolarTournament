@@ -34,6 +34,8 @@ export interface InputFrame {
   position: Vec3;
   velocity: Vec3;
   orientation: [number, number, number, number];
+  /** The ship's spin before the step (rad/s in the ship's frame, FlightModel.angularVelocity), which the flight model turns towards what is commanded at a bounded rate. */
+  spin: Vec3;
   /** Drive and thrusters, 0..1. */
   drive: number;
   thrusters: number;
