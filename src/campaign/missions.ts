@@ -28,6 +28,7 @@ import { yacht } from '../world/yacht';
 import type { HullBox } from '../world/boxes';
 import { LAND as ENCELADUS_LAND, STRIPE_NAMES, STRIPE_WAY, VENTS } from '../world/enceladus';
 import type { Asteroid } from '../world/asteroids';
+import { PLACE_PEOPLE } from './standing';
 import type { Claim } from '../world/mining';
 import { arenaById, type ArenaId } from '../world/arenas';
 import type { AsteroidField } from '../world/asteroids';
@@ -2155,8 +2156,12 @@ export const BOUNTY_TIERS: readonly { target: number; escorts: number; skill: nu
   { target: 0.5, escorts: 2, skill: 0.35, pay: 2500, ratings: 150 },
   { target: 0.55, escorts: 3, skill: 0.4, pay: 4000, ratings: 250 },
 ];
-/** The wanted faces, three a place, in the order of COURIER_PLACES (never translated). */
-const WANTED: readonly (readonly [string, string, string])[] = [
+/**
+ * The wanted faces in the order of COURIER_PLACES (never translated): three a place whose people
+ * count the Host (see campaign/standing), the second and third offered only as they trust it;
+ * one where nobody does (the Ballroom, whose guests count nobody).
+ */
+const WANTED: readonly (readonly string[])[] = [
   ['Gravel Mae', 'Scrapjaw', 'Saint Abrasive'],
   ['Twitch Okono', 'The Dowager', 'Lucky Pell'],
   ['Corporal Nobody', 'Red Tibor', 'Halfprint'],
@@ -2173,7 +2178,7 @@ const WANTED: readonly (readonly [string, string, string])[] = [
   ['Last Rung', 'Dysnomia Jane', 'Hollow Ruth'],
   ['Kiln Rat', 'Lantern Moll', 'Glow'],
   ['Feeder Fang', 'Snowball', 'The Harvester'],
-  ['Gala Crasher', 'Champagne Vex', 'Mister Bow Tie'],
+  ['Gala Crasher'],
 ];
 /** The places of the bounties in an air thick enough to hide a wing: a face there keeps one escort fewer, its gang unable to hold formation where it cannot see itself. */
 const HAZE_PLACES: readonly ArenaId[] = ['titan'];
@@ -2202,7 +2207,7 @@ function wanted(arena: ArenaId, name: string, tier: number): Drill {
   };
 }
 
-/** The bounties as jobs: three at each place of the courier runs (see BOUNTY_TIERS). */
+/** The bounties as jobs: three at each place of the courier runs whose people count the Host, one where nobody does (see BOUNTY_TIERS, WANTED). */
 const bounties: Mission[] = COURIER_PLACES.flatMap(([arena, after], p) =>
   WANTED[p].map((name, tier): Mission => ({
     id: `bounty:${arena}:${tier + 1}`,
@@ -2340,8 +2345,8 @@ const pitNight: Drill = {
 /** A night in the Pit, from the Gullet: never done, never the story's (see Mission.pit). */
 const pit: Mission = { id: 'pit', name: msg('The Pit'), drills: [pitNight], pay: 0, pit: true };
 
-/** The smuggling runs as jobs: one at each place of the courier runs, offered once its people count the Host as Known. */
-const smugglingRuns: Mission[] = COURIER_PLACES.map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
+/** The smuggling runs as jobs: one at each place of the courier runs with a people of its own, offered once they count the Host as Known. */
+const smugglingRuns: Mission[] = COURIER_PLACES.filter(([arena]) => PLACE_PEOPLE[arena]).map(([arena, after]) => ({ id: `smuggle:${arena}`, name: msg('Smuggling Run'), drills: [smuggling(arena)], pay: SMUGGLE_PAY, ratings: SMUGGLE_RATINGS, side: after, smuggle: arena, standing: 1 }));
 
 const valhallaSprint = timeTrial({ line: CAMPAIGN.valhallaSprint, arena: 'callisto', points: SPRINT_COURSE, normals: SPRINT_COURSE.map(() => SPRINT_WAY), time: SPRINT_TIME, gold: SPRINT_GOLD, missed: CAMPAIGN.valhallaSprintMissed, slow: CAMPAIGN.valhallaSprintSlow });
 

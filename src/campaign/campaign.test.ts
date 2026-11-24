@@ -6,6 +6,7 @@ import { DRIVE_STEP, PLATING_STEP, RADIATOR_STEP, STOCK, THRUSTER_STEP } from '.
 import { COURIER_PLACES, CUTTER_PRICE, MINING_PLACES } from './missions';
 import { takeChip, takeTag } from './campaign';
 import { FAMILIES_PAY, tagId, TAGS_PER_PLACE } from './finds';
+import { PLACE_PEOPLE } from './standing';
 
 describe('the campaign Lot 7731', () => {
   it('starts with the debt owed and the first mission next', () => {
@@ -60,6 +61,16 @@ describe('the campaign Lot 7731', () => {
     expect(sideTrips(campaign).some((mission) => mission.courier === 'rheasilvia')).toBe(false);
     complete(campaign, MISSIONS.find((mission) => mission.id === 'rheasilvia')!);
     expect(sideTrips(campaign).some((mission) => mission.courier === 'rheasilvia')).toBe(true);
+  });
+
+  it('offers every side job it builds: a job a people’s standing opens only where a people counts the Host, and each reached by flying the board', () => {
+    for (const mission of MISSIONS.filter((job) => job.standing)) expect(PLACE_PEOPLE[sideJobAt(mission)!], mission.id).toBeDefined();
+    // the whole story done, then every side job the board offers flown, without a rumor, until it offers none
+    const campaign = freshCampaign();
+    campaign.done = MISSIONS.filter((mission) => !mission.side && !mission.pit).map((mission) => mission.id);
+    for (let offered = sideTrips(campaign); offered.length; offered = sideTrips(campaign)) for (const mission of offered) complete(campaign, mission);
+    const never = MISSIONS.filter((mission) => mission.side && !mission.bar && !campaign.done.includes(mission.id)).map((mission) => mission.id);
+    expect(never).toEqual([]);
   });
 
   it('takes what the Host lost on the job off the pay before the yard takes its cut, never below nothing', () => {
