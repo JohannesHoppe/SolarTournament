@@ -964,11 +964,14 @@ export class AsteroidField {
         a.object.quaternion.premultiply(slerp(easing.identity(), ease.turn, left));
       } else a.ease = null;
     }
-    // a piece standing where it stood when its matrices were last reckoned (a world's ground, a
-    // rack, a slab: most pieces of a world) keeps them as they are, and what hangs under it too:
-    // reckoned again from the same pose they would come out the same to the bit
+    // only the piece's own matrix: its collisions and rays read it and its parts' local matrices,
+    // never what hangs under it in the world (LOD levels, junk parts, hull sections), whose world
+    // matrices the renderer reckons before it draws. A piece standing where it stood when its
+    // matrix was last reckoned (a world's ground, a rack, a slab: most pieces of a world) keeps it
+    // and its inverse as they are: reckoned again from the same pose they would come out the same
+    // to the bit
     if (!samePose(a)) {
-      a.object.updateMatrixWorld(true);
+      a.object.updateWorldMatrix(false, false);
       a.inverse.copy(a.object.matrixWorld).invert();
     }
     const frost = a.weld === null ? undefined : this.frosts.get(a.weld);
