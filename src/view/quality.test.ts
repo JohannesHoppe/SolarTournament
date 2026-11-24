@@ -27,10 +27,10 @@ describe('the quality ladder', () => {
       expect(below.belt).toBeLessThanOrEqual(above.belt);
       expect(below.landmark).toBeLessThanOrEqual(above.landmark);
       expect(below.lens).toBeLessThanOrEqual(above.lens);
-      expect(below.traces).toBeLessThanOrEqual(above.traces);
       expect(below.showcase.pixelRatio).toBeLessThanOrEqual(above.showcase.pixelRatio);
       expect(below.showcase.every).toBeGreaterThanOrEqual(above.showcase.every);
       if (!above.lacquer) expect(below.lacquer).toBe(false);
+      if (!above.traces) expect(below.traces).toBe(false);
       if (!above.showcase.shadows) expect(below.showcase.shadows).toBe(false);
       // every rung changes something
       expect(JSON.stringify(below)).not.toBe(JSON.stringify(above));

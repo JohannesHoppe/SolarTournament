@@ -12,9 +12,9 @@ import * as THREE from 'three';
  * skirt is only ever seen through such a gap. Only the looks: the field collides with the relief
  * itself (see world/asteroids, Relief), never with this mesh.
  */
-const TILE = 64;
-/** The levels' steps: every cell of the grid, every second, every fourth, … */
-const STEPS = [1, 2, 4, 8, 16];
+export const TILE = 64;
+/** The levels' steps: every cell of the grid, every second, every fourth, … A tile narrower than a step leaves out that level and the coarser ones, so a tile's levels are always the first of these. */
+export const STEPS = [1, 2, 4, 8, 16];
 /** How far (px) a coarser level may put the ground from where the full grid has it, on a picture PICTURE px high. */
 export const TOLERANCE = 2;
 const PICTURE = 1440;
@@ -63,8 +63,13 @@ class GroundTile extends THREE.LOD {
   }
 }
 
+/** The index in STEPS of the level `object` draws now if it is a tile of a ground (see tiledGround), 0 for anything else: what lies on the ground follows it (see world/traces). */
+export function tileLevel(object: THREE.Object3D | undefined): number {
+  return object instanceof GroundTile ? object.getCurrentLevel() : 0;
+}
+
 /** The rows or columns a level of step `step` takes from `from` to `to`: every step-th, and always the last. */
-function lines(from: number, to: number, step: number): number[] {
+export function lines(from: number, to: number, step: number): number[] {
   const out: number[] = [];
   for (let i = from; i < to; i += step) out.push(i);
   out.push(to);
@@ -109,9 +114,8 @@ function strays({ x0, x1, z0, z1 }: TileSpan, height: (ix: number, iz: number) =
           for (let ix = ca; ix <= cb; ix++) {
             const u = (ix - ca) / (cb - ca);
             const v = (iz - ra) / (rb - ra);
-            // the two faces of the coarse cell, split as the full grid's are: (a, b, d) and (b, c, d)
             const first = u + v <= 1;
-            const h = first ? ha + u * (hd - ha) + v * (hb - ha) : hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
+            const h = faceHeight(ha, hb, hc, hd, u, v);
             const off = Math.abs(height(ix, iz) - h);
             // a steep face is off the full grid mostly sideways: the distance to its plane is what shows
             most = Math.max(most, off * (first ? lower : upper));
@@ -129,10 +133,9 @@ function strays({ x0, x1, z0, z1 }: TileSpan, height: (ix: number, iz: number) =
 /**
  * A grid laid out as world/boneyard's flatGrid lays it, as something to stand on: its first
  * vertex at (`x0`, `z0`), cells `cellX` by `cellZ`, `nx` by `nz` of them, `height` the grid's at a
- * vertex. `at` gives the height at any point as the finest level draws it (the cell's two faces
- * split as THREE.PlaneGeometry splits them, from (ix, iz) to (ix + 1, iz) and (ix, iz + 1)), held to
- * the grid's border; `cell` gives a point's place on the grid in cells, for finding where a line
- * crosses the faces' edges (the grid's lines and each cell's diagonal, along which ix + iz is whole).
+ * vertex. Each cell is drawn as two faces split as THREE.PlaneGeometry splits them, along the
+ * diagonal from (ix, iz + 1) to (ix + 1, iz), along which ix + iz is whole; gridHeight gives the
+ * height at any point as the finest level draws it, levelHeight as a coarser one does.
  */
 export interface GroundGrid {
   x0: number;
@@ -144,23 +147,77 @@ export interface GroundGrid {
   height(ix: number, iz: number): number;
 }
 
-/** The height of `grid` at (x, z) as its finest level draws it (see GroundGrid). */
+/**
+ * The height at (u, v) (0..1 across and along) in a cell whose corners stand at `ha` (its first
+ * corner), `hb` (one row on), `hc` (one row and column on) and `hd` (one column on), drawn as the
+ * two faces (a, b, d) and (b, c, d) as the grid's index, its levels and their errors take them.
+ */
+function faceHeight(ha: number, hb: number, hc: number, hd: number, u: number, v: number): number {
+  return u + v <= 1 ? ha + u * (hd - ha) + v * (hb - ha) : hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
+}
+
+/** The height of `grid` at (x, z) as its finest level draws it (see GroundGrid), held to the grid's border. */
 export function gridHeight(grid: GroundGrid, x: number, z: number): number {
   const gx = Math.min(grid.nx, Math.max(0, (x - grid.x0) / grid.cellX));
   const gz = Math.min(grid.nz, Math.max(0, (z - grid.z0) / grid.cellZ));
   const ix = Math.min(grid.nx - 1, Math.floor(gx));
   const iz = Math.min(grid.nz - 1, Math.floor(gz));
-  const u = gx - ix;
-  const v = gz - iz;
-  const hb = grid.height(ix, iz + 1);
-  const hd = grid.height(ix + 1, iz);
-  // the faces (a, b, d) and (b, c, d), as the grid's index and the levels' errors take them
-  if (u + v <= 1) {
-    const ha = grid.height(ix, iz);
-    return ha + u * (hd - ha) + v * (hb - ha);
+  return faceHeight(grid.height(ix, iz), grid.height(ix, iz + 1), grid.height(ix + 1, iz + 1), grid.height(ix + 1, iz), gx - ix, gz - iz);
+}
+
+/** The cells a tile of a grid of `nx` by `nz` cells spans, the tile `tx`, `tz` (see tiledGround). */
+function tileSpan(nx: number, nz: number, tx: number, tz: number): TileSpan {
+  return { tx, tz, x0: tx * TILE, x1: Math.min(nx, (tx + 1) * TILE), z0: tz * TILE, z1: Math.min(nz, (tz + 1) * TILE) };
+}
+
+/**
+ * The height of `grid` at (x, z) as its tiles draw it at the level of step STEPS[`level`] (see
+ * tiledGround): the coarse cell of the tile it lies in, split into two faces as the grid's cells
+ * are. At level 0 the same as gridHeight.
+ */
+export function levelHeight(grid: GroundGrid, level: number, x: number, z: number): number {
+  const gx = Math.min(grid.nx, Math.max(0, (x - grid.x0) / grid.cellX));
+  const gz = Math.min(grid.nz, Math.max(0, (z - grid.z0) / grid.cellZ));
+  const span = tileSpan(grid.nx, grid.nz, Math.min(Math.ceil(grid.nx / TILE) - 1, Math.floor(gx / TILE)), Math.min(Math.ceil(grid.nz / TILE) - 1, Math.floor(gz / TILE)));
+  const step = STEPS[level];
+  // the coarse cell's columns and rows: every step-th from the tile's first, and the tile's last
+  const ca = span.x0 + Math.floor(Math.min(gx - span.x0, span.x1 - span.x0 - 1e-6) / step) * step;
+  const ra = span.z0 + Math.floor(Math.min(gz - span.z0, span.z1 - span.z0 - 1e-6) / step) * step;
+  const cb = Math.min(ca + step, span.x1);
+  const rb = Math.min(ra + step, span.z1);
+  const h = grid.height;
+  return faceHeight(h(ca, ra), h(ca, rb), h(cb, rb), h(cb, ra), (gx - ca) / (cb - ca), (gz - ra) / (rb - ra));
+}
+
+/** The grids grounds are drawn on, by the object that draws each (see drawnOn). */
+const DRAWN = new WeakMap<THREE.Object3D, GroundGrid>();
+
+/** Marks `object` as drawing a ground on `grid`, laid out in the object's own frame (see drawnGround); returns it. */
+export function drawnOn<T extends THREE.Object3D>(object: T, grid: GroundGrid): T {
+  DRAWN.set(object, grid);
+  return object;
+}
+
+/** A ground as drawn: its grid, and `matrix` taking the grid's frame into the frame of the piece it belongs to. */
+export interface DrawnGround {
+  grid: GroundGrid;
+  matrix: THREE.Matrix4;
+}
+
+/** The ground `root` draws (see drawnOn), the first found below it, or null if it draws none: for what is laid on the ground as drawn after it was built (a hull's scrape marks, see world/traces). */
+export function drawnGround(root: THREE.Object3D): DrawnGround | null {
+  const marked: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    if (DRAWN.has(object)) marked.push(object);
+  });
+  const found = marked[0];
+  if (!found) return null;
+  const matrix = new THREE.Matrix4();
+  for (let object: THREE.Object3D | null = found; object && object !== root; object = object.parent) {
+    object.updateMatrix();
+    matrix.premultiply(object.matrix);
   }
-  const hc = grid.height(ix + 1, iz + 1);
-  return hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
+  return { grid: DRAWN.get(found)!, matrix };
 }
 
 /** The grid of a flatGrid geometry `full` of `nx` by `nz` cells, its heights its vertices' y. */
@@ -192,9 +249,7 @@ export function tiledGround(full: THREE.BufferGeometry, nx: number, nz: number, 
   const tilesX = Math.ceil(nx / TILE);
   const tilesZ = Math.ceil(nz / TILE);
   const tiles: TileSpan[] = [];
-  for (let tz = 0; tz < tilesZ; tz++) {
-    for (let tx = 0; tx < tilesX; tx++) tiles.push({ tx, tz, x0: tx * TILE, x1: Math.min(nx, (tx + 1) * TILE), z0: tz * TILE, z1: Math.min(nz, (tz + 1) * TILE) });
-  }
+  for (let tz = 0; tz < tilesZ; tz++) for (let tx = 0; tx < tilesX; tx++) tiles.push(tileSpan(nx, nz, tx, tz));
   const measured = tiles.map((tile) => strays(tile, height, cellX, cellZ));
   const names = Object.keys(full.attributes);
 

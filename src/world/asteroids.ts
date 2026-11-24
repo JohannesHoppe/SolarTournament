@@ -14,6 +14,8 @@ import { cbrt, cos, hypot, pow, sin } from '../detmath';
 import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 import { hill, hillTide, kepler, type HillFrame } from './orbits';
 import { pyramidOf, type Ceiling } from './ceiling';
+import { drawnGround } from './groundlod';
+import type { ScrapeGround } from './traces';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -109,7 +111,12 @@ export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull' | 'rack';
 export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3; part?: boolean };
 
 /** The shapes of one kind (see above); `reliefs`: for a box shape, its top as a ground of hills and hollows (see Relief), by the shape's index. */
-export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean; fracture?: FractureSet; reliefs?: readonly (Relief | null)[] };
+/**
+ * A kind's shapes. `builds` gives for a shape the function that builds its looks the first time
+ * the field places it: its `near` entry then only stands in for it with what the field measures
+ * (its collider box), so a session never builds what it never shows (the campaign's places).
+ */
+export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean; fracture?: FractureSet; reliefs?: readonly (Relief | null)[]; builds?: readonly ((() => THREE.Object3D) | null)[] };
 
 /**
  * A massive body at the center of an arena or near it (a planet, a black hole): it pulls with
@@ -500,6 +507,8 @@ interface Template {
   parts: Attachment[];
   /** What a piece of the Satellite Junkyard's junk is built of (see world/junk); null for every other shape. */
   junk: JunkBuild | null;
+  /** Builds the shape's looks the first time it is placed, `object` standing in for them till then (see TemplateSet.builds); null once built or for a shape built at once. */
+  build?: (() => THREE.Object3D) | null;
 }
 
 /** The path of a piece in its shape's fracture tree from its id (`12.2.0`: piece 0 of piece 2 of rock 12), [] for a whole rock. */
@@ -604,6 +613,7 @@ export class AsteroidField {
           centroid: new THREE.Vector3(),
           parts: ((object.userData.parts ?? []) as { center: THREE.Vector3; half: THREE.Vector3 }[]).map((part) => attachment(new THREE.Matrix4().makeTranslation(part.center), part.half)),
           junk: (object.userData.junk as JunkBuild | undefined) ?? null,
+          build: set.builds?.[i] ?? null,
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull), rack: templates(sets.rack) };
@@ -828,6 +838,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
     this.grounds.length = 0;
+    this.drawn.clear();
     this.weldHomes.clear();
     this.broken.clear();
     this.frosts.clear();
@@ -858,6 +869,10 @@ export class AsteroidField {
     solid = false,
     spinRate = solid ? 0 : (this.layout?.spin ?? 0),
   ): Asteroid {
+    if (template.build) {
+      template.object = template.build();
+      template.build = null;
+    }
     const s = template.scale * scale;
     const meanRadius = template.mean * s;
     let object: THREE.Object3D = template.object.clone(true);
@@ -1656,6 +1671,34 @@ export class AsteroidField {
    * negative height. Only the ground itself counts: what stands on it (a rack, a module, a rock) is
    * not ground.
    */
+  /** The grounds as drawn, of the pieces of the world's ground that draw theirs on a grid (see drawnGround), each found once. */
+  private readonly drawn = new Map<Asteroid, ScrapeGround | null>();
+
+  /**
+   * The ground as drawn under `position`: of the piece of the world's ground whose box it lies
+   * over, if that piece draws its ground on a grid (see world/groundlod, drawnOn), with the
+   * matrices between the grid's frame and the world; for what is laid on the ground as drawn (a
+   * hull's scrape marks, see world/traces). Null over a ground drawn otherwise (a box's top) or
+   * none.
+   */
+  drawnGround(position: THREE.Vector3): ScrapeGround | null {
+    for (const ground of this.grounds) {
+      const local = u.copy(position).applyMatrix4(ground.inverse).sub(ground.center);
+      if (Math.abs(local.x) > ground.semiAxes.x || Math.abs(local.z) > ground.semiAxes.z) continue;
+      let drawn = this.drawn.get(ground);
+      if (drawn === undefined) {
+        // the piece's ground lies where it was placed, for good
+        const found = drawnGround((ground.object.userData.template as Template).object);
+        ground.object.updateMatrixWorld(true);
+        const toWorld = found && new THREE.Matrix4().multiplyMatrices(ground.object.matrixWorld, found.matrix);
+        drawn = found && toWorld ? { grid: found.grid, toWorld, fromWorld: toWorld.clone().invert() } : null;
+        this.drawn.set(ground, drawn);
+      }
+      if (drawn) return drawn;
+    }
+    return null;
+  }
+
   groundBelow(position: THREE.Vector3, normal: THREE.Vector3): number | null {
     let best: number | null = null;
     for (const ground of this.grounds) {

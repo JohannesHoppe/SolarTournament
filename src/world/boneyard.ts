@@ -29,7 +29,7 @@ import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
 import { vestaGround } from './rheasilvia';
-import { gridOf, tiledGround } from './groundlod';
+import { drawnOn, gridOf, tiledGround } from './groundlod';
 import { dustPatchTexture, groundTraces, PATCH_GLSL, type TracePlan } from './traces';
 
 /**
@@ -73,16 +73,26 @@ export const noUv = (geometry: THREE.BufferGeometry) => {
   return geometry;
 };
 
+/** The pieces of kind 'rack' the worlds of a tournament stand on and among (the race worlds, the worlds fought over): built with the page; the campaign's places are built the first time a place is entered (see TemplateSet.builds). */
+const PUBLIC_TYPES = new Set([CRACK_TYPE, STATION_TYPE, BRIDGE_TYPE, THROAT_TYPE, LINEAE_TYPE, ...Object.values(BATTLE_TYPES), ...Object.values(STRAIT_TYPES)]);
+
 /**
  * The racks: girders (posts at both ends and at every cradle, rails along top and bottom and at
  * every tier, cross braces), three tiers of cradles and the fighters on them; a full rack, one with gaps, an
- * empty frame. Each within its collider box (RACK_BOXES), which is its collision shape.
+ * empty frame. Each within its collider box (RACK_BOXES), which is its collision shape. With them
+ * every other piece of kind 'rack' (see world/yard): those of a tournament's worlds built at once,
+ * the campaign's only when the field first places them, each standing in by its collider box till then.
  */
 export function rackSet(): TemplateSet {
-  const steel = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(YARD_SEED), 2), color: 0x8a8f96 });
-  const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(YARD_SEED + 1, DEPOT), 2), color: 0x7d8466 });
-  const depot = depotLooks();
-  const near = RACK_BOXES.map((half, type) => {
+  let looks: { steel: THREE.MeshStandardMaterial; paint: THREE.MeshStandardMaterial; depot: ReturnType<typeof depotLooks> } | null = null;
+  const shared = () =>
+    (looks ??= {
+      steel: new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(YARD_SEED), 2), color: 0x8a8f96 }),
+      paint: new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(YARD_SEED + 1, DEPOT), 2), color: 0x7d8466 }),
+      depot: depotLooks(),
+    });
+  const build = (type: number): THREE.Object3D => {
+    const half = RACK_BOXES[type];
     if (type === VESTA_GROUND_TYPE) return vestaGround(half);
     if (type === OCCATOR_TYPE) return occatorGround(half);
     if (type > OCCATOR_TYPE && type <= OCCATOR_TYPE + STEPS) return occatorStep(type - OCCATOR_TYPE, half);
@@ -126,6 +136,7 @@ export function rackSet(): TemplateSet {
     if (type === BRIDGE_TYPE) return iceSlab(half);
     if (type === LINEAE_TYPE) return lineaeGround(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
+    const { steel, paint, depot } = shared();
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
     const girders: THREE.BufferGeometry[] = [];
@@ -153,8 +164,10 @@ export function rackSet(): TemplateSet {
     group.add(new THREE.Mesh(boxUv(mergeGeometries(girders.map(noUv)), 400), steel));
     if (hulls.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(hulls.map(noUv)), 400), paint));
     return withCollider(group, half);
-  });
-  return { near, far: [], box: true, reliefs: RACK_RELIEFS };
+  };
+  const near = RACK_BOXES.map((half, type) => (PUBLIC_TYPES.has(type) ? build(type) : withCollider(new THREE.Group(), half)));
+  const builds = RACK_BOXES.map((_, type) => (PUBLIC_TYPES.has(type) ? null : () => build(type)));
+  return { near, far: [], box: true, reliefs: RACK_RELIEFS, builds };
 }
 
 /** The depot's plating: one tile of it every this far (units, 8 m), the scale of its plates of 0.5 to 2 m (see stationSurface). */
@@ -944,7 +957,10 @@ export function reliefGround(half: THREE.Vector3, relief: Relief, color: number,
   const { widthSegments, heightSegments } = geometry.parameters;
   const ground = tiledGround(groundUv(geometry), widthSegments, heightSegments, material);
   ground.traverse((object) => (object.receiveShadow = object.castShadow = object instanceof THREE.Mesh));
-  if (traces) ground.add(groundTraces(traces, gridOf(geometry, widthSegments, heightSegments)));
+  // the traces among the tiles, each chunk following its tile's level; the grid the ground is drawn on marked for the hulls' scrape marks
+  const grid = gridOf(geometry, widthSegments, heightSegments);
+  if (traces) ground.add(groundTraces(traces, grid, true));
+  drawnOn(ground, grid);
   return withCollider(ground, half);
 }
 

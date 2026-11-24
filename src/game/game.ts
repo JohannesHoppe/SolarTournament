@@ -885,6 +885,10 @@ const junkAt = new THREE.Vector3();
 const junkPoint = new THREE.Vector3();
 /** Where a ship's path this frame first met a piece (see collide). */
 const sweepAt = new THREE.Vector3();
+/** The ground's normal under a ship another browser runs (see scrapeRemote). */
+const remoteGround = new THREE.Vector3();
+/** A ship another browser runs is seen touching the ground within this much (units, 50 cm) more than its radius: its place comes eased in from the network, never pushed out of the ground as the ships run here are (see scrapeRemote). */
+const REMOTE_TOUCH = 10;
 const junkLocal = new THREE.Vector3();
 const junkBefore = new THREE.Vector3();
 const junkRelative = new THREE.Vector3();
@@ -3243,7 +3247,7 @@ export class Game implements OnlineGame {
     this.hang(this.belt.group, arena.id === 'belt');
     this.mining.setSun(arena.sun.color, arena.sun.intensity);
     // hulls leave their scrape marks on airless ground only, as the traces people left lie there alone (see world/traces)
-    this.scrapes.mesh.visible = !air;
+    this.scrapes.enabled = !air;
     if (!keepWreckage) {
       this.scrapes.clear();
       this.wrecks.clear();
@@ -5188,6 +5192,7 @@ export class Game implements OnlineGame {
       if (ship.owner !== null) {
         if (ship.alive) this.outside(ship, dt, ship.pull);
         ship.updateRemote(dt, now);
+        if (ship.alive && this.scrapes.enabled && this.field.fall > 0) this.scrapeRemote(ship, now);
         // the synced throttle is all the drive's trail needs
         if (ship.alive) this.exhaust(ship, dt);
         continue;
@@ -9438,7 +9443,7 @@ export class Game implements OnlineGame {
   private glideOver(ship: Ship, dt: number, now: number) {
     const into = groundBlow(glide(ship.flight.velocity, normal, dt), this.field.fall);
     if (ship === this.me) this.lastScrape = this.lastGlide = now;
-    this.scrapes.add(ship, scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), normal, now);
+    this.scrapes.add(ship, scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), normal, now, this.field.drawnGround(scratch));
     if (into >= SAFE_IMPACT * 0.4) {
       ship.syncTransform();
       this.bounceHurts(ship, into, now, 'ground');
@@ -9449,6 +9454,13 @@ export class Game implements OnlineGame {
     if (speed < GLIDE_SPARKS || Math.random() > dt * GLIDE_SPARK_RATE) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 10 + speed * 0.01);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(0.5, speed / 4000), rate: 2.2 });
+  }
+
+  /** A ship another browser runs leaves its scrape marks here too, from where it is seen: wherever its hull touches a world's ground (looks only, nothing is sent for them). */
+  private scrapeRemote(ship: Ship, now: number) {
+    const height = this.field.groundBelow(ship.flight.position, remoteGround);
+    if (height === null || height > ship.radius + REMOTE_TOUCH) return;
+    this.scrapes.add(ship, scratch.copy(ship.flight.position).addScaledVector(remoteGround, -height), remoteGround, now, this.field.drawnGround(scratch));
   }
 
   /** A ship touched a surface (`what`: a rock, a battleship's hull, a gate) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
