@@ -30,9 +30,13 @@ describe('two ships meeting', () => {
     expect(ramDamage(ms(108), 'drive').drive).toBeLessThan(1);
   });
 
-  it('hurt by the felt half of the closing speed, as a rock deals it: nothing below 25 m/s, a dent from a pack\'s jostle', () => {
-    // two equal hulls each feel half the closing speed: below 25 m/s that is a rock's harmless 12.5
+  it('hurt by the felt half of the closing speed, as a rock deals it: only the least a ram costs below 25 m/s on a flank, the blow beyond', () => {
+    // two equal hulls each feel half the closing speed: below 25 m/s that is a rock's harmless 12.5, so a flank takes only the least a ram costs
     expect(ramDamage(ms(24), 'flank').hull).toBe(2);
+    expect(ramDamage(ms(35), 'nose').hull).toBe(2);
+    expect(ramDamage(ms(19), 'drive').hull).toBe(2);
+    expect(ramDamage(ms(30), 'drive').hull).toBeGreaterThan(2);
+    expect(ramDamage(ms(40), 'nose').hull).toBeGreaterThan(2);
     expect(ramDamage(ms(40), 'flank').hull).toBeCloseTo(12.5, 5);
     expect(ramDamage(ms(60), 'flank').hull).toBeCloseTo(29.2, 1);
     expect(ramDamage(ms(60), 'drive').drive).toBeLessThan(0.5);

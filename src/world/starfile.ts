@@ -61,7 +61,7 @@ export function spectralBV(type: string): number {
 /**
  * A star's surface temperature (kelvin) from its color index B−V, by Ballesteros's formula
  * (2012), which treats a star as a black body: about 10 000 K for Vega's 0, 5 800 K for the
- * sun's 0.65, 3 600 K for Betelgeuse's 1.85.
+ * sun's 0.65, 3 300 K for Betelgeuse's 1.85.
  */
 export function bvTemperature(bv: number): number {
   return 4600 * (1 / (0.92 * bv + 1.7) + 1 / (0.92 * bv + 0.62));

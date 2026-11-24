@@ -231,7 +231,9 @@ export interface Replay {
 /**
  * Replays a recording (see recorder.ts) through the flight model and the autopilot: every step
  * the autopilot flew is flown again from the recorded input; a step flown otherwise (free drift,
- * brake, flip, a swing) takes the recorded state as it was. The roll comes from the recording's
+ * brake, flip, a swing) takes the recorded state as it was, and each stretch of the autopilot
+ * starts from the recorded state, its spin included (a recording begun mid-turn, a stretch after
+ * a brake or a flip). The roll comes from the recording's
  * commands (the game adds it to the autopilot's), the aim assist is flown again toward the ship it
  * pulled onto.
  */
@@ -255,6 +257,7 @@ export function replay(recording: Recording): Replay {
       flight.position.fromArray(frame.position);
       flight.velocity.fromArray(frame.velocity);
       flight.orientation.fromArray(frame.orientation);
+      flight.angularVelocity.fromArray(frame.spin);
     }
     flight.driveFactor = frame.drive;
     flight.thrusterFactor = frame.thrusters;

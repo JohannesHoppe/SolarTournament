@@ -392,6 +392,48 @@ export type FieldState = {
   m?: ShovedState[];
 };
 
+/**
+ * A field's snapshot cut into parts, each of whole families (a root and every piece it broke
+ * into, see rootOf) and each listing no more than `bytes` of them as JSON (the first no more
+ * than `first`, which leaves room for what its message carries besides), unless one family alone
+ * is larger: a heavily broken field is far more than one message may carry (see net/session,
+ * sendSync). Every part carries the layout's key and the field time; joined again (see
+ * joinParts) they are the snapshot, its lists in another order.
+ */
+export function fieldParts(state: FieldState, bytes: number, first = bytes): FieldState[] {
+  const families = new Map<string, { a: AsteroidState[]; x: FieldState['x']; d: string[]; m: ShovedState[] }>();
+  const family = (id: string) => {
+    const root = rootOf(id);
+    return families.get(root) ?? families.set(root, { a: [], x: [], d: [], m: [] }).get(root)!;
+  };
+  for (const rock of state.a) family(rock.id).a.push(rock);
+  for (const broken of state.x) family(broken.id).x.push(broken);
+  for (const id of state.d ?? []) family(id).d.push(id);
+  for (const moved of state.m ?? []) family(moved.id).m.push(moved);
+  const parts: FieldState[] = [];
+  let part: FieldState | null = null;
+  let size = 0;
+  for (const lists of families.values()) {
+    const own = JSON.stringify(lists).length;
+    if (!part || size + own > (parts.length === 1 ? first : bytes)) {
+      part = { k: state.k, t: state.t, a: [], x: [], d: [], m: [] };
+      parts.push(part);
+      size = JSON.stringify(part).length;
+    }
+    part.a.push(...lists.a);
+    part.x.push(...lists.x);
+    part.d!.push(...lists.d);
+    part.m!.push(...lists.m);
+    size += own;
+  }
+  return parts.length ? parts : [{ ...state, a: [], x: [], d: [], m: [] }];
+}
+
+/** The snapshot whose parts these are (see fieldParts): the first's key and field time, every part's lists joined. */
+export function joinParts(parts: readonly FieldState[]): FieldState {
+  return { k: parts[0].k, t: parts[0].t, a: parts.flatMap((p) => p.a), x: parts.flatMap((p) => p.x), d: parts.flatMap((p) => p.d ?? []), m: parts.flatMap((p) => p.m ?? []) };
+}
+
 /** A piece's motion since a comet or the battleship shoved it: the field time of the blow, its position, drift, orientation and spin then (axis and rate), and who shoved it (the comet's seed, or RAMMED). */
 export type ShovedState = { id: string; b: number; p: number[]; v: number[]; q: number[]; s: number[]; c: number };
 

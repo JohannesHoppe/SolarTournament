@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, fieldState, flagsState, fleetState, ids, shipState, shovedState, wreckStates } from './validate';
+import { cleanName, fieldState, MAX_FAMILY, MAX_ROOTS, flagsState, fleetState, ids, shipState, shovedState, wreckStates } from './validate';
 import { KNOCKED, RAMMED } from '../world/asteroids';
 import { TINTS } from '../ship/tints';
 import { MAX_LOOKS } from '../game/hangar';
+import { ARENAS, FIGHT_WORLDS, RACE_WORLDS } from '../world/arenas';
+import { PIECES } from '../world/fracture';
+import { testField } from '../test/field';
 
 const ship = {
   id: 'p:abc',
@@ -64,6 +67,25 @@ describe('messages from other browsers', () => {
     expect(fieldState({ ...field, k: undefined })).toBeNull();
   });
 
+  it("take the snapshot of a tournament's largest field broken down to dust in full", () => {
+    const field = testField();
+    let largest: string[] = [];
+    for (const arena of [...ARENAS, ...RACE_WORLDS, ...FIGHT_WORLDS]) {
+      field.generate(arena.layout);
+      if (field.roots.length > largest.length) largest = [...field.roots];
+    }
+    expect(largest.length).toBeLessThanOrEqual(MAX_ROOTS);
+    // a family's pieces: the root, its PIECES and up to 3 of each of these (see world/fracture)
+    expect(1 + PIECES + PIECES * 3).toBe(MAX_FAMILY);
+    const family = (root: string) => [root, ...Array.from({ length: PIECES }, (_, i) => [`${root}.${i}`, ...[0, 1, 2].map((j) => `${root}.${i}.${j}`)]).flat()];
+    const roots = Array.from({ length: MAX_ROOTS }, (_, k) => largest[k] ?? `${k + 1000}`);
+    const pieces = roots.flatMap(family);
+    expect(pieces.length).toBe(MAX_ROOTS * MAX_FAMILY);
+    const snapshot = { k: 'rings', t: 300, a: [], x: pieces.map((id) => ({ id, b: 120 })), d: pieces };
+    expect(fieldState(snapshot)?.x.length).toBe(pieces.length);
+    expect(fieldState({ ...snapshot, x: [...snapshot.x, { id: 'extra', b: 1 }] })).toBeNull();
+  });
+
   it('drop oversized lists', () => {
     expect(ids(Array.from({ length: 201 }, (_, i) => `r0.${i}`))).toBeNull();
     expect(ids(['r0.1', 'p:abc.2.0'])).toEqual(['r0.1', 'p:abc.2.0']);
@@ -94,6 +116,14 @@ describe('messages from other browsers', () => {
     // the field time a comet broke up on its hull, once one did
     expect(fleetState({ ...fleet, c: 98.4 })?.c).toBe(98.4);
     for (const c of [-1, 'soon', null, Infinity]) expect(fleetState({ ...fleet, c })).toBeNull();
+    // the field time and the place it went down, both, and only once it did
+    const sunk = { ...fleet, d: 1, s: 212.345, w: [100, -2000, 30000] };
+    expect(fleetState(sunk)).toEqual(sunk);
+    expect(fleetState({ ...sunk, d: 0 })).toBeNull();
+    expect(fleetState({ ...sunk, w: undefined })).toBeNull();
+    expect(fleetState({ ...sunk, s: undefined })).toBeNull();
+    for (const s of [-1, 'soon', null, Infinity]) expect(fleetState({ ...sunk, s })).toBeNull();
+    for (const w of [[1, 2], [0, 0, 1e12], 'here']) expect(fleetState({ ...sunk, w })).toBeNull();
   });
 
   it('take a piece of the field shoved by a comet, rammed by the battleship or knocked by another piece, and drop it broken', () => {

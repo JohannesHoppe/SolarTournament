@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { InputRecorder } from '../recorder';
+import { InputRecorder, shipState, type Recording } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
@@ -24,9 +24,7 @@ const direction = (yaw: number, pitch = 0) => new THREE.Vector3(sin(yaw) * cos(p
 /** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
 const kept = (flight: FlightModel) => ({
   gravity: [0, 0, 0] as [number, number, number],
-  position: flight.position.toArray(),
-  velocity: flight.velocity.toArray(),
-  orientation: flight.orientation.toArray() as [number, number, number, number],
+  ...shipState(flight),
   drive: 1,
   thrusters: 1,
 });
@@ -282,6 +280,53 @@ describe('the input recorder', () => {
     expect(replayed.flown).toBe(300);
     expect(replayed.position).toBeLessThan(1e-6);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+  });
+
+  /** Flies `steps` steps of a hand turning the nose towards `goal` (braking instead with `brake`), recording each as `mode`. */
+  const recordSteps = (ship: Cockpit, hand: Hand, goal: THREE.Vector3, recorder: InputRecorder, steps: number, brake = false) => {
+    for (let i = 0; i < steps; i++) {
+      const controls = { ...IDLE, ...hand.steer(ship, goal) };
+      const frame = { t: ship.t, dt: STEP, mode: brake ? ('brake' as const) : ('autopilot' as const), controls, pointer: [hand.pointer.x, hand.pointer.y] as [number, number], ...kept(ship.flight) };
+      ship.step(controls, STEP, brake);
+      recorder.add({ ...frame, out: { ...ship.out } });
+    }
+  };
+  /** The replay of `recording` with every frame's spin taken out, as if the recorder kept none. */
+  const withoutSpin = (recording: Recording) => replay({ ...recording, frames: recording.frames.map((frame) => ({ ...frame, spin: [0, 0, 0] as [number, number, number] })) });
+
+  it('replays a recording begun mid-turn from the spin the ship had', () => {
+    const ship = new Cockpit(120 * MS);
+    const hand = new Hand();
+    const goal = direction(-2, 0.4);
+    // the turn is well under way, and spinning hard, when the recording begins
+    for (let i = 0; i < 30; i++) ship.step({ ...IDLE, ...hand.steer(ship, goal) });
+    expect(ship.flight.angularVelocity.length()).toBeGreaterThan(0.5);
+    const recorder = new InputRecorder();
+    recordSteps(ship, hand, goal, recorder, 200);
+    const recording: Recording = JSON.parse(recorder.json());
+    const replayed = replay(recording);
+    expect(replayed.flown).toBe(200);
+    expect(replayed.position).toBeLessThan(1e-6);
+    expect(replayed.velocity).toBeLessThan(1e-6);
+    // started from rest instead, the replay turns another way
+    expect(withoutSpin(recording).position).toBeGreaterThan(1);
+  });
+
+  it('starts each stretch of the autopilot after a brake from the spin the ship had', () => {
+    const ship = new Cockpit(120 * MS);
+    const hand = new Hand();
+    const recorder = new InputRecorder();
+    recordSteps(ship, hand, direction(1.5, -0.2), recorder, 60);
+    // the brake swings the nose against the flight; the autopilot takes over while it still turns
+    recordSteps(ship, hand, direction(1.5, -0.2), recorder, 20, true);
+    expect(ship.flight.angularVelocity.length()).toBeGreaterThan(0.5);
+    recordSteps(ship, hand, direction(-1, 0.5), recorder, 120);
+    const recording: Recording = JSON.parse(recorder.json());
+    const replayed = replay(recording);
+    expect(replayed.flown).toBe(180);
+    expect(replayed.position).toBeLessThan(1e-6);
+    expect(replayed.cockpit.flight.position.distanceTo(ship.flight.position)).toBeLessThan(1e-6);
+    expect(withoutSpin(recording).position).toBeGreaterThan(1);
   });
 
   it('replays the aim assist toward the ship it pulled the nose onto', () => {

@@ -58,6 +58,28 @@ describe("detthree: three.js's rotations on the deterministic functions", () => 
     }
   });
 
+  it('draws a random direction as three.js does from the same numbers', () => {
+    const draws = new Randomizer(11);
+    const numbers = Array.from({ length: 400 }, () => draws.nextFloat());
+    let k = 0;
+    const ours = new THREE.Vector3();
+    const theirs = new THREE.Vector3();
+    const random = Math.random;
+    try {
+      for (let i = 0; i < 200; i++) {
+        randomDirection(ours, () => numbers[k++]);
+        k -= 2;
+        Math.random = () => numbers[k++];
+        theirs.randomDirection();
+        Math.random = random;
+        near(ours, theirs);
+        expect(ours.length()).toBeCloseTo(1, 14);
+      }
+    } finally {
+      Math.random = random;
+    }
+  });
+
   it('measures angles and blends rotations as three.js does', () => {
     for (let i = 0; i < 200; i++) {
       const a = unit().multiplyScalar(r.range(0.1, 10));
@@ -104,16 +126,6 @@ describe("detthree: three.js's rotations on the deterministic functions", () => 
     // repeated points do not divide by zero
     const repeated = new CentripetalCurve([points[0], points[0], points[1], points[2]], false);
     for (let i = 0; i <= 10; i++) expect(Number.isFinite(repeated.getPoint(i / 10).x)).toBe(true);
-  });
-
-  it('picks random directions evenly on the unit sphere', () => {
-    const sum = new THREE.Vector3();
-    for (let i = 0; i < 4000; i++) {
-      const v = randomDirection(new THREE.Vector3());
-      expect(v.length()).toBeCloseTo(1, 12);
-      sum.add(v);
-    }
-    expect(sum.length() / 4000).toBeLessThan(0.05);
   });
 
   it("projects a camera as three.js's does, with a view offset and a film offset too", () => {

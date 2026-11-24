@@ -28,14 +28,26 @@ export const MOMENTS: Record<Moment, { banner: string; crowd: number; lines?: re
   pass: { banner: msg('OVERTAKEN'), crowd: 0.55, rank: 2 },
 };
 
+/**
+ * A nova's victims fall at once, but those other browsers run are reported over the network, a
+ * little later: the kills of the own nova within this time of its first count as one blast (s).
+ * The holder's clone burns up with its core, so a second nova this soon cannot be.
+ */
+export const NOVA_BLAST_SECONDS = 2;
+
 /** What the own pilot's kills and deaths add up to (see ownKill); its streak is counted with every ship's (see game/streaks). */
 export class Moments {
   /** The ship that killed the own clone last, until the pilot pays it back. */
   private avenge: string | null = null;
+  /** When the own last nova's first victim fell (s), and how many it has taken. */
+  private novaAt = -Infinity;
+  private novaVictims = 0;
 
-  /** A new round: nobody to avenge. */
+  /** A new round: nobody to avenge, no blast going on. */
   reset() {
     this.avenge = null;
+    this.novaAt = -Infinity;
+    this.novaVictims = 0;
   }
 
   /** The own clone died, by `killer` (its ship id) or by nothing. */
@@ -44,14 +56,21 @@ export class Moments {
   }
 
   /**
-   * The own pilot killed ship `victim`, the `streak`th kill of its streak (see Streaks), by a nova
-   * or otherwise: the moment that makes, or null for a plain kill. A nova's victims fall at once
-   * and count as one blast.
+   * The own pilot killed ship `victim` at `now` (s), the `streak`th kill of its streak (see
+   * Streaks), by a nova or otherwise: the moment that makes, or null for a plain kill. A SUPERNOVA
+   * is a nova that takes two ships or more (within NOVA_BLAST_SECONDS of its first), however the
+   * streak stands; a nova's single kill counts in the streak as any.
    */
-  ownKill(victim: string, streak: number, nova: boolean): Moment | null {
+  ownKill(victim: string, streak: number, nova: boolean, now: number): Moment | null {
     const revenge = victim === this.avenge;
     if (revenge) this.avenge = null;
-    if (nova && streak >= 2) return 'supernova';
+    if (nova) {
+      if (now - this.novaAt > NOVA_BLAST_SECONDS) {
+        this.novaAt = now;
+        this.novaVictims = 0;
+      }
+      if (++this.novaVictims >= 2) return 'supernova';
+    }
     if (streak >= 4) return 'multi';
     if (streak === 3) return 'triple';
     if (revenge) return 'revenge';

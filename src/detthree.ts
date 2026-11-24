@@ -5,7 +5,7 @@
  * the last bits between processors and systems (see `src/detmath.ts`): `Quaternion.setFromAxisAngle`
  * and `setFromEuler`, `Quaternion.slerp`, `angleTo` and `rotateTowards`, `Vector3.applyAxisAngle`
  * and `angleTo`, `Matrix4.makeRotationX/Y/Z/Axis`, the `rotateX/Y/Z` of a geometry or an object,
- * an object's `rotation` (an Euler turned into its quaternion) and the centripetal
+ * an object's `rotation` (an Euler turned into its quaternion), `Vector3.randomDirection` and the centripetal
  * `CatmullRomCurve3`. These do the same with the deterministic functions; the shared world and
  * everything in `src/world`, `src/game`, `src/net` and `src/ship` uses them instead
  * (`src/detmath.guard.test.ts` holds the code to it). Each takes the object it sets and returns it.
@@ -141,6 +141,17 @@ export const rotateX = <T extends THREE.BufferGeometry | THREE.Object3D>(target:
 export const rotateY = <T extends THREE.BufferGeometry | THREE.Object3D>(target: T, angle: number) => rotate(target, 'y', angle);
 export const rotateZ = <T extends THREE.BufferGeometry | THREE.Object3D>(target: T, angle: number) => rotate(target, 'z', angle);
 
+/**
+ * v as a direction drawn evenly over the sphere from `random` (uniform in [0, 1), Math.random by
+ * default): `Vector3.randomDirection`, drawing the same two numbers in the same order.
+ */
+export function randomDirection(v: THREE.Vector3, random: () => number = Math.random): THREE.Vector3 {
+  const theta = random() * Math.PI * 2;
+  const u = random() * 2 - 1;
+  const c = Math.sqrt(1 - u * u);
+  return v.set(c * cos(theta), u, c * sin(theta));
+}
+
 /** An object turned to Euler angles x, y, z (radians): what setting its `rotation` does. */
 export function setRotation<T extends THREE.Object3D>(object: T, x: number, y: number, z: number, order: THREE.EulerOrder = 'XYZ'): T {
   setFromEuler(object.quaternion, x, y, z, order);
@@ -206,14 +217,6 @@ function hermite(x0: number, x1: number, x2: number, x3: number, dt0: number, dt
   const c3 = 2 * x1 - 2 * x2 + t1 + t2;
   const w2 = w * w;
   return x1 + t1 * w + c2 * w2 + c3 * w2 * w;
-}
-
-/** v as a direction picked by `Math.random`, evenly over the sphere: `Vector3.randomDirection`. */
-export function randomDirection(v: THREE.Vector3): THREE.Vector3 {
-  const theta = Math.random() * Math.PI * 2;
-  const u = Math.random() * 2 - 1;
-  const c = Math.sqrt(1 - u * u);
-  return v.set(c * cos(theta), u, c * sin(theta));
 }
 
 /**

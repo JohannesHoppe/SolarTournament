@@ -51,6 +51,26 @@ describe('a piece on its own conic about the hole', () => {
     }
   });
 
+  it('flies a clearly unbound conic, as a comet kicks a piece, where gravity takes it for minutes', () => {
+    const start = new THREE.Vector3(28000, 0, 0);
+    const energy = (p: THREE.Vector3, v: THREE.Vector3) => v.lengthSq() / 2 - MU / p.length();
+    const p = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    // the orbit's own 3348 units/s and a kick of up to half a comet's speed, out- and inwards; and far beyond
+    for (const velocity of [new THREE.Vector3(0, 0, -6000), new THREE.Vector3(0, 0, -8000), new THREE.Vector3(0, 300, -9500), new THREE.Vector3(3000, 0, -7000), new THREE.Vector3(-2500, 0, -7000), new THREE.Vector3(0, 0, -20000)]) {
+      const truth = { p: start.clone(), v: velocity.clone(), at: 0 };
+      for (const seconds of [2, 60, 140, 300, 600]) {
+        kepler(MU, start, velocity, seconds, p, v);
+        expect(Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z)).toBe(true);
+        expect(Math.abs(energy(p, v) / energy(start, velocity) - 1)).toBeLessThan(1e-9);
+        const leg = stepped(MU, truth.p, truth.v, seconds - truth.at, 1 / 1000);
+        Object.assign(truth, { p: leg.p, v: leg.v, at: seconds });
+        expect(p.distanceTo(truth.p) / truth.p.length()).toBeLessThan(1e-6);
+        expect(v.distanceTo(truth.v)).toBeLessThan(0.1);
+      }
+    }
+  });
+
   it('keeps its energy over a round', () => {
     const start = new THREE.Vector3(45000, -1000, 12000);
     const velocity = new THREE.Vector3(-800, 30, 2700);

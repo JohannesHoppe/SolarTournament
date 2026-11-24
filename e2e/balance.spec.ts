@@ -21,7 +21,7 @@ const MIDDLING = 'Kessler';
 /**
  * Rounds per arena of each mode. In a deathmatch the middling bot's lead over the median differs
  * from round to round by about 550 points either way (a bot makes one or two kills a round),
- * against about 130 on average (672 rounds): over 168 rounds its mean scatters by about 45, so
+ * against about 130 on average (672 rounds): over 216 rounds (nine arenas) its mean scatters by about 37, so
  * chance does not decide the check. In Last Clone Standing its mean place lies about 1.1 inside
  * the limit, with a scatter of about 1.8 places a round: 42 rounds. The race and the battleship
  * are clearer.

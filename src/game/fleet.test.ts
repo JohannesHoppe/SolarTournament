@@ -439,6 +439,26 @@ describe("the President's fleet", () => {
     expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
     expect(late.down).toBe(true);
   });
+
+  it("goes up where and when the lead's went down on every browser, one that sank it first as well", () => {
+    const lead = battleship();
+    const other = battleship();
+    // the other browser counts the last hit first, a little earlier and elsewhere
+    other.firing(40.25);
+    other.position.set(300, -20, 7);
+    breakAll(other, zonesOf(other, 'battery'));
+    breakAll(other, zonesOf(other, 'reactor'));
+    lead.firing(40.4567);
+    lead.position.set(12.4, 0.6, -3.6);
+    breakAll(lead, zonesOf(lead, 'battery'));
+    breakAll(lead, zonesOf(lead, 'reactor'));
+    expect(lead.goesUp().at).toBeCloseTo(40.457 + SINK_SECONDS, 9);
+    expect(lead.goesUp().position.toArray()).toEqual([12, 1, -4]);
+    // until the lead's state comes, its own; then the lead's to the bit
+    expect(other.goesUp().at).toBe(40.25 + SINK_SECONDS);
+    other.follow(JSON.parse(JSON.stringify(lead.toState())));
+    expect(other.goesUp()).toEqual(lead.goesUp());
+  });
 });
 
 describe("the battleship and the field's rock", () => {

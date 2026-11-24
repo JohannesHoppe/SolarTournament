@@ -32,19 +32,22 @@ const bare = (text: string) => code(text).replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\
 const MATH = /\bMath\.(sin|cos|tan|asin|acos|atan|atan2|exp|expm1|log|log1p|log2|log10|pow|sinh|cosh|tanh|asinh|acosh|atanh|cbrt|hypot)\b/;
 /** The power operator, which is Math.pow. */
 const POWER = /\*\*/;
-/** three.js's helpers that call Math's trigonometry or powers. */
-const THREE_TRIG =
-  /\.(setFromAxisAngle|setFromEuler|makeRotationX|makeRotationY|makeRotationZ|makeRotationAxis|makeRotationFromEuler|applyAxisAngle|applyEuler|setFromSpherical|setFromSphericalCoords|setFromCylindrical|setFromCylindricalCoords|angleTo|rotateTowards|slerp|slerpQuaternions|rotateX|rotateY|rotateZ|rotateOnAxis|rotateOnWorldAxis)\(|\bTHREE\.(Euler|Spherical|Cylindrical|CatmullRomCurve3)\b|MathUtils\.damp\b|\.rotation\.(set\(|[xyz]\s*[-+*/]?=(?!=))/;
 /**
- * three.js's own that the logic reads where it is used besides the looks, held to the folders
+ * three.js's helpers that call Math's trigonometry or powers (its math classes read through for
+ * every call of them: Vector2/3/4, Quaternion, Euler, Matrix3/4, Spherical, Cylindrical,
+ * MathUtils, Object3D): a quaternion or a direction drawn at random (`random`, `randomDirection`)
+ * among them; `Math.random` itself is no such helper.
+ */
+const THREE_TRIG =
+  /\.(setFromAxisAngle|setFromEuler|makeRotationX|makeRotationY|makeRotationZ|makeRotationAxis|makeRotationFromEuler|makeRotation|setUvTransform|applyAxisAngle|applyEuler|setFromSpherical|setFromSphericalCoords|setFromCylindrical|setFromCylindricalCoords|setFromCartesianCoords|setAxisAngleFromQuaternion|setAxisAngleFromRotationMatrix|angleTo|rotateTowards|rotateAround|slerp|slerpFlat|slerpQuaternions|rotateX|rotateY|rotateZ|rotateOnAxis|rotateOnWorldAxis|randomDirection)\(|(?<!\bMath)\.random\(|\.angle\(\)|\bTHREE\.(Euler|Spherical|Cylindrical|CatmullRomCurve3)\b|MathUtils\.(damp|isPowerOfTwo|ceilPowerOfTwo|floorPowerOfTwo|setQuaternionFromProperEuler)\b|\.rotation\.(set\w*\(|[xyz]\s*[-+*/]?=(?!=))/;
+/**
+ * three.js's own math that the logic reads where it is used besides the looks, held to the folders
  * where no looks use it: `mergeVertices` (a rock's collision shape is welded with it; mergeVertices
- * of src/detthree.ts instead), a random direction (a spawn point, a bot's aim and wandering, the
- * jobs' simulated flights, whose Math.random is seeded; randomDirection of src/detthree.ts) and a
- * perspective camera's projection (the simulated Host's screen; updateProjection of src/detthree.ts).
+ * of src/detthree.ts instead) and a perspective camera's projection (the simulated Host's screen;
+ * updateProjection of src/detthree.ts).
  */
 const THREE_LOGIC: [RegExp, string[]][] = [
   [/\bmergeVertices\b[^;]*from 'three\/addons|\bGeometryUtils\.mergeVertices\b/, ['src/world/', 'src/game/', 'src/net/', 'src/ship/', 'src/test/']],
-  [/\.randomDirection\(/, ['src/ship/', 'src/net/', 'src/test/', 'src/campaign/']],
   [/(?<!updateProjection\()new THREE\.PerspectiveCamera\(|\.updateProjectionMatrix\(/, ['src/test/']],
 ];
 
@@ -78,16 +81,16 @@ describe('the deterministic mathematics', () => {
 
   it("never lets three.js's own math compute what the logic reads where it cannot be told apart from the looks", () => {
     expect(THREE_LOGIC.flatMap(([pattern, folders]) => found(pattern, code, (path) => folders.some((folder) => path.startsWith(folder))))).toEqual([]);
-    const caught = ["import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';", 'GeometryUtils.mergeVertices(g)', 'aim.randomDirection().multiplyScalar(2)', 'const c = new THREE.PerspectiveCamera(70, 1, 1, 10);', 'camera.updateProjectionMatrix();'];
+    const caught = ["import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';", 'GeometryUtils.mergeVertices(g)', 'const c = new THREE.PerspectiveCamera(70, 1, 1, 10);', 'camera.updateProjectionMatrix();'];
     expect(caught.filter((line) => THREE_LOGIC.some(([pattern]) => pattern.test(code(line))))).toEqual(caught);
-    const fine = ["import { mergeVertices } from '../detthree';", 'mergeVertices(g)', 'randomDirection(aim).multiplyScalar(2)', 'const c = updateProjection(new THREE.PerspectiveCamera(70, 1, 1, 10));', "import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';"];
+    const fine = ["import { mergeVertices } from '../detthree';", 'mergeVertices(g)', 'const c = updateProjection(new THREE.PerspectiveCamera(70, 1, 1, 10));', "import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';"];
     expect(fine.filter((line) => THREE_LOGIC.some(([pattern]) => pattern.test(code(line))))).toEqual([]);
   });
 
   it('finds what it looks for, and only that', () => {
-    const lines = ['x = Math.sin(a);', 'y = values.map(Math.cos);', 'z = a ** 2;', 'q.setFromAxisAngle(axis, 1);', 'mesh.rotation.x = 1;', 'mesh.rotation.y += 1;', 'v.angleTo(w)', 'new THREE.Euler()'];
+    const lines = ['x = Math.sin(a);', 'y = values.map(Math.cos);', 'z = a ** 2;', 'q.setFromAxisAngle(axis, 1);', 'mesh.rotation.x = 1;', 'mesh.rotation.y += 1;', 'v.angleTo(w)', 'new THREE.Euler()', 'v.randomDirection()', 'q.random()', 'p.angle()', 'm.makeRotation(1)', 'mesh.rotation.setFromQuaternion(q)', 'MathUtils.ceilPowerOfTwo(n)'];
     expect(lines.filter((line) => MATH.test(bare(line)) || POWER.test(bare(line)) || THREE_TRIG.test(bare(line)))).toEqual(lines);
-    const fine = ['x = sin(a); // Math.sin(a) differs', '/** a ** b */ y = pow(a, b);', "glob('**/*.ts')", 'mesh.rotation.x === 1', 'rotateX(geometry, 1)', 'Math.sqrt(x)', 'q.setFromRotationMatrix(m)'];
+    const fine = ['x = sin(a); // Math.sin(a) differs', '/** a ** b */ y = pow(a, b);', "glob('**/*.ts')", 'mesh.rotation.x === 1', 'rotateX(geometry, 1)', 'Math.sqrt(x)', 'q.setFromRotationMatrix(m)', 'x = Math.random();', 'ctx.rotate(0.1)', 'randomDirection(v)', 'v.angles()'];
     expect(fine.filter((line) => MATH.test(code(line)) || POWER.test(bare(line)) || THREE_TRIG.test(code(line)))).toEqual([]);
   });
 });

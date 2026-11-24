@@ -5,7 +5,7 @@ import { NOVA_RADIUS } from './items';
 import { SELF_DESTRUCT_RADIUS } from './hangar';
 import { SINK_BLAST } from './fleet';
 import { testField } from '../test/field';
-import { BLAST_STEP, blastBreaks, blastEnergy, blastTime, breakReach } from './blasts';
+import { BLAST_STEP, blastBreaks, blastClock, blastEnergy, blastTime, breakReach } from './blasts';
 import { BREAK_STEP } from './comet';
 
 /** Meters to units (1 unit = 5 cm). */
@@ -55,5 +55,34 @@ describe('big blasts by their energy', () => {
     // nothing beyond its reach broke
     for (const id of one) expect(a.brokeAt(id)).toBe(at);
     expect(blastBreaks(a, new THREE.Vector3(0, 1e7, 0), blastEnergy(NOVA_RADIUS), at)).toEqual([]);
+  });
+
+  it('breaks the same pieces at the field time the sender names, however late a browser heard of it', () => {
+    // the Event Horizon's pieces circle the hole at thousands of units a second: a lag shows at once
+    const hole = ARENAS.find((a) => a.id === 'hole')!.layout;
+    const sender = testField();
+    const late = testField();
+    sender.generate(hole);
+    late.generate(hole);
+    const clock = 61.2345;
+    const at = blastClock(clock);
+    sender.setClock(clock);
+    // the message of the blast arrives half a second later
+    late.setClock(clock + 0.5);
+    const rock = [...sender.asteroids.values()].filter((r) => !r.solid && !r.ground && r.kind === 'rock').sort((p, q) => p.meanRadius - q.meanRadius)[0];
+    // a nova just inside the smallest rock's reach of it where it is at the blast's field time, behind it on its way
+    const reach = breakReach(blastEnergy(NOVA_RADIUS), rock.meanRadius, 'rock');
+    const there = sender.positionOf(rock, at, new THREE.Vector3());
+    const behind = there.clone().sub(sender.positionOf(rock, at + 0.5, new THREE.Vector3())).normalize();
+    const center = there.clone().addScaledVector(behind, reach * 0.95);
+    expect(late.positionOf(late.asteroids.get(rock.id)!, late.clock, new THREE.Vector3()).distanceTo(center)).toBeGreaterThan(reach);
+    const one = blastBreaks(sender, center, blastEnergy(NOVA_RADIUS), blastTime(at)).map((r) => r.id);
+    const two = blastBreaks(late, center, blastEnergy(NOVA_RADIUS), blastTime(+at.toFixed(3))).map((r) => r.id);
+    expect(one).toContain(rock.id);
+    expect(two).toEqual(one);
+    for (const id of one) expect(late.brokeAt(id)).toBe(sender.brokeAt(id));
+    expect([...late.asteroids.keys()].sort()).toEqual([...sender.asteroids.keys()].sort());
+    // each piece is drawn where the field's clock puts it again
+    for (const piece of late.asteroids.values()) expect(piece.object.position.distanceTo(late.positionOf(piece, late.clock, new THREE.Vector3()))).toBeLessThan(1e-6);
   });
 });

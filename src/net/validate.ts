@@ -35,15 +35,19 @@ export const MAX_FIELD_TIME = 1e7;
 export const ROUND_LIMIT = 3600;
 /** Ship and rock ids are short ("p:abc…", "b:abc…:2", "12.0.1"). */
 const MAX_ID = 64;
+/** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
+export const MAX_FAMILY = 13;
+/** The roots of a tournament's field stay below this: the largest, the Rings of Saturn's, has 136 (120 in the layer and 16 beyond), with room. */
+export const MAX_ROOTS = 160;
 /**
- * A field's snapshot never lists more rocks than this, alive or broken: the largest fields have
- * 90 pieces, and each breaks into up to 3, twice (90 · (1 + 3 + 9) = 1170).
+ * A field's snapshot never lists more pieces than this in any of its lists: every family alive,
+ * broken or gone to dust in full (160 · 13 = 2080).
  */
-const MAX_ROCKS = 1200;
+const MAX_ROCKS = MAX_ROOTS * MAX_FAMILY;
 /** Probes in flight at once, and the seconds a probe drifts at most (see game/items). */
 const MAX_PROBES = 64;
 const MAX_PROBE_SECONDS = 200;
-/** Torpedoes a clone holds: its load with every tube, and two from each probe it took, far below this. */
+/** Torpedoes a clone holds: its load with every tube, and four from each probe it took (TORPEDOES_PER_PROBE in game/torpedoes), far below this. */
 const MAX_TORPEDOES = 99;
 /** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
 const MAX_IDS = 200;
@@ -76,7 +80,7 @@ function listOf<T>(x: unknown, max: number, check: (entry: unknown) => T | null)
 }
 
 /** A record of checked fields as the type it stands for, or null when any field failed its check. */
-function complete<T>(fields: Record<string, unknown>): T | null {
+export function complete<T>(fields: Record<string, unknown>): T | null {
   return Object.values(fields).some((value) => value === null) ? null : (fields as T);
 }
 
@@ -196,9 +200,7 @@ function dustOf(x: unknown, max: number, broken: readonly string[]): string[] | 
   });
 }
 
-/** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
-const MAX_FAMILY = 13;
-/** A slice never holds more families than this: the largest field's 160 roots in SYNC_SLICES slices, with room. */
+/** A slice never holds more families than this: MAX_ROOTS in SYNC_SLICES slices, with room. */
 const MAX_SLICE = 64;
 
 /** A family's list of ids with a number each (its breaks with their field times, its pieces with their hits), each id one of the family's; with `timed`, a piece's entry may name the field time of its last hit after its hits. */
@@ -284,8 +286,11 @@ export function fleetState(x: unknown): FleetState | null {
   const target = x.t === null ? null : id(x.t);
   // the field time a comet broke up on its hull, once one did
   const rammed = x.c === undefined ? undefined : num(x.c, 0, MAX_FIELD_TIME);
-  if (!state || (x.t !== null && target === null) || rammed === null || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
-  return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }) };
+  // the field time and the place it went down, both or neither, only once it did
+  const sunk = x.s === undefined ? undefined : num(x.s, 0, MAX_FIELD_TIME);
+  const where = x.w === undefined ? undefined : vec(x.w, 3, MAX_COORDINATE);
+  if (!state || (x.t !== null && target === null) || rammed === null || sunk === null || where === null || (sunk === undefined) !== (where === undefined) || (sunk !== undefined && state.d !== 1) || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
+  return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }), ...(sunk === undefined || !where ? {} : { s: sunk, w: where }) };
 }
 
 /** The DJ's word in the lead's round state (see music/dj): a step within MAX_DJ_OFFSET, a start within the round's limit, a title only exactly as the DJ's own words are tidied (djTitle); null for anything else. */
