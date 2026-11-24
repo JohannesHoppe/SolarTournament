@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cos, exp, hypot, pow, sin } from '../detmath';
-import { angleTo, applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
+import { angleTo, applyAxisAngle, randomDirection, setFromAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom } from '../view/bloom';
@@ -4411,7 +4411,7 @@ export class Game implements OnlineGame {
     const grounded = !course && !start && this.overWorld && this.groundSpawn(ship, position, edge);
     if (grounded) best = 0;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start && !grounded; attempt++) {
-      if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
+      if (base) randomDirection(candidate).multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
       else this.edgePoint(candidate, edge);
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       const score = this.spawnScore(ship, candidate);
@@ -4430,7 +4430,7 @@ export class Game implements OnlineGame {
     }
     // (in Last Clone Standing the open space behind the field, away from the sun, which no flare reaches)
     if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
-    else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
+    else if (best === -Infinity) randomDirection(position).multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
     // over a world, facing the arena's middle at the clone's own height, level over the ground
     if (!course && !start && this.overWorld) candidate.set(0, position.y, 0);
     ship.spawn(position, lookingAt(position, course || start || this.overWorld ? candidate : spawnMiddle, UP), this.time);
@@ -4509,7 +4509,7 @@ export class Game implements OnlineGame {
    * over the ground beneath (SPAWN_OVER_GROUND to four times that), never in it.
    */
   private edgePoint(point: THREE.Vector3, edge: number): THREE.Vector3 {
-    point.randomDirection();
+    randomDirection(point);
     if (!this.overWorld) return point.multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
     point.y = 0;
     if (point.lengthSq() < 1e-6) point.set(1, 0, 0);

@@ -13,7 +13,7 @@ import type { ArenaProfile } from '../world/arenas';
 import { exp, tan } from '../detmath';
 import { feltLoad } from '../ship/ship';
 import { extremeAfter, StrainHand } from '../ship/strainhand';
-import { angleTo, slerp } from '../detthree';
+import { angleTo, slerp, updateProjection } from '../detthree';
 
 /** The screen the simulated Host looks at (pixels): the game at 1280×720, the pointer's full deflection at its share of the shorter side. */
 const WIDTH = 1280;
@@ -88,7 +88,8 @@ const past = (offset: number, reach: number) => (Math.abs(offset) < 1 ? 0 : Math
 export class Human {
   readonly brake = new Brake();
   readonly out: Controls = { ...IDLE };
-  readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, WIDTH / HEIGHT, 10, 1e7);
+  /** The chase camera; its projection places what the Host sees, so it is computed on the deterministic functions. */
+  readonly camera = updateProjection(new THREE.PerspectiveCamera(CAMERA_FOV, WIDTH / HEIGHT, 10, 1e7));
   /** The pointer's offset from the screen's middle (px, x right, y up), and how fast it moves. */
   readonly pointer = { x: 0, y: 0 };
   private readonly speed = { x: 0, y: 0 };

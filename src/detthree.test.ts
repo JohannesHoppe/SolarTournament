@@ -1,6 +1,30 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { angleTo, applyAxisAngle, CentripetalCurve, makeRotationAxis, makeRotationX, makeRotationY, makeRotationZ, quaternionAngleTo, rotateTowards, rotateX, rotateY, rotateZ, setFromAxisAngle, setFromEuler, setRotation, slerp } from './detthree';
+import * as GeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { cos, sin } from './detmath';
+import {
+  angleTo,
+  applyAxisAngle,
+  CentripetalCurve,
+  cylinderGeometry,
+  deterministic,
+  makeRotationAxis,
+  makeRotationX,
+  makeRotationY,
+  makeRotationZ,
+  mergeVertices,
+  quaternionAngleTo,
+  randomDirection,
+  rotateTowards,
+  rotateX,
+  rotateY,
+  rotateZ,
+  setFromAxisAngle,
+  setFromEuler,
+  setRotation,
+  slerp,
+  updateProjection,
+} from './detthree';
 import { Randomizer } from './random';
 
 // Each helper does what three.js's own does, to the rounding of the last bits.
@@ -80,5 +104,58 @@ describe("detthree: three.js's rotations on the deterministic functions", () => 
     // repeated points do not divide by zero
     const repeated = new CentripetalCurve([points[0], points[0], points[1], points[2]], false);
     for (let i = 0; i <= 10; i++) expect(Number.isFinite(repeated.getPoint(i / 10).x)).toBe(true);
+  });
+
+  it('picks random directions evenly on the unit sphere', () => {
+    const sum = new THREE.Vector3();
+    for (let i = 0; i < 4000; i++) {
+      const v = randomDirection(new THREE.Vector3());
+      expect(v.length()).toBeCloseTo(1, 12);
+      sum.add(v);
+    }
+    expect(sum.length() / 4000).toBeLessThan(0.05);
+  });
+
+  it("projects a camera as three.js's does, with a view offset and a film offset too", () => {
+    for (let i = 0; i < 100; i++) {
+      const theirs = new THREE.PerspectiveCamera(r.range(20, 120), r.range(0.4, 2.5), r.range(0.1, 10), r.range(1e3, 1e7));
+      theirs.zoom = r.range(0.5, 2);
+      if (i % 2) theirs.setViewOffset(1920, 1080, r.range(-200, 200), r.range(-100, 100), 1600, 1000);
+      if (i % 3 === 0) theirs.filmOffset = r.range(-5, 5);
+      theirs.updateProjectionMatrix();
+      const ours = updateProjection(theirs.clone());
+      near(ours.projectionMatrix, theirs.projectionMatrix);
+      near(ours.projectionMatrixInverse, theirs.projectionMatrixInverse);
+    }
+  });
+
+  it("builds a cylinder and welds vertices as three.js does, on the deterministic functions", () => {
+    const sameArrays = (ours: THREE.BufferGeometry, theirs: THREE.BufferGeometry) => {
+      for (const name of Object.keys(theirs.attributes)) nearValues(ours.getAttribute(name).array, theirs.getAttribute(name).array);
+      expect(ours.index?.array).toEqual(theirs.index?.array);
+    };
+    for (const args of [[], [0.5, 2, 3, 11, 4, true, 1, 3], [3, 3, 7, 16, 1, true, Math.PI, Math.PI]] as ConstructorParameters<typeof THREE.CylinderGeometry>[])
+      sameArrays(cylinderGeometry(...args), new THREE.CylinderGeometry(...args));
+    for (const detail of [1, 3, 5]) {
+      const sphere = () => new THREE.IcosahedronGeometry(1, detail).deleteAttribute('normal').deleteAttribute('uv');
+      sameArrays(mergeVertices(sphere()), GeometryUtils.mergeVertices(sphere()));
+    }
+  });
+
+  it("puts Math's own functions back after a deterministic build, nested or failing too", () => {
+    const math = Math as unknown as Record<string, unknown>;
+    const own = math['cos'];
+    expect(own).not.toBe(cos);
+    deterministic(() => {
+      expect(math['cos']).toBe(cos);
+      deterministic(() => expect(math['sin']).toBe(sin));
+      expect(math['sin']).toBe(sin);
+    });
+    expect(() =>
+      deterministic(() => {
+        throw new Error('failed');
+      }),
+    ).toThrow('failed');
+    expect(math['cos']).toBe(own);
   });
 });

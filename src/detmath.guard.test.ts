@@ -35,6 +35,18 @@ const POWER = /\*\*/;
 /** three.js's helpers that call Math's trigonometry or powers. */
 const THREE_TRIG =
   /\.(setFromAxisAngle|setFromEuler|makeRotationX|makeRotationY|makeRotationZ|makeRotationAxis|makeRotationFromEuler|applyAxisAngle|applyEuler|setFromSpherical|setFromSphericalCoords|setFromCylindrical|setFromCylindricalCoords|angleTo|rotateTowards|slerp|slerpQuaternions|rotateX|rotateY|rotateZ|rotateOnAxis|rotateOnWorldAxis)\(|\bTHREE\.(Euler|Spherical|Cylindrical|CatmullRomCurve3)\b|MathUtils\.damp\b|\.rotation\.(set\(|[xyz]\s*[-+*/]?=(?!=))/;
+/**
+ * three.js's own that the logic reads where it is used besides the looks, held to the folders
+ * where no looks use it: `mergeVertices` (a rock's collision shape is welded with it; mergeVertices
+ * of src/detthree.ts instead), a random direction (a spawn point, a bot's aim and wandering, the
+ * jobs' simulated flights, whose Math.random is seeded; randomDirection of src/detthree.ts) and a
+ * perspective camera's projection (the simulated Host's screen; updateProjection of src/detthree.ts).
+ */
+const THREE_LOGIC: [RegExp, string[]][] = [
+  [/\bmergeVertices\b[^;]*from 'three\/addons|\bGeometryUtils\.mergeVertices\b/, ['src/world/', 'src/game/', 'src/net/', 'src/ship/', 'src/test/']],
+  [/\.randomDirection\(/, ['src/ship/', 'src/net/', 'src/test/', 'src/campaign/']],
+  [/(?<!updateProjection\()new THREE\.PerspectiveCamera\(|\.updateProjectionMatrix\(/, ['src/test/']],
+];
 
 describe('the deterministic mathematics', () => {
   const scanned = SCANNED.flatMap(files);
@@ -62,6 +74,14 @@ describe('the deterministic mathematics', () => {
 
   it("turns and blends the shared world with src/detthree.ts, never with three.js's own trigonometry", () => {
     expect(found(THREE_TRIG, code, (path) => SHARED.some((folder) => path.startsWith(folder)))).toEqual([]);
+  });
+
+  it("never lets three.js's own math compute what the logic reads where it cannot be told apart from the looks", () => {
+    expect(THREE_LOGIC.flatMap(([pattern, folders]) => found(pattern, code, (path) => folders.some((folder) => path.startsWith(folder))))).toEqual([]);
+    const caught = ["import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';", 'GeometryUtils.mergeVertices(g)', 'aim.randomDirection().multiplyScalar(2)', 'const c = new THREE.PerspectiveCamera(70, 1, 1, 10);', 'camera.updateProjectionMatrix();'];
+    expect(caught.filter((line) => THREE_LOGIC.some(([pattern]) => pattern.test(code(line))))).toEqual(caught);
+    const fine = ["import { mergeVertices } from '../detthree';", 'mergeVertices(g)', 'randomDirection(aim).multiplyScalar(2)', 'const c = updateProjection(new THREE.PerspectiveCamera(70, 1, 1, 10));', "import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';"];
+    expect(fine.filter((line) => THREE_LOGIC.some(([pattern]) => pattern.test(code(line))))).toEqual([]);
   });
 
   it('finds what it looks for, and only that', () => {

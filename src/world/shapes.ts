@@ -25,7 +25,7 @@ import {
 import type { Lettering } from '../view/lettering';
 import { beacons, biodome, domeGlass, FAILING_SHARE, frosted, paint, rimed, windowMaterials } from './worldship';
 import { atan2, cos, hypot, pow, sin } from '../detmath';
-import { rotateX, rotateY, rotateZ } from '../detthree';
+import { cylinderGeometry, rotateX, rotateY, rotateZ } from '../detthree';
 import { BUS_DENSITY, CUBIC, ENGINE_SHARE, FAIRING_SHEET, SQUARE, STACK_DENSITY, TANK_WALL, WING_SHEET, type JunkBuild } from './junk';
 
 /**
@@ -311,9 +311,10 @@ export function debrisSet(): TemplateSet {
       build.sheets = walls * (1 + ENGINE_SHARE);
       build.hard = { min: L * 0.26, max: L * 0.345 };
       build.ply = 2 * TANK_WALL;
-      outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.72, 16), Math.PI / 2).translate(-L * 0.1, 0, 0));
-      outline.push(rotateZ(new THREE.CylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true), Math.PI / 2).translate(-L * 0.44, 0, 0));
-      outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true), Math.PI / 2).translate(L * 0.37, 0, 0));
+      // its outline's cylinders give its collision boxes, so they are built on the deterministic functions
+      outline.push(rotateZ(cylinderGeometry(R, R, L * 0.72, 16), Math.PI / 2).translate(-L * 0.1, 0, 0));
+      outline.push(rotateZ(cylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true), Math.PI / 2).translate(-L * 0.44, 0, 0));
+      outline.push(rotateZ(cylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true), Math.PI / 2).translate(L * 0.37, 0, 0));
       painted.push(revolve([[-L * 0.46, R], [L * 0.26, R]], 32, { v: [LIVERY_STAGE[1], LIVERY_STAGE[0]] }));
       parts.push(tint(revolve([[-L * 0.474, 0], [-L * 0.47, R * 0.55], [-L * 0.465, R * 0.85], [-L * 0.46, R]], 32), 0xc9c5ba));
       parts.push(tint(revolve([[-L * 0.48, R * 0.3], [-L * 0.48, R * 0.47], [-L * 0.472, R * 0.62]], 24), METAL));
@@ -346,8 +347,8 @@ export function debrisSet(): TemplateSet {
       // all of it a shell: half a barrel and half its ogive nose (a cone's frustum as near)
       build.sheets = (Math.PI * R * L * 0.6 + (Math.PI * R * 1.15 * hypot(L * 0.4, R * 0.85)) / 2) * SQUARE * FAIRING_SHEET;
       build.ply = FAIRING_SHEET;
-      outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.6, 16, 1, true, 0, Math.PI), Math.PI / 2).translate(-L * 0.2, 0, 0));
-      outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.15, R, L * 0.4, 16, 1, true, Math.PI, Math.PI), -Math.PI / 2).translate(L * 0.3, 0, 0));
+      outline.push(rotateZ(cylinderGeometry(R, R, L * 0.6, 16, 1, true, 0, Math.PI), Math.PI / 2).translate(-L * 0.2, 0, 0));
+      outline.push(rotateZ(cylinderGeometry(R * 0.15, R, L * 0.4, 16, 1, true, Math.PI, Math.PI), -Math.PI / 2).translate(L * 0.3, 0, 0));
       const shell = (scale: number): [number, number][] => [
         [-L * 0.5, R * scale],
         [L * 0.1, R * scale],

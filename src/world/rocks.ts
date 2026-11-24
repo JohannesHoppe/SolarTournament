@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { Noise } from './noise';
 import { cubeDirection, cubeTexel } from './celestial';
@@ -7,6 +6,7 @@ import { tangentDirections } from './surface';
 import { impostorGeometry, impostorMaterial, impostorViews, IMPOSTOR_VIEWS, type ImpostorLook } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
 import { hypot, pow } from '../detmath';
+import { mergeVertices } from '../detthree';
 
 /** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
 const ROCK_SEED = 2584;

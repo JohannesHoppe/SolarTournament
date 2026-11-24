@@ -9,9 +9,14 @@
  * `CatmullRomCurve3`. These do the same with the deterministic functions; the shared world and
  * everything in `src/world`, `src/game`, `src/net` and `src/ship` uses them instead
  * (`src/detmath.guard.test.ts` holds the code to it). Each takes the object it sets and returns it.
+ *
+ * Besides, the counterparts of what of three.js's own the logic reads: a random direction, a
+ * camera's projection, a cylinder a collider is measured from and the addons' `mergeVertices`.
+ * What is only drawn may keep three.js's own math.
  */
 import * as THREE from 'three';
-import { acos, cos, sin } from './detmath';
+import * as GeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { acos, asin, atan, atan2, cbrt, cos, cosh, exp, expm1, hypot, log, log10, log1p, log2, pow, sin, sinh, tan, tanh } from './detmath';
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -202,3 +207,66 @@ function hermite(x0: number, x1: number, x2: number, x3: number, dt0: number, dt
   const w2 = w * w;
   return x1 + t1 * w + c2 * w2 + c3 * w2 * w;
 }
+
+/** v as a direction picked by `Math.random`, evenly over the sphere: `Vector3.randomDirection`. */
+export function randomDirection(v: THREE.Vector3): THREE.Vector3 {
+  const theta = Math.random() * Math.PI * 2;
+  const u = Math.random() * 2 - 1;
+  const c = Math.sqrt(1 - u * u);
+  return v.set(c * cos(theta), u, c * sin(theta));
+}
+
+/**
+ * A perspective camera's projection matrix and its inverse from its field of view, aspect, zoom,
+ * view offset and film offset: `PerspectiveCamera.updateProjectionMatrix`, its tangent from
+ * detmath, for a camera whose projection the logic reads (the simulated Host's screen in
+ * src/test/human.ts). Returns the camera.
+ */
+export function updateProjection<T extends THREE.PerspectiveCamera>(camera: T): T {
+  const near = camera.near;
+  let top = (near * tan(THREE.MathUtils.DEG2RAD * 0.5 * camera.fov)) / camera.zoom;
+  let height = 2 * top;
+  let width = camera.aspect * height;
+  let left = -0.5 * width;
+  const view = camera.view;
+  if (view !== null && view.enabled) {
+    left += (view.offsetX * width) / view.fullWidth;
+    top -= (view.offsetY * height) / view.fullHeight;
+    width *= view.width / view.fullWidth;
+    height *= view.height / view.fullHeight;
+  }
+  if (camera.filmOffset !== 0) left += (near * camera.filmOffset) / camera.getFilmWidth();
+  camera.projectionMatrix.makePerspective(left, left + width, top, top - height, near, camera.far, camera.coordinateSystem, camera.reversedDepth);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  return camera;
+}
+
+/** Math's functions beyond + - * / and the square root, each with the deterministic one that stands in for it. */
+const STAND_INS = { sin, cos, tan, asin, acos, atan, atan2, exp, expm1, log, log1p, log2, log10, pow, sinh, cosh, tanh, cbrt, hypot };
+type StandIn = keyof typeof STAND_INS;
+type Numeric = (...values: number[]) => number;
+const NAMES = Object.keys(STAND_INS) as StandIn[];
+const math = Math as unknown as Record<StandIn, Numeric>;
+
+/**
+ * What build returns, computed while `Math`'s functions are those of `src/detmath.ts`: for
+ * three.js's code that computes what the logic reads with `Math`'s functions inside (a geometry
+ * whose vertices a collider is measured from), run as three.js has it, on the deterministic
+ * functions, instead of a copy of it. JavaScript runs one thing at a time, so nothing else sees
+ * the stand-ins, and `Math`'s own are back once build returns or throws.
+ */
+export function deterministic<T>(build: () => T): T {
+  const own = NAMES.map((name) => math[name]);
+  for (const name of NAMES) math[name] = STAND_INS[name];
+  try {
+    return build();
+  } finally {
+    NAMES.forEach((name, i) => (math[name] = own[i]));
+  }
+}
+
+/** `new THREE.CylinderGeometry(...)` on the deterministic functions, for a cylinder a collider is measured from. */
+export const cylinderGeometry = (...args: ConstructorParameters<typeof THREE.CylinderGeometry>) => deterministic(() => new THREE.CylinderGeometry(...args));
+
+/** `mergeVertices` of three.js's addons on the deterministic functions (its tolerance's decimal places take a logarithm and a power): vertices within the tolerance welded into one. */
+export const mergeVertices = (...args: Parameters<typeof GeometryUtils.mergeVertices>) => deterministic(() => GeometryUtils.mergeVertices(...args));
